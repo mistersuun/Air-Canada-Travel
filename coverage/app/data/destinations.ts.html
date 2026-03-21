@@ -1,0 +1,496 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for app/data/destinations.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">app/data</a> destinations.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>97/97</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/0</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/0</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>97/97</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">export interface Destination {
+  city: string;
+  country: string;
+  code: string;
+  lat: number;
+  lng: number;
+  region: string;
+  type: 'Sun' | 'City' | 'Adventure' | 'Hub';
+  duration: string;
+  aircraft: string;
+  fromCities: string[];
+  season: string;
+  isNew?: boolean;
+}
+&nbsp;
+export interface Hub {
+  name: string;
+  lat: number;
+  lng: number;
+  code: string;
+}
+&nbsp;
+export const HUBS: Hub[] = [
+  { name: 'Toronto', lat: 43.68, lng: -79.62, code: 'YYZ' },
+  { name: 'Montreal', lat: 45.47, lng: -73.74, code: 'YUL' },
+  { name: 'Vancouver', lat: 49.20, lng: -123.18, code: 'YVR' },
+  { name: 'Calgary', lat: 51.13, lng: -114.01, code: 'YYC' },
+  { name: 'Ottawa', lat: 45.32, lng: -75.67, code: 'YOW' },
+  { name: 'Halifax', lat: 44.88, lng: -63.51, code: 'YHZ' },
+  { name: 'Edmonton', lat: 53.31, lng: -113.58, code: 'YEG' },
+  { name: 'Quebec City', lat: 46.79, lng: -71.39, code: 'YQB' },
+];
+&nbsp;
+export const REGIONS = [
+  'All', 'Caribbean', 'Mexico', 'USA', 'Europe',
+  'Asia &amp; Pacific', 'South America', 'Africa &amp; Middle East'
+];
+&nbsp;
+export const TYPES = ['All', 'Sun', 'City', 'Adventure'];
+&nbsp;
+export const REGION_COLORS: Record&lt;string, string&gt; = {
+  'Caribbean': '#0EA5E9',
+  'Mexico': '#E89020',
+  'USA': '#6366F1',
+  'Europe': '#8B5CF6',
+  'Asia &amp; Pacific': '#10B981',
+  'South America': '#F97316',
+  'Africa &amp; Middle East': '#E05090',
+};
+&nbsp;
+export const DESTINATIONS: Destination[] = [
+  // ─── CARIBBEAN ───
+  { city: 'Punta Cana', country: 'Dominican Republic', code: 'PUJ', lat: 18.57, lng: -68.37, region: 'Caribbean', type: 'Sun', duration: '4h 45m', aircraft: '737 MAX', fromCities: ['Toronto','Montreal'], season: 'Oct – Apr' },
+  { city: 'Montego Bay', country: 'Jamaica', code: 'MBJ', lat: 18.50, lng: -77.91, region: 'Caribbean', type: 'Sun', duration: '4h 15m', aircraft: 'A321', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Nassau', country: 'Bahamas', code: 'NAS', lat: 25.04, lng: -77.47, region: 'Caribbean', type: 'Sun', duration: '3h 30m', aircraft: '737', fromCities: ['Toronto'], season: 'Nov – Apr' },
+  { city: 'Bridgetown', country: 'Barbados', code: 'BGI', lat: 13.07, lng: -59.49, region: 'Caribbean', type: 'Sun', duration: '5h 20m', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'Nov – Apr' },
+  { city: 'Providenciales', country: 'Turks &amp; Caicos', code: 'PLS', lat: 21.77, lng: -72.27, region: 'Caribbean', type: 'Sun', duration: '4h', aircraft: 'A320', fromCities: ['Toronto','Montreal'], season: 'Nov – Apr' },
+  { city: 'Fort-de-France', country: 'Martinique', code: 'FDF', lat: 14.59, lng: -61.00, region: 'Caribbean', type: 'Sun', duration: '5h 35m', aircraft: '737 MAX', fromCities: ['Toronto','Montreal','Quebec City'], season: 'Nov – Apr', isNew: true },
+  { city: 'Oranjestad', country: 'Aruba', code: 'AUA', lat: 12.50, lng: -70.01, region: 'Caribbean', type: 'Sun', duration: '5h 10m', aircraft: '737', fromCities: ['Toronto'], season: 'Oct – Apr' },
+  { city: 'Pointe-à-Pitre', country: 'Guadeloupe', code: 'PTP', lat: 16.27, lng: -61.53, region: 'Caribbean', type: 'Sun', duration: '5h 40m', aircraft: '737 MAX', fromCities: ['Toronto','Montreal'], season: 'Nov – Apr' },
+  { city: 'Hamilton', country: 'Bermuda', code: 'BDA', lat: 32.36, lng: -64.68, region: 'Caribbean', type: 'Sun', duration: '3h', aircraft: 'A320', fromCities: ['Toronto'], season: 'May – Oct' },
+  { city: 'Port of Spain', country: 'Trinidad &amp; Tobago', code: 'POS', lat: 10.60, lng: -61.34, region: 'Caribbean', type: 'Sun', duration: '5h 30m', aircraft: '737', fromCities: ['Toronto'], season: 'Year-round' },
+&nbsp;
+  // ─── MEXICO ───
+  { city: 'Cancún', country: 'Mexico', code: 'CUN', lat: 21.04, lng: -86.87, region: 'Mexico', type: 'Sun', duration: '4h 30m', aircraft: '737 MAX', fromCities: ['Toronto','Montreal','Vancouver','Calgary','Ottawa','Halifax','Quebec City','Edmonton'], season: 'Year-round' },
+  { city: 'Puerto Vallarta', country: 'Mexico', code: 'PVR', lat: 20.68, lng: -105.25, region: 'Mexico', type: 'Sun', duration: '5h 15m', aircraft: '737', fromCities: ['Toronto','Vancouver','Calgary'], season: 'Oct – Apr' },
+  { city: 'Los Cabos', country: 'Mexico', code: 'SJD', lat: 23.15, lng: -109.72, region: 'Mexico', type: 'Sun', duration: '5h 45m', aircraft: '737 MAX', fromCities: ['Toronto','Vancouver','Calgary'], season: 'Oct – Apr' },
+  { city: 'Tulum', country: 'Mexico', code: 'TQO', lat: 20.23, lng: -87.43, region: 'Mexico', type: 'Sun', duration: '4h 25m', aircraft: 'A321', fromCities: ['Toronto','Montreal','Quebec City','Ottawa'], season: 'Nov – Apr' },
+  { city: 'Huatulco', country: 'Mexico', code: 'HUX', lat: 15.78, lng: -96.26, region: 'Mexico', type: 'Sun', duration: '5h 30m', aircraft: '737', fromCities: ['Toronto','Vancouver'], season: 'Nov – Apr' },
+  { city: 'Mexico City', country: 'Mexico', code: 'MEX', lat: 19.44, lng: -99.07, region: 'Mexico', type: 'City', duration: '5h', aircraft: '737 MAX', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Ixtapa', country: 'Mexico', code: 'ZIH', lat: 17.60, lng: -101.46, region: 'Mexico', type: 'Sun', duration: '5h 30m', aircraft: '737', fromCities: ['Toronto','Calgary'], season: 'Nov – Apr' },
+  { city: 'Guadalajara', country: 'Mexico', code: 'GDL', lat: 20.52, lng: -103.31, region: 'Mexico', type: 'City', duration: '5h 15m', aircraft: '737', fromCities: ['Toronto'], season: 'Nov – Apr' },
+&nbsp;
+  // ─── USA ───
+  { city: 'New York', country: 'USA', code: 'JFK', lat: 40.64, lng: -73.78, region: 'USA', type: 'City', duration: '1h 30m', aircraft: 'A220', fromCities: ['Toronto','Montreal','Vancouver'], season: 'Year-round' },
+  { city: 'Los Angeles', country: 'USA', code: 'LAX', lat: 33.94, lng: -118.41, region: 'USA', type: 'City', duration: '5h 20m', aircraft: '787', fromCities: ['Toronto','Montreal','Vancouver'], season: 'Year-round' },
+  { city: 'Miami', country: 'USA', code: 'MIA', lat: 25.80, lng: -80.29, region: 'USA', type: 'Sun', duration: '3h 30m', aircraft: '737 MAX', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Nashville', country: 'USA', code: 'BNA', lat: 36.13, lng: -86.67, region: 'USA', type: 'City', duration: '2h 20m', aircraft: 'A220', fromCities: ['Toronto','Montreal','Vancouver'], season: 'Year-round' },
+  { city: 'Honolulu', country: 'USA', code: 'HNL', lat: 21.32, lng: -157.92, region: 'USA', type: 'Sun', duration: '9h 45m', aircraft: '787', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'San Francisco', country: 'USA', code: 'SFO', lat: 37.62, lng: -122.38, region: 'USA', type: 'City', duration: '5h 30m', aircraft: '787', fromCities: ['Toronto','Vancouver','Montreal'], season: 'Year-round' },
+  { city: 'Orlando', country: 'USA', code: 'MCO', lat: 28.43, lng: -81.31, region: 'USA', type: 'Sun', duration: '3h 15m', aircraft: '737 MAX', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Las Vegas', country: 'USA', code: 'LAS', lat: 36.08, lng: -115.15, region: 'USA', type: 'City', duration: '5h', aircraft: '737 MAX', fromCities: ['Toronto','Vancouver','Calgary'], season: 'Year-round' },
+  { city: 'Tampa', country: 'USA', code: 'TPA', lat: 27.98, lng: -82.53, region: 'USA', type: 'Sun', duration: '3h 20m', aircraft: '737', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Fort Lauderdale', country: 'USA', code: 'FLL', lat: 26.07, lng: -80.15, region: 'USA', type: 'Sun', duration: '3h 30m', aircraft: '737', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+&nbsp;
+  // ─── EUROPE ───
+  { city: 'London', country: 'United Kingdom', code: 'LHR', lat: 51.47, lng: -0.46, region: 'Europe', type: 'City', duration: '7h 15m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Montreal','Vancouver'], season: 'Year-round' },
+  { city: 'Paris', country: 'France', code: 'CDG', lat: 49.01, lng: 2.55, region: 'Europe', type: 'City', duration: '7h 30m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Montreal','Vancouver'], season: 'Year-round' },
+  { city: 'Rome', country: 'Italy', code: 'FCO', lat: 41.80, lng: 12.25, region: 'Europe', type: 'City', duration: '8h 45m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Barcelona', country: 'Spain', code: 'BCN', lat: 41.30, lng: 2.08, region: 'Europe', type: 'City', duration: '8h', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'May – Oct' },
+  { city: 'Lisbon', country: 'Portugal', code: 'LIS', lat: 38.77, lng: -9.13, region: 'Europe', type: 'City', duration: '6h 50m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Dublin', country: 'Ireland', code: 'DUB', lat: 53.43, lng: -6.27, region: 'Europe', type: 'City', duration: '6h 30m', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Amsterdam', country: 'Netherlands', code: 'AMS', lat: 52.31, lng: 4.77, region: 'Europe', type: 'City', duration: '7h 40m', aircraft: '787 Dreamliner', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Athens', country: 'Greece', code: 'ATH', lat: 37.94, lng: 23.94, region: 'Europe', type: 'City', duration: '9h 45m', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'May – Oct' },
+  { city: 'Frankfurt', country: 'Germany', code: 'FRA', lat: 50.03, lng: 8.57, region: 'Europe', type: 'City', duration: '8h', aircraft: '787 Dreamliner', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Zurich', country: 'Switzerland', code: 'ZRH', lat: 47.46, lng: 8.56, region: 'Europe', type: 'City', duration: '8h 15m', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Madrid', country: 'Spain', code: 'MAD', lat: 40.47, lng: -3.57, region: 'Europe', type: 'City', duration: '8h', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Milan', country: 'Italy', code: 'MXP', lat: 45.63, lng: 8.72, region: 'Europe', type: 'City', duration: '8h 30m', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Copenhagen', country: 'Denmark', code: 'CPH', lat: 55.62, lng: 12.66, region: 'Europe', type: 'City', duration: '8h', aircraft: '787', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Nice', country: 'France', code: 'NCE', lat: 43.66, lng: 7.22, region: 'Europe', type: 'Sun', duration: '8h 10m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Sep' },
+  { city: 'Porto', country: 'Portugal', code: 'OPO', lat: 41.24, lng: -8.68, region: 'Europe', type: 'City', duration: '6h 40m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Oct' },
+  { city: 'Lyon', country: 'France', code: 'LYS', lat: 45.73, lng: 5.08, region: 'Europe', type: 'City', duration: '8h 15m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Oct' },
+  { city: 'Toulouse', country: 'France', code: 'TLS', lat: 43.63, lng: 1.37, region: 'Europe', type: 'City', duration: '8h 10m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Oct' },
+  // New 2026
+  { city: 'Budapest', country: 'Hungary', code: 'BUD', lat: 47.44, lng: 19.26, region: 'Europe', type: 'City', duration: '9h 15m', aircraft: '787', fromCities: ['Toronto'], season: 'Jun – Oct', isNew: true },
+  { city: 'Catania', country: 'Italy', code: 'CTA', lat: 37.47, lng: 15.07, region: 'Europe', type: 'City', duration: '9h 30m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Oct', isNew: true },
+  { city: 'Azores', country: 'Portugal', code: 'PDL', lat: 37.74, lng: -25.70, region: 'Europe', type: 'Adventure', duration: '5h', aircraft: '737 MAX', fromCities: ['Toronto'], season: 'Jun – Sep', isNew: true },
+  { city: 'Palma de Mallorca', country: 'Spain', code: 'PMI', lat: 39.55, lng: 2.74, region: 'Europe', type: 'Sun', duration: '8h 30m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Oct', isNew: true },
+  { city: 'Berlin', country: 'Germany', code: 'BER', lat: 52.37, lng: 13.52, region: 'Europe', type: 'City', duration: '8h 30m', aircraft: '787', fromCities: ['Toronto'], season: 'Jul – Oct', isNew: true },
+  { city: 'Nantes', country: 'France', code: 'NTE', lat: 47.16, lng: -1.61, region: 'Europe', type: 'City', duration: '7h 30m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Oct', isNew: true },
+&nbsp;
+  // ─── ASIA &amp; PACIFIC ───
+  { city: 'Tokyo', country: 'Japan', code: 'HND', lat: 35.55, lng: 139.78, region: 'Asia &amp; Pacific', type: 'City', duration: '12h 30m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Vancouver','Montreal'], season: 'Year-round' },
+  { city: 'Hong Kong', country: 'Hong Kong', code: 'HKG', lat: 22.31, lng: 113.91, region: 'Asia &amp; Pacific', type: 'City', duration: '15h 30m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Vancouver'], season: 'Year-round' },
+  { city: 'Seoul', country: 'South Korea', code: 'ICN', lat: 37.46, lng: 126.44, region: 'Asia &amp; Pacific', type: 'City', duration: '13h 15m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Vancouver'], season: 'Year-round' },
+  { city: 'Singapore', country: 'Singapore', code: 'SIN', lat: 1.36, lng: 103.99, region: 'Asia &amp; Pacific', type: 'City', duration: '18h 30m', aircraft: '787 Dreamliner', fromCities: ['Vancouver','Toronto'], season: 'Year-round' },
+  { city: 'Sydney', country: 'Australia', code: 'SYD', lat: -33.95, lng: 151.18, region: 'Asia &amp; Pacific', type: 'City', duration: '20h', aircraft: '787 Dreamliner', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'Bangkok', country: 'Thailand', code: 'BKK', lat: 13.69, lng: 100.75, region: 'Asia &amp; Pacific', type: 'City', duration: '17h', aircraft: '787 Dreamliner', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'Delhi', country: 'India', code: 'DEL', lat: 28.57, lng: 77.10, region: 'Asia &amp; Pacific', type: 'City', duration: '14h 20m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Vancouver'], season: 'Year-round' },
+  { city: 'Osaka', country: 'Japan', code: 'KIX', lat: 34.43, lng: 135.24, region: 'Asia &amp; Pacific', type: 'City', duration: '12h', aircraft: '787 Dreamliner', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'Shanghai', country: 'China', code: 'PVG', lat: 31.14, lng: 121.81, region: 'Asia &amp; Pacific', type: 'City', duration: '14h', aircraft: '787 Dreamliner', fromCities: ['Toronto','Vancouver'], season: 'Year-round' },
+  { city: 'Auckland', country: 'New Zealand', code: 'AKL', lat: -37.01, lng: 174.79, region: 'Asia &amp; Pacific', type: 'City', duration: '18h', aircraft: '787 Dreamliner', fromCities: ['Vancouver'], season: 'Year-round' },
+&nbsp;
+  // ─── SOUTH AMERICA ───
+  { city: 'Bogotá', country: 'Colombia', code: 'BOG', lat: 4.70, lng: -74.15, region: 'South America', type: 'City', duration: '6h 15m', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Cartagena', country: 'Colombia', code: 'CTG', lat: 10.44, lng: -75.51, region: 'South America', type: 'Sun', duration: '5h 30m', aircraft: '737 MAX', fromCities: ['Toronto','Montreal'], season: 'Nov – Apr', isNew: true },
+  { city: 'São Paulo', country: 'Brazil', code: 'GRU', lat: -23.43, lng: -46.47, region: 'South America', type: 'City', duration: '10h 15m', aircraft: '787 Dreamliner', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Lima', country: 'Peru', code: 'LIM', lat: -12.02, lng: -77.11, region: 'South America', type: 'City', duration: '8h', aircraft: '787', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Buenos Aires', country: 'Argentina', code: 'EZE', lat: -34.82, lng: -58.54, region: 'South America', type: 'City', duration: '11h 30m', aircraft: '787 Dreamliner', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Santiago', country: 'Chile', code: 'SCL', lat: -33.39, lng: -70.79, region: 'South America', type: 'City', duration: '12h', aircraft: '787', fromCities: ['Toronto'], season: 'Year-round' },
+&nbsp;
+  // ─── AFRICA &amp; MIDDLE EAST ───
+  { city: 'Casablanca', country: 'Morocco', code: 'CMN', lat: 33.37, lng: -7.59, region: 'Africa &amp; Middle East', type: 'City', duration: '7h 45m', aircraft: '787 Dreamliner', fromCities: ['Montreal'], season: 'Year-round' },
+  { city: 'Dubai', country: 'UAE', code: 'DXB', lat: 25.25, lng: 55.36, region: 'Africa &amp; Middle East', type: 'City', duration: '13h', aircraft: '787 Dreamliner', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Tel Aviv', country: 'Israel', code: 'TLV', lat: 32.01, lng: 34.89, region: 'Africa &amp; Middle East', type: 'City', duration: '11h', aircraft: '787 Dreamliner', fromCities: ['Toronto','Montreal'], season: 'Year-round' },
+  { city: 'Algiers', country: 'Algeria', code: 'ALG', lat: 36.69, lng: 3.22, region: 'Africa &amp; Middle East', type: 'City', duration: '8h', aircraft: '787', fromCities: ['Montreal'], season: 'Year-round' },
+];
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-03-21T11:35:05.264Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -41,7 +41,7 @@ export function getFlightsForWeek(
     const match = schedules.find(s => {
       const from = new Date(s.fromDate + 'T00:00:00');
       const to = new Date(s.toDate + 'T00:00:00');
-      return date >= from && date <= to && s.days.includes(dayName);
+      return date >= from && date <= to && s.days.split(',').includes(dayName);
     });
 
     if (match) {

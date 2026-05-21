@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visual Direction</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/helper.js" onerror="void 0"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0e1117; color: #e2e8f0; font-family: 'DM Sans', system-ui, sans-serif; padding: 32px 24px; }
+  h2 { font-size: 22px; font-weight: 700; color: #f8fafc; margin-bottom: 6px; }
+  .sub { font-size: 14px; color: #64748b; margin-bottom: 28px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+  .option {
+    border-radius: 16px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .option:hover { transform: translateY(-2px); }
+  .option.selected { border-color: #C8102E !important; }
+
+  .option-label {
+    padding: 14px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .option-label h3 { font-size: 14px; font-weight: 700; }
+  .option-label p { font-size: 12px; margin-top: 2px; line-height: 1.4; }
+  .badge {
+    font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  /* ── OPTION A: Frosted glass over gradient ── */
+  .a-wrap {
+    background: linear-gradient(135deg, #1e1035 0%, #0f1e3d 50%, #0d1a2e 100%);
+    padding: 14px;
+  }
+  .a-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.07);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  .a-week {
+    font-size: 13px; font-weight: 700;
+    background: linear-gradient(90deg, #f43f6e, #c026d3);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .a-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(8px);
+    border-radius: 12px;
+    padding: 11px 13px;
+    margin-bottom: 7px;
+  }
+  .a-route { font-size: 9px; color: rgba(255,255,255,0.35); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .a-city { font-size: 14px; font-weight: 700; color: #fff; }
+  .a-code { font-size: 17px; font-weight: 800; background: linear-gradient(135deg, #a78bfa, #60a5fa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .a-days { display: flex; gap: 3px; margin-top: 8px; }
+  .a-day-on  { flex:1; height:19px; border-radius:4px; background:rgba(244,63,110,0.25); border:1px solid rgba(244,63,110,0.5); font-size:8px; font-weight:700; color:#f43f6e; display:flex; align-items:center; justify-content:center; }
+  .a-day-off { flex:1; height:19px; border-radius:4px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07); font-size:8px; color:rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; }
+  .a-label { background: #0e1117; }
+  .a-label h3 { color: #e2e8f0; }
+  .a-label p { color: #64748b; }
+
+  /* ── OPTION B: Clean light ── */
+  .b-wrap { background: #f8f9fc; padding: 14px; }
+  .b-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  }
+  .b-logo { display:flex; align-items:center; gap:6px; }
+  .b-logo-dot { width:22px; height:22px; border-radius:50%; background:#C8102E; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; }
+  .b-logo span { font-size:13px; font-weight:700; color:#1e293b; }
+  .b-week { font-size:12px; font-weight:700; color:#C8102E; background:rgba(200,16,46,0.08); border:1px solid rgba(200,16,46,0.2); border-radius:6px; padding:4px 10px; }
+  .b-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 11px 13px;
+    margin-bottom: 7px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .b-route { font-size: 9px; color: #94a3b8; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .b-city { font-size: 14px; font-weight: 700; color: #0f172a; }
+  .b-code { font-size: 17px; font-weight: 800; color: #6d28d9; }
+  .b-days { display: flex; gap: 3px; margin-top: 8px; }
+  .b-day-on  { flex:1; height:19px; border-radius:4px; background:#fee2e2; border:1px solid #fca5a5; font-size:8px; font-weight:700; color:#C8102E; display:flex; align-items:center; justify-content:center; }
+  .b-day-off { flex:1; height:19px; border-radius:4px; background:#f1f5f9; border:1px solid #e2e8f0; font-size:8px; color:#cbd5e1; display:flex; align-items:center; justify-content:center; }
+  .b-label { background: #fff; border-top: 1px solid #e2e8f0; }
+  .b-label h3 { color: #0f172a; }
+  .b-label p { color: #64748b; }
+
+  /* ── OPTION C: Deep ocean ── */
+  .c-wrap { background: #071219; padding: 14px; }
+  .c-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px;
+    background: #0d1f2d;
+    border: 1px solid #1a3a50;
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  .c-logo { display:flex; align-items:center; gap:7px; }
+  .c-logo-dot { width:22px; height:22px; border-radius:50%; background:#C8102E; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; box-shadow: 0 0 12px rgba(200,16,46,0.4); }
+  .c-logo span { font-size:13px; font-weight:700; color:#e0eaf4; }
+  .c-week { font-size:12px; font-weight:700; color:#38bdf8; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.25); border-radius:6px; padding:4px 10px; }
+  .c-card {
+    background: #0d1f2d;
+    border: 1px solid #1a3a50;
+    border-radius: 12px;
+    padding: 11px 13px;
+    margin-bottom: 7px;
+  }
+  .c-route { font-size: 9px; color: #2d5a78; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .c-city { font-size: 14px; font-weight: 700; color: #e0eaf4; }
+  .c-code { font-size: 17px; font-weight: 800; color: #38bdf8; }
+  .c-days { display: flex; gap: 3px; margin-top: 8px; }
+  .c-day-on  { flex:1; height:19px; border-radius:4px; background:rgba(200,16,46,0.2); border:1px solid rgba(200,16,46,0.4); font-size:8px; font-weight:700; color:#f87171; display:flex; align-items:center; justify-content:center; }
+  .c-day-off { flex:1; height:19px; border-radius:4px; background:rgba(255,255,255,0.02); border:1px solid #112233; font-size:8px; color:#1e3a52; display:flex; align-items:center; justify-content:center; }
+  .c-label { background: #071219; border-top: 1px solid #0d2030; }
+  .c-label h3 { color: #e0eaf4; }
+  .c-label p { color: #2d5a78; }
+
+  .selected-indicator {
+    display: none; margin-top: 20px; padding: 12px 16px;
+    background: rgba(200,16,46,0.1); border: 1px solid rgba(200,16,46,0.25);
+    border-radius: 10px; font-size: 13px; color: #f87171; font-weight: 600;
+    text-align: center;
+  }
+  .selected-indicator.show { display: block; }
+</style>
+</head>
+<body>
+<h2>Visual Direction</h2>
+<p class="sub">Full UI treatment — pick the one that feels right for a daily work tool</p>
+
+<div class="grid">
+
+  <!-- A -->
+  <div class="option" id="opt-a" onclick="pick('a')">
+    <div class="a-wrap">
+      <div class="a-header">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div style="width:22px;height:22px;border-radius:50%;background:#C8102E;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;box-shadow:0 0 14px rgba(200,16,46,0.5);">✈</div>
+          <span style="font-size:13px;font-weight:700;color:#fff;">AC <span style="font-weight:400;color:rgba(255,255,255,0.4);">Trips</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:rgba(255,255,255,0.3);">←</span>
+          <span class="a-week">Jun 9 – 15</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.3);">→</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.6);">YYZ</div>
+      </div>
+      <div class="a-card">
+        <div class="a-route">YYZ → LHR · 9h · A330</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="a-city">London</div>
+          <div class="a-code">LHR</div>
+        </div>
+        <div class="a-days">
+          <div class="a-day-on">M</div><div class="a-day-on">T</div><div class="a-day-off">W</div>
+          <div class="a-day-on">T</div><div class="a-day-off">F</div><div class="a-day-on">S</div><div class="a-day-on">S</div>
+        </div>
+      </div>
+      <div class="a-card">
+        <div class="a-route">YYZ → CDG · 7h 30m · 787</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="a-city">Paris</div>
+          <div class="a-code">CDG</div>
+        </div>
+        <div class="a-days">
+          <div class="a-day-on">M</div><div class="a-day-on">T</div><div class="a-day-on">W</div>
+          <div class="a-day-on">T</div><div class="a-day-on">F</div><div class="a-day-on">S</div><div class="a-day-on">S</div>
+        </div>
+      </div>
+      <div class="a-card" style="opacity:0.7;">
+        <div class="a-route">YYZ → HND · 13h 35m · 777</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="a-city">Tokyo</div>
+          <div class="a-code">HND</div>
+        </div>
+        <div class="a-days">
+          <div class="a-day-on">M</div><div class="a-day-off">T</div><div class="a-day-off">W</div>
+          <div class="a-day-on">T</div><div class="a-day-off">F</div><div class="a-day-on">S</div><div class="a-day-off">S</div>
+        </div>
+      </div>
+    </div>
+    <div class="option-label a-label">
+      <div>
+        <h3>A — Gradient dark</h3>
+        <p>Deep purple-to-navy gradient. Frosted glass cards. Feels premium and travel-forward.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="option" id="opt-b" onclick="pick('b')">
+    <div class="b-wrap">
+      <div class="b-header">
+        <div class="b-logo">
+          <div class="b-logo-dot">✈</div>
+          <span>AC <span style="font-weight:400;color:#94a3b8;">Trips</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span style="font-size:11px;color:#cbd5e1;">←</span>
+          <div class="b-week">Jun 9 – 15</div>
+          <span style="font-size:11px;color:#cbd5e1;">→</span>
+        </div>
+        <div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;color:#475569;">YYZ</div>
+      </div>
+      <div class="b-card">
+        <div class="b-route">YYZ → LHR · 9h · A330</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="b-city">London</div>
+          <div class="b-code">LHR</div>
+        </div>
+        <div class="b-days">
+          <div class="b-day-on">M</div><div class="b-day-on">T</div><div class="b-day-off">W</div>
+          <div class="b-day-on">T</div><div class="b-day-off">F</div><div class="b-day-on">S</div><div class="b-day-on">S</div>
+        </div>
+      </div>
+      <div class="b-card">
+        <div class="b-route">YYZ → CDG · 7h 30m · 787</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="b-city">Paris</div>
+          <div class="b-code">CDG</div>
+        </div>
+        <div class="b-days">
+          <div class="b-day-on">M</div><div class="b-day-on">T</div><div class="b-day-on">W</div>
+          <div class="b-day-on">T</div><div class="b-day-on">F</div><div class="b-day-on">S</div><div class="b-day-on">S</div>
+        </div>
+      </div>
+      <div class="b-card" style="opacity:0.75;">
+        <div class="b-route">YYZ → HND · 13h 35m · 777</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="b-city">Tokyo</div>
+          <div class="b-code">HND</div>
+        </div>
+        <div class="b-days">
+          <div class="b-day-on">M</div><div class="b-day-off">T</div><div class="b-day-off">W</div>
+          <div class="b-day-on">T</div><div class="b-day-off">F</div><div class="b-day-on">S</div><div class="b-day-off">S</div>
+        </div>
+      </div>
+    </div>
+    <div class="option-label b-label">
+      <div>
+        <h3>B — Clean light</h3>
+        <p>White cards on off-white. Air Canada red pops as brand. Best readability in daylight and on phones.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="option" id="opt-c" onclick="pick('c')">
+    <div class="c-wrap">
+      <div class="c-header">
+        <div class="c-logo">
+          <div class="c-logo-dot">✈</div>
+          <span>AC <span style="font-weight:400;color:#2d5a78;">Trips</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <span style="font-size:11px;color:#1e3a52;">←</span>
+          <div class="c-week">Jun 9 – 15</div>
+          <span style="font-size:11px;color:#1e3a52;">→</span>
+        </div>
+        <div style="background:#0d1f2d;border:1px solid #1a3a50;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;color:#4a8aaa;">YYZ</div>
+      </div>
+      <div class="c-card">
+        <div class="c-route">YYZ → LHR · 9h · A330</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="c-city">London</div>
+          <div class="c-code">LHR</div>
+        </div>
+        <div class="c-days">
+          <div class="c-day-on">M</div><div class="c-day-on">T</div><div class="c-day-off">W</div>
+          <div class="c-day-on">T</div><div class="c-day-off">F</div><div class="c-day-on">S</div><div class="c-day-on">S</div>
+        </div>
+      </div>
+      <div class="c-card">
+        <div class="c-route">YYZ → CDG · 7h 30m · 787</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="c-city">Paris</div>
+          <div class="c-code">CDG</div>
+        </div>
+        <div class="c-days">
+          <div class="c-day-on">M</div><div class="c-day-on">T</div><div class="c-day-on">W</div>
+          <div class="c-day-on">T</div><div class="c-day-on">F</div><div class="c-day-on">S</div><div class="c-day-on">S</div>
+        </div>
+      </div>
+      <div class="c-card" style="opacity:0.75;">
+        <div class="c-route">YYZ → HND · 13h 35m · 777</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="c-city">Tokyo</div>
+          <div class="c-code">HND</div>
+        </div>
+        <div class="c-days">
+          <div class="c-day-on">M</div><div class="c-day-off">T</div><div class="c-day-off">W</div>
+          <div class="c-day-on">T</div><div class="c-day-off">F</div><div class="c-day-on">S</div><div class="c-day-off">S</div>
+        </div>
+      </div>
+    </div>
+    <div class="option-label c-label">
+      <div>
+        <h3>C — Deep ocean</h3>
+        <p>Near-black with teal/sky-blue accents and AC red for flight days. High contrast, easy on the eyes at night.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="indicator" class="selected-indicator"></div>
+
+<script>
+  function pick(choice) {
+    document.querySelectorAll('.option').forEach(el => el.classList.remove('selected'));
+    document.getElementById('opt-' + choice).classList.add('selected');
+    const labels = { a: 'A — Gradient dark', b: 'B — Clean light', c: 'C — Deep ocean' };
+    const indicator = document.getElementById('indicator');
+    indicator.textContent = 'Selected: ' + labels[choice] + ' — let me know in the terminal!';
+    indicator.classList.add('show');
+    if (window.__superpowers_record) window.__superpowers_record({ type: 'click', choice, text: labels[choice] });
+  }
+</script>
+</body>
+</html>

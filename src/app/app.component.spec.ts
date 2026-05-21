@@ -38,10 +38,9 @@ describe('AppComponent', () => {
     vi.useRealTimers();
   });
 
-  it('clears visited countries when confirmed', () => {
+  it('clears visited countries', () => {
     const component = new AppComponent();
     component.visitedCountries = ['France', 'Japan'];
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     component.clearVisitedCountries();
     expect(component.visitedCountries).toEqual([]);

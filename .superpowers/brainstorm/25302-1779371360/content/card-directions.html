@@ -1,0 +1,153 @@
+<h2>Card Design Direction</h2>
+<p class="subtitle">Pick the vibe that feels right. All use the same dark palette as the current app.</p>
+
+<div class="cards">
+
+  <!-- Option A: Clean flat rows -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1120;padding:16px;font-family:'DM Sans',sans-serif;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#eae6df;margin-bottom:2px;">Paris</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">France · City</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:14px;font-weight:700;color:#8B5CF6;letter-spacing:0.5px;">CDG</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);">7h 30m</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#eae6df;margin-bottom:2px;">London</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">United Kingdom · City</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:14px;font-weight:700;color:#8B5CF6;letter-spacing:0.5px;">LHR</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);">9h</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#eae6df;margin-bottom:2px;">Tokyo <span style="font-size:9px;background:#C8102E;color:#fff;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:4px;">NEW</span></div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.35);">Japan · City</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:14px;font-weight:700;color:#10B981;letter-spacing:0.5px;">HND</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);">13h 35m</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Clean rows</h3>
+      <p>Flat, border-only. No accent left borders. City + country left, code + duration right. Dense and scannable.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Compact tiles with region dot -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1120;padding:16px;font-family:'DM Sans',sans-serif;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#8B5CF6;flex-shrink:0;"></div>
+            <span style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.5px;">Europe</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:#eae6df;">Paris</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">France</div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;font-weight:700;color:#8B5CF6;">CDG</span>
+            <span style="font-size:11px;color:rgba(255,255,255,0.3);">7h 30m</span>
+          </div>
+        </div>
+        <div style="padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#8B5CF6;flex-shrink:0;"></div>
+            <span style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.5px;">Europe</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:#eae6df;">London</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">United Kingdom</div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;font-weight:700;color:#8B5CF6;">LHR</span>
+            <span style="font-size:11px;color:rgba(255,255,255,0.3);">9h</span>
+          </div>
+        </div>
+        <div style="padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#10B981;flex-shrink:0;"></div>
+            <span style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.5px;">Asia</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:#eae6df;">Tokyo <span style="font-size:9px;background:#C8102E;color:#fff;padding:1px 4px;border-radius:3px;font-weight:700;">NEW</span></div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Japan</div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;font-weight:700;color:#10B981;">HND</span>
+            <span style="font-size:11px;color:rgba(255,255,255,0.3);">13h 35m</span>
+          </div>
+        </div>
+        <div style="padding:12px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#0EA5E9;flex-shrink:0;"></div>
+            <span style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.5px;">Caribbean</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:#eae6df;">Cancún</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);">Mexico</div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;font-weight:700;color:#0EA5E9;">CUN</span>
+            <span style="font-size:11px;color:rgba(255,255,255,0.3);">7h</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Tile grid</h3>
+      <p>2-column tiles. Small region dot replaces the left border. More destinations visible at once.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Airline boarding-pass style -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1120;padding:16px;font-family:'DM Sans',sans-serif;">
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="padding:11px 14px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:0;">
+          <div style="flex:1;">
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:1px;text-transform:uppercase;letter-spacing:0.5px;">YYZ → CDG</div>
+            <div style="font-size:14px;font-weight:700;color:#eae6df;">Paris</div>
+          </div>
+          <div style="width:1px;height:32px;background:rgba(255,255,255,0.07);margin:0 12px;"></div>
+          <div style="text-align:center;min-width:40px;">
+            <div style="font-size:18px;font-weight:800;color:#8B5CF6;line-height:1;">CDG</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25);">7h 30m</div>
+          </div>
+        </div>
+        <div style="padding:11px 14px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;">
+          <div style="flex:1;">
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:1px;text-transform:uppercase;letter-spacing:0.5px;">YYZ → LHR</div>
+            <div style="font-size:14px;font-weight:700;color:#eae6df;">London</div>
+          </div>
+          <div style="width:1px;height:32px;background:rgba(255,255,255,0.07);margin:0 12px;"></div>
+          <div style="text-align:center;min-width:40px;">
+            <div style="font-size:18px;font-weight:800;color:#8B5CF6;line-height:1;">LHR</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25);">9h</div>
+          </div>
+        </div>
+        <div style="padding:11px 14px;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;">
+          <div style="flex:1;">
+            <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-bottom:1px;text-transform:uppercase;letter-spacing:0.5px;">YYZ → HND</div>
+            <div style="font-size:14px;font-weight:700;color:#eae6df;">Tokyo <span style="font-size:9px;background:#C8102E;color:#fff;padding:1px 4px;border-radius:3px;font-weight:700;margin-left:4px;">NEW</span></div>
+          </div>
+          <div style="width:1px;height:32px;background:rgba(255,255,255,0.07);margin:0 12px;"></div>
+          <div style="text-align:center;min-width:40px;">
+            <div style="font-size:18px;font-weight:800;color:#10B981;line-height:1;">HND</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25);">13h 35m</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Route style</h3>
+      <p>Shows the route (YYZ → CDG) explicitly. Airport code is larger and dominant. Feels like a flight search result.</p>
+    </div>
+  </div>
+
+</div>

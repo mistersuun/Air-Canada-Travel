@@ -61,6 +61,22 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Pointe-à-Pitre', country: 'Guadeloupe', code: 'PTP', lat: 16.27, lng: -61.53, region: 'Caribbean', type: 'Sun', duration: '4h 55m', aircraft: '737 MAX 8', fromCities: ['Montreal','Toronto'], season: 'Year-round' },
   { city: 'Hamilton', country: 'Bermuda', code: 'BDA', lat: 32.36, lng: -64.68, region: 'Caribbean', type: 'Sun', duration: '3h 50m', aircraft: 'A319', fromCities: ['Toronto'], season: 'Year-round' },
   { city: 'Port of Spain', country: 'Trinidad & Tobago', code: 'POS', lat: 10.60, lng: -61.34, region: 'Caribbean', type: 'Sun', duration: '5h 45m', aircraft: '737 MAX 8', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Antigua', country: 'Antigua & Barbuda', code: 'ANU', lat: 17.13, lng: -61.79, region: 'Caribbean', type: 'Sun', duration: '4h 50m', aircraft: 'A321', fromCities: ['Toronto'], season: 'Mar – Apr' },
+  { city: 'Cayo Coco', country: 'Cuba', code: 'CCC', lat: 22.46, lng: -78.51, region: 'Caribbean', type: 'Sun', duration: '3h 40m', aircraft: 'A319', fromCities: ['Toronto', 'Montreal'], season: 'Oct – Apr' },
+  { city: 'Curaçao', country: 'Curaçao', code: 'CUR', lat: 12.19, lng: -68.96, region: 'Caribbean', type: 'Sun', duration: '5h 10m', aircraft: '737 MAX 8', fromCities: ['Toronto', 'Montreal'], season: 'Year-round' },
+  { city: 'George Town', country: 'Cayman Islands', code: 'GCM', lat: 19.29, lng: -81.36, region: 'Caribbean', type: 'Sun', duration: '4h 10m', aircraft: '737 MAX 8', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Exuma', country: 'Bahamas', code: 'GGT', lat: 23.56, lng: -75.88, region: 'Caribbean', type: 'Sun', duration: '3h 35m', aircraft: 'CRJ-900', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Grenada', country: 'Grenada', code: 'GND', lat: 12.00, lng: -61.79, region: 'Caribbean', type: 'Sun', duration: '5h 25m', aircraft: '737 MAX 8', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Holguín', country: 'Cuba', code: 'HOG', lat: 20.79, lng: -76.31, region: 'Caribbean', type: 'Sun', duration: '3h 50m', aircraft: 'A319', fromCities: ['Toronto'], season: 'Oct – Apr' },
+  { city: 'Cozumel', country: 'Mexico', code: 'CZM', lat: 20.52, lng: -86.93, region: 'Caribbean', type: 'Sun', duration: '3h 20m', aircraft: '737 MAX 8', fromCities: ['Toronto', 'Montreal'], season: 'Year-round' },
+  { city: 'San Juan', country: 'Puerto Rico', code: 'SJU', lat: 18.44, lng: -66.00, region: 'Caribbean', type: 'Sun', duration: '4h 35m', aircraft: 'A321', fromCities: ['Toronto', 'Montreal'], season: 'Year-round' },
+  { city: 'St. Kitts', country: 'St. Kitts & Nevis', code: 'SKB', lat: 17.31, lng: -62.72, region: 'Caribbean', type: 'Sun', duration: '4h 55m', aircraft: 'A321', fromCities: ['Toronto'], season: 'Mar – Apr' },
+  { city: 'St. Maarten', country: 'Sint Maarten', code: 'SXM', lat: 18.04, lng: -63.11, region: 'Caribbean', type: 'Sun', duration: '4h 45m', aircraft: '737 MAX 8', fromCities: ['Toronto', 'Montreal'], season: 'Year-round' },
+  { city: 'St. Lucia', country: 'Saint Lucia', code: 'UVF', lat: 13.73, lng: -60.95, region: 'Caribbean', type: 'Sun', duration: '5h 15m', aircraft: 'A319', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'St. Vincent', country: 'Saint Vincent & the Grenadines', code: 'SVD', lat: 13.14, lng: -61.21, region: 'Caribbean', type: 'Sun', duration: '5h 20m', aircraft: '737 MAX 8', fromCities: ['Toronto'], season: 'Mar – Jul' },
+  { city: 'Santa Clara', country: 'Cuba', code: 'SNU', lat: 22.49, lng: -79.94, region: 'Caribbean', type: 'Sun', duration: '3h 40m', aircraft: 'A321', fromCities: ['Toronto'], season: 'Nov – Mar' },
+  { city: 'Varadero', country: 'Cuba', code: 'VRA', lat: 23.03, lng: -81.43, region: 'Caribbean', type: 'Sun', duration: '3h 35m', aircraft: 'A319', fromCities: ['Toronto', 'Montreal'], season: 'Oct – Apr' },
+  { city: 'Belize City', country: 'Belize', code: 'BZE', lat: 17.54, lng: -88.31, region: 'Caribbean', type: 'Adventure', duration: '4h 30m', aircraft: 'A319', fromCities: ['Toronto', 'Montreal'], season: 'Mar – Apr' },
 
   // ─── MEXICO ───
   { city: 'Cancún', country: 'Mexico', code: 'CUN', lat: 21.04, lng: -86.87, region: 'Mexico', type: 'Sun', duration: '7h', aircraft: '737 MAX 8', fromCities: ['Calgary','Edmonton','Halifax','Montreal','Ottawa','Quebec City','Toronto','Vancouver','Winnipeg'], season: 'Year-round' },
@@ -71,6 +87,7 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Mexico City', country: 'Mexico', code: 'MEX', lat: 19.44, lng: -99.07, region: 'Mexico', type: 'City', duration: '3h 59m', aircraft: '737 MAX 8', fromCities: ['Montreal','Toronto','Vancouver'], season: 'Year-round' },
   { city: 'Ixtapa', country: 'Mexico', code: 'ZIH', lat: 17.60, lng: -101.46, region: 'Mexico', type: 'Sun', duration: '5h 30m', aircraft: '737', fromCities: ['Toronto','Calgary'], season: 'Nov – Apr' },
   { city: 'Guadalajara', country: 'Mexico', code: 'GDL', lat: 20.52, lng: -103.31, region: 'Mexico', type: 'City', duration: '5h 15m', aircraft: '737', fromCities: ['Toronto'], season: 'Nov – Apr' },
+  { city: 'Monterrey', country: 'Mexico', code: 'MTY', lat: 25.77, lng: -100.11, region: 'Mexico', type: 'City', duration: '3h 45m', aircraft: 'CRJ-900', fromCities: ['Toronto'], season: 'Mar – Apr' },
 
   // ─── USA ───
   { city: 'New York', country: 'USA', code: 'JFK', lat: 40.64, lng: -73.78, region: 'USA', type: 'City', duration: '1h 30m', aircraft: 'A220', fromCities: ['Toronto','Montreal','Vancouver'], season: 'Year-round' },
@@ -83,6 +100,16 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Las Vegas', country: 'USA', code: 'LAS', lat: 36.08, lng: -115.15, region: 'USA', type: 'City', duration: '2h 44m', aircraft: 'A320', fromCities: ['Montreal','Toronto','Vancouver'], season: 'Year-round' },
   { city: 'Tampa', country: 'USA', code: 'TPA', lat: 27.98, lng: -82.53, region: 'USA', type: 'Sun', duration: '3h 17m', aircraft: 'A319', fromCities: ['Halifax','Montreal','Toronto'], season: 'Year-round' },
   { city: 'Fort Lauderdale', country: 'USA', code: 'FLL', lat: 26.07, lng: -80.15, region: 'USA', type: 'Sun', duration: '3h 53m', aircraft: 'A321', fromCities: ['Montreal','Ottawa','Quebec City','Toronto'], season: 'Year-round' },
+  { city: 'Jacksonville', country: 'USA', code: 'JAX', lat: 30.49, lng: -81.69, region: 'USA', type: 'City', duration: '2h 35m', aircraft: 'CRJ-900', fromCities: ['Toronto'], season: 'May – Sep' },
+  { city: 'Kailua-Kona', country: 'USA', code: 'KOA', lat: 19.74, lng: -156.04, region: 'USA', type: 'Sun', duration: '6h', aircraft: '737 MAX 8', fromCities: ['Vancouver'], season: 'Mar – Apr' },
+  { city: 'Maui', country: 'USA', code: 'OGG', lat: 20.90, lng: -156.43, region: 'USA', type: 'Sun', duration: '7h 30m', aircraft: '737 MAX 8', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'West Palm Beach', country: 'USA', code: 'PBI', lat: 26.68, lng: -80.09, region: 'USA', type: 'Sun', duration: '3h 15m', aircraft: 'CRJ-900', fromCities: ['Toronto', 'Montreal'], season: 'Mar – Apr' },
+  { city: 'Palm Springs', country: 'USA', code: 'PSP', lat: 33.83, lng: -116.51, region: 'USA', type: 'Sun', duration: '4h 30m', aircraft: '737 MAX 8', fromCities: ['Toronto', 'Vancouver'], season: 'Mar – Apr' },
+  { city: 'Fort Myers', country: 'USA', code: 'RSW', lat: 26.54, lng: -81.76, region: 'USA', type: 'Sun', duration: '3h 15m', aircraft: 'A321', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'San Diego', country: 'USA', code: 'SAN', lat: 32.73, lng: -117.19, region: 'USA', type: 'City', duration: '5h 30m', aircraft: 'CRJ-900', fromCities: ['Toronto', 'Montreal', 'Vancouver'], season: 'Year-round' },
+  { city: 'Sacramento', country: 'USA', code: 'SMF', lat: 38.70, lng: -121.59, region: 'USA', type: 'City', duration: '4h 35m', aircraft: 'CRJ-900', fromCities: ['Toronto', 'Vancouver'], season: 'May – Sep' },
+  { city: 'Orange County', country: 'USA', code: 'SNA', lat: 33.68, lng: -117.87, region: 'USA', type: 'City', duration: '4h 30m', aircraft: '737 MAX 8', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'Sarasota', country: 'USA', code: 'SRQ', lat: 27.40, lng: -82.55, region: 'USA', type: 'Sun', duration: '3h 10m', aircraft: '737 MAX 8', fromCities: ['Toronto'], season: 'Mar – Apr' },
 
   // ─── EUROPE ───
   { city: 'Brussels', country: 'Belgium', code: 'BRU', lat: 50.90, lng: 4.48, region: 'Europe', type: 'City', duration: '7h 20m', aircraft: '737 MAX 8', fromCities: ['Halifax', 'Montreal', 'Toronto'], season: 'Year-round' },
@@ -110,6 +137,16 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Palma de Mallorca', country: 'Spain', code: 'PMI', lat: 39.55, lng: 2.74, region: 'Europe', type: 'Sun', duration: '13h 25m', aircraft: '787-8', fromCities: ['Montreal'], season: 'Jun – Oct', isNew: true },
   { city: 'Berlin', country: 'Germany', code: 'BER', lat: 52.37, lng: 13.52, region: 'Europe', type: 'City', duration: '13h 45m', aircraft: 'A321neo', fromCities: ['Montreal'], season: 'Jul – Oct', isNew: true },
   { city: 'Nantes', country: 'France', code: 'NTE', lat: 47.16, lng: -1.61, region: 'Europe', type: 'City', duration: '7h 30m', aircraft: '737 MAX', fromCities: ['Montreal'], season: 'Jun – Oct', isNew: true },
+  { city: 'Stockholm', country: 'Sweden', code: 'ARN', lat: 59.65, lng: 17.93, region: 'Europe', type: 'City', duration: '8h 30m', aircraft: 'A330-300', fromCities: ['Toronto'], season: 'Jun – Sep' },
+  { city: 'Edinburgh', country: 'Scotland', code: 'EDI', lat: 55.95, lng: -3.37, region: 'Europe', type: 'City', duration: '7h 30m', aircraft: '787-9', fromCities: ['Toronto', 'Montreal'], season: 'Mar – Oct' },
+  { city: 'Geneva', country: 'Switzerland', code: 'GVA', lat: 46.23, lng: 6.11, region: 'Europe', type: 'City', duration: '8h 20m', aircraft: 'A330-300', fromCities: ['Montreal'], season: 'Year-round' },
+  { city: 'Reykjavík', country: 'Iceland', code: 'KEF', lat: 63.98, lng: -22.61, region: 'Europe', type: 'Adventure', duration: '6h 15m', aircraft: '737 MAX 8', fromCities: ['Toronto', 'Montreal'], season: 'Jun – Sep' },
+  { city: 'Manchester', country: 'United Kingdom', code: 'MAN', lat: 53.35, lng: -2.27, region: 'Europe', type: 'City', duration: '7h 30m', aircraft: '787-9', fromCities: ['Toronto'], season: 'Jun – Oct' },
+  { city: 'Munich', country: 'Germany', code: 'MUC', lat: 48.35, lng: 11.79, region: 'Europe', type: 'City', duration: '8h 30m', aircraft: '777-300ER', fromCities: ['Toronto'], season: 'Year-round' },
+  { city: 'Naples', country: 'Italy', code: 'NAP', lat: 40.88, lng: 14.29, region: 'Europe', type: 'City', duration: '9h 30m', aircraft: '787-8', fromCities: ['Montreal'], season: 'May – Oct' },
+  { city: 'Prague', country: 'Czech Republic', code: 'PRG', lat: 50.10, lng: 14.26, region: 'Europe', type: 'City', duration: '9h', aircraft: 'A330-300', fromCities: ['Toronto'], season: 'Jun – Oct' },
+  { city: 'Venice', country: 'Italy', code: 'VCE', lat: 45.50, lng: 12.35, region: 'Europe', type: 'City', duration: '9h 20m', aircraft: 'A330-300', fromCities: ['Toronto', 'Montreal'], season: 'May – Oct' },
+  { city: 'Vienna', country: 'Austria', code: 'VIE', lat: 48.11, lng: 16.57, region: 'Europe', type: 'City', duration: '8h 45m', aircraft: '787-9', fromCities: ['Toronto'], season: 'Year-round' },
 
   // ─── ASIA & PACIFIC ───
   { city: 'Tokyo', country: 'Japan', code: 'HND', lat: 35.55, lng: 139.78, region: 'Asia & Pacific', type: 'City', duration: '13h 35m', aircraft: '777-300ER', fromCities: ['Toronto'], season: 'Year-round' },
@@ -122,6 +159,10 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Osaka', country: 'Japan', code: 'KIX', lat: 34.43, lng: 135.24, region: 'Asia & Pacific', type: 'City', duration: '13h 35m', aircraft: '787-9', fromCities: ['Toronto','Vancouver'], season: 'Mar – Nov' },
   { city: 'Shanghai', country: 'China', code: 'PVG', lat: 31.14, lng: 121.81, region: 'Asia & Pacific', type: 'City', duration: '14h 45m', aircraft: '787-9', fromCities: ['Toronto','Vancouver'], season: 'Year-round' },
   { city: 'Auckland', country: 'New Zealand', code: 'AKL', lat: -37.01, lng: 174.79, region: 'Asia & Pacific', type: 'City', duration: '18h', aircraft: '787 Dreamliner', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'Sapporo', country: 'Japan', code: 'CTS', lat: 42.77, lng: 141.69, region: 'Asia & Pacific', type: 'City', duration: '10h', aircraft: '787-8', fromCities: ['Vancouver'], season: 'Dec – Mar' },
+  { city: 'Manila', country: 'Philippines', code: 'MNL', lat: 14.51, lng: 121.02, region: 'Asia & Pacific', type: 'City', duration: '13h 30m', aircraft: '787-9', fromCities: ['Vancouver'], season: 'Year-round' },
+  { city: 'Tokyo Narita', country: 'Japan', code: 'NRT', lat: 35.77, lng: 140.39, region: 'Asia & Pacific', type: 'City', duration: '13h 35m', aircraft: '777-300ER', fromCities: ['Toronto', 'Montreal', 'Vancouver'], season: 'Year-round' },
+  { city: 'Beijing', country: 'China', code: 'PEK', lat: 40.08, lng: 116.60, region: 'Asia & Pacific', type: 'City', duration: '11h', aircraft: '787-9', fromCities: ['Vancouver'], season: 'Year-round' },
 
   // ─── SOUTH AMERICA ───
   { city: 'Bogotá', country: 'Colombia', code: 'BOG', lat: 4.70, lng: -74.15, region: 'South America', type: 'City', duration: '5h 30m', aircraft: '787-8', fromCities: ['Montreal','Toronto'], season: 'Year-round' },
@@ -130,6 +171,11 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Lima', country: 'Peru', code: 'LIM', lat: -12.02, lng: -77.11, region: 'South America', type: 'City', duration: '7h 15m', aircraft: '787-8', fromCities: ['Montreal','Toronto'], season: 'Jan – Dec' },
   { city: 'Buenos Aires', country: 'Argentina', code: 'EZE', lat: -34.82, lng: -58.54, region: 'South America', type: 'City', duration: '11h 30m', aircraft: '787 Dreamliner', fromCities: ['Toronto'], season: 'Year-round' },
   { city: 'Santiago', country: 'Chile', code: 'SCL', lat: -33.39, lng: -70.79, region: 'South America', type: 'City', duration: '12h', aircraft: '787-9', fromCities: ['Montreal','Toronto'], season: 'Jan – Dec' },
+  { city: 'Rio de Janeiro', country: 'Brazil', code: 'GIG', lat: -22.80, lng: -43.24, region: 'South America', type: 'City', duration: '10h 30m', aircraft: '787-9', fromCities: ['Toronto'], season: 'Nov – Mar' },
+  { city: 'Quito', country: 'Ecuador', code: 'UIO', lat: -0.13, lng: -78.49, region: 'South America', type: 'City', duration: '7h 15m', aircraft: '787-8', fromCities: ['Toronto', 'Montreal'], season: 'Dec – Mar' },
+  { city: 'Guatemala City', country: 'Guatemala', code: 'GUA', lat: 14.58, lng: -90.52, region: 'South America', type: 'City', duration: '5h 30m', aircraft: 'A330-300', fromCities: ['Montreal'], season: 'Mar – Apr' },
+  { city: 'San José', country: 'Costa Rica', code: 'SJO', lat: 9.99, lng: -84.21, region: 'South America', type: 'City', duration: '5h 30m', aircraft: 'A330-300', fromCities: ['Toronto', 'Montreal'], season: 'Year-round' },
+  { city: 'Liberia', country: 'Costa Rica', code: 'LIR', lat: 10.59, lng: -85.54, region: 'South America', type: 'Sun', duration: '5h 40m', aircraft: '737 MAX 8', fromCities: ['Toronto', 'Montreal'], season: 'Year-round' },
 
   // ─── AFRICA & MIDDLE EAST ───
   { city: 'Casablanca', country: 'Morocco', code: 'CMN', lat: 33.37, lng: -7.59, region: 'Africa & Middle East', type: 'City', duration: '12h', aircraft: 'A330-300', fromCities: ['Montreal'], season: 'Year-round' },

@@ -1,133 +1,90 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { AppComponent } from './app.component';
+import { getWeekStart } from './utils/week';
 
 describe('AppComponent', () => {
+  let component: AppComponent;
+
   beforeEach(() => {
-    localStorage.clear();
+    component = new AppComponent();
   });
 
-  it('computes visited percentage from country counts', () => {
-    const component = new AppComponent();
-    component.visitedCountries = ['France', 'Japan'];
-
-    expect(component.visitedCount).toBe(2);
-    expect(component.totalCountries).toBeGreaterThan(2);
-    expect(component.visitedPercent).toBeGreaterThan(0);
+  it('initialises weekStart to the Monday of the current week', () => {
+    expect(component.weekStart.getDay()).toBe(1); // 1 = Monday
   });
 
-  it('toggles visited country and persists', () => {
-    const component = new AppComponent();
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem');
-
-    component.onVisitedCountryToggled('France');
-    expect(component.visitedCountries).toContain('France');
-
-    component.onVisitedCountryToggled('France');
-    expect(component.visitedCountries).not.toContain('France');
-    expect(setItemSpy).toHaveBeenCalled();
+  it('initialises to Toronto hub', () => {
+    expect(component.homeCity).toBe('Toronto');
+    expect(component.hubCode).toBe('YYZ');
   });
 
-  it('ignores unknown countries in toggle flow', () => {
-    vi.useFakeTimers();
-    const component = new AppComponent();
-    component.onVisitedCountryToggled('Atlantis');
-    vi.runAllTimers();
-
-    expect(component.visitedCountries).not.toContain('Atlantis');
-    expect(component.statusMessage).toBe('Unknown country could not be updated.');
-    vi.useRealTimers();
+  it('prevWeek steps back 7 days and clears expandedCode', () => {
+    const before = new Date(component.weekStart);
+    component.expandedCode = 'LHR';
+    component.prevWeek();
+    const diff = before.getTime() - component.weekStart.getTime();
+    expect(diff).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(component.expandedCode).toBeNull();
   });
 
-  it('clears visited countries', () => {
-    const component = new AppComponent();
-    component.visitedCountries = ['France', 'Japan'];
-
-    component.clearVisitedCountries();
-    expect(component.visitedCountries).toEqual([]);
+  it('nextWeek steps forward 7 days and clears expandedCode', () => {
+    const before = new Date(component.weekStart);
+    component.expandedCode = 'LHR';
+    component.nextWeek();
+    const diff = component.weekStart.getTime() - before.getTime();
+    expect(diff).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(component.expandedCode).toBeNull();
   });
 
-  it('does not clear when visited list is already empty', () => {
-    vi.useFakeTimers();
-    const component = new AppComponent();
-    component.visitedCountries = [];
-
-    component.clearVisitedCountries();
-    vi.runAllTimers();
-
-    expect(component.statusMessage).toBe('');
-    vi.useRealTimers();
+  it('onHomeCityChange updates hubCode and clears expandedCode', () => {
+    component.expandedCode = 'CDG';
+    component.onHomeCityChange('Vancouver');
+    expect(component.homeCity).toBe('Vancouver');
+    expect(component.hubCode).toBe('YVR');
+    expect(component.expandedCode).toBeNull();
   });
 
-  it('resets filters and clears selection', () => {
-    const component = new AppComponent();
-    component.region = 'Europe';
-    component.type = 'City';
-    component.search = 'par';
-    component.newOnly = true;
-    component.selected = component.filteredDestinations[0] ?? null;
-
-    component.resetFilters();
-
-    expect(component.region).toBe('All');
-    expect(component.type).toBe('All');
-    expect(component.search).toBe('');
-    expect(component.newOnly).toBe(false);
-    expect(component.selected).toBeNull();
+  it('onRegionSelected updates activeRegion and clears expandedCode', () => {
+    component.expandedCode = 'CDG';
+    component.onRegionSelected('Europe');
+    expect(component.activeRegion).toBe('Europe');
+    expect(component.expandedCode).toBeNull();
   });
 
-  it('updates filters through handlers', () => {
-    const component = new AppComponent();
-
-    component.onRegionChange('Europe');
-    component.onTypeChange('City');
-    component.onSearchChange('par');
-    component.onToggleNewOnly();
-
-    expect(component.region).toBe('Europe');
-    expect(component.type).toBe('City');
-    expect(component.search).toBe('par');
-    expect(component.newOnly).toBe(true);
+  it('onCardToggled expands a card', () => {
+    component.onCardToggled('LHR');
+    expect(component.expandedCode).toBe('LHR');
   });
 
-  it('loads visited countries from storage safely', () => {
-    localStorage.setItem('acExplorer.visitedCountries', JSON.stringify(['France', 'Invalidland']));
-    const component = new AppComponent();
-
-    expect(component.visitedCountries).toContain('France');
-    expect(component.visitedCountries).not.toContain('Invalidland');
+  it('onCardToggled collapses a card that is already expanded', () => {
+    component.expandedCode = 'LHR';
+    component.onCardToggled('LHR');
+    expect(component.expandedCode).toBeNull();
   });
 
-  it('handles malformed storage and persistence failures', () => {
-    localStorage.setItem('acExplorer.visitedCountries', '{bad-json');
-    const component = new AppComponent();
-    expect(component.visitedCountries).toEqual([]);
-
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('write failed');
-    });
-    component.onVisitedCountryToggled('France');
-    expect(setItemSpy).toHaveBeenCalled();
-    setItemSpy.mockRestore();
+  it('onCardToggled switches to a different card', () => {
+    component.expandedCode = 'LHR';
+    component.onCardToggled('CDG');
+    expect(component.expandedCode).toBe('CDG');
   });
 
-  it('clears search text', () => {
-    const component = new AppComponent();
-    component.search = 'mex';
-
-    component.clearSearch();
-    expect(component.search).toBe('');
+  it('filteredDestinations returns only routes active in the selected week', () => {
+    component.homeCity = 'Toronto';
+    component.weekStart = getWeekStart(new Date('2026-11-02T00:00:00'));
+    expect(component.filteredDestinations.length).toBeGreaterThan(0);
   });
 
-  it('handles null selection path and closes panel', () => {
-    vi.useFakeTimers();
-    const component = new AppComponent();
-    component.onSelect(null);
-    vi.runAllTimers();
-    expect(component.selected).toBeNull();
+  it('filteredDestinations filters by region', () => {
+    component.homeCity = 'Toronto';
+    component.weekStart = getWeekStart(new Date('2026-11-02T00:00:00'));
+    component.activeRegion = 'Europe';
+    const results = component.filteredDestinations;
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.every(d => d.region === 'Europe')).toBe(true);
+  });
 
-    component.onPanelClosed();
-    vi.runAllTimers();
-    expect(component.statusMessage).toBe('Route details closed.');
-    vi.useRealTimers();
+  it('filteredDestinations returns empty for a week with no flights', () => {
+    component.weekStart = getWeekStart(new Date('2020-01-06T00:00:00'));
+    expect(component.filteredDestinations).toHaveLength(0);
   });
 });

@@ -26,15 +26,22 @@ import { RouteCardComponent } from '../route-card/route-card.component';
   `,
   styles: [`
     .list {
-      padding: 12px 16px;
-      display: flex;
-      flex-direction: column;
+      padding: 12px 24px;
+      display: grid;
+      grid-template-columns: 1fr;
       gap: 8px;
-      max-width: 640px;
+      max-width: 1280px;
       margin: 0 auto;
       padding-bottom: 48px;
     }
+    @media (min-width: 768px) {
+      .list { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1200px) {
+      .list { grid-template-columns: repeat(3, 1fr); padding: 16px 32px; }
+    }
     .list__empty {
+      grid-column: 1 / -1;
       text-align: center;
       padding: 48px 24px;
       font-size: 14px;

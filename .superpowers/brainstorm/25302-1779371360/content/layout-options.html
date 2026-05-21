@@ -1,0 +1,163 @@
+<h2>Layout Direction</h2>
+<p class="subtitle">The globe stays or goes — which overall structure works for company trip planning?</p>
+
+<div class="cards">
+
+  <!-- Option A: Kill the globe, date-first layout -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1120;padding:16px;font-family:'DM Sans',sans-serif;min-height:220px;">
+      <!-- Date picker bar -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="background:rgba(200,16,46,0.12);border:1px solid rgba(200,16,46,0.3);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;color:#ff4d6a;">⬥ Jun 9 – Jun 16</div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:7px 12px;font-size:12px;color:rgba(255,255,255,0.4);">Any week</div>
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:7px 12px;font-size:12px;color:rgba(255,255,255,0.4);">All regions ▾</div>
+      </div>
+      <!-- Route cards -->
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div style="padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:9px;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:0;">
+          <div style="flex:1;">
+            <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">YYZ → LHR · Tue, Thu, Sat</div>
+            <div style="font-size:14px;font-weight:700;color:#eae6df;">London</div>
+          </div>
+          <div style="width:1px;height:28px;background:rgba(255,255,255,0.07);margin:0 12px;"></div>
+          <div style="text-align:center;min-width:38px;">
+            <div style="font-size:17px;font-weight:800;color:#8B5CF6;line-height:1;">LHR</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25);">9h</div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:9px;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;">
+          <div style="flex:1;">
+            <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">YYZ → CDG · Daily</div>
+            <div style="font-size:14px;font-weight:700;color:#eae6df;">Paris</div>
+          </div>
+          <div style="width:1px;height:28px;background:rgba(255,255,255,0.07);margin:0 12px;"></div>
+          <div style="text-align:center;min-width:38px;">
+            <div style="font-size:17px;font-weight:800;color:#8B5CF6;line-height:1;">CDG</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25);">7h 30m</div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:9px;border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;">
+          <div style="flex:1;">
+            <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">YYZ → CDG · Mon, Wed, Fri</div>
+            <div style="font-size:14px;font-weight:700;color:#eae6df;">Frankfurt</div>
+          </div>
+          <div style="width:1px;height:28px;background:rgba(255,255,255,0.07);margin:0 12px;"></div>
+          <div style="text-align:center;min-width:38px;">
+            <div style="font-size:17px;font-weight:800;color:#8B5CF6;line-height:1;">FRA</div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.25);">12h 30m</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.2);text-align:center;margin-top:4px;">+14 more routes with flights Jun 9–16</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Date-first, no globe</h3>
+      <p>Pick a week up top, see every route that has flights in that window. Flight days shown inline on each card. Fast and functional.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Keep globe, add schedule panel -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1120;padding:0;min-height:220px;overflow:hidden;border-radius:8px;display:flex;">
+      <!-- Globe placeholder -->
+      <div style="flex:1;background:radial-gradient(ellipse at 60% 50%, #1a1f3a 0%, #080b16 70%);display:flex;align-items:center;justify-content:center;position:relative;">
+        <div style="width:90px;height:90px;border-radius:50%;background:radial-gradient(circle at 35% 35%, #1e3a5f, #0a1628);border:1px solid rgba(255,255,255,0.1);box-shadow:0 0 30px rgba(79,70,229,0.2);"></div>
+        <div style="position:absolute;bottom:8px;left:8px;font-size:9px;color:rgba(255,255,255,0.2);">Globe (kept)</div>
+      </div>
+      <!-- Side panel -->
+      <div style="width:160px;background:rgba(12,15,28,0.9);border-left:1px solid rgba(255,255,255,0.06);padding:10px;display:flex;flex-direction:column;gap:6px;">
+        <div style="background:rgba(200,16,46,0.12);border:1px solid rgba(200,16,46,0.3);border-radius:6px;padding:5px 8px;font-size:10px;font-weight:700;color:#ff4d6a;text-align:center;">Jun 9 – 16</div>
+        <div style="padding:7px 8px;background:rgba(255,255,255,0.04);border-radius:7px;border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:2px;">YYZ → LHR · Tue Sat</div>
+          <div style="font-size:12px;font-weight:700;color:#eae6df;">London</div>
+        </div>
+        <div style="padding:7px 8px;background:rgba(255,255,255,0.04);border-radius:7px;border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:2px;">YYZ → CDG · Daily</div>
+          <div style="font-size:12px;font-weight:700;color:#eae6df;">Paris</div>
+        </div>
+        <div style="padding:7px 8px;background:rgba(255,255,255,0.04);border-radius:7px;border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:2px;">YYZ → HND · Mon Thu</div>
+          <div style="font-size:12px;font-weight:700;color:#eae6df;">Tokyo</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Globe + schedule sidebar</h3>
+      <p>Globe stays for visual context. Date picker filters the sidebar list. Good if the globe orientation (which hub, which region) helps you think spatially.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Week calendar view -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1120;padding:14px;font-family:'DM Sans',sans-serif;min-height:220px;">
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Week of Jun 9 · YYZ departures</div>
+      <!-- Day columns -->
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:10px;">
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px;">MON</div>
+          <div style="background:rgba(200,16,46,0.15);border:1px solid rgba(200,16,46,0.3);border-radius:6px;padding:4px 2px;font-size:9px;font-weight:700;color:#ff4d6a;">9</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px;">TUE</div>
+          <div style="background:rgba(200,16,46,0.15);border:1px solid rgba(200,16,46,0.3);border-radius:6px;padding:4px 2px;font-size:9px;font-weight:700;color:#ff4d6a;">10</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px;">WED</div>
+          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:4px 2px;font-size:9px;color:rgba(255,255,255,0.2);">11</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px;">THU</div>
+          <div style="background:rgba(200,16,46,0.15);border:1px solid rgba(200,16,46,0.3);border-radius:6px;padding:4px 2px;font-size:9px;font-weight:700;color:#ff4d6a;">12</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px;">FRI</div>
+          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:4px 2px;font-size:9px;color:rgba(255,255,255,0.2);">13</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px;">SAT</div>
+          <div style="background:rgba(200,16,46,0.15);border:1px solid rgba(200,16,46,0.3);border-radius:6px;padding:4px 2px;font-size:9px;font-weight:700;color:#ff4d6a;">14</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:4px;">SUN</div>
+          <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:4px 2px;font-size:9px;color:rgba(255,255,255,0.2);">15</div>
+        </div>
+      </div>
+      <!-- Routes under the week -->
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div style="display:grid;grid-template-columns:1fr auto;align-items:center;padding:7px 10px;background:rgba(255,255,255,0.04);border-radius:7px;border:1px solid rgba(255,255,255,0.06);">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#eae6df;">London <span style="font-size:11px;font-weight:400;color:#8B5CF6;">LHR</span></div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.3);">Flies: Mon Tue Thu Sat</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(255,255,255,0.04);font-size:8px;color:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(255,255,255,0.04);font-size:8px;color:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto;align-items:center;padding:7px 10px;background:rgba(255,255,255,0.04);border-radius:7px;border:1px solid rgba(255,255,255,0.06);">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#eae6df;">Paris <span style="font-size:11px;font-weight:400;color:#8B5CF6;">CDG</span></div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.3);">Flies: Daily</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="width:16px;height:16px;border-radius:3px;background:rgba(200,16,46,0.3);font-size:8px;font-weight:700;color:#ff4d6a;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Week calendar view</h3>
+      <p>Pick a week, see which days each route actually flies highlighted in a mini day-grid. Immediately answers "can I leave Tuesday and come back Saturday?"</p>
+    </div>
+  </div>
+
+</div>

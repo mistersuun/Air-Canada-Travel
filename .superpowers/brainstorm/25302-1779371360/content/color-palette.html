@@ -1,0 +1,162 @@
+<h2>Colour Direction</h2>
+<p class="subtitle">Same layout, three different palettes. Which feels right for a work tool you'd use daily?</p>
+
+<div class="cards">
+
+  <!-- A: Deep navy (my recommendation) -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f1623;padding:14px;font-family:'DM Sans',sans-serif;">
+
+      <!-- Week bar -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding:7px 10px;background:#1a2235;border-radius:8px;border:1px solid #2a3650;">
+        <span style="font-size:10px;color:#8496b0;font-weight:700;letter-spacing:1px;">DEPART</span>
+        <span style="font-size:11px;font-weight:700;color:#e84060;background:rgba(232,64,96,0.12);border:1px solid rgba(232,64,96,0.25);border-radius:5px;padding:3px 9px;">Jun 9 – 15</span>
+        <span style="font-size:11px;color:#4a6080;margin-left:auto;">← →</span>
+      </div>
+
+      <!-- Cards -->
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div style="padding:10px 12px;background:#1a2235;border-radius:9px;border:1px solid #2a3650;">
+          <div style="font-size:9px;color:#4a6080;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">YYZ → LHR</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <div style="font-size:14px;font-weight:700;color:#e8edf5;">London</div>
+            <div style="font-size:16px;font-weight:800;color:#7c6af7;">LHR</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#111827;border:1px solid #1e2d45;font-size:8px;color:#3a4f6a;display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#111827;border:1px solid #1e2d45;font-size:8px;color:#3a4f6a;display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+
+        <div style="padding:10px 12px;background:#1a2235;border-radius:9px;border:1px solid #2a3650;">
+          <div style="font-size:9px;color:#4a6080;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">YYZ → CDG</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <div style="font-size:14px;font-weight:700;color:#e8edf5;">Paris</div>
+            <div style="font-size:16px;font-weight:800;color:#7c6af7;">CDG</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.2);border:1px solid rgba(232,64,96,0.35);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Deep navy <span style="font-size:11px;background:rgba(124,106,247,0.15);color:#7c6af7;padding:2px 7px;border-radius:4px;margin-left:4px;">My pick</span></h3>
+      <p>Navy/slate base (#0f1623 bg, #1a2235 cards). Cards clearly separate from background. Warmer and more readable than pure black.</p>
+    </div>
+  </div>
+
+  <!-- B: Light mode -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#f0f2f7;padding:14px;font-family:'DM Sans',sans-serif;">
+
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding:7px 10px;background:#fff;border-radius:8px;border:1px solid #dde3ef;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <span style="font-size:10px;color:#8a96aa;font-weight:700;letter-spacing:1px;">DEPART</span>
+        <span style="font-size:11px;font-weight:700;color:#C8102E;background:rgba(200,16,46,0.08);border:1px solid rgba(200,16,46,0.2);border-radius:5px;padding:3px 9px;">Jun 9 – 15</span>
+        <span style="font-size:11px;color:#b0bac8;margin-left:auto;">← →</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div style="padding:10px 12px;background:#fff;border-radius:9px;border:1px solid #dde3ef;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+          <div style="font-size:9px;color:#9aa4b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">YYZ → LHR</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <div style="font-size:14px;font-weight:700;color:#1a2035;">London</div>
+            <div style="font-size:16px;font-weight:800;color:#6d56e8;">LHR</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#f0f2f7;border:1px solid #dde3ef;font-size:8px;color:#c0c8d8;display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#f0f2f7;border:1px solid #dde3ef;font-size:8px;color:#c0c8d8;display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">S</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+        <div style="padding:10px 12px;background:#fff;border-radius:9px;border:1px solid #dde3ef;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+          <div style="font-size:9px;color:#9aa4b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">YYZ → CDG</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <div style="font-size:14px;font-weight:700;color:#1a2035;">Paris</div>
+            <div style="font-size:16px;font-weight:800;color:#6d56e8;">CDG</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">S</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#fde8ec;border:1px solid #f8bcc8;font-size:8px;font-weight:700;color:#C8102E;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Light mode</h3>
+      <p>White cards on light gray (#f0f2f7). Air Canada red pops clearly. Great in bright offices and on phone screens in daylight.</p>
+    </div>
+  </div>
+
+  <!-- C: Charcoal warm -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#161514;padding:14px;font-family:'DM Sans',sans-serif;">
+
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding:7px 10px;background:#1f1e1c;border-radius:8px;border:1px solid #2e2c29;">
+        <span style="font-size:10px;color:#7a7268;font-weight:700;letter-spacing:1px;">DEPART</span>
+        <span style="font-size:11px;font-weight:700;color:#e84060;background:rgba(232,64,96,0.12);border:1px solid rgba(232,64,96,0.25);border-radius:5px;padding:3px 9px;">Jun 9 – 15</span>
+        <span style="font-size:11px;color:#4a4640;margin-left:auto;">← →</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <div style="padding:10px 12px;background:#1f1e1c;border-radius:9px;border:1px solid #2e2c29;">
+          <div style="font-size:9px;color:#5a5650;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">YYZ → LHR</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <div style="font-size:14px;font-weight:700;color:#f0ece6;">London</div>
+            <div style="font-size:16px;font-weight:800;color:#c084fc;">LHR</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#131211;border:1px solid #252320;font-size:8px;color:#3a3830;display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:#131211;border:1px solid #252320;font-size:8px;color:#3a3830;display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+        <div style="padding:10px 12px;background:#1f1e1c;border-radius:9px;border:1px solid #2e2c29;">
+          <div style="font-size:9px;color:#5a5650;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">YYZ → CDG</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;">
+            <div style="font-size:14px;font-weight:700;color:#f0ece6;">Paris</div>
+            <div style="font-size:16px;font-weight:800;color:#c084fc;">CDG</div>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">M</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">W</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">T</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">F</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+            <div style="flex:1;height:20px;border-radius:4px;background:rgba(232,64,96,0.18);border:1px solid rgba(232,64,96,0.3);font-size:8px;font-weight:700;color:#e84060;display:flex;align-items:center;justify-content:center;">S</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Warm charcoal</h3>
+      <p>Slightly warm dark (#161514). Between navy and pure black — less cold than A, avoids the blue tint. Good if you find navy too colourful.</p>
+    </div>
+  </div>
+
+</div>

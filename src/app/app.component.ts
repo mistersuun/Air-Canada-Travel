@@ -5,11 +5,12 @@ import { getWeekStart, routeHasFlightsInWeek } from './utils/week';
 import { HeaderComponent } from './components/header/header.component';
 import { WeekStripComponent } from './components/week-strip/week-strip.component';
 import { RouteListComponent } from './components/route-list/route-list.component';
+import { FlightModalComponent } from './components/flight-modal/flight-modal.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, HeaderComponent, WeekStripComponent, RouteListComponent],
+  imports: [CommonModule, HeaderComponent, WeekStripComponent, RouteListComponent, FlightModalComponent],
   template: `
     <app-header
       [homeCity]="homeCity"
@@ -33,6 +34,15 @@ import { RouteListComponent } from './components/route-list/route-list.component
       [expandedCode]="expandedCode"
       (cardToggled)="onCardToggled($event)"
     ></app-route-list>
+
+    <app-flight-modal
+      *ngIf="expandedDestination"
+      [destination]="expandedDestination!"
+      [hubCode]="hubCode"
+      [hubCityName]="homeCity"
+      [weekStart]="weekStart"
+      (closed)="expandedCode = null"
+    ></app-flight-modal>
   `,
   styles: [`
     :host {
@@ -50,6 +60,11 @@ export class AppComponent {
 
   get hubCode(): string {
     return HUBS.find(h => h.name === this.homeCity)?.code ?? 'YYZ';
+  }
+
+  get expandedDestination(): Destination | null {
+    if (!this.expandedCode) return null;
+    return DESTINATIONS.find(d => d.code === this.expandedCode) ?? null;
   }
 
   get filteredDestinations(): Destination[] {

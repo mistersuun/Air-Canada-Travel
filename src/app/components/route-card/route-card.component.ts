@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Destination, REGION_COLORS } from '../../data/destinations';
-import { DayFlight, getFlightsForWeek, formatDayLabel } from '../../utils/week';
+import { DayFlight, getFlightsForWeek } from '../../utils/week';
+import { getFlag } from '../../utils/flags';
 
 const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
 
@@ -30,7 +31,7 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
             {{ destination.aircraft }}
             <span *ngIf="destination.isNew" class="card__new">NEW</span>
           </div>
-          <div class="card__city">{{ destination.city }}</div>
+          <div class="card__city"><span class="card__flag">{{ flag }}</span>{{ destination.city }}</div>
           <div class="card__sub">{{ destination.country }} · {{ destination.region }}</div>
         </div>
         <div class="card__right">
@@ -49,28 +50,6 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
         >{{ dayInitials[i] }}</div>
       </div>
 
-      <!-- Expanded detail -->
-      <div class="card__detail" *ngIf="expanded" role="region" aria-label="Flight times this week">
-        <div class="detail__label">FLIGHTS THIS WEEK</div>
-
-        <div
-          *ngFor="let day of flights"
-          class="flight-row"
-          [class.flight-row--none]="!day.flies"
-        >
-          <span class="flight-row__date">{{ formatDay(day.date) }}</span>
-          <span class="flight-row__num">{{ day.flies ? day.flightNumber : '' }}</span>
-          <span class="flight-row__time" *ngIf="day.flies">
-            {{ day.departure }} → {{ day.arrival }}
-          </span>
-          <span class="flight-row__none" *ngIf="!day.flies">No departure</span>
-        </div>
-
-        <div class="detail__also" *ngIf="destination.fromCities.length > 1">
-          Also from:
-          {{ destination.fromCities.filter(c => c !== hubCityName).join(' · ') }}
-        </div>
-      </div>
     </div>
   `,
   styles: [`
@@ -93,6 +72,7 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
       font-size: 9px; font-weight: 700; background: #C8102E; color: #fff;
       padding: 1px 5px; border-radius: 3px; margin-left: 4px; vertical-align: middle;
     }
+    .card__flag { font-size: 18px; margin-right: 6px; vertical-align: -2px; }
     .card__city { font-size: 16px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.3px; }
     .card__sub { font-size: 12px; color: #86868b; margin-top: 1px; }
     .card__right { text-align: right; flex-shrink: 0; margin-left: 12px; }
@@ -108,29 +88,6 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
     .day-pill--on  { background: #fff0f2; color: #C8102E; border: 1px solid #ffc7cf; }
     .day-pill:not(.day-pill--on) { background: #f5f5f7; color: #c7c7cc; border: 1px solid #e8e8ed; }
 
-    .card__detail {
-      margin-top: 14px;
-      padding-top: 14px;
-      border-top: 1px solid #f2f2f2;
-    }
-    .detail__label {
-      font-size: 10px; font-weight: 700; color: #86868b;
-      letter-spacing: 1px; text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .flight-row {
-      display: flex; align-items: center; gap: 12px;
-      padding: 7px 0;
-      border-bottom: 1px solid #f5f5f5;
-      font-size: 12px;
-    }
-    .flight-row:last-of-type { border-bottom: none; }
-    .flight-row__date { font-weight: 600; color: #1d1d1f; min-width: 80px; }
-    .flight-row__num { color: #86868b; min-width: 48px; }
-    .flight-row__time { color: #1d1d1f; font-weight: 600; margin-left: auto; }
-    .flight-row--none { opacity: 0.4; }
-    .flight-row__none { color: #86868b; font-style: italic; }
-    .detail__also { font-size: 12px; color: #86868b; margin-top: 10px; }
   `]
 })
 export class RouteCardComponent {
@@ -147,11 +104,11 @@ export class RouteCardComponent {
     return getFlightsForWeek(this.hubCode, this.destination.code, this.weekStart);
   }
 
-  get regionColor(): string {
-    return REGION_COLORS[this.destination.region] || '#86868b';
+  get flag(): string {
+    return getFlag(this.destination.country);
   }
 
-  formatDay(date: Date): string {
-    return formatDayLabel(date);
+  get regionColor(): string {
+    return REGION_COLORS[this.destination.region] || '#86868b';
   }
 }

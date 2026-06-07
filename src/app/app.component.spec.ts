@@ -13,9 +13,9 @@ describe('AppComponent', () => {
     expect(component.weekStart.getDay()).toBe(1); // 1 = Monday
   });
 
-  it('initialises to Toronto hub', () => {
-    expect(component.homeCity).toBe('Toronto');
-    expect(component.hubCode).toBe('YYZ');
+  it('initialises to Montreal hub', () => {
+    expect(component.homeCity).toBe('Montreal');
+    expect(component.hubCode).toBe('YUL');
   });
 
   it('prevWeek steps back 7 days and clears expandedCode', () => {

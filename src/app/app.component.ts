@@ -53,7 +53,7 @@ import { FlightModalComponent } from './components/flight-modal/flight-modal.com
   `]
 })
 export class AppComponent {
-  homeCity = 'Toronto';
+  homeCity = 'Montreal';
   weekStart = getWeekStart(new Date());
   activeRegion = 'All';
   expandedCode: string | null = null;

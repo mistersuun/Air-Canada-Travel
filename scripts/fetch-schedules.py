@@ -18,52 +18,29 @@ except ImportError:
     print("pdfplumber not installed. Run: pip install pdfplumber")
     sys.exit(1)
 
-# ---------------------------------------------------------------------------
-# PDF URLs
-# ---------------------------------------------------------------------------
-PDF_URLS = [
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-ASIA-Asia.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHPACIFIC-Australia.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHPACIFIC-NewZealand.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-AtlanticCanada.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-EasternCanada.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-NorthernCanada.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-WesternCanada.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Bahamas.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Barbados.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-DominicanRepublic.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-EasternCaribbean.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Jamaica.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-SouthernCaribbean.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-WesternCaribbean.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-CentralEurope.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-England.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-France.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Greece.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Ireland.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Italy.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-NorthernEurope.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Portugal.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Scotland.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Spain.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-WesternEurope.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-CentralMexico.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-EastCoastMexico.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-WestCoastMexico.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-AFRICA-NorthernAfrica.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-MIDDLEEAST-MiddleEast.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-CentralAmerica.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-CostaRica.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-SouthAmerica.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-California.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-Florida.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-Hawaii.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-LasVegas.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-MidwestUSA.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-NorthEastUSA.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-SouthUSA.pdf",
-    "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-WesternUSA.pdf",
-]
+WHERE_WE_FLY_URL = "https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly"
+PDF_BASE = "https://vacations.aircanada.com"
+
+
+def discover_pdf_urls() -> list[str]:
+    """Scrape the where-we-fly page and return all schedule PDF URLs."""
+    req = urllib.request.Request(WHERE_WE_FLY_URL, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        html = resp.read().decode('utf-8', errors='replace')
+
+    # Match all href values ending in .pdf under the known files path
+    found = re.findall(r'href=["\']([^"\']*travel-info/where-we-fly/files/[^"\']*\.pdf)["\']', html)
+
+    # Deduplicate and make absolute
+    urls = []
+    seen = set()
+    for href in found:
+        url = href if href.startswith('http') else PDF_BASE + href
+        if url not in seen:
+            seen.add(url)
+            urls.append(url)
+
+    return urls
 
 # ---------------------------------------------------------------------------
 # Day bitmask → comma-separated day names
@@ -257,7 +234,15 @@ def main():
     all_routes = defaultdict(list)
     errors = []
 
-    for url in PDF_URLS:
+    print(f"Discovering PDFs from {WHERE_WE_FLY_URL}...")
+    try:
+        pdf_urls = discover_pdf_urls()
+        print(f"Found {len(pdf_urls)} PDFs\n")
+    except Exception as e:
+        print(f"Failed to discover PDFs: {e}")
+        sys.exit(1)
+
+    for url in pdf_urls:
         name = url.split('/')[-1]
         print(f"Fetching {name}...", end=' ', flush=True)
         try:

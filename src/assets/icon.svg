@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#D4182E"/>
+      <stop offset="100%" stop-color="#A01020"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Airplane -->
+  <g transform="translate(256,256) rotate(-30)">
+    <!-- Fuselage -->
+    <path d="M-20,120 L-10,40 L0,-140 L10,40 L20,120 Z" fill="white" opacity="0.95"/>
+    <!-- Wings -->
+    <path d="M0,20 L-120,70 L-110,85 L-10,55 L0,20 Z" fill="white" opacity="0.9"/>
+    <path d="M0,20 L120,70 L110,85 L10,55 L0,20 Z" fill="white" opacity="0.9"/>
+    <!-- Tail -->
+    <path d="M0,90 L-40,120 L-35,130 L0,110 Z" fill="white" opacity="0.85"/>
+    <path d="M0,90 L40,120 L35,130 L0,110 Z" fill="white" opacity="0.85"/>
+    <!-- Nose highlight -->
+    <ellipse cx="0" cy="-130" rx="5" ry="12" fill="white" opacity="0.6"/>
+  </g>
+  <!-- Maple leaf accent (small, bottom-right) -->
+  <g transform="translate(390,390) scale(0.55)" fill="white" opacity="0.25">
+    <path d="M0,-70 L14,-28 L56,-42 L35,-10 L70,14 L28,14 L28,56 L0,35 L-28,56 L-28,14 L-70,14 L-35,-10 L-56,-42 L-14,-28 Z"/>
+  </g>
+</svg>

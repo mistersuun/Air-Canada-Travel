@@ -10,7 +10,7 @@ import { HUBS } from '../../data/destinations';
   template: `
     <header class="header">
       <div class="header__brand">
-        <div class="header__logo">✈</div>
+        <img class="header__logo" src="assets/icon.svg" alt="AC Trips logo">
         <span class="header__name">Air Canada <span class="header__dim">Trips</span></span>
       </div>
       <div class="header__right">
@@ -42,10 +42,7 @@ import { HUBS } from '../../data/destinations';
     }
     .header__brand { display: flex; align-items: center; gap: 10px; }
     .header__logo {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: #C8102E; color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px;
+      width: 28px; height: 28px; border-radius: 6px;
     }
     .header__name { font-size: 16px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.2px; }
     .header__dim { font-weight: 400; color: #86868b; }

@@ -50,6 +50,7 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
         *ngFor="let day of flights"
         class="flight-row"
         [class.flight-row--none]="!day.flies"
+        [class.flight-row--selected]="isSelectedDay(day.date)"
       >
         <span class="flight-row__date">{{ formatDay(day.date) }}</span>
         <span class="flight-row__num">{{ day.flies ? day.flightNumber : '' }}</span>
@@ -153,6 +154,7 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
     .flight-row__num { color: #86868b; min-width: 48px; }
     .flight-row__time { color: #1d1d1f; font-weight: 600; margin-left: auto; }
     .flight-row--none { opacity: 0.4; }
+    .flight-row--selected { background: #fff0f2; border-radius: 6px; padding: 8px 6px; }
     .flight-row__none { color: #86868b; font-style: italic; }
     .modal__also {
       font-size: 12px; color: #86868b;
@@ -175,6 +177,7 @@ export class FlightModalComponent implements OnInit {
   @Input() hubCode = 'YYZ';
   @Input() hubCityName = 'Toronto';
   @Input() weekStart!: Date;
+  @Input() selectedDate: Date | null = null;
   @Output() closed = new EventEmitter<void>();
 
   readonly dayInitials = DAY_INITIALS;
@@ -204,6 +207,10 @@ export class FlightModalComponent implements OnInit {
 
   get regionColor(): string {
     return REGION_COLORS[this.destination.region] || '#86868b';
+  }
+
+  isSelectedDay(date: Date): boolean {
+    return this.selectedDate?.toDateString() === date.toDateString();
   }
 
   formatDay(date: Date): string {

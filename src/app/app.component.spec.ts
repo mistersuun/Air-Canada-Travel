@@ -68,23 +68,42 @@ describe('AppComponent', () => {
     expect(component.expandedCode).toBe('CDG');
   });
 
-  it('filteredDestinations returns only routes active in the selected week', () => {
+  it('allRoutes returns routes active in the selected week', () => {
     component.homeCity = 'Toronto';
     component.weekStart = getWeekStart(new Date('2026-11-02T00:00:00'));
-    expect(component.filteredDestinations.length).toBeGreaterThan(0);
+    expect(component.allRoutes.length).toBeGreaterThan(0);
   });
 
-  it('filteredDestinations filters by region', () => {
+  it('allRoutes filters by region', () => {
     component.homeCity = 'Toronto';
     component.weekStart = getWeekStart(new Date('2026-11-02T00:00:00'));
     component.activeRegion = 'Europe';
-    const results = component.filteredDestinations;
+    const results = component.allRoutes;
     expect(results.length).toBeGreaterThan(0);
-    expect(results.every(d => d.region === 'Europe')).toBe(true);
+    expect(results.every((r: { destination: { region: string } }) => r.destination.region === 'Europe')).toBe(true);
   });
 
-  it('filteredDestinations returns empty for a week with no flights', () => {
+  it('allRoutes returns empty for a week with no flights', () => {
+    component.showConnections = false;
     component.weekStart = getWeekStart(new Date('2020-01-06T00:00:00'));
-    expect(component.filteredDestinations).toHaveLength(0);
+    expect(component.allRoutes).toHaveLength(0);
+  });
+
+  it('onDaySelected sets selectedDate and clears expandedCode', () => {
+    component.expandedCode = 'CDG';
+    const date = new Date('2026-11-03');
+    component.onDaySelected(date);
+    expect(component.selectedDate).toBe(date);
+    expect(component.expandedCode).toBeNull();
+  });
+
+  it('showConnections toggle includes/excludes connecting routes', () => {
+    component.homeCity = 'Halifax';
+    component.weekStart = getWeekStart(new Date('2026-11-02T00:00:00'));
+    component.showConnections = true;
+    const withConns = component.allRoutes.length;
+    component.showConnections = false;
+    const withoutConns = component.allRoutes.length;
+    expect(withConns).toBeGreaterThanOrEqual(withoutConns);
   });
 });

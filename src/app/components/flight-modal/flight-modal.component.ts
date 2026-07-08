@@ -2,6 +2,8 @@ import { Component, Input, Output, EventEmitter, HostListener, OnInit, ElementRe
 import { CommonModule } from '@angular/common';
 import { Destination, REGION_COLORS } from '../../data/destinations';
 import { DayFlight, getFlightsForWeek, formatDayLabel } from '../../utils/week';
+import { findConnections, ConnectionOption, formatLayover } from '../../utils/connections';
+import { RouteEntry } from '../../app.component';
 import { getFlag } from '../../utils/flags';
 
 const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
@@ -18,7 +20,7 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
       aria-modal="true"
       [attr.aria-label]="destination.city + ' flight details'"
     >
-      <button class="modal__close" (click)="closed.emit()" aria-label="Close">✕</button>
+      <button class="modal__close" (click)="closed.emit()" aria-label="Close">&#x2715;</button>
 
       <div class="modal__hero">
         <span class="modal__flag">{{ flag }}</span>
@@ -29,34 +31,67 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
         <div class="modal__code" [style.color]="regionColor">{{ destination.code }}</div>
       </div>
 
-      <div class="modal__route">
-        {{ hubCode }} → {{ destination.code }}
-        &nbsp;·&nbsp;{{ destination.aircraft }}
-        &nbsp;·&nbsp;{{ destination.duration }} direct
-      </div>
+      <!-- DIRECT ROUTE INFO -->
+      <ng-container *ngIf="route?.isDirect">
+        <div class="modal__route">
+          {{ hubCode }} → {{ destination.code }}
+          &nbsp;·&nbsp;{{ destination.aircraft }}
+          &nbsp;·&nbsp;{{ destination.duration }} direct
+        </div>
 
-      <div class="modal__pills">
+        <div class="modal__pills">
+          <div
+            *ngFor="let day of flights; let i = index"
+            class="day-pill"
+            [class.day-pill--on]="day.flies"
+          >{{ dayInitials[i] }}</div>
+        </div>
+
+        <div class="modal__section-label">FLIGHTS THIS WEEK</div>
+
         <div
-          *ngFor="let day of flights; let i = index"
-          class="day-pill"
-          [class.day-pill--on]="day.flies"
-          [attr.aria-label]="dayInitials[i] + (day.flies ? ' has a flight' : ' no flight')"
-        >{{ dayInitials[i] }}</div>
-      </div>
+          *ngFor="let day of flights"
+          class="flight-row"
+          [class.flight-row--none]="!day.flies"
+          [class.flight-row--selected]="isSelectedDay(day.date)"
+        >
+          <span class="flight-row__date">{{ formatDay(day.date) }}</span>
+          <span class="flight-row__num">{{ day.flies ? day.flightNumber : '' }}</span>
+          <span class="flight-row__time" *ngIf="day.flies">{{ day.departure }} → {{ day.arrival }}</span>
+          <span class="flight-row__none" *ngIf="!day.flies">No departure</span>
+        </div>
+      </ng-container>
 
-      <div class="modal__section-label">FLIGHTS THIS WEEK</div>
+      <!-- CONNECTING ROUTE INFO -->
+      <ng-container *ngIf="route && !route.isDirect">
+        <div class="modal__route modal__route--connecting">
+          {{ hubCode }} → connection → {{ destination.code }}
+        </div>
 
-      <div
-        *ngFor="let day of flights"
-        class="flight-row"
-        [class.flight-row--none]="!day.flies"
-        [class.flight-row--selected]="isSelectedDay(day.date)"
-      >
-        <span class="flight-row__date">{{ formatDay(day.date) }}</span>
-        <span class="flight-row__num">{{ day.flies ? day.flightNumber : '' }}</span>
-        <span class="flight-row__time" *ngIf="day.flies">{{ day.departure }} → {{ day.arrival }}</span>
-        <span class="flight-row__none" *ngIf="!day.flies">No departure</span>
-      </div>
+        <div class="modal__section-label">CONNECTION OPTIONS THIS WEEK</div>
+
+        <div *ngIf="!weekConnections.length" class="modal__empty">
+          No connections available this week.
+        </div>
+
+        <div *ngFor="let conn of weekConnections" class="conn-card" [class.conn-card--selected]="isSelectedDay(conn.date)">
+          <div class="conn-card__date">{{ formatDay(conn.date) }}</div>
+          <div class="conn-card__legs">
+            <div class="conn-card__leg">
+              <span class="conn-card__codes">{{ conn.leg1.from }} → {{ conn.leg1.to }}</span>
+              <span class="conn-card__times">{{ conn.leg1.departure }} → {{ conn.leg1.arrival }}</span>
+            </div>
+            <div class="conn-card__layover">
+              {{ formatLayover(conn.layoverMinutes) }} layover in {{ conn.viaHubName }}
+            </div>
+            <div class="conn-card__leg">
+              <span class="conn-card__codes">{{ conn.leg2.from }} → {{ conn.leg2.to }}</span>
+              <span class="conn-card__times">{{ conn.leg2.departure }} → {{ conn.leg2.arrival }}</span>
+              <span class="conn-card__flight">{{ conn.leg2.flightNumber }}</span>
+            </div>
+          </div>
+        </div>
+      </ng-container>
 
       <div class="modal__also" *ngIf="destination.fromCities.length > 1">
         Also from:
@@ -129,6 +164,11 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
       background: #f5f5f7;
       border-radius: 8px;
     }
+    .modal__route--connecting {
+      background: #fef7ed;
+      color: #E89020;
+      font-weight: 600;
+    }
     .modal__pills { display: flex; gap: 4px; margin-bottom: 16px; }
     .day-pill {
       flex: 1; height: 24px; border-radius: 6px;
@@ -141,8 +181,12 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
     .modal__section-label {
       font-size: 10px; font-weight: 700; color: #86868b;
       letter-spacing: 1px; text-transform: uppercase;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
+    .modal__empty {
+      font-size: 13px; color: #86868b; text-align: center; padding: 16px 0;
+    }
+
     .flight-row {
       display: flex; align-items: center; gap: 10px;
       padding: 8px 0;
@@ -156,6 +200,30 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
     .flight-row--none { opacity: 0.4; }
     .flight-row--selected { background: #fff0f2; border-radius: 6px; padding: 8px 6px; }
     .flight-row__none { color: #86868b; font-style: italic; }
+
+    .conn-card {
+      background: #fef7ed;
+      border: 1px solid #fde0b0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .conn-card--selected { border-color: #E89020; box-shadow: 0 0 0 2px rgba(232,144,32,0.15); }
+    .conn-card__date { font-size: 12px; font-weight: 700; color: #1d1d1f; margin-bottom: 6px; }
+    .conn-card__legs { font-size: 12px; }
+    .conn-card__leg {
+      display: flex; align-items: center; gap: 8px; padding: 3px 0;
+    }
+    .conn-card__codes { font-weight: 600; color: #1d1d1f; min-width: 70px; }
+    .conn-card__times { font-weight: 700; color: #E89020; }
+    .conn-card__flight { font-size: 11px; color: #86868b; margin-left: auto; }
+    .conn-card__layover {
+      text-align: center; font-size: 10px; color: #86868b;
+      padding: 3px 0; margin: 2px 0;
+      border-top: 1px dashed #e0d0b0;
+      border-bottom: 1px dashed #e0d0b0;
+    }
+
     .modal__also {
       font-size: 12px; color: #86868b;
       margin-top: 12px;
@@ -178,14 +246,15 @@ export class FlightModalComponent implements OnInit {
   @Input() hubCityName = 'Toronto';
   @Input() weekStart!: Date;
   @Input() selectedDate: Date | null = null;
+  @Input() route: RouteEntry | null = null;
   @Output() closed = new EventEmitter<void>();
 
   readonly dayInitials = DAY_INITIALS;
+  readonly formatLayover = formatLayover;
 
   constructor(private el: ElementRef) {}
 
   ngOnInit(): void {
-    // Focus the modal for accessibility
     setTimeout(() => {
       const btn = this.el.nativeElement.querySelector('.modal__close');
       btn?.focus();
@@ -199,6 +268,20 @@ export class FlightModalComponent implements OnInit {
 
   get flights(): DayFlight[] {
     return getFlightsForWeek(this.hubCode, this.destination.code, this.weekStart);
+  }
+
+  get weekConnections(): ConnectionOption[] {
+    const all: ConnectionOption[] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(this.weekStart);
+      date.setDate(date.getDate() + i);
+      const dayConns = findConnections(this.hubCode, this.destination.code, date);
+      if (dayConns.length > 0) {
+        const best = dayConns.reduce((b, c) => c.layoverMinutes < b.layoverMinutes ? c : b);
+        all.push(best);
+      }
+    }
+    return all;
   }
 
   get flag(): string {

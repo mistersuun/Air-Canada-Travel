@@ -41,6 +41,13 @@ import { REGIONS } from '../../data/destinations';
 
     <div class="filter-chips" role="group" aria-label="Filter by region">
       <button
+        class="chip chip--connect"
+        [class.chip--connect-on]="showConnections"
+        (click)="connectionsToggled.emit(!showConnections)"
+        [attr.aria-pressed]="showConnections"
+      >Connections</button>
+      <span class="chip-sep"></span>
+      <button
         *ngFor="let r of regions"
         class="chip"
         [class.chip--active]="activeRegion === r"
@@ -130,6 +137,9 @@ import { REGIONS } from '../../data/destinations';
       transition: background 0.12s, color 0.12s;
     }
     .chip--active { background: #1d1d1f; color: #fff; border-color: #1d1d1f; }
+    .chip--connect { border-color: #E89020; color: #E89020; }
+    .chip--connect-on { background: #E89020; color: #fff; border-color: #E89020; }
+    .chip-sep { width: 1px; background: #e0e0e0; flex-shrink: 0; margin: 2px 4px; }
     .chip:focus-visible { outline: 2px solid #C8102E; outline-offset: 2px; }
 
     @media (max-width: 600px) {
@@ -146,10 +156,12 @@ export class WeekStripComponent {
   @Input() routeCount = 0;
   @Input() activeRegion = 'All';
   @Input() selectedDate: Date | null = null;
+  @Input() showConnections = true;
   @Output() prev = new EventEmitter<void>();
   @Output() next = new EventEmitter<void>();
   @Output() regionSelected = new EventEmitter<string>();
   @Output() daySelected = new EventEmitter<Date | null>();
+  @Output() connectionsToggled = new EventEmitter<boolean>();
 
   readonly regions = REGIONS;
   readonly dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];

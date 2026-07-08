@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Destination } from '../../data/destinations';
+import { RouteEntry } from '../../app.component';
 import { RouteCardComponent } from '../route-card/route-card.component';
 
 @Component({
@@ -9,20 +9,40 @@ import { RouteCardComponent } from '../route-card/route-card.component';
   imports: [CommonModule, RouteCardComponent],
   template: `
     <div class="list">
-      <p class="list__empty" *ngIf="!destinations.length">
+      <p class="list__empty" *ngIf="!routes.length">
         No routes with flights this week from {{ hubCityName }}.
         Try a different week or region.
       </p>
-      <app-route-card
-        *ngFor="let d of destinations; trackBy: trackByCode"
-        [destination]="d"
-        [hubCode]="hubCode"
-        [hubCityName]="hubCityName"
-        [weekStart]="weekStart"
-        [selectedDate]="selectedDate"
-        [expanded]="expandedCode === d.code"
-        (toggled)="cardToggled.emit(d.code)"
-      ></app-route-card>
+
+      <ng-container *ngFor="let r of directRoutes; trackBy: trackByCode">
+        <app-route-card
+          [destination]="r.destination"
+          [hubCode]="hubCode"
+          [hubCityName]="hubCityName"
+          [weekStart]="weekStart"
+          [selectedDate]="selectedDate"
+          [expanded]="expandedCode === r.destination.code"
+          [routeEntry]="r"
+          (toggled)="cardToggled.emit(r.destination.code)"
+        ></app-route-card>
+      </ng-container>
+
+      <div class="list__divider" *ngIf="connectingRoutes.length && directRoutes.length">
+        <span class="list__divider-text">Connecting flights</span>
+      </div>
+
+      <ng-container *ngFor="let r of connectingRoutes; trackBy: trackByCode">
+        <app-route-card
+          [destination]="r.destination"
+          [hubCode]="hubCode"
+          [hubCityName]="hubCityName"
+          [weekStart]="weekStart"
+          [selectedDate]="selectedDate"
+          [expanded]="expandedCode === r.destination.code"
+          [routeEntry]="r"
+          (toggled)="cardToggled.emit(r.destination.code)"
+        ></app-route-card>
+      </ng-container>
     </div>
   `,
   styles: [`
@@ -49,10 +69,34 @@ import { RouteCardComponent } from '../route-card/route-card.component';
       color: #86868b;
       line-height: 1.6;
     }
+    .list__divider {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 12px 0 4px;
+      position: relative;
+    }
+    .list__divider::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      border-top: 1px solid #e0e0e0;
+    }
+    .list__divider-text {
+      position: relative;
+      background: #f5f5f7;
+      padding: 0 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #86868b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
   `]
 })
 export class RouteListComponent {
-  @Input() destinations: Destination[] = [];
+  @Input() routes: RouteEntry[] = [];
   @Input() hubCode = 'YYZ';
   @Input() hubCityName = 'Toronto';
   @Input() weekStart!: Date;
@@ -60,7 +104,15 @@ export class RouteListComponent {
   @Input() expandedCode: string | null = null;
   @Output() cardToggled = new EventEmitter<string>();
 
-  trackByCode(_: number, d: Destination): string {
-    return d.code;
+  get directRoutes(): RouteEntry[] {
+    return this.routes.filter(r => r.isDirect);
+  }
+
+  get connectingRoutes(): RouteEntry[] {
+    return this.routes.filter(r => !r.isDirect);
+  }
+
+  trackByCode(_: number, r: RouteEntry): string {
+    return r.destination.code;
   }
 }

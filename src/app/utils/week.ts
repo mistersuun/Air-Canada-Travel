@@ -67,6 +67,45 @@ export function routeHasFlightsInWeek(
   return getFlightsForWeek(hubCode, destCode, weekStart).some(d => d.flies);
 }
 
+/** Returns the flight for a specific date, or null if none. */
+export function getFlightForDay(
+  hubCode: string,
+  destCode: string,
+  date: Date
+): DayFlight {
+  const jsDay = date.getDay();
+  const dayIndex = jsDay === 0 ? 6 : jsDay - 1;
+  const dayName = DAY_NAMES[dayIndex];
+  const schedules = getSchedulesForRoute(hubCode, destCode);
+
+  const match = schedules.find(s => {
+    const from = new Date(s.fromDate + 'T00:00:00');
+    const to = new Date(s.toDate + 'T00:00:00');
+    return date >= from && date <= to && s.days.split(',').includes(dayName);
+  });
+
+  if (match) {
+    return {
+      date,
+      flies: true,
+      flightNumber: match.flightNumber,
+      departure: match.departure,
+      arrival: match.arrival,
+      aircraft: match.aircraft,
+    };
+  }
+  return { date, flies: false };
+}
+
+/** Returns true if a specific date has a flight for this route. */
+export function routeHasFlightOnDay(
+  hubCode: string,
+  destCode: string,
+  date: Date
+): boolean {
+  return getFlightForDay(hubCode, destCode, date).flies;
+}
+
 /** "Jun 8 – 14, 2026" */
 export function formatWeekLabel(weekStart: Date): string {
   const end = new Date(weekStart);

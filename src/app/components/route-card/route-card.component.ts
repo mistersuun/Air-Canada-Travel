@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Destination, REGION_COLORS } from '../../data/destinations';
-import { DayFlight, getFlightsForWeek } from '../../utils/week';
+import { DayFlight, getFlightsForWeek, getFlightForDay } from '../../utils/week';
 import { getFlag } from '../../utils/flags';
 
 const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
@@ -40,8 +40,18 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
         </div>
       </div>
 
-      <!-- Day pills -->
-      <div class="card__days" aria-label="Operating days this week">
+      <!-- Flight time (when a specific day is selected) -->
+      <div class="card__flight-time" *ngIf="selectedDate && dayFlight?.flies">
+        <div class="card__time-badge">
+          <span class="card__time">{{ dayFlight!.departure }}</span>
+          <span class="card__time-arrow">→</span>
+          <span class="card__time">{{ dayFlight!.arrival }}</span>
+        </div>
+        <span class="card__flight-num">{{ dayFlight!.flightNumber }}</span>
+      </div>
+
+      <!-- Day pills (when viewing all week) -->
+      <div class="card__days" *ngIf="!selectedDate" aria-label="Operating days this week">
         <div
           *ngFor="let day of flights; let i = index"
           class="day-pill"
@@ -79,6 +89,35 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
     .card__code { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; line-height: 1; }
     .card__duration { font-size: 11px; color: #86868b; margin-top: 2px; }
 
+    .card__flight-time {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #fff0f2;
+      border-radius: 8px;
+      border: 1px solid #ffc7cf;
+    }
+    .card__time-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card__time {
+      font-size: 15px;
+      font-weight: 700;
+      color: #C8102E;
+    }
+    .card__time-arrow {
+      font-size: 12px;
+      color: #86868b;
+    }
+    .card__flight-num {
+      font-size: 12px;
+      color: #86868b;
+      margin-left: auto;
+    }
+
     .card__days { display: flex; gap: 4px; }
     .day-pill {
       flex: 1; height: 22px; border-radius: 6px;
@@ -95,6 +134,7 @@ export class RouteCardComponent {
   @Input() hubCode = 'YYZ';
   @Input() hubCityName = 'Toronto';
   @Input() weekStart!: Date;
+  @Input() selectedDate: Date | null = null;
   @Input() expanded = false;
   @Output() toggled = new EventEmitter<void>();
 
@@ -102,6 +142,11 @@ export class RouteCardComponent {
 
   get flights(): DayFlight[] {
     return getFlightsForWeek(this.hubCode, this.destination.code, this.weekStart);
+  }
+
+  get dayFlight(): DayFlight | null {
+    if (!this.selectedDate) return null;
+    return getFlightForDay(this.hubCode, this.destination.code, this.selectedDate);
   }
 
   get flag(): string {

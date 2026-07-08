@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Destination, DESTINATIONS, HUBS } from './data/destinations';
-import { getWeekStart, routeHasFlightsInWeek } from './utils/week';
+import { getWeekStart, routeHasFlightsInWeek, routeHasFlightOnDay } from './utils/week';
 import { HeaderComponent } from './components/header/header.component';
 import { WeekStripComponent } from './components/week-strip/week-strip.component';
 import { RouteListComponent } from './components/route-list/route-list.component';
@@ -21,9 +21,11 @@ import { FlightModalComponent } from './components/flight-modal/flight-modal.com
       [weekStart]="weekStart"
       [routeCount]="filteredDestinations.length"
       [activeRegion]="activeRegion"
+      [selectedDate]="selectedDate"
       (prev)="prevWeek()"
       (next)="nextWeek()"
       (regionSelected)="onRegionSelected($event)"
+      (daySelected)="onDaySelected($event)"
     ></app-week-strip>
 
     <app-route-list
@@ -31,6 +33,7 @@ import { FlightModalComponent } from './components/flight-modal/flight-modal.com
       [hubCode]="hubCode"
       [hubCityName]="homeCity"
       [weekStart]="weekStart"
+      [selectedDate]="selectedDate"
       [expandedCode]="expandedCode"
       (cardToggled)="onCardToggled($event)"
     ></app-route-list>
@@ -41,6 +44,7 @@ import { FlightModalComponent } from './components/flight-modal/flight-modal.com
       [hubCode]="hubCode"
       [hubCityName]="homeCity"
       [weekStart]="weekStart"
+      [selectedDate]="selectedDate"
       (closed)="expandedCode = null"
     ></app-flight-modal>
   `,
@@ -57,6 +61,7 @@ export class AppComponent {
   weekStart = getWeekStart(new Date());
   activeRegion = 'All';
   expandedCode: string | null = null;
+  selectedDate: Date | null = null;
 
   get hubCode(): string {
     return HUBS.find(h => h.name === this.homeCity)?.code ?? 'YYZ';
@@ -70,6 +75,9 @@ export class AppComponent {
   get filteredDestinations(): Destination[] {
     return DESTINATIONS.filter(d => {
       if (this.activeRegion !== 'All' && d.region !== this.activeRegion) return false;
+      if (this.selectedDate) {
+        return routeHasFlightOnDay(this.hubCode, d.code, this.selectedDate);
+      }
       return routeHasFlightsInWeek(this.hubCode, d.code, this.weekStart);
     });
   }
@@ -78,6 +86,7 @@ export class AppComponent {
     const d = new Date(this.weekStart);
     d.setDate(d.getDate() - 7);
     this.weekStart = d;
+    this.selectedDate = null;
     this.expandedCode = null;
   }
 
@@ -85,6 +94,7 @@ export class AppComponent {
     const d = new Date(this.weekStart);
     d.setDate(d.getDate() + 7);
     this.weekStart = d;
+    this.selectedDate = null;
     this.expandedCode = null;
   }
 
@@ -95,6 +105,11 @@ export class AppComponent {
 
   onRegionSelected(region: string): void {
     this.activeRegion = region;
+    this.expandedCode = null;
+  }
+
+  onDaySelected(date: Date | null): void {
+    this.selectedDate = date;
     this.expandedCode = null;
   }
 

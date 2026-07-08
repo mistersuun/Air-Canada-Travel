@@ -19,6 +19,7 @@ import { RouteCardComponent } from '../route-card/route-card.component';
         [hubCode]="hubCode"
         [hubCityName]="hubCityName"
         [weekStart]="weekStart"
+        [selectedDate]="selectedDate"
         [expanded]="expandedCode === d.code"
         (toggled)="cardToggled.emit(d.code)"
       ></app-route-card>
@@ -55,6 +56,7 @@ export class RouteListComponent {
   @Input() hubCode = 'YYZ';
   @Input() hubCityName = 'Toronto';
   @Input() weekStart!: Date;
+  @Input() selectedDate: Date | null = null;
   @Input() expandedCode: string | null = null;
   @Output() cardToggled = new EventEmitter<string>();
 

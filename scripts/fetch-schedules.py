@@ -145,31 +145,42 @@ def extract_routes_from_pdf(pdf_bytes: bytes) -> dict:
 
         # 3. Outbound marker: literal "to ..." line
         if line == 'to ...':
-            collecting = True
+            collecting = 'outbound'
             current_dest = last_airport_code
             continue
 
         # 4. Return marker: literal "from ..." line
         if line == 'from ...':
-            collecting = False
+            collecting = 'return'
             continue
 
-        # 5. Schedule row — only collect when in outbound mode
+        # 5. Schedule row — collect outbound and return legs
         if collecting and current_origin and current_dest:
             row_m = ROW_RE.search(line)
             if row_m:
                 from_date, to_date, days_raw, flight_num, dep, arr, aircraft = row_m.groups()
                 days = parse_days(days_raw)
                 if days:
-                    routes[(current_origin, current_dest)].append({
-                        'fromDate': from_date,
-                        'toDate': to_date,
-                        'days': days,
-                        'flightNumber': flight_num,
-                        'departure': dep,
-                        'arrival': arr,
-                        'aircraft': aircraft,
-                    })
+                    if collecting == 'outbound':
+                        routes[(current_origin, current_dest)].append({
+                            'fromDate': from_date,
+                            'toDate': to_date,
+                            'days': days,
+                            'flightNumber': flight_num,
+                            'departure': dep,
+                            'arrival': arr,
+                            'aircraft': aircraft,
+                        })
+                    elif collecting == 'return':
+                        routes[(current_dest, current_origin)].append({
+                            'fromDate': from_date,
+                            'toDate': to_date,
+                            'days': days,
+                            'flightNumber': flight_num,
+                            'departure': dep,
+                            'arrival': arr,
+                            'aircraft': aircraft,
+                        })
 
     return routes
 

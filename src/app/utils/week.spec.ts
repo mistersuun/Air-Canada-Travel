@@ -40,7 +40,7 @@ describe('getWeekStart', () => {
 });
 
 describe('getFlightsForWeek', () => {
-  // YYZ → BDA flies Fri,Sun from 2026-11-01 to 2027-03-12
+  // YYZ → BDA flies Thu,Sun from 2026-11-01 to 2027-03-11
   const weekStart = new Date('2026-11-02T00:00:00'); // Mon Nov 2 2026
 
   it('returns exactly 7 DayFlight entries', () => {
@@ -54,27 +54,27 @@ describe('getFlightsForWeek', () => {
     expect(result[6].date.getDate()).toBe(8);  // Sun Nov 8
   });
 
-  it('returns flies=true for Fri and Sun (days the schedule operates)', () => {
+  it('returns flies=true for Thu and Sun (days the schedule operates)', () => {
     const result = getFlightsForWeek('YYZ', 'BDA', weekStart);
-    expect(result[4].flies).toBe(true); // Fri Nov 6
+    expect(result[3].flies).toBe(true); // Thu Nov 5
     expect(result[6].flies).toBe(true); // Sun Nov 8
   });
 
-  it('returns flies=false for Mon, Tue, Wed, Thu, Sat', () => {
+  it('returns flies=false for Mon, Tue, Wed, Fri, Sat', () => {
     const result = getFlightsForWeek('YYZ', 'BDA', weekStart);
     expect(result[0].flies).toBe(false); // Mon
     expect(result[1].flies).toBe(false); // Tue
     expect(result[2].flies).toBe(false); // Wed
-    expect(result[3].flies).toBe(false); // Thu
+    expect(result[4].flies).toBe(false); // Fri
     expect(result[5].flies).toBe(false); // Sat
   });
 
   it('populates flightNumber, departure, arrival when flies=true', () => {
     const result = getFlightsForWeek('YYZ', 'BDA', weekStart);
-    const fri = result[4];
-    expect(fri.flightNumber).toBeDefined();
-    expect(fri.departure).toBeDefined();
-    expect(fri.arrival).toBeDefined();
+    const thu = result[3];
+    expect(thu.flightNumber).toBeDefined();
+    expect(thu.departure).toBeDefined();
+    expect(thu.arrival).toBeDefined();
   });
 
   it('returns all flies=false for unknown route', () => {

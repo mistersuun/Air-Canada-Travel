@@ -66,7 +66,7 @@ ROW_RE = re.compile(
     r'(\d{4}-\d{2}-\d{2})\s+'   # fromDate
     r'(\d{4}-\d{2}-\d{2})\s+'   # toDate
     r'([MTW-][TW-][W-]{1}[R-][F-][S-][U-])\s+'  # days (7 chars)
-    r'(AC\d{3,4})\s+'           # flightNumber
+    r'(AC\d{2,4})\s+'           # flightNumber
     r'(\d{2}:\d{2})\s+'         # departure
     r'(\d{2}:\d{2})\s+'         # arrival
     r'(\w+)'                     # aircraft
@@ -255,6 +255,9 @@ def main():
 
     for url in pdf_urls:
         name = url.split('/')[-1]
+        if 'CANADA-' in name:
+            print(f"Skipping {name} (domestic)")
+            continue
         print(f"Fetching {name}...", end=' ', flush=True)
         try:
             pdf_bytes = fetch_pdf(url)

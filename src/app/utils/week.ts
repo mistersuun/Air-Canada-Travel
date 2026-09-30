@@ -1,8 +1,8 @@
 /**
  * Direct-flight engine: turns schedule records into dated flight instances.
  *
- * Every departure on a day is returned (filter, not find), de-duplicated on
- * flight number + departure time, sorted by departure instant. Times stay
+ * Every departure on a day is returned (filter, not find), one per flight
+ * number and one per departure slot, sorted by departure instant. Times stay
  * local at each airport; depUtc/arrUtc are real instants computed with each
  * airport's IANA zone, and arrDayOffset (−1..+2) is inferred from them when
  * the data has none (critique 5, 15).
@@ -19,6 +19,7 @@ import {
   MINUTE_MS,
   WEEKDAY_SHORT,
   addDays,
+  diffDays,
   formatKey,
   hhmmToMin,
   keyToDate,
@@ -31,6 +32,11 @@ import {
 export interface FlightInstance {
   /** 'AC880'; null for an estimated (invented) leg. */
   flightNumber: string | null;
+  /**
+   * Other flight numbers filed for this same departure (same route, date and
+   * local times), e.g. a renumbered equipment swap. Absent when there are none.
+   */
+  altFlightNumbers?: string[];
   origin: string;
   dest: string;
   /** Local departure date at the origin. */
@@ -162,15 +168,40 @@ const dayCache = new Map<string, FlightInstance[]>();
 function cacheFor(key: string): FlightInstance[] | undefined {
   if (cacheVersion !== scheduleVersion()) {
     dayCache.clear();
+    dropped.clear();
     cacheVersion = scheduleVersion();
   }
   return dayCache.get(key);
 }
 
+/** Days in a record's date range (its specificity: fewer is more specific). */
+function spanDays(r: ScheduleRecord): number {
+  return diffDays(r.fromDate, r.toDate);
+}
+
+/**
+ * True when filing `r` should replace `cur` for the same flight number on the
+ * same date (overlapping filings with different times): the more specific
+ * filing (shorter date range, e.g. a one-day retime) wins; on equal spans the
+ * one starting later (the newer filing) wins; otherwise the first row stays.
+ */
+function supersedes(r: ScheduleRecord, cur: ScheduleRecord): boolean {
+  const a = spanDays(r), b = spanDays(cur);
+  if (a !== b) return a < b;
+  return r.fromDate > cur.fromDate;
+}
+
 /**
  * Every published direct departure origin → dest on the local date `dateKey`,
- * de-duplicated (flight number + departure) and sorted by departure instant.
- * The returned array is cached and shared: treat it as read-only.
+ * sorted by departure instant. The returned array is cached and shared: treat
+ * it as read-only.
+ *
+ * - One instance per flight number: when overlapping filings disagree on the
+ *   time, the more specific filing wins (see supersedes).
+ * - Different flight numbers with the same local departure and arrival are one
+ *   departure (a renumbered swap): shown once, the others in altFlightNumbers.
+ * - Instances with an implausible block time are dropped as parse errors;
+ *   droppedForBlockTime() lists them so specs and audits can surface them.
  */
 export function flightsOn(origin: string, dest: string, dateKey: string): FlightInstance[] {
   const key = `${origin}-${dest}|${dateKey}`;
@@ -181,29 +212,69 @@ export function flightsOn(origin: string, dest: string, dateKey: string): Flight
   let out: FlightInstance[] = [];
   if (records.length) {
     const bit = 1 << weekdayIndex(dateKey);
-    // One instance per flight number per date. Same departure: the first row
-    // wins. Different departures (overlapping filings with a retime): the row
-    // whose date range starts later (the newer filing) wins.
-    const byFlight = new Map<string, { rec: ScheduleRecord; inst: FlightInstance }>();
-    const unnumbered: FlightInstance[] = [];
+    const byFlight = new Map<string, ScheduleRecord>();
+    const unnumbered: ScheduleRecord[] = [];
     for (const c of compile(records)) {
       const r = c.rec;
       if (!(c.mask & bit) || dateKey < r.fromDate || dateKey > r.toDate) continue;
-      const cur = r.flightNumber ? byFlight.get(r.flightNumber) : undefined;
-      if (cur && (cur.rec.departure === r.departure || cur.rec.fromDate >= r.fromDate)) continue;
-      const inst = buildInstance(r, origin, dest, dateKey);
-      // Implausible block times are parse errors (a reverse leg filed under
-      // this route, or a misread time): never show them as real flights.
-      if (inst.durationMin < MIN_BLOCK_MIN || inst.durationMin > MAX_BLOCK_MIN) continue;
-      if (r.flightNumber) byFlight.set(r.flightNumber, { rec: r, inst });
-      else if (!unnumbered.some(u => u.depLocal === inst.depLocal)) unnumbered.push(inst);
+      if (!r.flightNumber) {
+        if (!unnumbered.some(u => u.departure === r.departure)) unnumbered.push(r);
+        continue;
+      }
+      const cur = byFlight.get(r.flightNumber);
+      if (!cur || (cur.departure !== r.departure && supersedes(r, cur))) byFlight.set(r.flightNumber, r);
     }
-    out = [...[...byFlight.values()].map(v => v.inst), ...unnumbered];
+    const bySlot = new Map<string, FlightInstance>();
+    for (const r of [...byFlight.values(), ...unnumbered]) {
+      const inst = buildInstance(r, origin, dest, dateKey);
+      if (inst.durationMin < MIN_BLOCK_MIN || inst.durationMin > MAX_BLOCK_MIN) {
+        noteDropped(inst);
+        continue;
+      }
+      const slot = `${inst.depLocal}|${inst.arrLocal}|${inst.arrDayOffset}`;
+      const same = bySlot.get(slot);
+      if (!same) {
+        bySlot.set(slot, inst);
+      } else if (inst.flightNumber) {
+        if (!same.flightNumber) {
+          bySlot.set(slot, inst);
+        } else {
+          // Keep the lower flight number as the display number (stable across dates).
+          const [keep, alt] = flightSortKey(inst.flightNumber) < flightSortKey(same.flightNumber)
+            ? [inst, same] : [same, inst];
+          keep.altFlightNumbers = [...(keep.altFlightNumbers ?? []), alt.flightNumber!, ...(alt.altFlightNumbers ?? [])].sort(
+            (x, y) => flightSortKey(x) - flightSortKey(y));
+          bySlot.set(slot, keep);
+        }
+      }
+    }
+    out = [...bySlot.values()];
     out.sort((a, b) => a.depUtc - b.depUtc || String(a.flightNumber).localeCompare(String(b.flightNumber)));
   }
   if (dayCache.size > 60_000) dayCache.clear();
   dayCache.set(key, out);
   return out;
+}
+
+function flightSortKey(flight: string): number {
+  const n = parseInt(flight.replace(/\D/g, ''), 10);
+  return Number.isNaN(n) ? Number.MAX_SAFE_INTEGER : n;
+}
+
+const dropped = new Map<string, FlightInstance>();
+
+function noteDropped(inst: FlightInstance): void {
+  if (dropped.size < 5_000) dropped.set(`${inst.origin}-${inst.dest}|${inst.dateKey}|${inst.flightNumber}`, inst);
+}
+
+/**
+ * Instances flightsOn has dropped for an implausible block time since the
+ * schedule source last changed (a time-zone or airport-code problem in the
+ * data, never a real flight). Read by data-integrity specs and audits.
+ */
+export function droppedForBlockTime(): FlightInstance[] {
+  cacheFor('');
+  return [...dropped.values()];
 }
 
 /** Coverage hub for a route: the hub end of it (return legs use the dest hub). */

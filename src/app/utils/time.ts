@@ -181,7 +181,31 @@ function wallClock(utcMs: number, tz: string): WallClock {
   return { y: get('year'), mo: get('month'), d: get('day'), h: get('hour') % 24, mi: get('minute'), s: get('second') };
 }
 
+/**
+ * Zone rule changes newer than the time-zone data many browsers and Node ship.
+ * From `fromUtc` on, the zone keeps a fixed `offsetMin` (minutes east of UTC).
+ * The schedule PDFs already use these rules, so without them every winter
+ * time at these airports is read an hour off (YVR-SEA shows a 7-minute block,
+ * YWG-YYZ 95 minutes). Browsers with current data agree with these values, so
+ * the override is a no-op there.
+ *
+ * - British Columbia stays on UTC-7 (permanent daylight time) from the
+ *   2026-11-01 02:00 PDT change that no longer happens (tzdata 2026d).
+ * - Alberta stays on UTC-6 from 2026-11-01 02:00 MDT (tzdata 2026d).
+ * - Manitoba stays on UTC-5 from 2026-11-01 02:00 CDT (announced 2026-09-17,
+ *   after tzdata 2026d; the PDFs' YWG times follow it).
+ * - Morocco stays on UTC+0 from 2026-09-20 02:00 (tzdata 2026d).
+ */
+export const TZ_OVERRIDES: Readonly<Record<string, { fromUtc: number; offsetMin: number }>> = {
+  'America/Vancouver': { fromUtc: Date.UTC(2026, 10, 1, 9), offsetMin: -420 },
+  'America/Edmonton': { fromUtc: Date.UTC(2026, 10, 1, 8), offsetMin: -360 },
+  'America/Winnipeg': { fromUtc: Date.UTC(2026, 10, 1, 7), offsetMin: -300 },
+  'Africa/Casablanca': { fromUtc: Date.UTC(2026, 8, 20, 1), offsetMin: 0 },
+};
+
 function rawOffsetAt(tz: string, at: number): number {
+  const fixed = TZ_OVERRIDES[tz];
+  if (fixed && at >= fixed.fromUtc) return fixed.offsetMin;
   let perTz = offsetCache.get(tz);
   if (!perTz) offsetCache.set(tz, (perTz = new Map()));
   let off = perTz.get(at);

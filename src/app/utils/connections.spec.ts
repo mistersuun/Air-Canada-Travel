@@ -55,12 +55,13 @@ describe('findItineraries: layovers in UTC', () => {
   it('YYZ→YVR→SYD across three zones and the date line', () => {
     const [it0] = findItineraries('YYZ', 'SYD', '2026-12-01');
     expect(it0.hubs).toEqual(['YVR']);
-    // 19:00 EST + 5h05 = 21:05 PST; AC33 at 23:40 PST → 2h35. The 21:00 leg would leave only 35m.
+    // 19:00 EST + 5h05 = 22:05 at YVR (UTC−7 all winter from Nov 2026); AC33 at
+    // 23:40 → 1h35. The 21:00 leg would land after AC33 leaves.
     expect(it0.legs[0].depLocal).toBe('19:00');
-    expect(it0.legs[0].arrLocal).toBe('21:05');
-    expect(it0.layovers).toEqual([155]);
+    expect(it0.legs[0].arrLocal).toBe('22:05');
+    expect(it0.layovers).toEqual([95]);
     expect(it0.arrDayOffset).toBe(2);
-    expect(it0.totalMin).toBe(305 + 155 + 870);
+    expect(it0.totalMin).toBe(305 + 95 + 930);
   });
 
   it('uses real hub-to-hub schedules before estimated ones', () => {

@@ -119,6 +119,23 @@ describe('time zones', () => {
     expect(tzOffsetMin('America/Toronto', Date.UTC(2026, 10, 1, 6, 0))).toBe(-300);
   });
 
+  it('applies the 2026 fixed-offset rules even with older runtime tz data', () => {
+    const summer = Date.UTC(2026, 6, 1);
+    const winter = Date.UTC(2026, 11, 15);
+    expect(tzOffsetMin('America/Vancouver', summer)).toBe(-420);
+    expect(tzOffsetMin('America/Vancouver', winter)).toBe(-420);
+    expect(tzOffsetMin('America/Edmonton', winter)).toBe(-360);
+    expect(tzOffsetMin('America/Winnipeg', winter)).toBe(-300);
+    expect(tzOffsetMin('Africa/Casablanca', winter)).toBe(0);
+    // Zones without an override keep following the runtime.
+    expect(tzOffsetMin('America/Toronto', winter)).toBe(-300);
+    expect(tzOffsetMin('America/Regina', winter)).toBe(-360);
+    // The last change before the override still applies (PST → PDT, 2026-03-08).
+    expect(tzOffsetMin('America/Vancouver', Date.UTC(2026, 1, 1))).toBe(-480);
+    expect(toUtcMs('2026-12-01', '09:25', 'America/Vancouver')).toBe(Date.UTC(2026, 11, 1, 16, 25));
+    expect(utcToLocal(Date.UTC(2027, 0, 5, 12), 'America/Winnipeg')).toEqual({ dateKey: '2027-01-05', hhmm: '07:00' });
+  });
+
   it('converts local wall time to UTC', () => {
     expect(toUtcMs('2026-10-05', '22:10', 'America/Toronto')).toBe(Date.UTC(2026, 9, 6, 2, 10));
     expect(toUtcMs('2026-12-05', '22:10', 'America/Toronto')).toBe(Date.UTC(2026, 11, 6, 3, 10));

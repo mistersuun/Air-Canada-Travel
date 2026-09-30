@@ -5,6 +5,7 @@ import {
   buildInstance,
   countFlyingDays,
   coverageHubFor,
+  droppedForBlockTime,
   flightsOn,
   formatDayLabel,
   formatWeekLabel,
@@ -64,6 +65,50 @@ describe('flightsOn / getFlightsForWeek', () => {
     expect(flightsOn('YUL', 'LHR', '2026-10-08').map(f => f.depLocal)).toEqual(['22:00']);
   });
 
+  it('prefers the more specific filing, then the later-starting one (BOS-YUL AC8611, SFO-YVR AC567)', () => {
+    setScheduleSource([route('BOS', 'YUL',
+      // A one-day retime inside a week-long filing that starts the same day.
+      rec('AC8611', '19:00', '20:29', '2026-10-08', '2026-10-15', 'Mon,Thu,Fri,Sun', 'E75'),
+      rec('AC8611', '18:50', '20:19', '2026-10-08', '2026-10-08', 'Thu', 'E75'),
+    ), route('SFO', 'YVR',
+      // A stale season-long row vs the newer month rows inside it.
+      rec('AC567', '14:45', '18:05', '2026-12-01', '2027-02-28', undefined, '223'),
+      rec('AC567', '14:40', '18:00', '2027-02-01', '2027-02-28', undefined, '223'),
+    )]);
+    expect(flightsOn('BOS', 'YUL', '2026-10-08').map(f => f.depLocal)).toEqual(['18:50']);
+    expect(flightsOn('BOS', 'YUL', '2026-10-09').map(f => f.depLocal)).toEqual(['19:00']);
+    expect(flightsOn('SFO', 'YVR', '2027-02-10').map(f => f.depLocal)).toEqual(['14:40']);
+    expect(flightsOn('SFO', 'YVR', '2027-01-10').map(f => f.depLocal)).toEqual(['14:45']);
+  });
+
+  it('shows two flight numbers filed for the same departure once (YYZ-AUS AC1043/AC1739)', () => {
+    setScheduleSource([route('YYZ', 'AUS',
+      rec('AC1739', '08:15', '10:48', '2026-10-22', '2026-10-22', 'Thu', '7M8'),
+      rec('AC1043', '08:15', '10:48', '2026-10-20', '2026-10-24', 'Tue,Thu,Fri,Sat', '223'),
+      rec('AC1043', '17:45', '20:18', '2026-10-19', '2026-10-19', 'Mon', '223'),
+    )]);
+    const [f, ...rest] = flightsOn('YYZ', 'AUS', '2026-10-22');
+    expect(rest).toEqual([]);
+    expect(f.flightNumber).toBe('AC1043');
+    expect(f.altFlightNumbers).toEqual(['AC1739']);
+    expect(flightsOn('YYZ', 'AUS', '2026-10-23')[0].altFlightNumbers).toBeUndefined();
+  });
+
+  it('reads YVR, YYC and YWG with their post-2026 fixed offsets', () => {
+    setScheduleSource([
+      route('YVR', 'SEA', rec('AC8798', '09:25', '09:32', '2026-11-02', '2027-02-27', undefined, 'CR9')),
+      route('YWG', 'YYZ', rec('AC256', '06:15', '08:50', '2026-11-02', '2026-11-30', undefined, '320')),
+      route('YYC', 'EWR', rec('AC584', '07:45', '13:26', '2026-11-01', '2026-11-30', undefined, '320')),
+    ]);
+    // PDT kept all winter: 09:25 (UTC−7) → 09:32 PST (UTC−8) is 67 min, not 7.
+    expect(flightsOn('YVR', 'SEA', '2026-11-10')[0].durationMin).toBe(67);
+    // Manitoba keeps CDT: 06:15 (UTC−5) → 08:50 EST = 155 min, not 95.
+    expect(flightsOn('YWG', 'YYZ', '2026-11-10')[0].durationMin).toBe(155);
+    // Alberta keeps MDT: 07:45 (UTC−6) → 13:26 EST = 281 min, as 06:45 → 13:26 EDT in October.
+    expect(flightsOn('YYC', 'EWR', '2026-11-10')[0].durationMin).toBe(281);
+    expect(droppedForBlockTime()).toEqual([]);
+  });
+
   it('drops instances with implausible block times (parse errors)', () => {
     setScheduleSource([
       route('YUL', 'FRA', rec('AC845', '09:55', '12:00', '2026-09-01', '2027-03-31', undefined, '333')),
@@ -73,6 +118,7 @@ describe('flightsOn / getFlightsForWeek', () => {
     expect(flightsOn('YUL', 'FRA', '2026-10-06')).toEqual([]); // ~20h "+1"
     expect(flightsOn('YVR', 'SEA', '2026-10-06')).toEqual([]); // 7 min
     expect(flightsOn('YUL', 'LHR', '2026-10-06')).toHaveLength(1);
+    expect(droppedForBlockTime().map(f => `${f.origin}-${f.dest}`).sort()).toEqual(['YUL-FRA', 'YVR-SEA']);
   });
 
   it('infers +1 for an overnight eastbound flight (YUL→LHR 22:10→10:00)', () => {
@@ -87,13 +133,13 @@ describe('flightsOn / getFlightsForWeek', () => {
   it('infers 0 across the date line when the calendar date is unchanged (AKL→YVR)', () => {
     const [f] = flightsOn('AKL', 'YVR', '2026-12-04');
     expect(f.arrDayOffset).toBe(0);
-    expect(f.durationMin).toBe(845); // 14:00 NZDT → 07:05 PST same date = 14h05
+    expect(f.durationMin).toBe(785); // 14:00 NZDT → 07:05 same date; YVR stays on UTC−7 from Nov 2026 = 13h05
   });
 
   it('infers +2 for YVR→SYD', () => {
     const [f] = flightsOn('YVR', 'SYD', '2026-12-01');
     expect(f.arrDayOffset).toBe(2);
-    expect(f.durationMin).toBe(870); // 23:40 PST → 09:10 AEDT two days later = 14h30
+    expect(f.durationMin).toBe(930); // 23:40 (UTC−7) → 09:10 AEDT two days later = 15h30
   });
 
   it('honours an explicit arrDayOffset (including −1)', () => {

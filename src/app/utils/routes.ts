@@ -17,6 +17,7 @@ import {
   summarizeWeek,
   toConnectionOption,
 } from './connections';
+import { routeSeason } from './season';
 import { hhmmToMin, monthKeys, weekKeys, weekdayIndex } from './time';
 import { DayFlight, FlightInstance, coverageHubFor, flightsOn, getFlightsForWeek } from './week';
 
@@ -101,6 +102,11 @@ export interface RouteEntry {
   /** Days this week with a direct flight (direct) or a connection (connecting). */
   daysFlying: number;
   isFavourite: boolean;
+  /**
+   * Months this home → destination route flies, from the published data
+   * ('Nov – Apr'), or null when it flies all year (or only connects).
+   */
+  season?: string | null;
   /** @deprecated Old shape for route-card/flight-modal until WS5/WS6. Same as `itinerary`. */
   bestConnection?: ConnectionOption;
 }
@@ -193,13 +199,14 @@ export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
     const weekDays = filteredWeek(p.home, d.code, p.weekStartKey, keepFlight, trivialFlightFilter);
     const directDays = weekDays.filter(w => w.flies).length;
     const isFavourite = favs.has(d.code);
+    const season = routeSeason(p.home, d.code);
 
     if (p.dateKey) {
       const flights = trivialFlightFilter
         ? flightsOn(p.home, d.code, p.dateKey)
         : flightsOn(p.home, d.code, p.dateKey).filter(keepFlight);
       if (flights.length) {
-        direct.push({ destination: d, isDirect: true, weekDays, flights, daysFlying: directDays, isFavourite });
+        direct.push({ destination: d, isDirect: true, weekDays, flights, daysFlying: directDays, isFavourite, season });
       } else if (p.showConnections && isCovered(p.dateKey, coverageHubFor(p.home, d.code))) {
         const itineraries = findItineraries(p.home, d.code, p.dateKey, connect, keepItin);
         if (itineraries.length) {
@@ -209,6 +216,7 @@ export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
             // Connection days this week (not direct days), so the 'days' sort ranks connecting routes meaningfully.
             daysFlying: summarizeWeek(p.home, d.code, p.weekStartKey, connect, keepFlight, keepItin).connectDays,
             isFavourite,
+            season,
             bestConnection: toConnectionOption(itinerary) ?? undefined,
           });
         }
@@ -221,12 +229,12 @@ export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
       ? summarizeWeek(p.home, d.code, p.weekStartKey, connect, keepFlight, keepItin)
       : undefined;
     if (directDays) {
-      direct.push({ destination: d, isDirect: true, weekDays, flights, weekSummary, daysFlying: directDays, isFavourite });
+      direct.push({ destination: d, isDirect: true, weekDays, flights, weekSummary, daysFlying: directDays, isFavourite, season });
     } else if (weekSummary && weekSummary.connectDays) {
       const best = weekSummary.days.find(x => x.best)?.best ?? undefined;
       connecting.push({
         destination: d, isDirect: false, weekDays, flights: [], weekSummary,
-        daysFlying: weekSummary.connectDays, isFavourite,
+        daysFlying: weekSummary.connectDays, isFavourite, season,
         bestConnection: best ? toConnectionOption(best) ?? undefined : undefined,
       });
     }

@@ -16,6 +16,10 @@ export interface Destination {
   duration: string;
   /** Marketing figure only; real equipment comes from FlightInstance.aircraft. */
   aircraft: string;
+  /**
+   * @deprecated Hand-written and often wrong (PUJ said 'Oct – Apr', it flies
+   * all year). The UI derives seasons from the schedules (utils/season.ts).
+   */
   season: string;
   isNew?: boolean;
 }

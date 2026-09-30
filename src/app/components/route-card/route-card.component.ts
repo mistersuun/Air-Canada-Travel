@@ -19,7 +19,6 @@ import { PlaneIconComponent } from '../shared/plane-icon.component';
 import { IconComponent } from '../shared/icons.component';
 
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
-const YEAR_ROUND = new Set(['Year-round', 'Jan – Dec', '']);
 
 export type SegKind = 'direct' | 'connect' | 'outside' | 'none';
 
@@ -336,10 +335,8 @@ export class RouteCardComponent {
 
   readonly flag = computed(() => getFlag(this.entry().destination));
   readonly region = computed(() => regionVar(this.entry().destination.region));
-  readonly season = computed(() => {
-    const s = this.entry().destination.season?.trim() ?? '';
-    return YEAR_ROUND.has(s) ? null : s;
-  });
+  /** Months this route flies, derived from the schedules (null: all year). */
+  readonly season = computed(() => this.entry().season ?? null);
 
   readonly originCity = computed(() => this.hubName() || airportName(this.trip()?.origin ?? ''));
 

@@ -3,7 +3,11 @@ import { CommonModule } from '@angular/common';
 import { Destination, REGION_COLORS } from '../../data/destinations';
 import { DayFlight, getFlightsForWeek, formatDayLabel } from '../../utils/week';
 import { findConnections, ConnectionOption, formatLayover } from '../../utils/connections';
-import { RouteEntry } from '../../app.component';
+import { RouteEntry } from '../../utils/routes';
+import type { Coverage } from '../../data/schedule-index';
+import type { ConnectOptions } from '../../utils/connections';
+import type { TimeFormat } from '../../state/prefs.service';
+import { keyToDate } from '../../utils/time';
 import { getFlag } from '../../utils/flags';
 import { getOrigins } from '../../utils/airports';
 
@@ -242,13 +246,28 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
   `]
 })
 export class FlightModalComponent implements OnInit {
+  // WS3 binding contract (stubs; WS6 implements the UI). Dates are 'YYYY-MM-DD' keys.
   @Input() destination!: Destination;
-  @Input() hubCode = 'YYZ';
-  @Input() hubCityName = 'Toronto';
-  @Input() weekStart!: Date;
-  @Input() selectedDate: Date | null = null;
-  @Input() route: RouteEntry | null = null;
+  @Input() hubCode = 'YUL';
+  @Input() set entry(e: RouteEntry | null) { this.route = e; }
+  @Input() set hubName(n: string) { this.hubCityName = n; }
+  @Input() set weekStartKey(k: string) { this.weekStart = keyToDate(k); }
+  @Input() set selectedDateKey(k: string | null) { this.selectedDate = k ? keyToDate(k) : null; }
+  @Input() todayKey: string | null = null;
+  @Input() coverage: Coverage | null = null;
+  @Input() showConnections = true;
+  @Input() connect: ConnectOptions = {};
+  @Input() timeFormat: TimeFormat = '24h';
+  @Input() isFavourite = false;
   @Output() closed = new EventEmitter<void>();
+  @Output() selectDate = new EventEmitter<string>();
+  @Output() share = new EventEmitter<void>();
+  @Output() toggleFavourite = new EventEmitter<void>();
+
+  hubCityName = 'Montreal';
+  weekStart!: Date;
+  selectedDate: Date | null = null;
+  route: RouteEntry | null = null;
 
   readonly dayInitials = DAY_INITIALS;
   readonly formatLayover = formatLayover;

@@ -1,6 +1,9 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouteEntry } from '../../app.component';
+import { RouteEntry, HubStats } from '../../utils/routes';
+import type { Coverage } from '../../data/schedule-index';
+import type { TimeFormat } from '../../state/prefs.service';
+import { keyToDate } from '../../utils/time';
 import { RouteCardComponent } from '../route-card/route-card.component';
 
 @Component({
@@ -23,7 +26,7 @@ import { RouteCardComponent } from '../route-card/route-card.component';
           [selectedDate]="selectedDate"
           [expanded]="expandedCode === r.destination.code"
           [routeEntry]="r"
-          (toggled)="cardToggled.emit(r.destination.code)"
+          (toggled)="open.emit(r.destination.code)"
         ></app-route-card>
       </ng-container>
 
@@ -40,7 +43,7 @@ import { RouteCardComponent } from '../route-card/route-card.component';
           [selectedDate]="selectedDate"
           [expanded]="expandedCode === r.destination.code"
           [routeEntry]="r"
-          (toggled)="cardToggled.emit(r.destination.code)"
+          (toggled)="open.emit(r.destination.code)"
         ></app-route-card>
       </ng-container>
     </div>
@@ -96,13 +99,29 @@ import { RouteCardComponent } from '../route-card/route-card.component';
   `]
 })
 export class RouteListComponent {
-  @Input() routes: RouteEntry[] = [];
-  @Input() hubCode = 'YYZ';
-  @Input() hubCityName = 'Toronto';
-  @Input() weekStart!: Date;
-  @Input() selectedDate: Date | null = null;
-  @Input() expandedCode: string | null = null;
-  @Output() cardToggled = new EventEmitter<string>();
+  // WS3 binding contract (stubs; WS5 implements the UI). Dates are 'YYYY-MM-DD' keys.
+  @Input() set entries(v: RouteEntry[]) { this.routes = v; }
+  @Input() set weekStartKey(k: string) { this.weekStart = keyToDate(k); }
+  @Input() set selectedDateKey(k: string | null) { this.selectedDate = k ? keyToDate(k) : null; }
+  @Input() set hubName(n: string) { this.hubCityName = n; }
+  @Input() hubCode = 'YUL';
+  @Input() coverage: Coverage | null = null;
+  @Input() stats: HubStats | null = null;
+  @Input() favourites: readonly string[] = [];
+  @Input() timeFormat: TimeFormat = '24h';
+  @Input() todayKey: string | null = null;
+  @Input() showConnections = true;
+  @Input() hasActiveFilters = false;
+  @Output() open = new EventEmitter<string>();
+  @Output() toggleFavourite = new EventEmitter<string>();
+  @Output() clearFilters = new EventEmitter<void>();
+  @Output() jumpToCoverage = new EventEmitter<string | null>();
+
+  routes: RouteEntry[] = [];
+  hubCityName = 'Montreal';
+  weekStart!: Date;
+  selectedDate: Date | null = null;
+  expandedCode: string | null = null;
 
   get directRoutes(): RouteEntry[] {
     return this.routes.filter(r => r.isDirect);

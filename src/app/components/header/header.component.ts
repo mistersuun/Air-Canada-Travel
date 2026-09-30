@@ -2,6 +2,9 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HUBS } from '../../data/destinations';
+import { Filters, EMPTY_FILTERS, SortKey } from '../../utils/routes';
+import { DEFAULT_HUB, ThemePref } from '../../state/prefs.service';
+import type { StarredItem } from '../../state/app-state.service';
 
 @Component({
   selector: 'app-header',
@@ -10,7 +13,7 @@ import { HUBS } from '../../data/destinations';
   template: `
     <header class="header">
       <div class="header__brand">
-        <img class="header__logo" src="assets/icon.svg" alt="AC Trips logo">
+        <img class="header__logo" src="icon.svg" alt="AC Trips logo">
         <span class="header__name">Air Canada <span class="header__dim">Trips</span></span>
       </div>
       <div class="header__right">
@@ -18,11 +21,11 @@ import { HUBS } from '../../data/destinations';
         <select
           id="hub-select"
           class="header__hub-select"
-          [ngModel]="homeCity"
-          (ngModelChange)="homeCityChanged.emit($event)"
+          [ngModel]="hubCode"
+          (ngModelChange)="hubCodeChange.emit($event)"
           aria-label="Select home airport"
         >
-          <option *ngFor="let h of hubs" [value]="h.name">{{ h.code }} · {{ h.name }}</option>
+          <option *ngFor="let h of hubs" [value]="h.code">{{ h.code }} · {{ h.name }}</option>
         </select>
       </div>
     </header>
@@ -69,7 +72,28 @@ import { HUBS } from '../../data/destinations';
   `]
 })
 export class HeaderComponent {
-  @Input() homeCity = 'Toronto';
-  @Output() homeCityChanged = new EventEmitter<string>();
+  // WS3 binding contract (stubs; WS7 implements the UI). Hub is a code, not a name.
+  @Input() hubCode = DEFAULT_HUB;
+  @Input() query = '';
+  @Input() sort: SortKey = 'az';
+  @Input() filters: Filters = EMPTY_FILTERS;
+  @Input() region = 'All';
+  @Input() showConnections = true;
+  @Input() selectedDateKey: string | null = null;
+  @Input() theme: ThemePref = 'auto';
+  @Input() favourites: readonly string[] = [];
+  @Input() starredThisWeek: readonly StarredItem[] = [];
+  @Input() activeFilterCount = 0;
+  @Input() routeCount = 0;
+  @Output() hubCodeChange = new EventEmitter<string>();
+  @Output() queryChange = new EventEmitter<string>();
+  @Output() sortChange = new EventEmitter<SortKey>();
+  @Output() filtersChange = new EventEmitter<Filters>();
+  @Output() regionChange = new EventEmitter<string>();
+  @Output() showConnectionsChange = new EventEmitter<boolean>();
+  @Output() themeChange = new EventEmitter<ThemePref>();
+  @Output() openSettings = new EventEmitter<void>();
+  @Output() openDestination = new EventEmitter<string>();
+  @Output() clearFilters = new EventEmitter<void>();
   readonly hubs = HUBS;
 }

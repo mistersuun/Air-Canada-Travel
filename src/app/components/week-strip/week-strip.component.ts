@@ -2,6 +2,8 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { formatWeekLabel, formatWeekNavLabel } from '../../utils/week';
 import { REGIONS } from '../../data/destinations';
+import type { Coverage } from '../../data/schedule-index';
+import { dateKey, keyToDate } from '../../utils/time';
 
 @Component({
   selector: 'app-week-strip',
@@ -25,14 +27,14 @@ import { REGIONS } from '../../data/destinations';
       <button
         class="day-btn"
         [class.day-btn--active]="!selectedDate"
-        (click)="daySelected.emit(null)"
+        (click)="selectDay.emit(null)"
       >All week</button>
       <button
         *ngFor="let day of weekDays; let i = index"
         class="day-btn"
         [class.day-btn--active]="isSelected(day)"
         [class.day-btn--today]="isToday(day)"
-        (click)="daySelected.emit(day)"
+        (click)="selectDay.emit(toKey(day))"
       >
         <span class="day-btn__name">{{ dayNames[i] }}</span>
         <span class="day-btn__date">{{ day.getDate() }}</span>
@@ -152,10 +154,19 @@ import { REGIONS } from '../../data/destinations';
   `]
 })
 export class WeekStripComponent {
-  @Input() weekStart!: Date;
+  // WS3 binding contract (stubs; WS7 implements the UI). Dates are 'YYYY-MM-DD' keys.
+  @Input() set weekStartKey(k: string) { this.weekStart = keyToDate(k); }
+  @Input() set selectedDateKey(k: string | null) { this.selectedDate = k ? keyToDate(k) : null; }
+  @Input() todayKey: string | null = null;
+  @Input() coverage: Coverage | null = null;
+  @Output() selectDay = new EventEmitter<string | null>();
+  @Output() jumpTo = new EventEmitter<string>();
+  protected toKey(d: Date): string { return dateKey(d); }
+
+  weekStart!: Date;
   @Input() routeCount = 0;
   @Input() activeRegion = 'All';
-  @Input() selectedDate: Date | null = null;
+  selectedDate: Date | null = null;
   @Input() showConnections = true;
   @Output() prev = new EventEmitter<void>();
   @Output() next = new EventEmitter<void>();

@@ -10,6 +10,7 @@
           "/favicon.ico",
           "/index.html",
           "/manifest.webmanifest",
+          "/icon.svg",
           "/*.css",
           "/*.js"
         ]
@@ -30,15 +31,26 @@
   ],
   "dataGroups": [
     {
-      "name": "google-fonts",
+      "name": "google-fonts-css",
       "urls": [
-        "https://fonts.googleapis.com/**",
+        "https://fonts.googleapis.com/**"
+      ],
+      "cacheConfig": {
+        "maxSize": 10,
+        "maxAge": "30d",
+        "timeout": "3s",
+        "strategy": "freshness"
+      }
+    },
+    {
+      "name": "google-fonts-files",
+      "urls": [
         "https://fonts.gstatic.com/**"
       ],
       "cacheConfig": {
-        "maxSize": 20,
-        "maxAge": "30d",
-        "strategy": "freshness"
+        "maxSize": 30,
+        "maxAge": "365d",
+        "strategy": "performance"
       }
     }
   ]

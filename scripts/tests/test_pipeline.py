@@ -1,5 +1,6 @@
 """Pipeline tests: discovery, download, gates and file writing, all stubbed."""
 import io
+import json
 import urllib.error
 
 import pytest
@@ -8,7 +9,22 @@ from conftest import load_pages
 
 BASE = "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/"
 HUBS = ["YYZ", "YUL", "YVR", "YWG"]
-PREVIOUS = '// previous file\nexport const ROUTE_SCHEDULES = [\n  { originCode: "YUL", destinationCode: "CDG", schedules: [] },\n];\n'
+
+
+def prev_json(routes: dict) -> str:
+    """A previously generated schedules.json: {'YUL-CDG': [[from, to, mask, flight, dep, arr, ac]]}."""
+    return json.dumps({"version": 1, "meta": {}, "routes": routes})
+
+
+def load_out(path) -> dict:
+    return json.loads(path.read_text())
+
+
+def many_routes(n=40) -> str:
+    return prev_json({f"YUL-X{i:02d}": [] for i in range(n)})
+
+
+PREVIOUS = prev_json({"YUL-CDG": []})
 
 
 # --- discovery ------------------------------------------------------------------
@@ -134,10 +150,15 @@ def test_load_hub_codes_reads_destinations(fs, tmp_path):
     assert fs.load_hub_codes(str(tmp_path / "missing.ts")) == list(fs.FALLBACK_HUBS)
 
 
-def test_previous_route_count_counts_origin_code_entries(fs, tmp_path):
-    p = tmp_path / "s.ts"
-    p.write_text("export interface RouteSchedule {\n  originCode: string;\n}\n" + PREVIOUS)
+def test_previous_route_count_reads_json_and_legacy_ts(fs, tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(PREVIOUS)
     assert fs.previous_route_count(str(p)) == 1
+    legacy = tmp_path / "s.ts"
+    legacy.write_text("export interface RouteSchedule {\n  originCode: string;\n}\n"
+                      '  { originCode: "YUL", destinationCode: "CDG", schedules: [] },\n')
+    assert fs.previous_route_count(str(legacy)) == 1
+    assert fs.previous_route_count(str(tmp_path / "missing.json")) == 0
 
 
 # --- gates ----------------------------------------------------------------------
@@ -222,7 +243,8 @@ ALL_URLS = sorted(list(FIXTURE_PDFS) + [BASE + "EN-SOUTHPACIFIC-Pacific.pdf"])
 def out(tmp_path, fs, monkeypatch):
     monkeypatch.setattr(fs, "MIN_RECORDS", 1)
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
-    p = tmp_path / "schedules.ts"
+    p = tmp_path / "data" / "schedules.json"
+    p.parent.mkdir()
     p.write_text(PREVIOUS)
     return p
 
@@ -238,7 +260,7 @@ def test_run_zero_pdfs_fails_and_leaves_file_identical(fs, out):
     assert _run(fs, out, discover=lambda: []) == 1
     assert _run(fs, out, ["--dry-run"], discover=lambda: []) == 1
     assert out.read_bytes() == before
-    assert not (out.parent / "schedules.ts.tmp").exists()
+    assert not (out.parent / "schedules.json.tmp").exists()
 
 
 def test_run_discovery_exception_fails(fs, out):
@@ -274,14 +296,19 @@ def test_run_missing_required_hub_fails(fs, out):
 
 
 def test_run_route_count_drop_fails(fs, out):
-    many = "".join(f'  {{ originCode: "YUL", destinationCode: "X{i:02d}", schedules: [] }},\n' for i in range(40))
-    out.write_text(many)
+    out.write_text(many_routes())
     before = out.read_bytes()
     assert _run(fs, out) == 1
     assert out.read_bytes() == before
 
 
-def test_domestic_pdfs_skipped_unless_opted_in(fs, out):
+DOMESTIC_TEXT = ("Toronto (YYZ)\nToronto to Montreal\nTrudeau Airport (YUL)\nto ...\n"
+                 "2026-10-01 2026-10-31 MTWRFSU AC403 08:10 09:33 321\n"
+                 "Toronto to Sudbury\nSudbury Airport (YSB)\nto ...\n"
+                 "2026-10-01 2026-10-31 MTWRFSU AC8000 08:10 09:33 DH4\n")
+
+
+def test_domestic_hub_to_hub_legs_parsed_by_default(fs, out):
     seen = []
 
     def fetch(url):
@@ -291,22 +318,19 @@ def test_domestic_pdfs_skipped_unless_opted_in(fs, out):
         return _fetch_ok(url)
 
     def extract(b):
-        if b == b"%PDF-DOM":
-            return ["Toronto (YYZ)\nToronto to Montreal\nTrudeau Airport (YUL)\nto ...\n"
-                    "2026-10-01 2026-10-31 MTWRFSU AC403 08:10 09:33 321\n"
-                    "Toronto to Sudbury\nSudbury Airport (YSB)\nto ...\n"
-                    "2026-10-01 2026-10-31 MTWRFSU AC8000 08:10 09:33 DH4\n"]
-        return _extract(b)
+        return [DOMESTIC_TEXT] if b == b"%PDF-DOM" else _extract(b)
 
     urls = ALL_URLS + [BASE + "EN-CANADA-EasternCanada.pdf"]
     assert _run(fs, out, discover=lambda: urls, fetch=fetch, extract=extract) == 0
-    assert not any("CANADA" in u for u in seen)
-    assert '"YYZ", destinationCode: "YUL"' not in out.read_text()
+    routes = load_out(out)["routes"]
+    assert routes["YYZ-YUL"] == [["2026-10-01", "2026-10-31", "MTWRFSU", "AC403", "08:10", "09:33", "321"]]
+    assert not any(k.endswith("-YSB") for k in routes)               # non-hub dropped
+    assert any("CANADA" in u for u in seen)
 
-    assert _run(fs, out, ["--include-domestic"], discover=lambda: urls, fetch=fetch, extract=extract) == 0
-    text = out.read_text()
-    assert 'originCode: "YYZ", destinationCode: "YUL"' in text      # hub-to-hub kept
-    assert 'destinationCode: "YSB"' not in text                     # non-hub dropped
+    seen.clear()
+    assert _run(fs, out, ["--skip-domestic"], discover=lambda: urls, fetch=fetch, extract=extract) == 0
+    assert not any("CANADA" in u for u in seen)
+    assert "YYZ-YUL" not in load_out(out)["routes"]
 
 
 def test_domestic_parse_failure_is_not_fatal(fs, out):
@@ -319,7 +343,7 @@ def test_domestic_parse_failure_is_not_fatal(fs, out):
         return _extract(b)
 
     urls = ALL_URLS + [BASE + "EN-CANADA-EasternCanada.pdf"]
-    assert _run(fs, out, ["--include-domestic"], discover=lambda: urls, fetch=fetch, extract=extract) == 0
+    assert _run(fs, out, discover=lambda: urls, fetch=fetch, extract=extract) == 0
 
 
 def test_run_writes_deterministic_output_with_meta(fs, out):
@@ -336,19 +360,27 @@ def test_run_writes_deterministic_output_with_meta(fs, out):
     out.write_text(first.replace('"AC7"', '"AC9"'))
     assert _run(fs, out, now=t2) == 0
     third = out.read_text()
-    assert 'generatedAt: "2026-10-01T08:30:00Z"' in third
+    assert '"generatedAt": "2026-10-01T08:30:00Z"' in third
     assert first.replace("2026-09-30T12:00:00Z", "X") == third.replace("2026-10-01T08:30:00Z", "X")
 
-    assert 'generatedAt: "2026-09-30T12:00:00Z"' in first
-    assert "export const SCHEDULES_META = {" in first
-    assert 'coverageFrom: "2026-09-29"' in first
-    assert 'coverageTo: "2027-09-26"' in first
-    assert 'YUL: { from: "2026-09-29", to: "2027-09-06" }' in first
-    assert "pdfCount: 4," in first
-    assert "export function getSchedulesForRoute(originCode: string, destinationCode: string): FlightSchedule[]" in first
-    assert "export const ROUTE_SCHEDULES: RouteSchedule[] = [" in first
-    assert "ROUTE_INDEX" not in first and "arrDayOffset" not in first
-    assert not (out.parent / "schedules.ts.tmp").exists()
+    data = json.loads(first)
+    assert data["version"] == 1
+    meta = data["meta"]
+    assert meta["generatedAt"] == "2026-09-30T12:00:00Z"
+    assert meta["coverageFrom"] == "2026-09-29" and meta["coverageTo"] == "2027-09-26"
+    assert meta["coverageByHub"]["YUL"] == {"from": "2026-09-29", "to": "2027-09-06"}
+    assert meta["pdfCount"] == 4
+    assert meta["routeCount"] == len(data["routes"]) and meta["recordCount"] == sum(map(len, data["routes"].values()))
+    assert data["routes"]["YUL-CMN"][0] == ["2026-09-30", "2026-10-04", "--W-FSU", "AC72", "19:10", "06:15", "333"]
+    # One record per line keeps the weekly diff readable.
+    assert '      ["2026-09-30", "2026-10-04", "--W-FSU", "AC72", "19:10", "06:15", "333"],' in first
+    assert not (out.parent / "schedules.json.tmp").exists()
+
+
+def test_days_mask_round_trip(fs):
+    for days in ("Mon,Wed,Fri", "Thu,Sun", "Mon,Tue,Wed,Thu,Fri,Sat,Sun"):
+        assert fs.decode_days(fs.encode_days(days)) == days
+    assert fs.encode_days("Tue,Sat") == "-T---S-"
 
 
 def test_step_summary_written(fs, out, tmp_path, monkeypatch):
@@ -361,30 +393,32 @@ def test_step_summary_written(fs, out, tmp_path, monkeypatch):
 
 # --- failed sources, ratchets, orphans -------------------------------------------
 
-PREV_WITH_RECORDS = (
-    '// previous file\nexport const ROUTE_SCHEDULES = [\n'
-    '  { originCode: "YUL", destinationCode: "CDG", schedules: [\n'
-    '    { fromDate: "2026-09-01", toDate: "2027-03-31", days: "Mon", flightNumber: "AC870", '
-    'departure: "18:00", arrival: "07:30", aircraft: "333" },\n'
-    '  ] },\n'
-    '  { originCode: "YUL", destinationCode: "OLD", schedules: [\n'
-    '    { fromDate: "2026-01-01", toDate: "2026-03-31", days: "Mon", flightNumber: "AC1", '
-    'departure: "18:00", arrival: "07:30", aircraft: "333" },\n'
-    '  ] },\n'
-    '  { originCode: "YUL", destinationCode: "YYZ", schedules: [\n'
-    '    { fromDate: "2026-09-01", toDate: "2027-03-31", days: "Mon", flightNumber: "AC400", '
-    'departure: "08:00", arrival: "09:20", aircraft: "321" },\n'
-    '  ] },\n'
-    '];\n')
+PREV_WITH_RECORDS = prev_json({
+    "YUL-CDG": [["2026-09-01", "2027-03-31", "M------", "AC870", "18:00", "07:30", "333"]],
+    "YUL-OLD": [["2026-01-01", "2026-03-31", "M------", "AC1", "18:00", "07:30", "333"]],
+    "YUL-YYZ": [["2026-09-01", "2027-03-31", "M------", "AC400", "08:00", "09:20", "321"]],
+})
 
 
 def test_load_previous_routes(fs, tmp_path):
-    p = tmp_path / "s.ts"
+    p = tmp_path / "s.json"
     p.write_text(PREV_WITH_RECORDS)
     prev = fs.load_previous_routes(str(p))
     assert set(prev) == {("YUL", "CDG"), ("YUL", "OLD"), ("YUL", "YYZ")}
-    assert prev[("YUL", "CDG")][0]["flightNumber"] == "AC870"
-    assert fs.load_previous_routes(str(tmp_path / "missing.ts")) == {}
+    assert prev[("YUL", "CDG")][0] == {
+        "fromDate": "2026-09-01", "toDate": "2027-03-31", "days": "Mon", "flightNumber": "AC870",
+        "departure": "18:00", "arrival": "07:30", "aircraft": "333"}
+    assert fs.load_previous_routes(str(tmp_path / "missing.json")) == {}
+
+
+def test_load_previous_routes_reads_legacy_schedules_ts(fs, tmp_path):
+    p = tmp_path / "schedules.ts"
+    p.write_text('export const ROUTE_SCHEDULES = [\n'
+                 '  { originCode: "YUL", destinationCode: "CDG", schedules: [\n'
+                 '    { fromDate: "2026-09-01", toDate: "2027-03-31", days: "Mon", flightNumber: "AC870", '
+                 'departure: "18:00", arrival: "07:30", aircraft: "333" },\n'
+                 '  ] },\n];\n')
+    assert fs.load_previous_routes(str(p))[("YUL", "CDG")][0]["flightNumber"] == "AC870"
 
 
 def test_single_failed_source_is_tolerated_and_carried_forward(fs, out, monkeypatch):
@@ -399,10 +433,10 @@ def test_single_failed_source_is_tolerated_and_carried_forward(fs, out, monkeypa
 
     now = lambda: datetime(2026, 9, 30, tzinfo=timezone.utc)
     assert _run(fs, out, fetch=fetch, now=now) == 0
-    text = out.read_text()
-    assert 'originCode: "YUL", destinationCode: "CDG"' in text      # carried forward
-    assert 'destinationCode: "OLD"' not in text                     # expired: not carried
-    assert 'destinationCode: "YYZ"' not in text                     # hub-to-hub: not domestic run
+    routes = load_out(out)["routes"]
+    assert "YUL-CDG" in routes            # carried forward
+    assert "YUL-OLD" not in routes        # expired: not carried
+    assert "YUL-YYZ" not in routes        # hub-to-hub: only carried for a failed domestic PDF
 
 
 def test_too_many_failed_sources_still_fail(fs, out):
@@ -440,8 +474,7 @@ def test_gate_orphans_count_as_rejects(fs, monkeypatch):
 
 
 def test_allow_route_drop_flag(fs, out):
-    many = "".join(f'  {{ originCode: "YUL", destinationCode: "X{i:02d}", schedules: [] }},\n' for i in range(40))
-    out.write_text(many)
+    out.write_text(many_routes())
     assert _run(fs, out, ["--dry-run"]) == 1
     assert _run(fs, out, ["--dry-run", "--allow-route-drop"]) == 0
 
@@ -454,20 +487,54 @@ def test_gate_record_count_ratchet(fs, monkeypatch):
     assert errors == [] and any("record count dropped" in w for w in warnings)
 
 
-def test_domestic_download_failure_is_not_fatal(fs, out):
+def test_domestic_failure_is_not_fatal_and_carries_hub_legs_forward(fs, out):
+    from datetime import datetime, timezone
+    out.write_text(PREV_WITH_RECORDS)
+
     def fetch(url):
         if "CANADA" in url:
             raise RuntimeError("down")
         return _fetch_ok(url)
 
     urls = ALL_URLS + [BASE + "EN-CANADA-EasternCanada.pdf"]
-    assert _run(fs, out, ["--include-domestic"], discover=lambda: urls, fetch=fetch) == 0
+    now = lambda: datetime(2026, 9, 30, tzinfo=timezone.utc)
+    assert _run(fs, out, discover=lambda: urls, fetch=fetch, now=now) == 0
+    routes = load_out(out)["routes"]
+    assert routes["YUL-YYZ"][0][3] == "AC400"   # the lost hub-to-hub leg is kept
+    assert "YUL-CDG" not in routes              # nothing else is carried
 
 
-def test_domestic_baseline_excluded_without_flag(fs, out):
-    # Previous file has 20 hub-to-hub routes (from a --include-domestic run): not counted.
-    hubhub = "".join(
-        f'  {{ originCode: "{a}", destinationCode: "{b}", schedules: [] }},\n'
-        for a in HUBS for b in HUBS if a != b) * 2
-    out.write_text(PREVIOUS + hubhub)
-    assert _run(fs, out, ["--dry-run"]) == 0
+def test_domestic_pdf_that_parses_to_nothing_counts_as_failed(fs, out):
+    from datetime import datetime, timezone
+    out.write_text(PREV_WITH_RECORDS)
+
+    def fetch(url):
+        return (b"%PDF-DOM", 0.0) if "CANADA" in url else _fetch_ok(url)
+
+    def extract(b):
+        return ["a new layout"] if b == b"%PDF-DOM" else _extract(b)
+
+    urls = ALL_URLS + [BASE + "EN-CANADA-EasternCanada.pdf"]
+    now = lambda: datetime(2026, 9, 30, tzinfo=timezone.utc)
+    assert _run(fs, out, discover=lambda: urls, fetch=fetch, extract=extract, now=now) == 0
+    assert "YUL-YYZ" in load_out(out)["routes"]
+
+
+def test_domestic_pdf_without_hub_legs_is_fine(fs, out, capsys):
+    def fetch(url):
+        return (b"%PDF-DOM", 0.0) if "CANADA" in url else _fetch_ok(url)
+
+    def extract(b):
+        return ["Toronto (YYZ)\nToronto to Sudbury\nSudbury Airport (YSB)\nto ...\n"
+                "2026-10-01 2026-10-31 MTWRFSU AC8000 08:10 09:33 DH4\n"] if b == b"%PDF-DOM" else _extract(b)
+
+    urls = ALL_URLS + [BASE + "EN-CANADA-NorthernCanada.pdf"]
+    assert _run(fs, out, discover=lambda: urls, fetch=fetch, extract=extract) == 0
+    assert "domestic source(s) failed" not in capsys.readouterr().out
+
+
+def test_domestic_baseline_excluded_when_skipped(fs, out):
+    # Previous file has hub-to-hub routes (from the domestic PDFs): not counted with --skip-domestic.
+    hubhub = {f"{a}-{b}": [] for a in HUBS for b in HUBS if a != b}
+    out.write_text(prev_json({"YUL-CDG": [], **hubhub}))
+    assert _run(fs, out, ["--dry-run", "--skip-domestic"]) == 0

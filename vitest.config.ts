@@ -73,7 +73,6 @@ export default defineConfig({
       exclude: [
         'src/main.ts',
         'src/**/*.spec.ts',
-        'src/app/data/schedules.ts', // generated data
       ],
       thresholds: {
         // Pure logic: the engine must stay well covered.

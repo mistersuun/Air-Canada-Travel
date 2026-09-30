@@ -2,7 +2,7 @@ name: Update Flight Schedules
 
 on:
   # Weekly cron DISABLED while the feat/overhaul rework is in flight: the bot
-  # pushes schedules.ts straight to master and conflicts with the rework.
+  # pushes schedules.json straight to master and conflicts with the rework.
   # Re-enable once the overhaul has merged.
   # schedule:
   #   # Every Monday at 6am UTC (AC typically updates schedules on weekends)
@@ -51,7 +51,7 @@ jobs:
         run: npm ci
 
       - name: Fetch latest schedules
-        # Exits non-zero (and leaves schedules.ts untouched) if any safety gate fails.
+        # Exits non-zero (and leaves schedules.json untouched) if any safety gate fails.
         # Leaves the file untouched too when only generatedAt would change.
         env:
           ALLOW_ROUTE_DROP: ${{ inputs.allow_route_drop && '--allow-route-drop' || '' }}
@@ -60,9 +60,9 @@ jobs:
       - name: Diff summary
         run: |
           {
-            echo '### schedules.ts diff'
+            echo '### schedules.json diff'
             echo '```'
-            git diff --stat -- src/app/data/schedules.ts || true
+            git diff --stat -- public/data/schedules.json || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -74,10 +74,10 @@ jobs:
 
       - name: Commit and push if changed
         run: |
-          git diff --quiet -- src/app/data/schedules.ts && exit 0
+          git diff --quiet -- public/data/schedules.json && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/app/data/schedules.ts
+          git add public/data/schedules.json
           git commit -m "chore: update flight schedules from AC Vacations PDFs"
           git push
 

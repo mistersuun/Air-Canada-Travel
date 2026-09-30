@@ -1,18 +1,36 @@
 /**
  * Hand-written access layer over the generated schedules (critique 6).
  *
- * - Builds ROUTE_INDEX (`${origin}-${dest}` → records) from ROUTE_SCHEDULES so
- *   lookups are O(1) instead of a linear find over ~600 routes.
+ * - The data lives in public/data/schedules.json (written by
+ *   scripts/fetch-schedules.py), outside the JS bundle: loadSchedules() fetches
+ *   and installs it before the app starts (app.config.ts), and the service
+ *   worker caches it with the app. decodeSchedules() turns the compact file
+ *   into ScheduleRoute records.
+ * - Builds ROUTE_INDEX (`${origin}-${dest}` → records) so lookups are O(1)
+ *   instead of a linear find over ~700 routes.
  * - Makes the schedule source injectable: specs call setScheduleSource(fixture)
  *   and resetScheduleSource() so behavioural tests never depend on live data
  *   that expires with the next weekly scrape (critique 9).
  * - Computes coverage windows globally and per airport (critique 7), reading
- *   SCHEDULES_META when the generator emits it.
+ *   the file's meta when present.
  *
  * Nothing in here knows about destinations or time zones; see utils/.
  */
-import * as generated from './schedules';
-import type { FlightSchedule } from './schedules';
+
+/** One published schedule row: a flight on some weekdays between two dates. */
+export interface FlightSchedule {
+  fromDate: string;
+  toDate: string;
+  /** 'Mon,Wed,Fri'. */
+  days: string;
+  flightNumber: string;
+  /** 'HH:MM' local at the origin. */
+  departure: string;
+  /** 'HH:MM' local at the destination. */
+  arrival: string;
+  /** IATA equipment code ('789'). */
+  aircraft: string;
+}
 
 /** A generated schedule row. `arrDayOffset` is optional (the PDFs have no marker; see critique 5). */
 export interface ScheduleRecord extends FlightSchedule {
@@ -25,15 +43,31 @@ export interface ScheduleRoute {
   schedules: readonly ScheduleRecord[];
 }
 
-/** Shape of SCHEDULES_META when the scraper emits it (all fields optional). */
+/** The file's `meta` block (all fields optional). */
 export interface SchedulesMeta {
   generatedAt?: string;
   coverageFrom?: string;
   coverageTo?: string;
+  coverageByHub?: Readonly<Record<string, { from: string; to: string }>>;
   pdfCount?: number;
+  routeCount?: number;
   recordCount?: number;
   sources?: readonly string[];
 }
+
+/** A record in the file: [fromDate, toDate, 'M-W-F--' day mask, flight, departure, arrival, aircraft]. */
+export type EncodedSchedule = readonly [string, string, string, string, string, string, string];
+
+/** public/data/schedules.json, as written by scripts/fetch-schedules.py. */
+export interface SchedulesFile {
+  version: number;
+  meta?: SchedulesMeta;
+  /** 'YUL-CDG' → records. */
+  routes: Readonly<Record<string, readonly EncodedSchedule[]>>;
+}
+
+/** Where the app fetches the schedules (relative to the base href). */
+export const SCHEDULES_URL = 'data/schedules.json';
 
 export interface CoverageWindow {
   /** First date key with published data, or null when there is none. */
@@ -60,11 +94,39 @@ interface SourceState {
   aircraft: string[];
 }
 
-function readGeneratedMeta(): SchedulesMeta | null {
-  // SCHEDULES_META only exists once WS1's generator lands; read it defensively
-  // (a dynamic lookup, so the bundler does not warn about a missing export).
-  const meta = Object.entries(generated).find(([name]) => name === 'SCHEDULES_META')?.[1];
-  return meta && typeof meta === 'object' ? (meta as SchedulesMeta) : null;
+const DAY_LETTERS = 'MTWRFSU';
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const maskCache = new Map<string, string>();
+
+/** 'M-W-F--' → 'Mon,Wed,Fri' (the PDFs' mask: R = Thursday, U = Sunday). */
+export function decodeDayMask(mask: string): string {
+  let days = maskCache.get(mask);
+  if (days === undefined) {
+    days = [...mask].map((c, i) => (c === DAY_LETTERS[i] ? DAY_NAMES[i] : '')).filter(Boolean).join(',');
+    maskCache.set(mask, days);
+  }
+  return days;
+}
+
+/** Turns the compact schedules file into routes. Throws on a file it cannot read. */
+export function decodeSchedules(file: SchedulesFile): { routes: ScheduleRoute[]; meta: SchedulesMeta | null } {
+  if (!file || typeof file !== 'object' || file.version !== 1 || !file.routes || typeof file.routes !== 'object') {
+    throw new Error('Unsupported schedules file');
+  }
+  const routes: ScheduleRoute[] = [];
+  for (const [key, rows] of Object.entries(file.routes)) {
+    const [originCode, destinationCode] = key.split('-');
+    if (!originCode || !destinationCode || !Array.isArray(rows)) continue;
+    routes.push({
+      originCode,
+      destinationCode,
+      schedules: rows.map(r => ({
+        fromDate: r[0], toDate: r[1], days: decodeDayMask(r[2]), flightNumber: r[3],
+        departure: r[4], arrival: r[5], aircraft: r[6],
+      })),
+    });
+  }
+  return { routes, meta: file.meta ?? null };
 }
 
 function widen(w: CoverageWindow, from: string, to: string): void {
@@ -116,7 +178,9 @@ function build(routes: readonly ScheduleRoute[], meta: SchedulesMeta | null): So
   };
 }
 
-let state: SourceState = build(generated.ROUTE_SCHEDULES, readGeneratedMeta());
+/** The loaded (published) data that resetScheduleSource() restores. */
+let baseline: { routes: readonly ScheduleRoute[]; meta: SchedulesMeta | null } = { routes: [], meta: null };
+let state: SourceState = build(baseline.routes, baseline.meta);
 let version = 0;
 
 /**
@@ -126,7 +190,7 @@ let version = 0;
 export let ROUTE_INDEX: ReadonlyMap<string, readonly ScheduleRecord[]> = state.index;
 
 /**
- * Replace the schedule data (tests, or a future async JSON load).
+ * Replace the schedule data (tests inject fixtures here).
  * Bumps scheduleVersion() so memoised engine caches invalidate.
  */
 export function setScheduleSource(routes: readonly ScheduleRoute[], meta: SchedulesMeta | null = null): void {
@@ -135,9 +199,40 @@ export function setScheduleSource(routes: readonly ScheduleRoute[], meta: Schedu
   version++;
 }
 
-/** Restore the generated schedules.ts data. */
+/** Restore the published data (the last installSchedules/loadSchedules). */
 export function resetScheduleSource(): void {
-  setScheduleSource(generated.ROUTE_SCHEDULES, readGeneratedMeta());
+  setScheduleSource(baseline.routes, baseline.meta);
+}
+
+/** Installs a schedules file as the published data. */
+export function installSchedules(file: SchedulesFile): void {
+  baseline = decodeSchedules(file);
+  resetScheduleSource();
+}
+
+/** True once published data is installed. */
+export function schedulesLoaded(): boolean {
+  return baseline.routes.length > 0;
+}
+
+/**
+ * Fetches and installs public/data/schedules.json (app startup). The service
+ * worker serves it from cache offline. Resolves false, leaving the source
+ * empty, when it cannot be loaded, so the app still starts (and says so).
+ */
+export async function loadSchedules(
+  url: string = SCHEDULES_URL,
+  fetchFn: typeof fetch = (...a) => fetch(...a),
+): Promise<boolean> {
+  try {
+    const res = await fetchFn(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    installSchedules((await res.json()) as SchedulesFile);
+    return true;
+  } catch (err) {
+    console.error(`[schedules] could not load ${url}:`, err);
+    return false;
+  }
 }
 
 /** Increments on every source change; used as a cache key by the engine. */
@@ -176,7 +271,7 @@ export function getAircraftCodes(): readonly string[] {
 /**
  * Published coverage window. With `hub`, the window of that airport's flights
  * (each hub PDF and seasonal route ends at a different date); without, the
- * global window (SCHEDULES_META when present, else min/max of the data).
+ * global window (the file's meta when present, else min/max of the data).
  */
 export function getCoverage(hub?: string | null): Coverage {
   const generatedAt = state.meta?.generatedAt ?? null;

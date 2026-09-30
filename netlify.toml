@@ -27,6 +27,13 @@
   [headers.values]
     Cache-Control = "no-cache"
 
+# Schedule data is not content-hashed: always revalidate (the service worker
+# versions it through ngsw.json).
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
 [[headers]]
   for = "/manifest.webmanifest"
   [headers.values]

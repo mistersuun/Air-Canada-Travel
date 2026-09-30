@@ -1,6 +1,7 @@
 /**
  * Vitest global setup (jsdom).
  *
+ * - Installs public/data/schedules.json as the published schedule data.
  * - Initialises the Angular TestBed environment. The app bootstraps with
  *   Angular 21's default zoneless change detection (main.ts has no
  *   provideZoneChangeDetection), and TestBed is zoneless by default too, so no
@@ -14,8 +15,15 @@
  *   providers: [{ provide: SwUpdate, useValue: { isEnabled: false, versionUpdates: EMPTY } }]
  */
 import '@angular/compiler';
+import { readFileSync } from 'node:fs';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+import { installSchedules } from './app/data/schedule-index';
+
+// The published schedules (the app fetches this file at startup). Specs that
+// need stable data inject fixtures with setScheduleSource; resetScheduleSource
+// comes back to this.
+installSchedules(JSON.parse(readFileSync(`${process.cwd()}/public/data/schedules.json`, 'utf8')));
 
 const testBed = getTestBed();
 try {

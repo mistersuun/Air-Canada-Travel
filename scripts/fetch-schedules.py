@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Fetches Air Canada Vacations schedule PDFs and regenerates src/app/data/schedules.ts.
-Run manually or via GitHub Actions.
+Fetches Air Canada Vacations schedule PDFs and regenerates public/data/schedules.json,
+the schedule data the app fetches at startup (kept out of the JS bundle, cached
+by the service worker).
 
 Usage:
-  python3 scripts/fetch-schedules.py [--dry-run] [--include-domestic] [--allow-route-drop] [--out PATH]
+  python3 scripts/fetch-schedules.py [--dry-run] [--skip-domestic] [--allow-route-drop] [--out PATH]
 
---include-domestic also parses the domestic "CANADA-" PDFs and keeps only
-hub-to-hub legs (both ends in destinations.ts HUBS). Off by default: it adds
-~13.7k records (~2.2 MB of source) and would push the initial bundle past the
-3 MB angular.json budget while schedules.ts is still bundled into JS.
+The domestic "CANADA-" PDFs are parsed too, keeping only hub-to-hub legs (both
+ends in destinations.ts HUBS): they are the real first legs of connections.
+--skip-domestic leaves them out (--include-domestic is accepted and is the
+default). A domestic PDF that fails is never fatal: the hub-to-hub routes the
+run lost are carried forward from the previous file (unexpired records only).
 
 The script refuses to write anything when a safety gate fails (no PDFs found,
 too many international PDFs failed, too few routes/records compared with the
@@ -36,6 +38,7 @@ text fixtures; pdfplumber is only imported when a real PDF is opened.
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import sys
@@ -57,7 +60,8 @@ WHERE_WE_FLY_URL = "https://vacations.aircanada.com/en/plan-your-trip/travel-inf
 USER_AGENT = "Mozilla/5.0 (compatible; ac-explorer-schedule-bot)"
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_OUT = os.path.join(REPO_ROOT, "src", "app", "data", "schedules.ts")
+DEFAULT_OUT = os.path.join(REPO_ROOT, "public", "data", "schedules.json")
+SCHEMA_VERSION = 1
 DESTINATIONS_TS = os.path.join(REPO_ROOT, "src", "app", "data", "destinations.ts")
 
 ALLOWED_HOST_SUFFIX = "aircanada.com"
@@ -449,83 +453,52 @@ def coverage(routes: dict, hubs: Iterable[str]) -> dict:
     }
 
 
-def _q(s: str) -> str:
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+def encode_days(days: str) -> str:
+    """'Mon,Wed,Fri' -> 'M-W-F--' (the PDFs' MTWRFSU mask; compact in JSON)."""
+    have = set(days.split(",")) if days else set()
+    return "".join(k if n in have else "-" for k, n in zip(DAY_KEYS, DAY_NAMES))
 
 
-def generate_ts(routes: dict, *, generated_at: str, sources: list[str], hubs: Iterable[str]) -> str:
+def decode_days(mask: str) -> str:
+    return parse_days(mask) or ""
+
+
+def _j(v) -> str:
+    return json.dumps(v, ensure_ascii=False)
+
+
+def generate_json(routes: dict, *, generated_at: str, sources: list[str], hubs: Iterable[str]) -> str:
+    """
+    The schedule file the app loads. One record per line so weekly diffs stay
+    readable. Records are [fromDate, toDate, dayMask, flight, departure,
+    arrival, aircraft] with the PDFs' MTWRFSU day mask.
+    """
     cov = coverage(routes, hubs)
-    record_count = sum(len(v) for v in routes.values())
-    lines = [
-        "// Auto-generated from Air Canada Vacations flight schedule PDFs",
-        f"// Source: {WHERE_WE_FLY_URL}",
-        "// DO NOT EDIT MANUALLY — run scripts/fetch-schedules.py to regenerate",
-        "",
-        "export interface FlightSchedule {",
-        "  fromDate: string;",
-        "  toDate: string;",
-        "  days: string;",
-        "  flightNumber: string;",
-        "  departure: string;",
-        "  arrival: string;",
-        "  aircraft: string;",
-        "}",
-        "",
-        "export interface RouteSchedule {",
-        "  originCode: string;",
-        "  destinationCode: string;",
-        "  schedules: FlightSchedule[];",
-        "}",
-        "",
-        "/**",
-        " * Generation metadata. coverageFrom/coverageTo span every record; coverageByHub",
-        " * is the published window for routes touching each hub (use this for",
-        " * 'not yet published' states, since each hub/seasonal route ends at a different date).",
-        " */",
-        "export const SCHEDULES_META = {",
-        f"  generatedAt: {_q(generated_at)},",
-        f"  coverageFrom: {_q(cov['from'])},",
-        f"  coverageTo: {_q(cov['to'])},",
-        "  coverageByHub: {",
-    ]
-    for hub, (f, t) in cov["byHub"].items():
-        lines.append(f"    {hub}: {{ from: {_q(f)}, to: {_q(t)} }},")
-    lines += [
-        "  } as Record<string, { from: string; to: string }>,",
-        f"  pdfCount: {len(sources)},",
-        f"  routeCount: {len(routes)},",
-        f"  recordCount: {record_count},",
-        "  sources: [",
-    ]
-    for s in sorted(sources):
-        lines.append(f"    {_q(s)},")
-    lines += [
-        "  ] as readonly string[],",
-        "} as const;",
-        "",
-        "/** @deprecated Kept for compatibility; prefer the indexed lookup in schedule-index.ts. */",
-        "export function getSchedulesForRoute(originCode: string, destinationCode: string): FlightSchedule[] {",
-        "  const route = ROUTE_SCHEDULES.find(",
-        "    r => r.originCode === originCode && r.destinationCode === destinationCode",
-        "  );",
-        "  return route?.schedules ?? [];",
-        "}",
-        "",
-        "export const ROUTE_SCHEDULES: RouteSchedule[] = [",
-    ]
-    for (origin, dest), schedules in sorted(routes.items()):
-        if not schedules:
-            continue
-        lines.append(f"  {{ originCode: {_q(origin)}, destinationCode: {_q(dest)}, schedules: [")
-        for s in schedules:
-            lines.append(
-                f'    {{ fromDate: {_q(s["fromDate"])}, toDate: {_q(s["toDate"])}, '
-                f'days: {_q(s["days"])}, flightNumber: {_q(s["flightNumber"])}, '
-                f'departure: {_q(s["departure"])}, arrival: {_q(s["arrival"])}, '
-                f'aircraft: {_q(s["aircraft"])} }},'
-            )
-        lines.append("  ] },")
-    lines.append("];")
+    live = [(k, v) for k, v in sorted(routes.items()) if v]
+    record_count = sum(len(v) for _, v in live)
+    meta = {
+        "generatedAt": generated_at,
+        "coverageFrom": cov["from"],
+        "coverageTo": cov["to"],
+        "coverageByHub": {h: {"from": f, "to": t} for h, (f, t) in cov["byHub"].items()},
+        "pdfCount": len(sources),
+        "routeCount": len(live),
+        "recordCount": record_count,
+        "sources": sorted(sources),
+    }
+    lines = ["{", f'  "version": {SCHEMA_VERSION},', '  "source": ' + _j(WHERE_WE_FLY_URL) + ",", '  "meta": {']
+    items = list(meta.items())
+    for i, (k, v) in enumerate(items):
+        lines.append(f"    {_j(k)}: {_j(v)}" + ("," if i < len(items) - 1 else ""))
+    lines += ["  },", '  "routes": {']
+    for ri, ((origin, dest), schedules) in enumerate(live):
+        lines.append(f'    "{origin}-{dest}": [')
+        for si, s in enumerate(schedules):
+            row = [s["fromDate"], s["toDate"], encode_days(s["days"]), s["flightNumber"],
+                   s["departure"], s["arrival"], s["aircraft"]]
+            lines.append("      " + _j(row) + ("," if si < len(schedules) - 1 else ""))
+        lines.append("    ]" + ("," if ri < len(live) - 1 else ""))
+    lines += ["  }", "}"]
     return "\n".join(lines) + "\n"
 
 
@@ -638,23 +611,41 @@ def load_hub_codes(path: str = DESTINATIONS_TS) -> list[str]:
     return list(FALLBACK_HUBS)
 
 
+_REC_KEYS = ("fromDate", "toDate", "days", "flightNumber", "departure", "arrival", "aircraft")
+# Legacy schedules.ts (before the data moved to JSON): still readable so the
+# first JSON run can compare against, and carry forward from, the old file.
 _PREV_ROUTE_RE = re.compile(r'originCode:\s*"([A-Z0-9]{3})",\s*destinationCode:\s*"([A-Z0-9]{3})"')
 _PREV_REC_RE = re.compile(
     r'\{\s*fromDate:\s*"([^"]*)",\s*toDate:\s*"([^"]*)",\s*days:\s*"([^"]*)",\s*'
     r'flightNumber:\s*"([^"]*)",\s*departure:\s*"([^"]*)",\s*arrival:\s*"([^"]*)",\s*aircraft:\s*"([^"]*)"\s*\}')
-_REC_KEYS = ("fromDate", "toDate", "days", "flightNumber", "departure", "arrival", "aircraft")
 
 
-def load_previous_routes(path: str) -> dict:
-    """{(origin, dest): [record]} from a previously generated schedules.ts ({} if unreadable)."""
+def _read(path: str) -> str | None:
     try:
         with open(path, encoding="utf-8") as f:
-            lines = f.read().split("\n")
+            return f.read()
     except OSError:
-        return {}
+        return None
+
+
+def _parse_json_routes(text: str) -> dict | None:
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("routes"), dict):
+        return None
+    routes = {}
+    for key, rows in data["routes"].items():
+        o, _, d = key.partition("-")
+        routes[(o, d)] = [dict(zip(_REC_KEYS, [r[0], r[1], decode_days(r[2]), *r[3:7]])) for r in rows]
+    return routes
+
+
+def _parse_legacy_ts_routes(text: str) -> dict:
     routes: dict = {}
     key = None
-    for line in lines:
+    for line in text.split("\n"):
         m = _PREV_ROUTE_RE.search(line)
         if m:
             key = (m.group(1), m.group(2))
@@ -666,16 +657,27 @@ def load_previous_routes(path: str) -> dict:
     return routes
 
 
+def load_previous_routes(path: str) -> dict:
+    """{(origin, dest): [record]} from a previously generated file ({} if unreadable)."""
+    text = _read(path)
+    if text is None:
+        return {}
+    parsed = _parse_json_routes(text)
+    return parsed if parsed is not None else _parse_legacy_ts_routes(text)
+
+
 def strip_generated_at(text: str) -> str:
-    return re.sub(r'^\s*generatedAt:.*$', "", text, flags=re.M)
+    return re.sub(r'^\s*"?generatedAt"?:.*$', "", text, flags=re.M)
 
 
 def previous_route_count(path: str) -> int:
-    try:
-        with open(path, encoding="utf-8") as f:
-            return len(re.findall(r"\boriginCode:\s*\"", f.read()))
-    except OSError:
+    text = _read(path)
+    if text is None:
         return 0
+    parsed = _parse_json_routes(text)
+    if parsed is not None:
+        return len(parsed)
+    return len(re.findall(r"\boriginCode:\s*\"", text))
 
 
 # ---------------------------------------------------------------------------
@@ -737,7 +739,7 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         out_path: str | None = None, hubs: list[str] | None = None,
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> int:
     dry_run = "--dry-run" in argv
-    include_domestic = "--include-domestic" in argv
+    include_domestic = "--skip-domestic" not in argv
     allow_drop = "--allow-route-drop" in argv
     if "--out" in argv:
         out_path = argv[argv.index("--out") + 1]
@@ -760,12 +762,13 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
     download_errors: list[tuple[str, str]] = []
     all_orphans: list[dict] = []
     all_rejects: list[dict] = []
+    domestic_failures: list[str] = []
 
     for url in pdf_urls:
         name = url.rsplit("/", 1)[-1]
         domestic = is_domestic(url)
         if domestic and not include_domestic:
-            print(f"Skipping {name} (domestic; pass --include-domestic to parse hub-to-hub legs)")
+            print(f"Skipping {name} (domestic; --skip-domestic)")
             continue
         print(f"Fetching {name}{' (domestic)' if domestic else ''}...", end=" ", flush=True)
         try:
@@ -773,6 +776,7 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         except Exception as e:  # noqa: BLE001
             if domestic:
                 print(f"WARNING: domestic PDF did not download ({e}); skipping")
+                domestic_failures.append(name)
                 continue
             print(f"DOWNLOAD ERROR: {e}")
             download_errors.append((name, str(e)))
@@ -782,12 +786,18 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         except Exception as e:  # noqa: BLE001
             if domestic:
                 print(f"WARNING: domestic PDF did not parse ({e}); skipping")
+                domestic_failures.append(name)
                 continue
             print(f"PARSE ERROR: {e}")
             download_errors.append((name, f"parse error: {e}"))
             continue
         if domestic:
-            # Only hub-to-hub legs feed connections; everything else is out of scope.
+            if not res.routes:
+                print("WARNING: domestic PDF parsed to 0 routes (layout change?); skipping")
+                domestic_failures.append(name)
+                continue
+            # Only hub-to-hub legs feed connections; everything else is out of scope
+            # (NorthernCanada, for one, has none).
             res.routes = {k: v for k, v in res.routes.items() if k[0] in hub_set and k[1] in hub_set}
             res.orphans, res.rejects = [], []  # optional data: never gates the run
         print(f"{len(res.routes)} routes, {res.record_count} rows"
@@ -808,20 +818,35 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
 
     previous = load_previous_routes(out_path)
     if not include_domestic:
-        # Hub-to-hub legs only exist with --include-domestic: never compare against them.
+        # Hub-to-hub legs only come from the domestic PDFs: never compare against them.
         previous = {k: v for k, v in previous.items() if not (k[0] in hub_set and k[1] in hub_set)}
     prev_records = sum(len(v) for v in previous.values())
 
+    source_warnings: list[str] = []
+    if domestic_failures:
+        # Keep connections real: carry the hub-to-hub legs this run lost.
+        today = now().strftime("%Y-%m-%d")
+        carried = 0
+        for key, recs in previous.items():
+            if key in routes or not (key[0] in hub_set and key[1] in hub_set):
+                continue
+            live = [r for r in recs if r["toDate"] >= today]
+            if live:
+                routes[key] = sorted(live, key=record_sort_key)
+                carried += 1
+        routes = dict(sorted(routes.items()))
+        source_warnings.append(f"domestic source(s) failed: {', '.join(domestic_failures)}; "
+                               f"{carried} hub-to-hub route(s) carried forward")
+
     # A few failed sources are tolerated; their routes are carried forward.
     source_count = sum(1 for u in pdf_urls if include_domestic or not is_domestic(u))
-    source_warnings: list[str] = []
     if download_errors and len(download_errors) <= MAX_FAILED_SOURCES \
             and len(download_errors) <= MAX_FAILED_FRACTION * source_count:
         today = now().strftime("%Y-%m-%d")
         carried = 0
         for key, recs in previous.items():
-            if key in routes:
-                continue
+            if key in routes or (key[0] in hub_set and key[1] in hub_set):
+                continue  # hub-to-hub legs come from the domestic PDFs (handled above)
             live = [r for r in recs if r["toDate"] >= today]
             if live:
                 routes[key] = sorted(live, key=record_sort_key)
@@ -855,8 +880,8 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         warnings.append(f"{len(all_orphans)} orphan row(s)")
 
     record_count = sum(len(v) for v in routes.values())
-    ts = generate_ts(routes, generated_at=now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                     sources=[s.url or s.name for s, _ in parsed], hubs=hubs)
+    ts = generate_json(routes, generated_at=now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                       sources=[s.url or s.name for s, _ in parsed], hubs=hubs)
     cov = coverage(routes, hubs)
 
     print(f"\nTotal: {len(routes)} routes (previous {prev}), {record_count} records, "
@@ -894,6 +919,7 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         print(f"\nNo schedule changes; {out_path} left untouched (generatedAt kept).")
         return 0
 
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp_path = out_path + ".tmp"
     with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(ts)

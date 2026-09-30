@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ROUTE_INDEX,
   getAircraftCodes,
@@ -9,21 +10,57 @@ import {
   getRouteSchedules,
   getSchedulesForRoute,
   getSchedulesMeta,
+  decodeDayMask,
+  decodeSchedules,
+  installSchedules,
   isCovered,
+  loadSchedules,
   resetScheduleSource,
   scheduleVersion,
   setScheduleSource,
 } from './schedule-index';
-import { ROUTE_SCHEDULES } from './schedules';
 import { FIXTURE_META, FIXTURE_ROUTES, rec, route } from './testing/schedule-fixtures';
 
 afterEach(() => resetScheduleSource());
 
 describe('schedule index', () => {
-  it('indexes the generated schedules by default', () => {
-    const r = ROUTE_SCHEDULES[0];
+  it('indexes the published schedules by default (installed by test-setup)', () => {
+    const routes = getRouteSchedules();
+    expect(routes.length).toBeGreaterThan(100);
+    const r = routes[0];
     expect(getSchedulesForRoute(r.originCode, r.destinationCode)).toBe(r.schedules);
-    expect(getRouteSchedules()).toBe(ROUTE_SCHEDULES);
+    expect(getSchedulesMeta()?.recordCount).toBe(routes.reduce((n, x) => n + x.schedules.length, 0));
+  });
+
+  it('decodes the compact file format', () => {
+    expect(decodeDayMask('M-W-F--')).toBe('Mon,Wed,Fri');
+    expect(decodeDayMask('---R--U')).toBe('Thu,Sun');
+    const { routes, meta } = decodeSchedules({
+      version: 1,
+      meta: { generatedAt: '2026-10-01T00:00:00Z' },
+      routes: { 'YUL-CDG': [['2026-10-01', '2026-10-31', '-T---S-', 'AC870', '18:30', '07:45', '333']] },
+    });
+    expect(meta?.generatedAt).toBe('2026-10-01T00:00:00Z');
+    expect(routes).toEqual([{ originCode: 'YUL', destinationCode: 'CDG', schedules: [
+      { fromDate: '2026-10-01', toDate: '2026-10-31', days: 'Tue,Sat', flightNumber: 'AC870', departure: '18:30', arrival: '07:45', aircraft: '333' },
+    ] }]);
+    expect(() => decodeSchedules({ version: 2, routes: {} })).toThrow();
+  });
+
+  it('loads the file over fetch and keeps the old data when it cannot', async () => {
+    const file = { version: 1, meta: {}, routes: { 'YUL-CDG': [['2026-10-01', '2026-10-31', 'MTWRFSU', 'AC870', '18:30', '07:45', '333']] } };
+    const ok = vi.fn(async () => new Response(JSON.stringify(file)));
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await loadSchedules('x.json', ok as typeof fetch)).toBe(true);
+    expect(ok).toHaveBeenCalledWith('x.json');
+    expect(getSchedulesForRoute('YUL', 'CDG')).toHaveLength(1);
+    expect(await loadSchedules('x.json', (async () => new Response('', { status: 404 })) as typeof fetch)).toBe(false);
+    expect(getSchedulesForRoute('YUL', 'CDG')).toHaveLength(1);
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+    // Restore the published data for the other specs.
+    installSchedules(JSON.parse(readFileSync(`${process.cwd()}/public/data/schedules.json`, 'utf8')));
+    expect(getRouteSchedules().length).toBeGreaterThan(100);
   });
 
   it('swaps to an injected source and back', () => {

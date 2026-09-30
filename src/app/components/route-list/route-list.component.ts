@@ -124,6 +124,10 @@ const LONG_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', 
     .bar i { display: block; width: 100%; min-height: 2px; border-radius: 2px; background: var(--line-strong); }
     .bar.is-today i { background: var(--accent); }
     .bar em { font: normal 500 9px/1 var(--font-code); color: var(--ink-3); }
+    @media (max-width: 699px) {
+      .tile--chart { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: var(--space-2); }
+      .bars { flex: none; min-width: 0; height: 30px; }
+    }
 
     .note {
       display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-4); padding: 10px var(--space-3);

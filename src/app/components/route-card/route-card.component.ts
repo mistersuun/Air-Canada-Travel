@@ -302,7 +302,6 @@ function distinct<T>(xs: readonly (T | null | undefined)[]): T[] {
     .card__stub { margin-top: var(--space-1); }
     /* Centre the notches on the card's outer edge so they bite in; the card clips the outer half. */
     .card { overflow: hidden; }
-    .card__stub::after { left: calc(-1 * var(--space-4) - 1px); right: calc(-1 * var(--space-4) - 1px); }
     .ui-stub__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .card__more {
       display: inline-flex; align-items: center; gap: 2px; margin-top: var(--space-3); padding: 4px 0;

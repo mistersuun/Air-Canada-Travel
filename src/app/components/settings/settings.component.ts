@@ -193,7 +193,12 @@ import { IconComponent } from '../shared/icons.component';
     .switch:checked::after { transform: translateX(20px); }
     .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-    .settings__foot { display: flex; justify-content: space-between; gap: var(--space-3); }
+    .settings__foot {
+      position: sticky; bottom: 0; z-index: 1;
+      display: flex; justify-content: space-between; gap: var(--space-3);
+      padding: var(--space-3) 0 calc(var(--space-3) + env(safe-area-inset-bottom));
+      background: var(--surface); border-top: 1px solid var(--line);
+    }
     .settings__foot .ui-btn { flex: 1; }
     .settings__note { margin: calc(-1 * var(--space-2)) 0 0; font-size: 12px; color: var(--ink-3); text-align: center; }
   `],

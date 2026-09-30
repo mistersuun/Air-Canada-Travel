@@ -509,8 +509,10 @@ select {
     content: '';
     position: absolute;
     top: calc(-1 * var(--notch));
-    left: calc(-1 * var(--space-4) - var(--notch) - 1px);
-    right: calc(-1 * var(--space-4) - var(--notch) - 1px);
+    // centres sit on the card's outer (border) edge; the card should clip
+    // (overflow: hidden) so only the inner half of each notch shows.
+    left: calc(-1 * var(--space-4) - 1px);
+    right: calc(-1 * var(--space-4) - 1px);
     height: calc(2 * var(--notch));
     pointer-events: none;
     background:

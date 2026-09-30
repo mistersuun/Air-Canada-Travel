@@ -161,6 +161,18 @@ export class AppStateService {
   constructor() {
     this.applyUrl(parseUrlState(this.win?.location.search ?? ''), true);
 
+    // A deep link that opens a destination: rewrite the landing entry without
+    // `dest` and push the modal entry on top, so Back closes the modal and
+    // stays in the app instead of leaving the page.
+    if (this.openCode() && !this.win?.history.state?.[MODAL_STATE]) {
+      const base = untracked(() => ({ ...this.urlState(), dest: undefined }));
+      this.writeUrl(serializeUrlState(base), false);
+      this.writeUrl(serializeUrlState(untracked(() => this.urlState())), true);
+      this.pushedModal = true;
+    } else if (this.openCode()) {
+      this.pushedModal = true; // reloaded on our own modal entry
+    }
+
     effect(() => {
       const url = serializeUrlState(this.urlState());
       untracked(() => this.writeUrl(url, false));

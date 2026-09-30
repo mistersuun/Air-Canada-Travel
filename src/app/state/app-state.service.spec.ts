@@ -289,14 +289,30 @@ describe('AppStateService', () => {
       expect(search()).toBe('?from=YUL&day=2026-10-14');
     });
 
-    it('closing a deep-linked modal just rewrites the URL', () => {
+    it('a deep-linked modal sits on its own history entry, so Back closes it and stays in the app', async () => {
+      const { state } = setup({ url: '?from=YYZ&dest=LHR' });
+      TestBed.tick();
+      expect(state.openCode()).toBe('LHR');
+      expect(window.history.state?.acModal).toBe(true);
+      expect(search()).toBe('?from=YYZ&dest=LHR');
+
+      const popped = new Promise(r => window.addEventListener('popstate', r, { once: true }));
+      window.history.back();
+      await popped;
+      TestBed.tick();
+      expect(state.openCode()).toBeNull();
+      expect(search()).toBe('?from=YYZ');
+    });
+
+    it('closing a deep-linked modal in the UI pops its entry', async () => {
       const { state } = setup({ url: '?dest=LHR' });
       TestBed.tick();
-      const before = window.history.length;
+      const popped = new Promise(r => window.addEventListener('popstate', r, { once: true }));
       state.closeDestination();
+      await popped;
       TestBed.tick();
+      expect(state.openCode()).toBeNull();
       expect(search()).toBe('?from=YUL');
-      expect(window.history.length).toBe(before);
     });
 
     it('ignores unknown destination codes', () => {

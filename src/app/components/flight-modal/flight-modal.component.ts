@@ -177,7 +177,7 @@ const SHEET_QUERY = '(max-width: 719px)';
     .fav[aria-pressed='true'] { color: var(--accent); }
     .ui-icon-btn:focus-visible, .tab:focus-visible, .panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .body { padding: 4px 16px 20px; display: grid; gap: 14px; }
-    .ticket { position: relative; padding: 16px; border-radius: var(--radius-card); background: var(--surface-2); border: 1px solid var(--line); }
+    .ticket { position: relative; overflow: hidden; padding: 16px; border-radius: var(--radius-card); background: var(--surface-2); border: 1px solid var(--line); }
     .route { display: flex; align-items: center; gap: 14px; }
     .end { display: grid; gap: 3px; min-width: 0; }
     .end--r { text-align: right; justify-items: end; }

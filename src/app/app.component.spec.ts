@@ -71,10 +71,10 @@ describe('AppComponent (shell wiring)', () => {
   it('passes the hub as a code and date keys to the children', async () => {
     await render();
     const header = child(HeaderComponent);
-    expect(header.hubCode).toBe('YUL');
+    expect(header.hubCode()).toBe('YUL');
     const strip = child(WeekStripComponent);
-    expect(strip.todayKey).toBe('2026-10-01');
-    expect(strip.coverage?.to).toBe('2027-03-31');
+    expect(strip.todayKey()).toBe('2026-10-01');
+    expect(strip.coverage()?.to).toBe('2027-03-31');
     const list = child(RouteListComponent);
     expect(list.routes.map(r => r.destination.code)).toContain('LHR');
     expect(list.stats?.directDestinations).toBeGreaterThan(0);
@@ -117,8 +117,8 @@ describe('AppComponent (shell wiring)', () => {
     child(RouteListComponent).open.emit('LHR');
     await fixture.whenStable();
     const modal = child(FlightModalComponent);
-    expect(modal.destination.code).toBe('LHR');
-    expect(modal.route?.destination.code).toBe('LHR');
+    expect(modal.destination().code).toBe('LHR');
+    expect(modal.entry()?.destination.code).toBe('LHR');
     expect(window.location.search).toContain('dest=LHR');
     // Closing pops the history entry pushed on open; wait for it so it cannot leak into the next test.
     const popped = new Promise(r => window.addEventListener('popstate', r, { once: true }));
@@ -131,9 +131,9 @@ describe('AppComponent (shell wiring)', () => {
 
   it('deep link ?from=YYZ&day=…&dest=LHR opens that hub, day and modal', async () => {
     await render('?from=YYZ&day=2026-10-07&dest=LHR');
-    expect(child(HeaderComponent).hubCode).toBe('YYZ');
+    expect(child(HeaderComponent).hubCode()).toBe('YYZ');
     expect(state.selectedDateKey()).toBe('2026-10-07');
-    expect(child(FlightModalComponent).destination.code).toBe('LHR');
+    expect(child(FlightModalComponent).destination().code).toBe('LHR');
   });
 
   it('modal selectDate moves the app to that day and keeps the modal open', async () => {
@@ -151,9 +151,9 @@ describe('AppComponent (shell wiring)', () => {
     child(FlightModalComponent).toggleFavourite.emit();
     await fixture.whenStable();
     expect(JSON.parse(storage.getItem(PREFS_KEY)!).favourites).toEqual(['ATH', 'LHR']);
-    expect(child(FlightModalComponent).isFavourite).toBe(true);
+    expect(child(FlightModalComponent).isFavourite()).toBe(true);
     expect(child(RouteListComponent).favourites).toEqual(['ATH', 'LHR']);
-    expect(child(HeaderComponent).starredThisWeek.map(s => s.code)).toEqual(['ATH', 'LHR']);
+    expect(child(HeaderComponent).starredThisWeek().map(s => s.code)).toEqual(['ATH', 'LHR']);
   });
 
   it('clearFilters and jumpToCoverage from the list reach the state', async () => {
@@ -174,7 +174,7 @@ describe('AppComponent (shell wiring)', () => {
     header.themeChange.emit('dark');
     await fixture.whenStable();
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
-    expect(header.theme).toBe('dark');
+    expect(header.theme()).toBe('dark');
 
     header.openSettings.emit();
     await fixture.whenStable();

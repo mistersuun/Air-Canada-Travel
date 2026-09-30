@@ -62,7 +62,7 @@ const HUB_DISPLAY: Record<string, string> = { YUL: 'Montréal', YQB: 'Québec Ci
 
         <div class="hd__search" role="search">
           <app-icon name="search" [size]="18" class="hd__search-icon" />
-          <input #search id="dest-search" type="search" class="hd__input" placeholder="City, country or code"
+          <input #search id="dest-search" type="search" class="hd__input" placeholder="City or code"
                  autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="Search destinations"
                  [value]="draft()" (input)="onInput($event)" (keydown.escape)="onEscape($event)">
           @if (draft()) {
@@ -161,7 +161,7 @@ const HUB_DISPLAY: Record<string, string> = { YUL: 'Montréal', YQB: 'Québec Ci
     .hd__starred { margin-top: var(--space-2); }
 
     @media (hover: hover) and (pointer: fine) { .hd__kb { display: inline-grid; } }
-    @media (hover: none) { .hd__kbd { display: none; } }
+    @media (hover: none), (max-width: 479px) { .hd__kbd { display: none; } }
     @media (max-width: 340px) { .hd__city { display: none; } }
     @media (max-width: 899px) {
       :host(.is-compact) .hd__bar { grid-template-areas: 'hub search search'; padding-top: var(--space-2); }

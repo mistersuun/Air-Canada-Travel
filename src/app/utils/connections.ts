@@ -3,18 +3,22 @@
  *
  * A connection is from → hub → to where each leg is a "segment":
  *   - real published flights when the pair exists in the schedules (the
- *     international legs, and domestic hub-to-hub legs once WS1 emits them);
- *   - otherwise, between two hubs only, an ESTIMATED leg from HUB_FLIGHTS:
- *     flightNumber null, aircraft null, estimated true.
+ *     international legs, and the domestic hub-to-hub legs from the CANADA
+ *     PDFs);
+ *   - otherwise, between two hubs only and only when the data has no
+ *     hub-to-hub legs at all (meta.hubToHub false, e.g. a scrape run with
+ *     --skip-domestic), an ESTIMATED leg from HUB_FLIGHTS: flightNumber null,
+ *     aircraft null, estimated true. With the domestic legs published, a
+ *     missing pair (YHZ-YOW) has no nonstop and is never invented.
  * Layovers are computed on UTC instants (each airport's zone), so YVR→YUL→LHR
  * is no longer off by three hours. Itineraries keep
  * one option per reachable onward flight (fed by the latest possible first
  * leg), ranked by arrival, then total trip time — never by shortest layover alone.
  */
 import { Destination, HUBS } from '../data/destinations';
-import { getSchedulesForRoute, scheduleVersion } from '../data/schedule-index';
+import { getSchedulesForRoute, getSchedulesMeta, isCovered, scheduleVersion } from '../data/schedule-index';
 import { airportName, airportTz, findDestination, findHub } from './airports';
-import { FlightInstance, flightsOn } from './week';
+import { FlightInstance, coverageHubFor, flightsOn } from './week';
 import {
   MINUTE_MS,
   addDays,
@@ -87,8 +91,9 @@ export const OVERNIGHT_MAX_LAYOVER = 14 * 60;
 export const LONG_LAYOVER = 360;
 
 /**
- * Invented domestic frequencies used only when no real hub-to-hub schedule
- * exists: local departure times at the first hub and a block time in minutes.
+ * Invented domestic frequencies, used only when the data has no hub-to-hub
+ * legs (see estimatesAllowed): local departure times at the first hub and a
+ * block time in minutes.
  */
 export const HUB_FLIGHTS: Record<string, Record<string, { duration: number; flights: string[] }>> = {
   YUL: {
@@ -184,9 +189,21 @@ export function estimatedInstance(origin: string, dest: string, dateKey: string,
   };
 }
 
-/** True when from → to has published flights or an estimated hub table. */
+/**
+ * Estimated hub legs are allowed only when the data has no published
+ * hub-to-hub legs (meta.hubToHub is not true).
+ */
+export function estimatesAllowed(): boolean {
+  return getSchedulesMeta()?.hubToHub !== true;
+}
+
+function estimatedTable(from: string, to: string) {
+  return estimatesAllowed() ? HUB_FLIGHTS[from]?.[to] : undefined;
+}
+
+/** True when from → to has published flights or (see estimatesAllowed) an estimated hub table. */
 export function hasSegment(from: string, to: string): boolean {
-  return getSchedulesForRoute(from, to).length > 0 || !!HUB_FLIGHTS[from]?.[to];
+  return getSchedulesForRoute(from, to).length > 0 || !!estimatedTable(from, to);
 }
 
 let segVersion = -1;
@@ -194,11 +211,12 @@ const segCache = new Map<string, FlightInstance[]>();
 
 /**
  * Flights from → to departing on local `dateKey`: real ones when the pair has
- * any published schedule, else estimated ones for known hub pairs, else [].
+ * any published schedule, else (see estimatesAllowed) estimated ones for
+ * known hub pairs, else [].
  */
 export function segmentFlights(from: string, to: string, dateKey: string): FlightInstance[] {
   if (getSchedulesForRoute(from, to).length) return flightsOn(from, to, dateKey);
-  const table = HUB_FLIGHTS[from]?.[to];
+  const table = estimatedTable(from, to);
   if (!table) return [];
   if (segVersion !== scheduleVersion()) {
     segCache.clear();
@@ -423,9 +441,12 @@ export function summarizeWeek(
 ): WeekSummary {
   const hubCount = new Map<string, number>();
   let directDays = 0, connectDays = 0, connectOnlyDays = 0, estimated = false;
+  const hub = coverageHubFor(from, to);
   const days = weekKeys(weekStart).map(k => {
     const direct = flightsOn(from, to, k).filter(keepFlight).length;
-    const its = findItineraries(from, to, k, opts, keepItinerary);
+    // Outside the published window the modal shows "not yet published", so
+    // the list must not offer connections there either.
+    const its = isCovered(k, hub) ? findItineraries(from, to, k, opts, keepItinerary) : [];
     const best = its[0] ?? null;
     if (direct) directDays++;
     if (its.length) connectDays++;

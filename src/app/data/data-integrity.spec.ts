@@ -5,12 +5,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DESTINATIONS, HUBS, REGIONS, TYPES } from './destinations';
-import { ROUTE_INDEX, getCoverage, getRouteSchedules } from './schedule-index';
+import { ROUTE_INDEX, getCoverage, getRouteSchedules, getSchedulesMeta } from './schedule-index';
 import { flagFromIso2, getFlag } from '../utils/flags';
 import { hasKnownTz } from '../utils/airports';
 import { addDays, hhmmToMin, isDateKey, isValidTimeZone, weekStartKey } from '../utils/time';
 import { MAX_BLOCK_MIN, MIN_BLOCK_MIN, buildInstance, flightsOn, nextFlightDate, parseDayMask } from '../utils/week';
 import { computeRoutes } from '../utils/routes';
+import { estimatesAllowed } from '../utils/connections';
 
 describe('destinations and hubs', () => {
   it('every destination has a valid tz, iso2 and flag', () => {
@@ -67,42 +68,78 @@ describe('schedules', () => {
     }
   });
 
-  it('every hub-to-destination airport has a time zone (report only)', () => {
+  it('every schedule airport is a hub, a destination or an extra airport', () => {
+    // An unknown code falls back to UTC (every duration wrong) and never shows
+    // in the list: add it to DESTINATIONS, HUBS or EXTRA_AIRPORTS (as DJT, the
+    // renamed Palm Beach, and YTZ, Billy Bishop, needed).
     const unknown = new Set<string>();
     for (const r of getRouteSchedules()) {
       if (!hasKnownTz(r.originCode)) unknown.add(r.originCode);
       if (!hasKnownTz(r.destinationCode)) unknown.add(r.destinationCode);
     }
-    // Unknown airports fall back to UTC; add them to DESTINATIONS or EXTRA_AIRPORTS.
-    // Not gating, so a new route in the weekly scrape cannot block CI.
-    if (unknown.size) console.warn(`[data-integrity] airports without a time zone: ${[...unknown].sort().join(', ')}`);
-    for (const h of HUBS) expect(unknown.has(h.code)).toBe(false);
+    expect([...unknown].sort()).toEqual([]);
   });
 
-  it('flags implausible block times (report only; the app drops them)', () => {
-    // flightsOn already drops instances outside MIN/MAX_BLOCK_MIN, so check the
-    // raw records with buildInstance. Not gating: schedules.ts is generated and
-    // the current scrape still contains a few such rows.
-    const odd = new Set<string>();
+  it('every route touches a hub', () => {
+    const hubs = new Set(HUBS.map(h => h.code));
+    const orphans = getRouteSchedules()
+      .filter(r => !hubs.has(r.originCode) && !hubs.has(r.destinationCode))
+      .map(r => `${r.originCode}-${r.destinationCode}`);
+    expect(orphans).toEqual([]);
+  });
+
+  it('no published record has an implausible block time', () => {
+    // flightsOn drops such instances as parse errors. With every airport's zone
+    // right none should exist; one here means a time-zone rule or airport code
+    // is wrong (YVR-SEA at 7 minutes was BC's 2026 permanent daylight time).
+    const odd: string[] = [];
     for (const r of getRouteSchedules()) {
-      if (!hasKnownTz(r.originCode) || !hasKnownTz(r.destinationCode)) continue;
       for (const s of r.schedules) {
         const x = buildInstance(s, r.originCode, r.destinationCode, nextOperating(s.fromDate, s.days));
         if (x.durationMin < MIN_BLOCK_MIN || x.durationMin > MAX_BLOCK_MIN) {
-          odd.add(`${x.origin}-${x.dest} ${x.flightNumber} ${x.depLocal}→${x.arrLocal} (${x.durationMin}m)`);
+          odd.push(`${x.origin}-${x.dest} ${x.flightNumber} ${x.dateKey} ${x.depLocal}→${x.arrLocal} (${x.durationMin}m)`);
         }
       }
     }
-    if (odd.size) console.warn(`[data-integrity] implausible block times (dropped by flightsOn):\n  ${[...odd].join('\n  ')}`);
+    expect(odd).toEqual([]);
+  });
+
+  it('the same flight keeps its block time across the clock changes', () => {
+    // A zone the runtime reads differently from the PDFs shows up as a flight
+    // whose block time jumps by an hour at a DST boundary (YWG-YYZ AC256 was
+    // 155 min in October and 95 in November). Compare each flight's median
+    // block time in October and in January.
+    const median = (xs: number[]) => xs.sort((a, b) => a - b)[xs.length >> 1];
+    const jumps: string[] = [];
     for (const r of getRouteSchedules()) {
-      const s = r.schedules[0];
-      if (!s || !hasKnownTz(r.originCode) || !hasKnownTz(r.destinationCode)) continue;
-      // The filter must never hide a whole route that parses sanely.
-      const x = buildInstance(s, r.originCode, r.destinationCode, nextOperating(s.fromDate, s.days));
-      if (x.durationMin >= MIN_BLOCK_MIN && x.durationMin <= MAX_BLOCK_MIN) {
-        expect(flightsOn(r.originCode, r.destinationCode, x.dateKey).length, `${r.originCode}-${r.destinationCode}`).toBeGreaterThan(0);
+      const oct: number[] = [], jan: number[] = [];
+      for (let i = 0; i < 28; i++) {
+        for (const f of flightsOn(r.originCode, r.destinationCode, addDays('2026-10-01', i))) oct.push(f.durationMin);
+        for (const f of flightsOn(r.originCode, r.destinationCode, addDays('2027-01-11', i))) jan.push(f.durationMin);
       }
+      if (oct.length < 4 || jan.length < 4) continue;
+      const d = median(jan) - median(oct);
+      if (Math.abs(d) >= 45) jumps.push(`${r.originCode}-${r.destinationCode} Oct ${median(oct)} Jan ${median(jan)}`);
     }
+    // Long-haul winds move a few routes by up to ~40 min; a whole-hour jump on
+    // many routes of one airport is a zone problem.
+    expect(jumps.length, jumps.join('\n')).toBeLessThanOrEqual(3);
+  });
+
+  it('destinations without any published flight (report only)', () => {
+    const served = new Set(getRouteSchedules().flatMap(r => [r.originCode, r.destinationCode]));
+    const none = DESTINATIONS.filter(d => !served.has(d.code)).map(d => d.code);
+    // Not gating: a seasonal destination can drop out of one weekly scrape.
+    if (none.length) console.warn(`[data-integrity] destinations with no published flights: ${none.join(', ')}`);
+    expect(none.length).toBeLessThan(DESTINATIONS.length / 10);
+  });
+
+  it('publishes the domestic hub-to-hub legs, so no connection uses an invented leg', () => {
+    expect(getSchedulesMeta()?.hubToHub).toBe(true);
+    expect(estimatesAllowed()).toBe(false);
+    const hubs = HUBS.map(h => h.code);
+    const pairs = getRouteSchedules().filter(r => hubs.includes(r.originCode) && hubs.includes(r.destinationCode));
+    expect(pairs.length).toBeGreaterThan(40);
   });
 
   it('has a coverage window', () => {

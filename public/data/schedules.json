@@ -2,14 +2,15 @@
   "version": 1,
   "source": "https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly",
   "meta": {
-    "generatedAt": "2026-09-30T18:03:01Z",
+    "generatedAt": "2026-09-30T18:10:52Z",
     "coverageFrom": "2026-09-29",
     "coverageTo": "2027-09-26",
     "coverageByHub": {"YEG": {"from": "2026-09-29", "to": "2027-09-26"}, "YHZ": {"from": "2026-09-29", "to": "2027-09-26"}, "YOW": {"from": "2026-09-29", "to": "2027-09-26"}, "YQB": {"from": "2026-09-29", "to": "2027-09-26"}, "YTZ": {"from": "2026-09-29", "to": "2027-09-26"}, "YUL": {"from": "2026-09-29", "to": "2027-09-26"}, "YVR": {"from": "2026-09-29", "to": "2027-09-26"}, "YWG": {"from": "2026-09-29", "to": "2027-09-26"}, "YYC": {"from": "2026-09-29", "to": "2027-09-26"}, "YYZ": {"from": "2026-09-29", "to": "2027-09-26"}},
-    "pdfCount": 40,
+    "hubToHub": true,
+    "pdfCount": 41,
     "routeCount": 678,
-    "recordCount": 26957,
-    "sources": ["https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-AFRICA-NorthernAfrica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-ASIA-Asia.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-AtlanticCanada.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-EasternCanada.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-WesternCanada.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-CentralEurope.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-England.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-France.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Greece.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Ireland.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Italy.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-NorthernEurope.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Portugal.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Scotland.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Spain.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-WesternEurope.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-MIDDLEEAST-MiddleEast.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-CentralAmerica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-CostaRica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-SouthAmerica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHPACIFIC-Australia.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHPACIFIC-NewZealand.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Bahamas.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Barbados.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-CentralMexico.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-DominicanRepublic.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-EastCoastMexico.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-EasternCaribbean.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Jamaica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-SouthernCaribbean.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-WestCoastMexico.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-WesternCaribbean.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-California.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-Florida.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-Hawaii.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-LasVegas.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-MidwestUSA.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-NorthEastUSA.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-SouthUSA.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-WesternUSA.pdf"]
+    "recordCount": 26952,
+    "sources": ["https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-AFRICA-NorthernAfrica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-ASIA-Asia.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-AtlanticCanada.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-EasternCanada.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-NorthernCanada.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-CANADA-WesternCanada.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-CentralEurope.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-England.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-France.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Greece.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Ireland.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Italy.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-NorthernEurope.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Portugal.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Scotland.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-Spain.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-EUROPE-WesternEurope.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-MIDDLEEAST-MiddleEast.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-CentralAmerica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-CostaRica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHANDCENTRALAMERICA-SouthAmerica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHPACIFIC-Australia.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SOUTHPACIFIC-NewZealand.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Bahamas.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Barbados.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-CentralMexico.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-DominicanRepublic.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-EastCoastMexico.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-EasternCaribbean.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-Jamaica.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-SouthernCaribbean.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-WestCoastMexico.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-SUN-WesternCaribbean.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-California.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-Florida.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-Hawaii.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-LasVegas.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-MidwestUSA.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-NorthEastUSA.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-SouthUSA.pdf", "https://vacations.aircanada.com/en/travel-info/where-we-fly/files/EN-USA-WesternUSA.pdf"]
   },
   "routes": {
     "AKL-YVR": [
@@ -428,8 +429,7 @@
       ["2027-03-28", "2027-04-25", "------U", "AC1819", "16:30", "18:30", "7M8"],
       ["2027-04-01", "2027-04-29", "---R---", "AC1819", "17:50", "19:50", "7M8"],
       ["2027-05-02", "2027-06-01", "-T--F-U", "AC1819", "12:50", "14:50", "7M8"],
-      ["2027-06-02", "2027-09-24", "-TW-F-U", "AC1819", "12:50", "14:50", "7M8"],
-      ["2027-06-02", "2027-09-26", "-TW-F-U", "AC1819", "12:50", "14:50", "7M8"]
+      ["2027-06-02", "2027-09-24", "-TW-F-U", "AC1819", "12:50", "14:50", "7M8"]
     ],
     "BER-YUL": [
       ["2027-06-02", "2027-09-12", "M-W-F-U", "AC945", "11:30", "14:10", "32Q"],
@@ -2534,7 +2534,7 @@
       ["2027-03-14", "2027-03-27", "MTWRFSU", "AC1831", "12:10", "17:20", "7M8"],
       ["2027-03-28", "2027-04-20", "MTWRFSU", "AC1831", "12:10", "17:15", "7M8"],
       ["2027-04-22", "2027-04-30", "MT-RFSU", "AC1831", "12:10", "17:15", "7M8"],
-      ["2027-05-01", "2027-09-26", "-T-R-SU", "AC1831", "12:15", "17:20", "7M8"]
+      ["2027-05-01", "2027-09-25", "-T-R-SU", "AC1831", "12:15", "17:20", "7M8"]
     ],
     "GDL-YYZ": [
       ["2026-10-27", "2026-10-30", "-TW-F--", "AC1361", "08:20", "15:10", "223"],
@@ -2948,7 +2948,7 @@
       ["2027-09-09", "2027-09-25", "M--R-S-", "AC2103", "10:00", "12:00", "7M8"]
     ],
     "KIN-YYZ": [
-      ["2026-09-30", "2026-09-30", "--W----", "AC965", "15:05", "20:25", "7M8"],
+      ["2026-09-29", "2026-09-30", "-TW----", "AC965", "15:05", "20:25", "7M8"],
       ["2026-10-01", "2026-10-02", "---RF--", "AC1445", "15:05", "20:25", "7M8"],
       ["2026-10-22", "2026-10-22", "---R---", "AC1445", "14:35", "19:55", "789"],
       ["2026-10-28", "2026-10-29", "--WR---", "AC1445", "15:15", "20:40", "789"],
@@ -4370,12 +4370,12 @@
       ["2027-05-02", "2027-05-02", "------U", "AC1835", "12:45", "18:15", "7M8"]
     ],
     "MBJ-YWG": [
-      ["2026-12-06", "2027-03-07", "------U", "AC2111", "15:40", "21:20", "7M8"],
+      ["2026-12-06", "2027-03-07", "------U", "AC2111", "15:40", "20:20", "7M8"],
       ["2027-03-14", "2027-04-18", "------U", "AC2111", "14:40", "20:20", "7M8"]
     ],
     "MBJ-YYZ": [
-      ["2027-05-01", "2027-09-26", "MTWRFSU", "AC1483", "13:45", "18:55", "321"],
-      ["2026-09-30", "2026-10-06", "MTW--SU", "AC1805", "12:30", "17:40", "319"],
+      ["2027-05-01", "2027-09-25", "MTWRFSU", "AC1483", "13:45", "18:55", "321"],
+      ["2026-09-29", "2026-10-06", "MTW--SU", "AC1805", "12:30", "17:40", "319"],
       ["2026-10-01", "2026-10-02", "---RF--", "AC1805", "12:30", "17:40", "320"],
       ["2026-10-07", "2026-10-10", "--WR-S-", "AC1805", "12:30", "17:40", "321"],
       ["2026-10-09", "2026-10-18", "-TWRF-U", "AC1805", "12:30", "17:40", "320"],
@@ -5627,8 +5627,7 @@
       ["2026-11-02", "2026-11-02", "M------", "AC1839", "13:05", "17:15", "321"],
       ["2026-12-15", "2026-12-20", "-T-R--U", "AC1839", "13:05", "17:15", "321"],
       ["2027-05-02", "2027-06-17", "-T-RF-U", "AC1839", "13:15", "17:20", "7M8"],
-      ["2027-06-18", "2027-09-24", "-T-RF-U", "AC1839", "13:15", "17:10", "7M8"],
-      ["2027-06-18", "2027-09-26", "-T-RF-U", "AC1839", "13:15", "17:10", "7M8"]
+      ["2027-06-18", "2027-09-24", "-T-RF-U", "AC1839", "13:15", "17:10", "7M8"]
     ],
     "PMI-YUL": [
       ["2026-10-01", "2026-10-05", "M--R---", "AC925", "12:15", "14:25", "788"],
@@ -18231,7 +18230,7 @@
       ["2027-03-16", "2027-04-21", "-TW-FS-", "AC2088", "09:10", "14:15", "7M8"]
     ],
     "YWG-MBJ": [
-      ["2026-12-06", "2027-03-07", "------U", "AC2110", "09:20", "14:40", "7M8"],
+      ["2026-12-06", "2027-03-07", "------U", "AC2110", "08:20", "14:40", "7M8"],
       ["2027-03-14", "2027-04-18", "------U", "AC2110", "08:20", "13:40", "7M8"]
     ],
     "YWG-PUJ": [
@@ -20273,7 +20272,7 @@
       ["2027-03-14", "2027-04-25", "------U", "AC1818", "11:35", "15:25", "7M8"],
       ["2027-03-18", "2027-04-29", "---R---", "AC1818", "12:55", "16:45", "7M8"],
       ["2027-05-02", "2027-06-01", "-T--F-U", "AC1818", "08:00", "11:50", "7M8"],
-      ["2027-06-02", "2027-09-26", "-TW-F-U", "AC1818", "08:00", "11:50", "7M8"]
+      ["2027-06-02", "2027-09-24", "-TW-F-U", "AC1818", "08:00", "11:50", "7M8"]
     ],
     "YYZ-BGI": [
       ["2026-10-25", "2026-10-31", "M--RFSU", "AC1466", "08:15", "13:25", "789"],
@@ -21499,7 +21498,7 @@
       ["2027-03-14", "2027-03-27", "MTWRFSU", "AC1830", "08:05", "11:10", "7M8"],
       ["2027-03-28", "2027-04-20", "MTWRFSU", "AC1830", "08:05", "11:05", "7M8"],
       ["2027-04-22", "2027-04-30", "MT-RFSU", "AC1830", "08:05", "11:05", "7M8"],
-      ["2027-05-01", "2027-09-26", "-T-R-SU", "AC1830", "08:15", "11:15", "7M8"]
+      ["2027-05-01", "2027-09-25", "-T-R-SU", "AC1830", "08:15", "11:15", "7M8"]
     ],
     "YYZ-GDL": [
       ["2026-10-26", "2026-10-29", "MT-R---", "AC1360", "17:35", "21:00", "223"],
@@ -21710,7 +21709,7 @@
       ["2027-09-08", "2027-09-26", "--W-F-U", "AC2102", "23:10", "08:55", "7M8"]
     ],
     "YYZ-KIN": [
-      ["2026-09-30", "2026-09-30", "--W----", "AC964", "10:45", "13:55", "7M8"],
+      ["2026-09-29", "2026-09-30", "-TW----", "AC964", "10:45", "13:55", "7M8"],
       ["2026-10-01", "2026-10-02", "---RF--", "AC1444", "10:45", "13:55", "7M8"],
       ["2026-10-22", "2026-10-22", "---R---", "AC1444", "09:50", "13:00", "789"],
       ["2026-10-28", "2026-10-29", "--WR---", "AC1444", "10:20", "13:40", "789"],
@@ -22416,9 +22415,7 @@
     ],
     "YYZ-MBJ": [
       ["2027-05-01", "2027-09-25", "MTWRFSU", "AC1482", "09:45", "12:50", "321"],
-      ["2027-05-01", "2027-09-26", "MTWRFSU", "AC1482", "09:45", "12:50", "321"],
       ["2026-09-29", "2026-10-06", "MTW--SU", "AC1804", "08:15", "11:20", "319"],
-      ["2026-09-30", "2026-10-06", "MTW--SU", "AC1804", "08:15", "11:20", "319"],
       ["2026-10-01", "2026-10-02", "---RF--", "AC1804", "08:15", "11:20", "320"],
       ["2026-10-07", "2026-10-10", "--WR-S-", "AC1804", "08:15", "11:20", "321"],
       ["2026-10-09", "2026-10-18", "-TWRF-U", "AC1804", "08:15", "11:20", "320"],
@@ -23057,8 +23054,7 @@
       ["2026-10-26", "2026-10-30", "MT--F--", "AC1838", "08:15", "12:25", "7M8"],
       ["2026-11-02", "2026-11-02", "M------", "AC1838", "08:00", "12:10", "321"],
       ["2026-12-15", "2026-12-20", "-T-R--U", "AC1838", "08:00", "12:10", "321"],
-      ["2027-05-02", "2027-09-24", "-T-RF-U", "AC1838", "08:15", "12:15", "7M8"],
-      ["2027-05-02", "2027-09-26", "-T-RF-U", "AC1838", "08:15", "12:15", "7M8"]
+      ["2027-05-02", "2027-09-24", "-T-RF-U", "AC1838", "08:15", "12:15", "7M8"]
     ],
     "YYZ-POP": [
       ["2026-11-02", "2026-11-02", "M------", "AC1394", "07:15", "12:30", "7M8"],

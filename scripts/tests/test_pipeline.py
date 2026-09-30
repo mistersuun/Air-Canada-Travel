@@ -324,6 +324,7 @@ def test_domestic_hub_to_hub_legs_parsed_by_default(fs, out):
     assert _run(fs, out, discover=lambda: urls, fetch=fetch, extract=extract) == 0
     routes = load_out(out)["routes"]
     assert routes["YYZ-YUL"] == [["2026-10-01", "2026-10-31", "MTWRFSU", "AC403", "08:10", "09:33", "321"]]
+    assert load_out(out)["meta"]["hubToHub"] is True
     assert not any(k.endswith("-YSB") for k in routes)               # non-hub dropped
     assert any("CANADA" in u for u in seen)
 
@@ -331,6 +332,7 @@ def test_domestic_hub_to_hub_legs_parsed_by_default(fs, out):
     assert _run(fs, out, ["--skip-domestic"], discover=lambda: urls, fetch=fetch, extract=extract) == 0
     assert not any("CANADA" in u for u in seen)
     assert "YYZ-YUL" not in load_out(out)["routes"]
+    assert load_out(out)["meta"]["hubToHub"] is False
 
 
 def test_domestic_parse_failure_is_not_fatal(fs, out):

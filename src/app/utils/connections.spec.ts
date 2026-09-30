@@ -7,6 +7,7 @@ import {
   bestItinerary,
   directItineraries,
   estimatedInstance,
+  estimatesAllowed,
   findAlternatives,
   findConnections,
   findConnectionsForWeek,
@@ -83,6 +84,37 @@ describe('findItineraries: layovers in UTC', () => {
     expect(segmentFlights('YHZ', 'YYZ', '2026-10-06')).toEqual([]);
     expect(findItineraries('YHZ', 'LHR', '2026-10-06')).toEqual([]);
     expect(findItineraries('YHZ', 'LHR', '2026-10-05')).toHaveLength(1);
+  });
+
+  it('never invents a hub leg once the data publishes hub-to-hub legs (meta.hubToHub)', () => {
+    const world = [
+      route('YHZ', 'YYZ', rec('AC603', '14:00', '15:30', '2026-10-01', '2026-10-31')),
+      route('YYZ', 'LHR', rec('AC848', '18:00', '06:15', '2026-10-01', '2026-10-31')),
+      route('YOW', 'LHR', rec('AC5', '18:00', '06:15', '2026-10-01', '2026-10-31')),
+    ];
+    // Without the domestic PDFs, YHZ→YOW (no real nonstop) is estimated.
+    setScheduleSource(world, { coverageFrom: '2026-10-01', coverageTo: '2026-10-31' });
+    expect(estimatesAllowed()).toBe(true);
+    expect(findItineraries('YHZ', 'LHR', '2026-10-05').some(i => i.hubs[0] === 'YOW' && i.estimated)).toBe(true);
+    // With them, a missing pair is simply not flown.
+    setScheduleSource(world, { coverageFrom: '2026-10-01', coverageTo: '2026-10-31', hubToHub: true });
+    expect(estimatesAllowed()).toBe(false);
+    expect(hasSegment('YHZ', 'YOW')).toBe(false);
+    expect(segmentFlights('YHZ', 'YOW', '2026-10-05')).toEqual([]);
+    const its = findItineraries('YHZ', 'LHR', '2026-10-05');
+    expect(its.map(i => i.hubs[0])).toEqual(['YYZ']);
+    expect(its.some(i => i.estimated)).toBe(false);
+  });
+
+  it('offers no connections outside the home hub published window (as the modal)', () => {
+    // YWG's only records start 11-01, so October is "not yet published" for YWG;
+    // the estimated YWG→YYZ leg must not produce October cards there.
+    setScheduleSource([
+      route('YWG', 'CUN', rec('AC1480', '08:00', '13:00', '2026-11-01', '2026-11-30')),
+      route('YYZ', 'LHR', rec('AC848', '18:00', '06:15', '2026-10-01', '2026-11-30')),
+    ]);
+    expect(summarizeWeek('YWG', 'LHR', '2026-10-05').connectDays).toBe(0);
+    expect(summarizeWeek('YWG', 'LHR', '2026-11-02').connectDays).toBe(7);
   });
 
   describe('layover edges', () => {

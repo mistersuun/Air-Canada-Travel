@@ -49,6 +49,11 @@ export interface SchedulesMeta {
   coverageFrom?: string;
   coverageTo?: string;
   coverageByHub?: Readonly<Record<string, { from: string; to: string }>>;
+  /**
+   * True when the domestic PDFs were parsed: every published hub-to-hub leg
+   * is in the data, so a missing hub pair has no nonstop.
+   */
+  hubToHub?: boolean;
   pdfCount?: number;
   routeCount?: number;
   recordCount?: number;

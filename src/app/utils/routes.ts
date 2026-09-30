@@ -200,7 +200,7 @@ export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
         : flightsOn(p.home, d.code, p.dateKey).filter(keepFlight);
       if (flights.length) {
         direct.push({ destination: d, isDirect: true, weekDays, flights, daysFlying: directDays, isFavourite });
-      } else if (p.showConnections) {
+      } else if (p.showConnections && isCovered(p.dateKey, coverageHubFor(p.home, d.code))) {
         const itineraries = findItineraries(p.home, d.code, p.dateKey, connect, keepItin);
         if (itineraries.length) {
           const itinerary = itineraries[0];

@@ -467,11 +467,15 @@ def _j(v) -> str:
     return json.dumps(v, ensure_ascii=False)
 
 
-def generate_json(routes: dict, *, generated_at: str, sources: list[str], hubs: Iterable[str]) -> str:
+def generate_json(routes: dict, *, generated_at: str, sources: list[str], hubs: Iterable[str],
+                  hub_to_hub: bool = False) -> str:
     """
     The schedule file the app loads. One record per line so weekly diffs stay
     readable. Records are [fromDate, toDate, dayMask, flight, departure,
-    arrival, aircraft] with the PDFs' MTWRFSU day mask.
+    arrival, aircraft] with the PDFs' MTWRFSU day mask. `hub_to_hub` records
+    that the domestic PDFs were parsed, so every published hub-to-hub leg is in
+    the file and a missing pair means there is no nonstop (the app then never
+    invents one for a connection).
     """
     cov = coverage(routes, hubs)
     live = [(k, v) for k, v in sorted(routes.items()) if v]
@@ -481,6 +485,7 @@ def generate_json(routes: dict, *, generated_at: str, sources: list[str], hubs: 
         "coverageFrom": cov["from"],
         "coverageTo": cov["to"],
         "coverageByHub": {h: {"from": f, "to": t} for h, (f, t) in cov["byHub"].items()},
+        "hubToHub": hub_to_hub,
         "pdfCount": len(sources),
         "routeCount": len(live),
         "recordCount": record_count,
@@ -880,8 +885,9 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         warnings.append(f"{len(all_orphans)} orphan row(s)")
 
     record_count = sum(len(v) for v in routes.values())
+    hub_to_hub = include_domestic and any(o in hub_set and d in hub_set for (o, d) in routes)
     ts = generate_json(routes, generated_at=now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                       sources=[s.url or s.name for s, _ in parsed], hubs=hubs)
+                       sources=[s.url or s.name for s, _ in parsed], hubs=hubs, hub_to_hub=hub_to_hub)
     cov = coverage(routes, hubs)
 
     print(f"\nTotal: {len(routes)} routes (previous {prev}), {record_count} records, "

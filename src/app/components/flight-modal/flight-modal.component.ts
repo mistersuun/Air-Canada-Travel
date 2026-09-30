@@ -5,6 +5,7 @@ import { DayFlight, getFlightsForWeek, formatDayLabel } from '../../utils/week';
 import { findConnections, ConnectionOption, formatLayover } from '../../utils/connections';
 import { RouteEntry } from '../../app.component';
 import { getFlag } from '../../utils/flags';
+import { getOrigins } from '../../utils/airports';
 
 const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
 
@@ -93,9 +94,9 @@ const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
         </div>
       </ng-container>
 
-      <div class="modal__also" *ngIf="destination.fromCities.length > 1">
+      <div class="modal__also" *ngIf="alsoFrom.length">
         Also from:
-        {{ destination.fromCities.filter(c => c !== hubCityName).join(' · ') }}
+        {{ alsoFrom.join(' · ') }}
       </div>
     </div>
   `,
@@ -285,7 +286,12 @@ export class FlightModalComponent implements OnInit {
   }
 
   get flag(): string {
-    return getFlag(this.destination.country);
+    return getFlag(this.destination);
+  }
+
+  /** Other airports with published flights here (derived from schedules). */
+  get alsoFrom(): string[] {
+    return getOrigins(this.destination.code).filter(o => o.code !== this.hubCode).map(o => o.name);
   }
 
   get regionColor(): string {

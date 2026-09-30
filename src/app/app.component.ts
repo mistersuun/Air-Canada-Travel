@@ -1,18 +1,16 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Destination, DESTINATIONS, HUBS } from './data/destinations';
-import { getWeekStart, routeHasFlightsInWeek, routeHasFlightOnDay } from './utils/week';
-import { findConnections, findConnectionsForWeek, ConnectionOption } from './utils/connections';
+import { getWeekStart } from './utils/week';
+import { dateKey } from './utils/time';
+import { computeRoutes, RouteEntry } from './utils/routes';
 import { HeaderComponent } from './components/header/header.component';
 import { WeekStripComponent } from './components/week-strip/week-strip.component';
 import { RouteListComponent } from './components/route-list/route-list.component';
 import { FlightModalComponent } from './components/flight-modal/flight-modal.component';
 
-export interface RouteEntry {
-  destination: Destination;
-  isDirect: boolean;
-  bestConnection?: ConnectionOption;
-}
+/** @deprecated Import RouteEntry from './utils/routes' (re-exported here until WS3/WS5 land). */
+export type { RouteEntry } from './utils/routes';
 
 @Component({
   selector: 'app-root',
@@ -89,42 +87,13 @@ export class AppComponent {
   }
 
   get allRoutes(): RouteEntry[] {
-    const routes: RouteEntry[] = [];
-    const seen = new Set<string>();
-
-    for (const d of DESTINATIONS) {
-      if (this.activeRegion !== 'All' && d.region !== this.activeRegion) continue;
-
-      const hasDirect = this.selectedDate
-        ? routeHasFlightOnDay(this.hubCode, d.code, this.selectedDate)
-        : routeHasFlightsInWeek(this.hubCode, d.code, this.weekStart);
-
-      if (hasDirect) {
-        routes.push({ destination: d, isDirect: true });
-        seen.add(d.code);
-      }
-    }
-
-    if (this.showConnections) {
-      for (const d of DESTINATIONS) {
-        if (seen.has(d.code)) continue;
-        if (this.activeRegion !== 'All' && d.region !== this.activeRegion) continue;
-
-        if (this.selectedDate) {
-          const conns = findConnections(this.hubCode, d.code, this.selectedDate);
-          if (conns.length > 0) {
-            const best = conns.reduce((b, c) => c.layoverMinutes < b.layoverMinutes ? c : b);
-            routes.push({ destination: d, isDirect: false, bestConnection: best });
-          }
-        } else {
-          if (findConnectionsForWeek(this.hubCode, d.code, this.weekStart)) {
-            routes.push({ destination: d, isDirect: false });
-          }
-        }
-      }
-    }
-
-    return routes;
+    return computeRoutes({
+      home: this.hubCode,
+      weekStartKey: dateKey(this.weekStart),
+      dateKey: this.selectedDate ? dateKey(this.selectedDate) : null,
+      region: this.activeRegion,
+      showConnections: this.showConnections,
+    });
   }
 
   prevWeek(): void {

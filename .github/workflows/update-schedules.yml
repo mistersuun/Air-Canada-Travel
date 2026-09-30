@@ -1,16 +1,24 @@
 name: Update Flight Schedules
 
 on:
-  schedule:
-    # Run every Monday at 6am UTC (AC typically updates schedules on weekends)
-    - cron: '0 6 * * 1'
-  workflow_dispatch:  # Allow manual trigger from GitHub Actions UI
+  # Weekly cron DISABLED while the feat/overhaul rework is in flight: the bot
+  # pushes schedules.ts straight to master and conflicts with the rework.
+  # Re-enable once the overhaul has merged.
+  # schedule:
+  #   # Every Monday at 6am UTC (AC typically updates schedules on weekends)
+  #   - cron: '0 6 * * 1'
+  workflow_dispatch:  # Manual trigger from the GitHub Actions UI
+
+concurrency:
+  group: update-schedules
+  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -19,18 +27,57 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
 
-      - name: Install dependencies
-        run: pip install pdfplumber
+      - name: Install Python dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Scraper unit tests
+        run: python -m pytest -q scripts/tests
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
 
       - name: Fetch latest schedules
+        # Exits non-zero (and leaves schedules.ts untouched) if any safety gate fails.
         run: python3 scripts/fetch-schedules.py
+
+      - name: Diff summary
+        run: |
+          {
+            echo '### schedules.ts diff'
+            echo '```'
+            git diff --stat -- src/app/data/schedules.ts || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: App tests (no coverage gate)
+        run: npx vitest run
+
+      - name: Production build
+        run: npx ng build
 
       - name: Commit and push if changed
         run: |
-          git diff --quiet src/app/data/schedules.ts && exit 0
+          git diff --quiet -- src/app/data/schedules.ts && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src/app/data/schedules.ts
           git commit -m "chore: update flight schedules from AC Vacations PDFs"
           git push
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Schedule update failed ($(date -u +%Y-%m-%d))" \
+            --body "The update-schedules workflow failed and nothing was committed. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

@@ -1,0 +1,4 @@
+# Pinned for reproducible schedule generation (scripts/fetch-schedules.py).
+pdfplumber==0.11.10
+pdfminer.six==20260107
+pytest==9.1.1

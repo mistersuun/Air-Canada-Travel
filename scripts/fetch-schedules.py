@@ -1,295 +1,774 @@
 #!/usr/bin/env python3
 """
-Fetches Air Canada Vacations schedule PDFs and regenerates schedules.ts.
+Fetches Air Canada Vacations schedule PDFs and regenerates src/app/data/schedules.ts.
 Run manually or via GitHub Actions.
 
 Usage:
-  python3 scripts/fetch-schedules.py [--dry-run]
+  python3 scripts/fetch-schedules.py [--dry-run] [--include-domestic] [--out PATH]
+
+--include-domestic also parses the domestic "CANADA-" PDFs and keeps only
+hub-to-hub legs (both ends in destinations.ts HUBS). Off by default: it adds
+~13.7k records (~2.2 MB of source) and would push the initial bundle past the
+3 MB angular.json budget while schedules.ts is still bundled into JS.
+
+The script refuses to write anything when a safety gate fails (no PDFs found,
+a download failed, too few routes/records compared with the previous file, a
+core hub missing, too many unparseable rows). --dry-run runs every step and
+every gate and exits with the same status, but never writes the output file.
+
+The parser is pure (parse_pages / parse_text) so it can be tested with plain
+text fixtures; pdfplumber is only imported when a real PDF is opened.
 """
 
+from __future__ import annotations
+
+import io
+import os
 import re
 import sys
+import time
+import unicodedata
+import urllib.error
+import urllib.parse
 import urllib.request
-from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import date, datetime, timezone
+from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
+from typing import Callable, Iterable
 
-try:
-    import pdfplumber
-except ImportError:
-    print("pdfplumber not installed. Run: pip install pdfplumber")
-    sys.exit(1)
-
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 WHERE_WE_FLY_URL = "https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly"
-PDF_BASE = "https://vacations.aircanada.com"
+USER_AGENT = "Mozilla/5.0 (compatible; ac-explorer-schedule-bot)"
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_OUT = os.path.join(REPO_ROOT, "src", "app", "data", "schedules.ts")
+DESTINATIONS_TS = os.path.join(REPO_ROOT, "src", "app", "data", "destinations.ts")
 
-def discover_pdf_urls() -> list[str]:
-    """Scrape the where-we-fly page and return all schedule PDF URLs."""
-    req = urllib.request.Request(WHERE_WE_FLY_URL, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        html = resp.read().decode('utf-8', errors='replace')
+ALLOWED_HOST_SUFFIX = "aircanada.com"
+FETCH_TIMEOUT_S = 60
+FETCH_BACKOFF_S = (1, 2, 4)        # sleeps between attempts -> 4 attempts total
+MAX_PDF_BYTES = 30 * 1024 * 1024
 
-    # Match all href values ending in .pdf under the known files path
-    found = re.findall(r'href=["\']([^"\']*travel-info/where-we-fly/files/[^"\']*\.pdf)["\']', html)
+# Safety gates
+MIN_ROUTE_RATIO = 0.80             # vs. routes (originCode: entries) in the previous file
+MIN_RECORDS = 5000
+MAX_REJECT_RATIO = 0.05            # rejected rows / (accepted + rejected)
+REQUIRED_HUBS = ("YUL", "YYZ", "YVR")   # hard-fail if any has 0 departures
 
-    # Deduplicate and make absolute
-    urls = []
-    seen = set()
-    for href in found:
-        url = href if href.startswith('http') else PDF_BASE + href
-        if url not in seen:
-            seen.add(url)
-            urls.append(url)
+FALLBACK_HUBS = ("YYZ", "YUL", "YVR", "YYC", "YOW", "YHZ", "YEG", "YQB", "YWG")
 
-    return urls
-
-# ---------------------------------------------------------------------------
-# Day bitmask → comma-separated day names
-# Format in PDF: MTWRFSU where - means absent
-# ---------------------------------------------------------------------------
-DAY_CHARS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-DAY_KEYS   = ['M',   'T',   'W',   'R',   'F',   'S',   'U']
-
-def parse_days(bitmask: str) -> str:
-    """Convert 'M-W-F--' → 'Mon,Wed,Fri'"""
-    days = []
-    for i, char in enumerate(bitmask[:7]):
-        if char != '-':
-            days.append(DAY_CHARS[i])
-    return ','.join(days)
-
+# Day mask in the PDFs is MTWRFSU (R = Thursday, U = Sunday), '-' = no flight.
+DAY_KEYS = ("M", "T", "W", "R", "F", "S", "U")
+DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 # ---------------------------------------------------------------------------
-# Schedule row pattern
-# Example: "2026-12-07 2027-03-08 M------ AC2092 08:15 16:45 7M8"
+# Regexes
 # ---------------------------------------------------------------------------
+# Anything that starts like a schedule row (two ISO dates). Validated field by
+# field afterwards so malformed rows are reported instead of silently dropped.
+ROW_START_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\s+\d{4}-\d{2}-\d{2}\b")
 ROW_RE = re.compile(
-    r'(\d{4}-\d{2}-\d{2})\s+'   # fromDate
-    r'(\d{4}-\d{2}-\d{2})\s+'   # toDate
-    r'([MTW-][TW-][W-]{1}[R-][F-][S-][U-])\s+'  # days (7 chars)
-    r'(AC\d{2,4})\s+'           # flightNumber
-    r'(\d{2}:\d{2})\s+'         # departure
-    r'(\d{2}:\d{2})\s+'         # arrival
-    r'(\w+)'                     # aircraft
+    r"^(\d{4}-\d{2}-\d{2})\s+"      # fromDate
+    r"(\d{4}-\d{2}-\d{2})\s+"       # toDate
+    r"(\S+)\s+"                     # day mask (validated separately)
+    r"(AC\d{1,4})\s+"               # flight number
+    r"(\d{1,2}:\d{2})\s+"           # departure (local)
+    r"(\d{1,2}:\d{2})\s+"           # arrival (local)
+    r"([A-Z0-9]{2,4})\b"            # aircraft code
 )
+AIRPORT_CODE_RE = re.compile(r"\(([A-Z]{3})\)")
+# City section header, e.g. "Montreal (YUL)". Matched on an ASCII-folded copy.
+CITY_HEADER_RE = re.compile(r"^([A-Za-z /\-'\.]{2,30})\s+\(([A-Z]{3})\)\s*$")
+AIRPORT_WORDS = ("airport", "aeroport", "international", "terminal", "pearson", "stanfield")
+# Direction line, e.g. "Montreal to Casablanca, Morocco" (not the "to ..." marker
+# and not a table-of-contents "to/from ..... X" line).
+DIRECTION_RE = re.compile(r"^(?!to\b)(?!from\b)(?!to/from\b)\S.*\sto\s\S.*$")
+# Direction markers: "to ..." (outbound) / "from ..." (return), optionally
+# followed on the same line by the airport, e.g. "to ... Sangster International Airport (MBJ)".
+MARKER_RE = re.compile(r"^(to|from) \.\.\.(?:\s+(.*))?$")
 
-# Airport code in parentheses e.g. "(MBJ)"
-AIRPORT_CODE_RE = re.compile(r'\(([A-Z]{3})\)')
 
-# City section header: short name + code, must NOT be an airport name
-# "Edmonton (YEG)" ✓   "Norman Manley International Airport (KIN)" ✗
-CITY_HEADER_RE = re.compile(r'^([A-Za-z /\-\'\.]{2,30})\s+\(([A-Z]{3})\)\s*$')
-AIRPORT_WORDS = {'airport', 'aéroport', 'international', 'terminal', 'pearson', 'stanfield'}
+# ---------------------------------------------------------------------------
+# Small helpers
+# ---------------------------------------------------------------------------
+def fold(text: str) -> str:
+    """Strip accents: 'Montréal' -> 'Montreal', 'Bogotá' -> 'Bogota'."""
+    decomposed = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
-def is_city_header(line: str) -> tuple:
+def is_city_header(line: str) -> tuple[str, str] | None:
     """Returns (city_name, code) if line is a city section header, else None."""
-    m = CITY_HEADER_RE.match(line)
+    m = CITY_HEADER_RE.match(fold(line))
     if not m:
         return None
     city = m.group(1).lower()
-    # Reject airport name lines
     if any(w in city for w in AIRPORT_WORDS):
         return None
-    return (m.group(1), m.group(2))
+    return (line[: line.rfind("(")].strip(), m.group(2))
 
 
-def extract_routes_from_pdf(pdf_bytes: bytes) -> dict:
+def parse_days(mask: str) -> str | None:
+    """'M-W-F--' -> 'Mon,Wed,Fri'. Returns None when the mask is malformed."""
+    if len(mask) != 7:
+        return None
+    days = []
+    for i, ch in enumerate(mask):
+        if ch == "-":
+            continue
+        if ch != DAY_KEYS[i]:
+            return None
+        days.append(DAY_NAMES[i])
+    return ",".join(days) if days else None
+
+
+def parse_time(value: str) -> str | None:
+    """'7:05' -> '07:05'; None when outside 00:00-23:59."""
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", value)
+    if not m:
+        return None
+    h, mi = int(m.group(1)), int(m.group(2))
+    if not (0 <= h <= 23 and 0 <= mi <= 59):
+        return None
+    return f"{h:02d}:{mi:02d}"
+
+
+def parse_row(line: str) -> tuple[dict | None, str | None]:
+    """Returns (record, None) or (None, reject_reason)."""
+    m = ROW_RE.match(line)
+    if not m:
+        return None, "unparseable row"
+    from_s, to_s, mask, flight, dep_s, arr_s, aircraft = m.groups()
+    try:
+        from_d = date.fromisoformat(from_s)
+        to_d = date.fromisoformat(to_s)
+    except ValueError:
+        return None, "invalid date"
+    if from_d > to_d:
+        return None, "fromDate after toDate"
+    days = parse_days(mask)
+    if days is None:
+        return None, f"malformed day mask {mask!r}"
+    dep = parse_time(dep_s)
+    arr = parse_time(arr_s)
+    if dep is None or arr is None:
+        return None, "invalid time"
+    return {
+        "fromDate": from_s,
+        "toDate": to_s,
+        "days": days,
+        "flightNumber": flight,
+        "departure": dep,
+        "arrival": arr,
+        "aircraft": aircraft,
+    }, None
+
+
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
+@dataclass
+class ParseResult:
+    routes: dict = field(default_factory=dict)     # (origin, dest) -> [record]
+    orphans: list = field(default_factory=list)    # valid rows with no origin/dest/direction
+    rejects: list = field(default_factory=list)    # row-like lines that failed validation
+
+    @property
+    def record_count(self) -> int:
+        return sum(len(v) for v in self.routes.values())
+
+
+def _valid_dest(code: str | None, origin: str | None) -> str | None:
+    return code if code and code != origin else None
+
+
+def parse_pages(pages: Iterable[str], source: str = "") -> ParseResult:
     """
-    Returns dict: { (originCode, destCode): [schedules] }
+    Parses the text of every PDF page (in order) into route records.
 
-    The PDFs use literal "to ..." and "from ..." marker lines to indicate
-    outbound vs return legs. We collect only outbound rows.
-
-    PDF structure per route block:
-      [OriginCity] ([OriginCode])          ← city section header
-      [OriginCity] Airport                 ← ignored
-      [OriginCity] to [DestCity]           ← route direction line
-      [DestCity] Airport ([DestCode])      ← dest airport with code
-      to ...                               ← OUTBOUND marker
-      From Date  To Date  Days  ...        ← column header (skipped)
+    PDF structure per route block (state carries across page breaks):
+      [OriginCity] ([OriginCode])          <- city section header (new origin)
+      [OriginCity] Airport                 <- ignored
+      [OriginCity] to [DestCity]           <- direction line
+      [DestCity] Airport ([DestCode])      <- other end of the route
+      to ...                               <- OUTBOUND marker: origin -> dest
       [schedule rows]
-      [DestCity] to [OriginCity]           ← return direction line
-      [DestCity] Airport ([DestCode])      ← same dest airport
-      from ...                             ← RETURN marker (skip rows)
-      [schedule rows — skipped]
+      [DestCity] to [OriginCity]           <- direction line
+      [DestCity] Airport ([DestCode])
+      from ...                             <- RETURN marker: dest -> origin
+      [schedule rows]
+    Either marker may come first.
     """
-    import io
-    routes = defaultdict(list)
+    result = ParseResult()
+    current_origin: str | None = None
+    current_dest: str | None = None
+    last_airport_code: str | None = None
+    direction: str | None = None          # 'outbound' | 'return' | None
+    awaiting_dest = False                 # just saw a direction line
 
+    for page_no, page_text in enumerate(pages, start=1):
+        for line_no, raw in enumerate((page_text or "").split("\n"), start=1):
+            line = raw.strip()
+            if not line:
+                continue
+
+            # Schedule rows first: they never look like anything else.
+            if ROW_START_RE.match(line):
+                record, reason = parse_row(line)
+                where = {"source": source, "page": page_no, "line": line_no, "text": line}
+                if record is None:
+                    result.rejects.append({**where, "reason": reason})
+                elif current_origin and current_dest and direction:
+                    key = ((current_origin, current_dest) if direction == "outbound"
+                           else (current_dest, current_origin))
+                    result.routes.setdefault(key, []).append(record)
+                else:
+                    result.orphans.append(where)
+                awaiting_dest = False
+                continue
+
+            marker_m = MARKER_RE.match(line)
+            if marker_m:
+                direction = "outbound" if marker_m.group(1) == "to" else "return"
+                # After a page break the marker and the airport can share a line:
+                # "from ... London Heathrow Airport (LHR)".
+                rest_code = AIRPORT_CODE_RE.search(marker_m.group(2) or "")
+                if rest_code:
+                    last_airport_code = rest_code.group(1)
+                    current_dest = _valid_dest(last_airport_code, current_origin)
+                    awaiting_dest = False
+                elif awaiting_dest:
+                    # Marker came before the airport line (text-order quirk,
+                    # e.g. "Sao Paulo, Brazil to Montreal / from ... / Guarulhos ... (GRU)").
+                    current_dest = None
+                else:
+                    current_dest = _valid_dest(last_airport_code, current_origin)
+                continue
+
+            code_m = AIRPORT_CODE_RE.search(line)
+
+            # An airport line right after a direction line is the route's
+            # other end, even if it happens to look like a city header
+            # (e.g. "Timmins/Victor M. Power (YTS)").
+            if awaiting_dest and code_m:
+                last_airport_code = code_m.group(1)
+                awaiting_dest = False
+                if direction:
+                    current_dest = _valid_dest(last_airport_code, current_origin)
+                continue
+
+            city = is_city_header(line)
+            if city:
+                current_origin = city[1]
+                current_dest = None
+                last_airport_code = None
+                direction = None
+                awaiting_dest = False
+                continue
+
+            if DIRECTION_RE.match(fold(line)) and not code_m:
+                current_dest = None
+                last_airport_code = None
+                direction = None
+                awaiting_dest = True
+                continue
+
+            if code_m:
+                last_airport_code = code_m.group(1)
+
+    return result
+
+
+def parse_text(text: str, source: str = "") -> ParseResult:
+    """Test helper: pages separated by form feeds ('\\f')."""
+    return parse_pages(text.split("\f"), source)
+
+
+def extract_pages(pdf_bytes: bytes) -> list[str]:
+    try:
+        import pdfplumber
+    except ImportError:
+        print("pdfplumber not installed. Run: pip install -r scripts/requirements.txt")
+        raise
+    pages = []
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        full_text = '\n'.join(
-            page.extract_text() or '' for page in pdf.pages
-        )
-        lines = full_text.split('\n')
-
-    current_origin = None
-    last_airport_code = None  # most recent (XXX) code seen
-    collecting = False        # True = outbound, False = skip/return
-
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        # 1. City section header → new origin, reset state
-        city = is_city_header(line)
-        if city:
-            current_origin = city[1]
-            collecting = False
-            continue
-
-        # 2. Any airport code line → remember it as potential dest code
-        code_m = AIRPORT_CODE_RE.search(line)
-        if code_m:
-            last_airport_code = code_m.group(1)
-
-        # 3. Outbound marker: literal "to ..." line
-        if line == 'to ...':
-            collecting = 'outbound'
-            current_dest = last_airport_code
-            continue
-
-        # 4. Return marker: literal "from ..." line
-        if line == 'from ...':
-            collecting = 'return'
-            continue
-
-        # 5. Schedule row — collect outbound and return legs
-        if collecting and current_origin and current_dest:
-            row_m = ROW_RE.search(line)
-            if row_m:
-                from_date, to_date, days_raw, flight_num, dep, arr, aircraft = row_m.groups()
-                days = parse_days(days_raw)
-                if days:
-                    if collecting == 'outbound':
-                        routes[(current_origin, current_dest)].append({
-                            'fromDate': from_date,
-                            'toDate': to_date,
-                            'days': days,
-                            'flightNumber': flight_num,
-                            'departure': dep,
-                            'arrival': arr,
-                            'aircraft': aircraft,
-                        })
-                    elif collecting == 'return':
-                        routes[(current_dest, current_origin)].append({
-                            'fromDate': from_date,
-                            'toDate': to_date,
-                            'days': days,
-                            'flightNumber': flight_num,
-                            'departure': dep,
-                            'arrival': arr,
-                            'aircraft': aircraft,
-                        })
-
-    return routes
+        for page in pdf.pages:
+            pages.append(page.extract_text() or "")
+            page.close()
+    return pages
 
 
-def fetch_pdf(url: str) -> bytes:
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return resp.read()
+# ---------------------------------------------------------------------------
+# Merge, dedupe, conflicts
+# ---------------------------------------------------------------------------
+def flight_sort_key(flight: str) -> tuple:
+    digits = re.sub(r"\D", "", flight)
+    return (int(digits) if digits else 0, flight)
 
 
-def generate_ts(all_routes: dict) -> str:
+def record_sort_key(r: dict) -> tuple:
+    return (flight_sort_key(r["flightNumber"]), r["fromDate"], r["toDate"],
+            r["days"], r["departure"], r["arrival"], r["aircraft"])
+
+
+def _weekday_set(days: str) -> set:
+    return set(days.split(",")) if days else set()
+
+
+@dataclass
+class Source:
+    name: str
+    url: str = ""
+    published: float = 0.0     # epoch seconds from Last-Modified / CreationDate, 0 = unknown
+    domestic: bool = False
+
+
+def merge_routes(parsed: list[tuple[Source, ParseResult]],
+                 log: Callable[[str], None] = print) -> tuple[dict, list[str]]:
+    """
+    Merges per-PDF results into { (origin, dest): [records] } with
+    deterministic ordering. Records sharing (origin, dest, flight, fromDate,
+    toDate, days) are collapsed; if their times differ it is a CONFLICT and
+    the record from the most recently published PDF wins (ties broken by PDF
+    name, then record content). Overlapping date ranges that share weekdays
+    but have different times are logged as CONFLICT but both are kept.
+    """
+    candidates: dict[tuple, list[tuple[Source, dict]]] = {}
+    for src, res in parsed:
+        for (origin, dest), records in res.routes.items():
+            for r in records:
+                k = (origin, dest, r["flightNumber"], r["fromDate"], r["toDate"], r["days"])
+                candidates.setdefault(k, []).append((src, r))
+
+    conflicts: list[str] = []
+    merged: dict[tuple, list[dict]] = {}
+    for k in sorted(candidates):
+        cands = candidates[k]
+        cands.sort(key=lambda sr: (-sr[0].published, sr[0].name, record_sort_key(sr[1])))
+        winner = cands[0][1]
+        times = {(r["departure"], r["arrival"]) for _, r in cands}
+        if len(times) > 1:
+            msg = (f"CONFLICT {k[0]}-{k[1]} {k[2]} {k[3]}..{k[4]} [{k[5]}]: "
+                   + "; ".join(sorted(f"{s.name} {r['departure']}-{r['arrival']}" for s, r in cands))
+                   + f" -> kept {winner['departure']}-{winner['arrival']} from {cands[0][0].name}")
+            conflicts.append(msg)
+            log(msg)
+        merged.setdefault((k[0], k[1]), []).append(dict(winner))
+
+    for key in merged:
+        recs = sorted(merged[key], key=record_sort_key)
+        merged[key] = recs
+        # Overlap check within a flight number (same origin/dest).
+        by_flight: dict[str, list[dict]] = {}
+        for r in recs:
+            by_flight.setdefault(r["flightNumber"], []).append(r)
+        for flight, rs in by_flight.items():
+            for i in range(len(rs)):
+                for j in range(i + 1, len(rs)):
+                    a, b = rs[i], rs[j]
+                    if (a["departure"], a["arrival"]) == (b["departure"], b["arrival"]):
+                        continue
+                    if a["fromDate"] > b["toDate"] or b["fromDate"] > a["toDate"]:
+                        continue
+                    if not (_weekday_set(a["days"]) & _weekday_set(b["days"])):
+                        continue
+                    msg = (f"CONFLICT {key[0]}-{key[1]} {flight}: overlapping "
+                           f"{a['fromDate']}..{a['toDate']} {a['departure']}-{a['arrival']} vs "
+                           f"{b['fromDate']}..{b['toDate']} {b['departure']}-{b['arrival']} (both kept)")
+                    conflicts.append(msg)
+                    log(msg)
+    return dict(sorted(merged.items())), conflicts
+
+
+# ---------------------------------------------------------------------------
+# Coverage + TS generation
+# ---------------------------------------------------------------------------
+def coverage(routes: dict, hubs: Iterable[str]) -> dict:
+    all_from = [r["fromDate"] for rs in routes.values() for r in rs]
+    all_to = [r["toDate"] for rs in routes.values() for r in rs]
+    by_hub = {}
+    for hub in sorted(set(hubs)):
+        f = [r["fromDate"] for (o, d), rs in routes.items() if hub in (o, d) for r in rs]
+        t = [r["toDate"] for (o, d), rs in routes.items() if hub in (o, d) for r in rs]
+        if f:
+            by_hub[hub] = (min(f), max(t))
+    return {
+        "from": min(all_from) if all_from else "",
+        "to": max(all_to) if all_to else "",
+        "byHub": by_hub,
+    }
+
+
+def _q(s: str) -> str:
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def generate_ts(routes: dict, *, generated_at: str, sources: list[str], hubs: Iterable[str]) -> str:
+    cov = coverage(routes, hubs)
+    record_count = sum(len(v) for v in routes.values())
     lines = [
-        '// Auto-generated from Air Canada Vacations flight schedule PDFs',
-        '// Source: https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly',
-        '// DO NOT EDIT MANUALLY — run scripts/fetch-schedules.py to regenerate',
-        '',
-        'export interface FlightSchedule {',
-        '  fromDate: string;',
-        '  toDate: string;',
-        '  days: string;',
-        '  flightNumber: string;',
-        '  departure: string;',
-        '  arrival: string;',
-        '  aircraft: string;',
-        '}',
-        '',
-        'export interface RouteSchedule {',
-        '  originCode: string;',
-        '  destinationCode: string;',
-        '  schedules: FlightSchedule[];',
-        '}',
-        '',
-        'export function getSchedulesForRoute(originCode: string, destinationCode: string): FlightSchedule[] {',
-        '  const route = ROUTE_SCHEDULES.find(',
-        '    r => r.originCode === originCode && r.destinationCode === destinationCode',
-        '  );',
-        '  return route?.schedules ?? [];',
-        '}',
-        '',
-        'export const ROUTE_SCHEDULES: RouteSchedule[] = [',
+        "// Auto-generated from Air Canada Vacations flight schedule PDFs",
+        f"// Source: {WHERE_WE_FLY_URL}",
+        "// DO NOT EDIT MANUALLY — run scripts/fetch-schedules.py to regenerate",
+        "",
+        "export interface FlightSchedule {",
+        "  fromDate: string;",
+        "  toDate: string;",
+        "  days: string;",
+        "  flightNumber: string;",
+        "  departure: string;",
+        "  arrival: string;",
+        "  aircraft: string;",
+        "}",
+        "",
+        "export interface RouteSchedule {",
+        "  originCode: string;",
+        "  destinationCode: string;",
+        "  schedules: FlightSchedule[];",
+        "}",
+        "",
+        "/**",
+        " * Generation metadata. coverageFrom/coverageTo span every record; coverageByHub",
+        " * is the published window for routes touching each hub (use this for",
+        " * 'not yet published' states, since each hub/seasonal route ends at a different date).",
+        " */",
+        "export const SCHEDULES_META = {",
+        f"  generatedAt: {_q(generated_at)},",
+        f"  coverageFrom: {_q(cov['from'])},",
+        f"  coverageTo: {_q(cov['to'])},",
+        "  coverageByHub: {",
     ]
-
-    for (origin, dest), schedules in sorted(all_routes.items()):
+    for hub, (f, t) in cov["byHub"].items():
+        lines.append(f"    {hub}: {{ from: {_q(f)}, to: {_q(t)} }},")
+    lines += [
+        "  } as Record<string, { from: string; to: string }>,",
+        f"  pdfCount: {len(sources)},",
+        f"  routeCount: {len(routes)},",
+        f"  recordCount: {record_count},",
+        "  sources: [",
+    ]
+    for s in sorted(sources):
+        lines.append(f"    {_q(s)},")
+    lines += [
+        "  ] as readonly string[],",
+        "} as const;",
+        "",
+        "/** @deprecated Kept for compatibility; prefer the indexed lookup in schedule-index.ts. */",
+        "export function getSchedulesForRoute(originCode: string, destinationCode: string): FlightSchedule[] {",
+        "  const route = ROUTE_SCHEDULES.find(",
+        "    r => r.originCode === originCode && r.destinationCode === destinationCode",
+        "  );",
+        "  return route?.schedules ?? [];",
+        "}",
+        "",
+        "export const ROUTE_SCHEDULES: RouteSchedule[] = [",
+    ]
+    for (origin, dest), schedules in sorted(routes.items()):
         if not schedules:
             continue
-        lines.append(f'  {{ originCode: "{origin}", destinationCode: "{dest}", schedules: [')
+        lines.append(f"  {{ originCode: {_q(origin)}, destinationCode: {_q(dest)}, schedules: [")
         for s in schedules:
             lines.append(
-                f'    {{ fromDate: "{s["fromDate"]}", toDate: "{s["toDate"]}", '
-                f'days: "{s["days"]}", flightNumber: "{s["flightNumber"]}", '
-                f'departure: "{s["departure"]}", arrival: "{s["arrival"]}", '
-                f'aircraft: "{s["aircraft"]}" }},'
+                f'    {{ fromDate: {_q(s["fromDate"])}, toDate: {_q(s["toDate"])}, '
+                f'days: {_q(s["days"])}, flightNumber: {_q(s["flightNumber"])}, '
+                f'departure: {_q(s["departure"])}, arrival: {_q(s["arrival"])}, '
+                f'aircraft: {_q(s["aircraft"])} }},'
             )
-        lines.append('  ] },')
+        lines.append("  ] },")
+    lines.append("];")
+    return "\n".join(lines) + "\n"
 
-    lines.append('];')
-    return '\n'.join(lines) + '\n'
+
+# ---------------------------------------------------------------------------
+# Discovery + download
+# ---------------------------------------------------------------------------
+class _LinkParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.hrefs: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == "a":
+            for name, value in attrs:
+                if name.lower() == "href" and value:
+                    self.hrefs.append(value)
 
 
-def main():
-    dry_run = '--dry-run' in sys.argv
-    all_routes = defaultdict(list)
-    errors = []
+def is_allowed_host(url: str) -> bool:
+    p = urllib.parse.urlparse(url)
+    host = (p.hostname or "").lower()
+    return p.scheme == "https" and (host == ALLOWED_HOST_SUFFIX or host.endswith("." + ALLOWED_HOST_SUFFIX))
+
+
+def parse_pdf_links(html: str, base_url: str = WHERE_WE_FLY_URL) -> list[str]:
+    """All schedule PDF links on the page: absolute, aircanada.com only, deduplicated, sorted."""
+    parser = _LinkParser()
+    parser.feed(html)
+    urls = set()
+    for href in parser.hrefs:
+        url = urllib.parse.urljoin(base_url, href.strip())
+        path = urllib.parse.urlparse(url).path.lower()
+        if not path.endswith(".pdf") or "where-we-fly" not in path:
+            continue
+        if not is_allowed_host(url):
+            continue
+        urls.add(url)
+    return sorted(urls)
+
+
+def is_domestic(url: str) -> bool:
+    name = urllib.parse.urlparse(url).path.rsplit("/", 1)[-1]
+    return "canada-" in name.lower()
+
+
+def discover_pdf_urls(opener=urllib.request.urlopen) -> list[str]:
+    req = urllib.request.Request(WHERE_WE_FLY_URL, headers={"User-Agent": USER_AGENT})
+    with opener(req, timeout=FETCH_TIMEOUT_S) as resp:
+        html = resp.read().decode("utf-8", errors="replace")
+    return parse_pdf_links(html, WHERE_WE_FLY_URL)
+
+
+def _last_modified(headers) -> float:
+    value = headers.get("Last-Modified") if headers is not None else None
+    if not value:
+        return 0.0
+    try:
+        return parsedate_to_datetime(value).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def fetch_pdf(url: str, opener=urllib.request.urlopen, sleep=time.sleep) -> tuple[bytes, float]:
+    """Returns (pdf_bytes, last_modified_epoch). Retries with backoff, validates the body."""
+    if not is_allowed_host(url):
+        raise ValueError(f"refusing non-aircanada.com URL: {url}")
+    last_err: Exception | None = None
+    for attempt in range(len(FETCH_BACKOFF_S) + 1):
+        if attempt:
+            sleep(FETCH_BACKOFF_S[attempt - 1])
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with opener(req, timeout=FETCH_TIMEOUT_S) as resp:
+                length = resp.headers.get("Content-Length") if resp.headers is not None else None
+                if length and length.isdigit() and int(length) > MAX_PDF_BYTES:
+                    raise ValueError(f"PDF too large ({length} bytes)")
+                body = resp.read(MAX_PDF_BYTES + 1)
+                if len(body) > MAX_PDF_BYTES:
+                    raise ValueError("PDF too large")
+                if not body.startswith(b"%PDF-"):
+                    raise ValueError("response is not a PDF")
+                return body, _last_modified(resp.headers)
+        except ValueError:
+            raise
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            last_err = e
+    raise RuntimeError(f"download failed after {len(FETCH_BACKOFF_S) + 1} attempts: {last_err}")
+
+
+# ---------------------------------------------------------------------------
+# Hubs + previous file
+# ---------------------------------------------------------------------------
+def load_hub_codes(path: str = DESTINATIONS_TS) -> list[str]:
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        block = re.search(r"export const HUBS[^=]*=\s*\[(.*?)\];", text, re.S)
+        codes = re.findall(r"code:\s*['\"]([A-Z]{3})['\"]", block.group(1)) if block else []
+        if codes:
+            return codes
+    except OSError:
+        pass
+    return list(FALLBACK_HUBS)
+
+
+def previous_route_count(path: str) -> int:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return len(re.findall(r"\boriginCode:\s*\"", f.read()))
+    except OSError:
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# Gates
+# ---------------------------------------------------------------------------
+def check_gates(*, pdf_count: int, download_errors: list, routes: dict, prev_routes: int,
+                hubs: Iterable[str], accepted_rows: int, rejected_rows: int) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if pdf_count == 0:
+        errors.append("no schedule PDFs discovered")
+    for name, err in download_errors:
+        errors.append(f"download failed: {name}: {err}")
+    route_count = len(routes)
+    record_count = sum(len(v) for v in routes.values())
+    if prev_routes and route_count < MIN_ROUTE_RATIO * prev_routes:
+        errors.append(f"route count dropped: {route_count} < {MIN_ROUTE_RATIO:.0%} of previous {prev_routes}")
+    if record_count < MIN_RECORDS:
+        errors.append(f"too few records: {record_count} < {MIN_RECORDS}")
+    origins = {o for (o, _d) in routes}
+    for hub in hubs:
+        if hub in origins:
+            continue
+        if hub in REQUIRED_HUBS:
+            errors.append(f"required hub {hub} has 0 departing routes")
+        else:
+            warnings.append(f"hub {hub} has 0 departing routes (seasonal?)")
+    total = accepted_rows + rejected_rows
+    if total and rejected_rows / total > MAX_REJECT_RATIO:
+        errors.append(f"too many rejected rows: {rejected_rows}/{total}")
+    elif rejected_rows:
+        warnings.append(f"{rejected_rows} rejected row(s)")
+    return errors, warnings
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+def _write_step_summary(md: str) -> None:
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(md + "\n")
+    except OSError:
+        pass
+
+
+def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_urls,
+        fetch: Callable[[str], tuple[bytes, float]] = fetch_pdf,
+        extract: Callable[[bytes], list[str]] = extract_pages,
+        out_path: str | None = None, hubs: list[str] | None = None,
+        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> int:
+    dry_run = "--dry-run" in argv
+    include_domestic = "--include-domestic" in argv
+    if "--out" in argv:
+        out_path = argv[argv.index("--out") + 1]
+    out_path = out_path or DEFAULT_OUT
+    hubs = hubs if hubs is not None else load_hub_codes()
+    hub_set = set(hubs)
 
     print(f"Discovering PDFs from {WHERE_WE_FLY_URL}...")
     try:
-        pdf_urls = discover_pdf_urls()
-        print(f"Found {len(pdf_urls)} PDFs\n")
-    except Exception as e:
-        print(f"Failed to discover PDFs: {e}")
-        sys.exit(1)
+        pdf_urls = discover()
+    except Exception as e:  # noqa: BLE001
+        print(f"ERROR: failed to discover PDFs: {e}")
+        return 1
+    print(f"Found {len(pdf_urls)} PDFs\n")
+    if not pdf_urls:
+        print("ERROR: no schedule PDFs discovered; refusing to continue")
+        return 1
+
+    parsed: list[tuple[Source, ParseResult]] = []
+    download_errors: list[tuple[str, str]] = []
+    all_orphans: list[dict] = []
+    all_rejects: list[dict] = []
 
     for url in pdf_urls:
-        name = url.split('/')[-1]
-        if 'CANADA-' in name:
-            print(f"Skipping {name} (domestic)")
+        name = url.rsplit("/", 1)[-1]
+        domestic = is_domestic(url)
+        if domestic and not include_domestic:
+            print(f"Skipping {name} (domestic; pass --include-domestic to parse hub-to-hub legs)")
             continue
-        print(f"Fetching {name}...", end=' ', flush=True)
+        print(f"Fetching {name}{' (domestic)' if domestic else ''}...", end=" ", flush=True)
         try:
-            pdf_bytes = fetch_pdf(url)
-            routes = extract_routes_from_pdf(pdf_bytes)
-            count = sum(len(v) for v in routes.values())
-            print(f"{len(routes)} routes, {count} schedule entries")
-            for key, schedules in routes.items():
-                all_routes[key].extend(schedules)
-        except Exception as e:
-            print(f"ERROR: {e}")
-            errors.append((name, str(e)))
+            pdf_bytes, published = fetch(url)
+        except Exception as e:  # noqa: BLE001
+            print(f"DOWNLOAD ERROR: {e}")
+            download_errors.append((name, str(e)))
+            continue
+        try:
+            res = parse_pages(extract(pdf_bytes), name)
+        except Exception as e:  # noqa: BLE001
+            if domestic:
+                print(f"WARNING: domestic PDF did not parse ({e}); skipping")
+                continue
+            print(f"PARSE ERROR: {e}")
+            download_errors.append((name, f"parse error: {e}"))
+            continue
+        if domestic:
+            # Only hub-to-hub legs feed connections; everything else is out of scope.
+            res.routes = {k: v for k, v in res.routes.items() if k[0] in hub_set and k[1] in hub_set}
+            res.orphans, res.rejects = [], []  # optional data: never gates the run
+        print(f"{len(res.routes)} routes, {res.record_count} rows"
+              + (f", {len(res.orphans)} orphans" if res.orphans else "")
+              + (f", {len(res.rejects)} rejects" if res.rejects else ""))
+        parsed.append((Source(name=name, url=url, published=published, domestic=domestic), res))
+        all_orphans += res.orphans
+        all_rejects += res.rejects
 
-    print(f"\nTotal: {len(all_routes)} routes")
+    routes, conflicts = merge_routes(parsed)
+    accepted = sum(r.record_count for _, r in parsed)
 
-    ts_content = generate_ts(all_routes)
+    if all_orphans:
+        print(f"\n{len(all_orphans)} orphan row(s) (no origin/destination/direction):")
+        for o in all_orphans[:50]:
+            print(f"  ORPHAN {o['source']} p{o['page']} l{o['line']}: {o['text']}")
+    if all_rejects:
+        print(f"\n{len(all_rejects)} rejected row(s):")
+        for r in all_rejects[:50]:
+            print(f"  REJECT {r['source']} p{r['page']} l{r['line']} ({r['reason']}): {r['text']}")
 
-    if dry_run:
-        print("\n--- DRY RUN: not writing file ---")
-        print(ts_content[:500])
-        return
+    prev = previous_route_count(out_path)
+    errors, warnings = check_gates(
+        pdf_count=len(pdf_urls), download_errors=download_errors, routes=routes,
+        prev_routes=prev, hubs=hubs, accepted_rows=accepted, rejected_rows=len(all_rejects))
+    if conflicts:
+        warnings.append(f"{len(conflicts)} CONFLICT(s) logged")
+    if all_orphans:
+        warnings.append(f"{len(all_orphans)} orphan row(s)")
 
-    out_path = 'src/app/data/schedules.ts'
-    with open(out_path, 'w') as f:
-        f.write(ts_content)
-    print(f"Written to {out_path}")
+    record_count = sum(len(v) for v in routes.values())
+    ts = generate_ts(routes, generated_at=now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                     sources=[s.url or s.name for s, _ in parsed], hubs=hubs)
+    cov = coverage(routes, hubs)
+
+    print(f"\nTotal: {len(routes)} routes (previous {prev}), {record_count} records, "
+          f"coverage {cov['from']}..{cov['to']}")
+    for w in warnings:
+        print(f"WARNING: {w}")
+    for e in errors:
+        print(f"ERROR: {e}")
+
+    summary = [
+        "### Schedule update" + (" (dry run)" if dry_run else ""),
+        "",
+        f"- PDFs: {len(pdf_urls)} discovered, {len(parsed)} parsed",
+        f"- Routes: {prev} -> {len(routes)}",
+        f"- Records: {record_count}",
+        f"- Coverage: {cov['from']} .. {cov['to']}",
+    ] + [f"  - {h}: {f} .. {t}" for h, (f, t) in cov["byHub"].items()] \
+      + [f"- WARNING: {w}" for w in warnings] + [f"- **ERROR: {e}**" for e in errors]
+    _write_step_summary("\n".join(summary))
 
     if errors:
-        print(f"\nWarnings — {len(errors)} PDF(s) failed:")
-        for name, err in errors:
-            print(f"  {name}: {err}")
-        sys.exit(1)
+        print(f"\nSafety gates failed; {out_path} left untouched.")
+        return 1
+
+    if dry_run:
+        print("\n--- DRY RUN: all gates passed, not writing file ---")
+        return 0
+
+    tmp_path = out_path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(ts)
+    # Sanity check the file we are about to publish.
+    if previous_route_count(tmp_path) != len(routes):
+        os.remove(tmp_path)
+        print("ERROR: generated file failed self-check; not replacing")
+        return 1
+    os.replace(tmp_path, out_path)
+    print(f"Written to {out_path}")
+    return 0
 
 
-if __name__ == '__main__':
+def main() -> None:
+    sys.exit(run(sys.argv[1:]))
+
+
+if __name__ == "__main__":
     main()

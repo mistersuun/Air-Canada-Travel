@@ -1,0 +1,20 @@
+South America
+Montréal (YUL)
+Montréal / Pierre Elliott Trudeau International Airport
+Montréal to Bogotá, Colombia
+Aeropuerto Internacional El Dorado (BOG)
+to ...
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2026-12-01 2027-03-31 -T-R--U AC984 08:45 14:10 223
+Bogotá, Colombia to Montréal
+Aeropuerto Internacional El Dorado (BOG)
+from ...
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2026-12-01 2027-03-31 -T-R--U AC985 15:40 22:30 223
+Toronto (YYZ)
+Lester B. Pearson International Airport
+Toronto to Timmins
+Timmins/Victor M. Power (YTS)
+to ...
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2027-09-07 2027-09-26 MTWRFSU AC8435 20:55 22:22 DH4

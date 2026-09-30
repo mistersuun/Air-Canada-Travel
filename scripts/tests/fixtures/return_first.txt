@@ -1,0 +1,33 @@
+Asia
+Toronto (YYZ)
+Lester B. Pearson International Airport
+Toronto to Seoul, South Korea
+Incheon International Airport (ICN)
+to ...
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2026-10-01 2026-10-31 MTWRFSU AC63 13:05 16:30 789
+Tokyo, Japan to Toronto
+Narita International Airport (NRT)
+from ...
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2026-10-01 2026-10-31 MTWRFSU AC10 17:45 16:25 789
+Toronto to Tokyo, Japan
+Narita International Airport (NRT)
+to ...
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2026-10-01 2026-10-31 MTWRFSU AC9 13:20 15:50 789
+Sao Paulo, Brazil to Toronto
+Page 4 of 9
+<<<PAGE>>>
+Asia
+from ...
+Guarulhos - Governador Andre Franco Montoro International Airport (GRU)
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2026-10-01 2026-10-31 M--R-S- AC91 23:30 07:10 789
+Toronto to Montego Bay
+Page 5 of 9
+<<<PAGE>>>
+Jamaica
+to ... Sangster International Airport (MBJ)
+From Date To Date Days 1 Flight# Departure Arrival Aircraft 2
+2026-10-01 2026-10-31 MTWRFSU AC1804 08:15 11:20 319

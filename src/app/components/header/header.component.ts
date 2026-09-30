@@ -21,7 +21,7 @@ const THEME_CYCLE: Record<ThemePref, ThemePref> = { auto: 'light', light: 'dark'
 const THEME_ICON: Record<ThemePref, IconName> = { auto: 'auto', light: 'sun', dark: 'moon' };
 const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
 /** Display names with their proper accents (HUBS names are ASCII for search). */
-const HUB_DISPLAY: Record<string, string> = { YUL: 'Montréal', YQB: 'Québec City' };
+const HUB_DISPLAY: Record<string, string> = { YUL: 'Montréal', YQB: 'Québec City', YTZ: 'Toronto Island' };
 
 /**
  * App header: brand, a big "From" hub cell (native <select> overlaid), search

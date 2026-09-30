@@ -18,6 +18,8 @@ describe('parseUrlState', () => {
 
   it('upper-cases codes', () => {
     expect(parseUrlState('?from=yyz&dest=lhr')).toEqual({ from: 'YYZ', dest: 'LHR' });
+    // Palm Beach's old code in saved links opens its current code.
+    expect(parseUrlState('?from=ytz&dest=pbi')).toEqual({ from: 'YTZ', dest: 'DJT' });
   });
 
   it('normalises week to its Monday', () => {

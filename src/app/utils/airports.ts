@@ -3,11 +3,11 @@ import { getOriginCodes } from '../data/schedule-index';
 
 /**
  * Airports that appear in the schedules but are neither a hub nor a listed
- * destination (e.g. Toronto Billy Bishop). Needed for time zones and names.
+ * destination. Needed for time zones and names; the data-integrity spec fails
+ * when a schedule code is in none of HUBS, DESTINATIONS or this table.
+ * (Toronto Billy Bishop, YTZ, used to live here; it is a hub now.)
  */
-export const EXTRA_AIRPORTS: Record<string, { name: string; tz: string; country: string }> = {
-  YTZ: { name: 'Toronto Billy Bishop', tz: 'America/Toronto', country: 'Canada' },
-};
+export const EXTRA_AIRPORTS: Record<string, { name: string; tz: string; country: string }> = {};
 
 const DEST_BY_CODE = new Map<string, Destination>(DESTINATIONS.map(d => [d.code, d]));
 const HUB_BY_CODE = new Map<string, Hub>(HUBS.map(h => [h.code, h]));
@@ -49,7 +49,7 @@ export interface OriginInfo {
 /**
  * Airports with published flights to `destCode`, derived from the schedule
  * index (replaces the static fromCities list). Hubs first in HUBS order, then
- * other origins (e.g. YTZ) alphabetically. Codes are mapped to names
+ * other origins alphabetically. Codes are mapped to names
  * (critique 18).
  */
 export function getOrigins(destCode: string): OriginInfo[] {

@@ -6,7 +6,7 @@ import { airportName, airportTz, findDestination, findHub, getOrigins, hasKnownT
 afterEach(() => resetScheduleSource());
 
 describe('airports', () => {
-  it('resolves zones for hubs, destinations and extra airports', () => {
+  it('resolves zones for hubs (YTZ included) and destinations', () => {
     expect(airportTz('YVR')).toBe('America/Vancouver');
     expect(airportTz('LHR')).toBe('Europe/London');
     expect(airportTz('YTZ')).toBe('America/Toronto');
@@ -25,6 +25,8 @@ describe('airports', () => {
     expect(findHub('YYC')?.name).toBe('Calgary');
     expect(findHub('LIS')).toBeNull();
     expect(isHub('YHZ')).toBe(true);
+    expect(isHub('YTZ')).toBe(true);
+    expect(airportName('DJT')).toBe('West Palm Beach');
   });
 
   it('derives origins from the schedules, hubs first, with names (critique 18)', () => {
@@ -32,12 +34,14 @@ describe('airports', () => {
       route('YTZ', 'BOS', rec('AC1', '09:00', '10:30', '2026-10-01', '2026-10-31')),
       route('YUL', 'BOS', rec('AC2', '09:00', '10:30', '2026-10-01', '2026-10-31')),
       route('YYZ', 'BOS', rec('AC3', '09:00', '10:30', '2026-10-01', '2026-10-31')),
+      route('XYZ', 'BOS', rec('AC4', '09:00', '10:30', '2026-10-01', '2026-10-31')),
       route('YOW', 'BOS'),
     ]);
     expect(getOrigins('BOS')).toEqual([
       { code: 'YYZ', name: 'Toronto', isHub: true },
       { code: 'YUL', name: 'Montreal', isHub: true },
-      { code: 'YTZ', name: 'Toronto Billy Bishop', isHub: false },
+      { code: 'YTZ', name: 'Toronto Billy Bishop', isHub: true },
+      { code: 'XYZ', name: 'XYZ', isHub: false },
     ]);
     expect(getOrigins('ZZZ')).toEqual([]);
   });

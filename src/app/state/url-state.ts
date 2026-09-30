@@ -1,5 +1,5 @@
 import { isDateKey, weekStartKey } from '../utils/time';
-import { isDestinationCode, isHubCode, isRegion } from './prefs.service';
+import { currentDestinationCode, isDestinationCode, isHubCode, isRegion } from './prefs.service';
 
 /**
  * View state carried in the URL, e.g.
@@ -39,7 +39,7 @@ export function parseUrlState(search: string): UrlState {
   const region = p.get('region');
   if (isRegion(region)) out.region = region;
 
-  const dest = p.get('dest')?.toUpperCase();
+  const dest = currentDestinationCode(p.get('dest')?.toUpperCase());
   if (isDestinationCode(dest)) out.dest = dest;
 
   const q = p.get('q')?.trim();

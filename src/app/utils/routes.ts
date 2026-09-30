@@ -167,7 +167,7 @@ function filteredWeek(home: string, dest: string, weekStartKey: string, keep: (x
 /**
  * The list's routes for a hub and week (or day): direct routes first, then
  * connecting ones, each group sorted by `sort` with starred first.
- * Destinations with no flights in scope (e.g. unscheduled CCC, HOG) are omitted.
+ * Destinations with no flights in scope (e.g. seasonal ones out of season) are omitted.
  */
 export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
   const filters: Filters = { ...EMPTY_FILTERS, ...(p.filters ?? {}) };

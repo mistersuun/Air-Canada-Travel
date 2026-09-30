@@ -18,11 +18,11 @@ describe('sanitizePrefs', () => {
   it('keeps valid fields and drops invalid ones independently', () => {
     const p = sanitizePrefs({
       hub: 'YVR', region: 'Mars', showConnections: false, theme: 'neon', timeFormat: '12h',
-      minConnect: 90, maxLayover: 7, allowOvernight: 'yes', favourites: ['LHR', 'XXX', 'LHR', 42, 'ATH'],
+      minConnect: 90, maxLayover: 7, allowOvernight: 'yes', favourites: ['LHR', 'XXX', 'LHR', 42, 'ATH', 'PBI'],
     });
     expect(p).toEqual({
       hub: 'YVR', region: 'All', showConnections: false, theme: 'auto', timeFormat: '12h',
-      minConnect: 90, maxLayover: 360, allowOvernight: false, favourites: ['LHR', 'ATH'],
+      minConnect: 90, maxLayover: 360, allowOvernight: false, favourites: ['LHR', 'ATH', 'DJT'],
     });
   });
 

@@ -66,12 +66,22 @@ export function isDestinationCode(v: unknown): v is string {
   return typeof v === 'string' && DEST_CODES.has(v);
 }
 
+/** Codes a destination used to have: stars and links saved with them keep working. */
+const RENAMED_DEST_CODES: Readonly<Record<string, string>> = {
+  PBI: 'DJT', // Palm Beach International's IATA code since 2026
+};
+
+/** A saved destination code, mapped to its current code when it was renamed. */
+export function currentDestinationCode(v: unknown): unknown {
+  return typeof v === 'string' ? RENAMED_DEST_CODES[v] ?? v : v;
+}
+
 /** Coerce anything (parsed JSON, a patch) into valid Prefs; unknown or invalid fields take defaults. */
 export function sanitizePrefs(raw: unknown): Prefs {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const d = DEFAULT_PREFS;
   const favs = Array.isArray(r['favourites'])
-    ? [...new Set(r['favourites'].filter(isDestinationCode))]
+    ? [...new Set(r['favourites'].map(currentDestinationCode).filter(isDestinationCode))]
     : [];
   return {
     hub: isHubCode(r['hub']) ? r['hub'] : d.hub,

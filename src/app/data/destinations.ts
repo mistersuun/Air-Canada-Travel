@@ -39,6 +39,8 @@ export const HUBS: Hub[] = [
   { name: 'Edmonton', lat: 53.31, lng: -113.58, code: 'YEG', tz: 'America/Edmonton' },
   { name: 'Quebec City', lat: 46.79, lng: -71.39, code: 'YQB', tz: 'America/Toronto' },
   { name: 'Winnipeg', lat: 49.91, lng: -97.24, code: 'YWG', tz: 'America/Winnipeg' },
+  // Toronto's island airport: its own origin section in the PDFs (BOS, LGA, IAD, ORD).
+  { name: 'Toronto Billy Bishop', lat: 43.63, lng: -79.40, code: 'YTZ', tz: 'America/Toronto' },
 ];
 
 export const REGIONS = [
@@ -77,20 +79,16 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Hamilton', country: 'Bermuda', code: 'BDA', iso2: 'BM', tz: 'Atlantic/Bermuda', lat: 32.36, lng: -64.68, region: 'Caribbean', type: 'Sun', duration: '3h 50m', aircraft: 'A319', season: 'Year-round' },
   { city: 'Port of Spain', country: 'Trinidad & Tobago', code: 'POS', iso2: 'TT', tz: 'America/Port_of_Spain', lat: 10.60, lng: -61.34, region: 'Caribbean', type: 'Sun', duration: '5h 45m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'Antigua', country: 'Antigua & Barbuda', code: 'ANU', iso2: 'AG', tz: 'America/Antigua', lat: 17.13, lng: -61.79, region: 'Caribbean', type: 'Sun', duration: '4h 50m', aircraft: 'A321', season: 'Mar – Apr' },
-  { city: 'Cayo Coco', country: 'Cuba', code: 'CCC', iso2: 'CU', tz: 'America/Havana', lat: 22.46, lng: -78.51, region: 'Caribbean', type: 'Sun', duration: '3h 40m', aircraft: 'A319', season: 'Oct – Apr' },
   { city: 'Curaçao', country: 'Curaçao', code: 'CUR', iso2: 'CW', tz: 'America/Curacao', lat: 12.19, lng: -68.96, region: 'Caribbean', type: 'Sun', duration: '5h 10m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'George Town', country: 'Cayman Islands', code: 'GCM', iso2: 'KY', tz: 'America/Cayman', lat: 19.29, lng: -81.36, region: 'Caribbean', type: 'Sun', duration: '4h 10m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'Exuma', country: 'Bahamas', code: 'GGT', iso2: 'BS', tz: 'America/Nassau', lat: 23.56, lng: -75.88, region: 'Caribbean', type: 'Sun', duration: '3h 35m', aircraft: 'CRJ-900', season: 'Year-round' },
   { city: 'Grenada', country: 'Grenada', code: 'GND', iso2: 'GD', tz: 'America/Grenada', lat: 12.00, lng: -61.79, region: 'Caribbean', type: 'Sun', duration: '5h 25m', aircraft: '737 MAX 8', season: 'Year-round' },
-  { city: 'Holguín', country: 'Cuba', code: 'HOG', iso2: 'CU', tz: 'America/Havana', lat: 20.79, lng: -76.31, region: 'Caribbean', type: 'Sun', duration: '3h 50m', aircraft: 'A319', season: 'Oct – Apr' },
   { city: 'Cozumel', country: 'Mexico', code: 'CZM', iso2: 'MX', tz: 'America/Cancun', lat: 20.52, lng: -86.93, region: 'Caribbean', type: 'Sun', duration: '3h 20m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'San Juan', country: 'Puerto Rico', code: 'SJU', iso2: 'PR', tz: 'America/Puerto_Rico', lat: 18.44, lng: -66.00, region: 'Caribbean', type: 'Sun', duration: '4h 35m', aircraft: 'A321', season: 'Year-round' },
   { city: 'St. Kitts', country: 'St. Kitts & Nevis', code: 'SKB', iso2: 'KN', tz: 'America/St_Kitts', lat: 17.31, lng: -62.72, region: 'Caribbean', type: 'Sun', duration: '4h 55m', aircraft: 'A321', season: 'Mar – Apr' },
   { city: 'St. Maarten', country: 'Sint Maarten', code: 'SXM', iso2: 'SX', tz: 'America/Lower_Princes', lat: 18.04, lng: -63.11, region: 'Caribbean', type: 'Sun', duration: '4h 45m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'St. Lucia', country: 'Saint Lucia', code: 'UVF', iso2: 'LC', tz: 'America/St_Lucia', lat: 13.73, lng: -60.95, region: 'Caribbean', type: 'Sun', duration: '5h 15m', aircraft: 'A319', season: 'Year-round' },
   { city: 'St. Vincent', country: 'Saint Vincent & the Grenadines', code: 'SVD', iso2: 'VC', tz: 'America/St_Vincent', lat: 13.14, lng: -61.21, region: 'Caribbean', type: 'Sun', duration: '5h 20m', aircraft: '737 MAX 8', season: 'Mar – Jul' },
-  { city: 'Santa Clara', country: 'Cuba', code: 'SNU', iso2: 'CU', tz: 'America/Havana', lat: 22.49, lng: -79.94, region: 'Caribbean', type: 'Sun', duration: '3h 40m', aircraft: 'A321', season: 'Nov – Mar' },
-  { city: 'Varadero', country: 'Cuba', code: 'VRA', iso2: 'CU', tz: 'America/Havana', lat: 23.03, lng: -81.43, region: 'Caribbean', type: 'Sun', duration: '3h 35m', aircraft: 'A319', season: 'Oct – Apr' },
   { city: 'La Romana', country: 'Dominican Republic', code: 'LRM', iso2: 'DO', tz: 'America/Santo_Domingo', lat: 18.45, lng: -68.91, region: 'Caribbean', type: 'Sun', duration: '4h 45m', aircraft: '737 MAX 8', season: 'Dec – Mar' },
   { city: 'Puerto Plata', country: 'Dominican Republic', code: 'POP', iso2: 'DO', tz: 'America/Santo_Domingo', lat: 19.76, lng: -70.57, region: 'Caribbean', type: 'Sun', duration: '4h 30m', aircraft: '737 MAX 8', season: 'Oct – Apr' },
   { city: 'Samaná', country: 'Dominican Republic', code: 'AZS', iso2: 'DO', tz: 'America/Santo_Domingo', lat: 19.27, lng: -69.74, region: 'Caribbean', type: 'Sun', duration: '4h 30m', aircraft: '737 MAX 8', season: 'Nov – Apr' },
@@ -112,7 +110,6 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Mazatlán', country: 'Mexico', code: 'MZT', iso2: 'MX', tz: 'America/Mazatlan', lat: 23.16, lng: -106.27, region: 'Mexico', type: 'Sun', duration: '4h 50m', aircraft: '737 MAX 8', season: 'Nov – Apr' },
 
   // ─── USA ───
-  { city: 'New York', country: 'USA', code: 'JFK', iso2: 'US', tz: 'America/New_York', lat: 40.64, lng: -73.78, region: 'USA', type: 'City', duration: '1h 30m', aircraft: 'A220', season: 'Year-round' },
   { city: 'Los Angeles', country: 'USA', code: 'LAX', iso2: 'US', tz: 'America/Los_Angeles', lat: 33.94, lng: -118.41, region: 'USA', type: 'City', duration: '3h 15m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'Miami', country: 'USA', code: 'MIA', iso2: 'US', tz: 'America/New_York', lat: 25.80, lng: -80.29, region: 'USA', type: 'Sun', duration: '3h 59m', aircraft: 'A220-300', season: 'Year-round' },
   { city: 'Nashville', country: 'USA', code: 'BNA', iso2: 'US', tz: 'America/Chicago', lat: 36.13, lng: -86.67, region: 'USA', type: 'City', duration: '2h 20m', aircraft: 'A220', season: 'Year-round' },
@@ -125,7 +122,7 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Jacksonville', country: 'USA', code: 'JAX', iso2: 'US', tz: 'America/New_York', lat: 30.49, lng: -81.69, region: 'USA', type: 'City', duration: '2h 35m', aircraft: 'CRJ-900', season: 'May – Sep' },
   { city: 'Kailua-Kona', country: 'USA', code: 'KOA', iso2: 'US', tz: 'Pacific/Honolulu', lat: 19.74, lng: -156.04, region: 'USA', type: 'Sun', duration: '6h', aircraft: '737 MAX 8', season: 'Mar – Apr' },
   { city: 'Maui', country: 'USA', code: 'OGG', iso2: 'US', tz: 'Pacific/Honolulu', lat: 20.90, lng: -156.43, region: 'USA', type: 'Sun', duration: '7h 30m', aircraft: '737 MAX 8', season: 'Year-round' },
-  { city: 'West Palm Beach', country: 'USA', code: 'PBI', iso2: 'US', tz: 'America/New_York', lat: 26.68, lng: -80.09, region: 'USA', type: 'Sun', duration: '3h 15m', aircraft: 'CRJ-900', season: 'Mar – Apr' },
+  { city: 'West Palm Beach', country: 'USA', code: 'DJT', iso2: 'US', tz: 'America/New_York', lat: 26.68, lng: -80.09, region: 'USA', type: 'Sun', duration: '3h 15m', aircraft: 'CRJ-900', season: 'Mar – Apr' },
   { city: 'Palm Springs', country: 'USA', code: 'PSP', iso2: 'US', tz: 'America/Los_Angeles', lat: 33.83, lng: -116.51, region: 'USA', type: 'Sun', duration: '4h 30m', aircraft: '737 MAX 8', season: 'Mar – Apr' },
   { city: 'Fort Myers', country: 'USA', code: 'RSW', iso2: 'US', tz: 'America/New_York', lat: 26.54, lng: -81.76, region: 'USA', type: 'Sun', duration: '3h 15m', aircraft: 'A321', season: 'Year-round' },
   { city: 'San Diego', country: 'USA', code: 'SAN', iso2: 'US', tz: 'America/Los_Angeles', lat: 32.73, lng: -117.19, region: 'USA', type: 'City', duration: '5h 30m', aircraft: 'CRJ-900', season: 'Year-round' },
@@ -228,7 +225,6 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Cartagena', country: 'Colombia', code: 'CTG', iso2: 'CO', tz: 'America/Bogota', lat: 10.44, lng: -75.51, region: 'South America', type: 'Sun', duration: '4h 55m', aircraft: '737 MAX 8', season: 'Jan – Dec', isNew: true },
   { city: 'São Paulo', country: 'Brazil', code: 'GRU', iso2: 'BR', tz: 'America/Sao_Paulo', lat: -23.43, lng: -46.47, region: 'South America', type: 'City', duration: '11h 05m', aircraft: '787-9', season: 'Year-round' },
   { city: 'Lima', country: 'Peru', code: 'LIM', iso2: 'PE', tz: 'America/Lima', lat: -12.02, lng: -77.11, region: 'South America', type: 'City', duration: '7h 15m', aircraft: '787-8', season: 'Jan – Dec' },
-  { city: 'Buenos Aires', country: 'Argentina', code: 'EZE', iso2: 'AR', tz: 'America/Argentina/Buenos_Aires', lat: -34.82, lng: -58.54, region: 'South America', type: 'City', duration: '11h 30m', aircraft: '787 Dreamliner', season: 'Year-round' },
   { city: 'Santiago', country: 'Chile', code: 'SCL', iso2: 'CL', tz: 'America/Santiago', lat: -33.39, lng: -70.79, region: 'South America', type: 'City', duration: '12h', aircraft: '787-9', season: 'Jan – Dec' },
   { city: 'Rio de Janeiro', country: 'Brazil', code: 'GIG', iso2: 'BR', tz: 'America/Sao_Paulo', lat: -22.80, lng: -43.24, region: 'South America', type: 'City', duration: '10h 30m', aircraft: '787-9', season: 'Nov – Mar' },
   { city: 'Quito', country: 'Ecuador', code: 'UIO', iso2: 'EC', tz: 'America/Guayaquil', lat: -0.13, lng: -78.49, region: 'South America', type: 'City', duration: '7h 15m', aircraft: '787-8', season: 'Dec – Mar' },
@@ -243,5 +239,4 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Casablanca', country: 'Morocco', code: 'CMN', iso2: 'MA', tz: 'Africa/Casablanca', lat: 33.37, lng: -7.59, region: 'Africa & Middle East', type: 'City', duration: '12h', aircraft: 'A330-300', season: 'Year-round' },
   { city: 'Dubai', country: 'UAE', code: 'DXB', iso2: 'AE', tz: 'Asia/Dubai', lat: 25.25, lng: 55.36, region: 'Africa & Middle East', type: 'City', duration: '21h', aircraft: '787-9', season: 'Year-round' },
   { city: 'Tel Aviv', country: 'Israel', code: 'TLV', iso2: 'IL', tz: 'Asia/Jerusalem', lat: 32.01, lng: 34.89, region: 'Africa & Middle East', type: 'City', duration: '17h 10m', aircraft: '787-9', season: 'Year-round' },
-  { city: 'Algiers', country: 'Algeria', code: 'ALG', iso2: 'DZ', tz: 'Africa/Algiers', lat: 36.69, lng: 3.22, region: 'Africa & Middle East', type: 'City', duration: '12h 45m', aircraft: 'A330-300', season: 'Jun – Sep' },
 ];

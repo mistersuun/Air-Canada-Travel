@@ -74,7 +74,7 @@ MAX_FAILED_SOURCES = 2             # international PDFs that may fail in one run
 MAX_FAILED_FRACTION = 0.10         # ...as long as they are at most this share of all sources
 REQUIRED_HUBS = ("YUL", "YYZ", "YVR")   # hard-fail if any has 0 departures
 
-FALLBACK_HUBS = ("YYZ", "YUL", "YVR", "YYC", "YOW", "YHZ", "YEG", "YQB", "YWG")
+FALLBACK_HUBS = ("YYZ", "YUL", "YVR", "YYC", "YOW", "YHZ", "YEG", "YQB", "YWG", "YTZ")
 
 # Day mask in the PDFs is MTWRFSU (R = Thursday, U = Sunday), '-' = no flight.
 DAY_KEYS = ("M", "T", "W", "R", "F", "S", "U")

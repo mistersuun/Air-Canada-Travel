@@ -96,8 +96,13 @@ ROW_RE = re.compile(
     r"([A-Z0-9]{2,4})\b"            # aircraft code
 )
 AIRPORT_CODE_RE = re.compile(r"\(([A-Z]{3})\)")
-# City section header, e.g. "Montreal (YUL)". Matched on an ASCII-folded copy.
+# City section header, e.g. "Montreal (YUL)". Matched on an ASCII-folded copy
+# with apostrophes normalised. Every real header is under 30 characters; longer
+# lines of this shape are airport names.
 CITY_HEADER_RE = re.compile(r"^([A-Za-z /\-'\.]{2,30})\s+\(([A-Z]{3})\)\s*$")
+# The PDFs spell the apostrophe of "St. John's" as a backtick; typographic
+# quotes appear too. All become a plain ASCII apostrophe before matching.
+APOSTROPHES = str.maketrans({"`": "'", "\u2019": "'", "\u2018": "'", "\u00b4": "'"})
 AIRPORT_WORDS = ("airport", "aeroport", "international", "terminal", "pearson", "stanfield")
 # Direction line, e.g. "Montreal to Casablanca, Morocco" (not the "to ..." marker
 # and not a table-of-contents "to/from ..... X" line).
@@ -118,7 +123,7 @@ def fold(text: str) -> str:
 
 def is_city_header(line: str) -> tuple[str, str] | None:
     """Returns (city_name, code) if line is a city section header, else None."""
-    m = CITY_HEADER_RE.match(fold(line))
+    m = CITY_HEADER_RE.match(fold(line).translate(APOSTROPHES))
     if not m:
         return None
     city = m.group(1).lower()
@@ -334,6 +339,30 @@ def _weekday_set(days: str) -> set:
     return set(days.split(",")) if days else set()
 
 
+def shared_operating_date(a: dict, b: dict) -> str | None:
+    """
+    The first date both records actually operate on, or None. Overlapping date
+    ranges and overlapping weekday sets are not enough on their own: 05-19..05-23
+    Wed,Sun and 05-21..05-29 Mon,Tue never fly on the same day.
+    """
+    start = max(a["fromDate"], b["fromDate"])
+    end = min(a["toDate"], b["toDate"])
+    if start > end:
+        return None
+    common = _weekday_set(a["days"]) & _weekday_set(b["days"])
+    if not common:
+        return None
+    d = date.fromisoformat(start)
+    last = date.fromisoformat(end)
+    for _ in range(7):
+        if d > last:
+            return None
+        if DAY_NAMES[d.weekday()] in common:
+            return d.isoformat()
+        d = date.fromordinal(d.toordinal() + 1)
+    return None
+
+
 @dataclass
 class Source:
     name: str
@@ -349,8 +378,11 @@ def merge_routes(parsed: list[tuple[Source, ParseResult]],
     deterministic ordering. Records sharing (origin, dest, flight, fromDate,
     toDate, days) are collapsed; if their times differ it is a CONFLICT and
     the record from the most recently published PDF wins (ties broken by PDF
-    name, then record content). Overlapping date ranges that share weekdays
-    but have different times are logged as CONFLICT but both are kept.
+    name, then record content). Records of one flight that operate on a
+    common date with different times are logged as CONFLICT but both are kept
+    (the app shows the more specific filing on that date, see week.ts
+    flightsOn); rows whose ranges and weekdays overlap without a common date
+    are not conflicts.
     """
     candidates: dict[tuple, list[tuple[Source, dict]]] = {}
     for src, res in parsed:
@@ -387,11 +419,10 @@ def merge_routes(parsed: list[tuple[Source, ParseResult]],
                     a, b = rs[i], rs[j]
                     if (a["departure"], a["arrival"]) == (b["departure"], b["arrival"]):
                         continue
-                    if a["fromDate"] > b["toDate"] or b["fromDate"] > a["toDate"]:
+                    day = shared_operating_date(a, b)
+                    if day is None:
                         continue
-                    if not (_weekday_set(a["days"]) & _weekday_set(b["days"])):
-                        continue
-                    msg = (f"CONFLICT {key[0]}-{key[1]} {flight}: overlapping "
+                    msg = (f"CONFLICT {key[0]}-{key[1]} {flight} on {day}: overlapping "
                            f"{a['fromDate']}..{a['toDate']} {a['departure']}-{a['arrival']} vs "
                            f"{b['fromDate']}..{b['toDate']} {b['departure']}-{b['arrival']} (both kept)")
                     conflicts.append(msg)

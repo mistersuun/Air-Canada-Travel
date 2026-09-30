@@ -84,6 +84,19 @@ def test_airport_line_that_looks_like_header_is_a_destination(fs, pages):
     assert not any(o == "YTS" for (o, _d) in res.routes)
 
 
+def test_backtick_apostrophe_header_starts_a_new_section(fs, pages):
+    # 'St. John`s (YYT)' (backtick apostrophe, as printed in EasternCanada.pdf)
+    # must open a new origin; before the fix its rows were filed under the
+    # previous section, Sept-Iles (YZV).
+    res = fs.parse_pages(pages("st_johns.txt"), "st_johns")
+    assert flights(res, "YZV", "YUL") == ["AC8911"]
+    assert flights(res, "YYT", "YYZ") == ["AC691"]
+    assert flights(res, "YYZ", "YYT") == ["AC690"]
+    assert not any("YZV" in k and "YYZ" in k for k in res.routes)
+    assert fs.is_city_header("St. John\u2019s (YYT)") == ("St. John\u2019s", "YYT")
+    assert fs.is_city_header("Chicago O`Hare International Airport (ORD)") is None
+
+
 def test_malformed_rows_are_rejected_with_reasons(fs, pages):
     res = fs.parse_pages(pages("malformed.txt"), "malformed")
     assert flights(res, "YOW", "FLL") == ["AC1612"]
@@ -154,9 +167,42 @@ def test_conflict_tie_break_is_deterministic(fs, pages):
 
 def test_overlapping_ranges_with_shared_days_are_logged(fs, pages):
     routes, conflicts, _ = _merge(fs, pages, 1.0, 2.0)
-    # AC874 11-01..11-15 M-W-F vs 11-10..11-20 M: overlap on Mondays, different times.
-    assert any("AC874" in c and "overlapping" in c for c in conflicts)
+    # AC874 11-01..11-15 M-W-F vs 11-09..11-20 M: both fly Monday 11-09, different times.
+    assert any("AC874 on 2026-11-09" in c and "overlapping" in c for c in conflicts)
     assert len([r for r in routes[("YUL", "CDG")] if r["flightNumber"] == "AC874"]) == 2
+
+
+def _conflicts_for(fs, rows):
+    text = "Montreal (YUL)\nMontreal to Paris\nCDG (CDG)\nto ...\n" + "".join(r + "\n" for r in rows)
+    _, conflicts = fs.merge_routes([(fs.Source("x"), fs.parse_text(text))], log=lambda m: None)
+    return conflicts
+
+
+def test_overlap_without_a_common_operating_date_is_not_a_conflict(fs):
+    # Real false alarm from the log (YUL-LHR AC864): ranges and weekday sets both
+    # overlap, but 05-19..05-23 Wed,Sun and 05-21..05-29 Mon,Tue,Wed,Fri,Sat
+    # share no date (the only Wednesday in 05-21..05-23 is none: 05-21 is a Friday).
+    assert _conflicts_for(fs, [
+        "2027-05-19 2027-05-23 --W---U AC864 20:40 08:10 333",
+        "2027-05-21 2027-05-29 MTW-FS- AC864 20:50 08:20 333",
+    ]) == []
+
+
+def test_overlap_on_a_real_common_date_is_a_conflict_naming_it(fs):
+    # BOS-YUL AC8611 shape: a one-day retime inside a longer filing.
+    conflicts = _conflicts_for(fs, [
+        "2026-10-08 2026-10-08 ---R--- AC8611 18:50 20:19 E75",
+        "2026-10-08 2026-10-15 M--RF-U AC8611 19:00 20:29 E75",
+    ])
+    assert len(conflicts) == 1 and "on 2026-10-08" in conflicts[0]
+
+
+def test_shared_operating_date(fs):
+    a = {"fromDate": "2026-10-01", "toDate": "2026-10-31", "days": "Mon"}
+    b = {"fromDate": "2026-10-10", "toDate": "2026-12-31", "days": "Mon,Tue"}
+    assert fs.shared_operating_date(a, b) == "2026-10-12"
+    assert fs.shared_operating_date(a, {**b, "days": "Tue"}) is None
+    assert fs.shared_operating_date(a, {**b, "fromDate": "2026-11-01"}) is None
 
 
 def test_records_sorted_by_flight_then_date(fs):

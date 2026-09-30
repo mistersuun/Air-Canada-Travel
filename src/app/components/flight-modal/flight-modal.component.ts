@@ -1,327 +1,456 @@
-import { Component, Input, Output, EventEmitter, HostListener, OnInit, ElementRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { Destination, REGION_COLORS } from '../../data/destinations';
-import { DayFlight, getFlightsForWeek, formatDayLabel } from '../../utils/week';
-import { findConnections, ConnectionOption, formatLayover } from '../../utils/connections';
-import { RouteEntry } from '../../utils/routes';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, input, output,
+  signal, viewChild,
+} from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import type { Destination } from '../../data/destinations';
 import type { Coverage } from '../../data/schedule-index';
-import type { ConnectOptions } from '../../utils/connections';
+import type { RouteEntry } from '../../utils/routes';
 import type { TimeFormat } from '../../state/prefs.service';
-import { keyToDate } from '../../utils/time';
-import { getFlag } from '../../utils/flags';
+import { directItineraries, findItineraries, NO_OPTS, type ConnectOptions, type Itinerary } from '../../utils/connections';
+import { nextFlightDate } from '../../utils/week';
 import { getOrigins } from '../../utils/airports';
+import { getFlag } from '../../utils/flags';
+import { regionVar } from '../../utils/region-color';
+import { formatDuration, weekKeys } from '../../utils/time';
+import { IconComponent } from '../shared/icons.component';
+import { PlaneIconComponent } from '../shared/plane-icon.component';
+import { OutboundPanelComponent } from './outbound-panel.component';
+import { ReturnPanelComponent } from './return-panel.component';
+import { MonthCalendarComponent } from './month-calendar.component';
+import { isOutside, operatesLabel, shortDay, type OutboundDay } from './modal-model';
 
-const DAY_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
+export type ModalTab = 'outbound' | 'return' | 'calendar';
+const TABS: readonly { id: ModalTab; label: string }[] = [
+  { id: 'outbound', label: 'Outbound' },
+  { id: 'return', label: 'Return' },
+  { id: 'calendar', label: 'Calendar' },
+];
 
+/** Drag distance (px) that closes the bottom sheet. */
+export const DRAG_CLOSE_PX = 120;
+const SHEET_QUERY = '(max-width: 719px)';
+
+/**
+ * Destination planning dialog.
+ *
+ * A native <dialog> opened with showModal() after first render: focus is
+ * trapped, the page behind is inert, Esc / backdrop / close button close it
+ * and (closed) is emitted from the dialog's close event. Focus returns to the
+ * element that opened it and the page does not scroll behind it. Under 720px
+ * it is a bottom sheet (drag the top down to dismiss); above, a centred panel.
+ *
+ * Tabs: Outbound (every flight and connection this week, with timelines,
+ * .ics export and backups), Return (trip length → ways home) and Calendar
+ * (month operating heatmap; a tap moves the app's week and day).
+ */
 @Component({
   selector: 'app-flight-modal',
   standalone: true,
-  imports: [CommonModule],
+  imports: [IconComponent, PlaneIconComponent, OutboundPanelComponent, ReturnPanelComponent, MonthCalendarComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="backdrop" (click)="closed.emit()" aria-hidden="true"></div>
-    <div
-      class="modal"
-      role="dialog"
-      aria-modal="true"
-      [attr.aria-label]="destination.city + ' flight details'"
-    >
-      <button class="modal__close" (click)="closed.emit()" aria-label="Close">&#x2715;</button>
-
-      <div class="modal__hero">
-        <span class="modal__flag">{{ flag }}</span>
-        <div class="modal__titles">
-          <div class="modal__city">{{ destination.city }}</div>
-          <div class="modal__sub">{{ destination.country }} · {{ destination.region }}</div>
-        </div>
-        <div class="modal__code" [style.color]="regionColor">{{ destination.code }}</div>
-      </div>
-
-      <!-- DIRECT ROUTE INFO -->
-      <ng-container *ngIf="route?.isDirect">
-        <div class="modal__route">
-          {{ hubCode }} → {{ destination.code }}
-          &nbsp;·&nbsp;{{ destination.aircraft }}
-          &nbsp;·&nbsp;{{ destination.duration }} direct
-        </div>
-
-        <div class="modal__pills">
-          <div
-            *ngFor="let day of flights; let i = index"
-            class="day-pill"
-            [class.day-pill--on]="day.flies"
-          >{{ dayInitials[i] }}</div>
-        </div>
-
-        <div class="modal__section-label">FLIGHTS THIS WEEK</div>
-
-        <div
-          *ngFor="let day of flights"
-          class="flight-row"
-          [class.flight-row--none]="!day.flies"
-          [class.flight-row--selected]="isSelectedDay(day.date)"
-        >
-          <span class="flight-row__date">{{ formatDay(day.date) }}</span>
-          <span class="flight-row__num">{{ day.flies ? day.flightNumber : '' }}</span>
-          <span class="flight-row__time" *ngIf="day.flies">{{ day.departure }} → {{ day.arrival }}</span>
-          <span class="flight-row__none" *ngIf="!day.flies">No departure</span>
-        </div>
-      </ng-container>
-
-      <!-- CONNECTING ROUTE INFO -->
-      <ng-container *ngIf="route && !route.isDirect">
-        <div class="modal__route modal__route--connecting">
-          {{ hubCode }} → connection → {{ destination.code }}
-        </div>
-
-        <div class="modal__section-label">CONNECTION OPTIONS THIS WEEK</div>
-
-        <div *ngIf="!weekConnections.length" class="modal__empty">
-          No connections available this week.
-        </div>
-
-        <div *ngFor="let conn of weekConnections" class="conn-card" [class.conn-card--selected]="isSelectedDay(conn.date)">
-          <div class="conn-card__date">{{ formatDay(conn.date) }}</div>
-          <div class="conn-card__legs">
-            <div class="conn-card__leg">
-              <span class="conn-card__codes">{{ conn.leg1.from }} → {{ conn.leg1.to }}</span>
-              <span class="conn-card__times">{{ conn.leg1.departure }} → {{ conn.leg1.arrival }}</span>
-            </div>
-            <div class="conn-card__layover">
-              {{ formatLayover(conn.layoverMinutes) }} layover in {{ conn.viaHubName }}
-            </div>
-            <div class="conn-card__leg">
-              <span class="conn-card__codes">{{ conn.leg2.from }} → {{ conn.leg2.to }}</span>
-              <span class="conn-card__times">{{ conn.leg2.departure }} → {{ conn.leg2.arrival }}</span>
-              <span class="conn-card__flight">{{ conn.leg2.flightNumber }}</span>
-            </div>
+    @let d = destination();
+    <dialog #dlg class="ui-sheet fm" aria-labelledby="fm-title" aria-describedby="fm-sub"
+            (close)="onClose()" (click)="onDialogClick($event)" (keydown)="onKeydown($event)">
+      <div #top class="top" (pointerdown)="dragStart($event)" (pointermove)="dragMove($event)"
+           (pointerup)="dragEnd($event)" (pointercancel)="dragEnd($event)">
+        <div class="ui-sheet__grabber" aria-hidden="true"></div>
+        <div class="bar">
+          <span class="flag" aria-hidden="true">{{ flag() }}</span>
+          <div class="names">
+            <h2 id="fm-title" class="title" tabindex="-1">{{ d.city }}</h2>
+            <p id="fm-sub" class="sub">
+              {{ d.country }}<span class="region" [style.--c]="region()">{{ d.region }}</span>
+            </p>
+          </div>
+          <div class="acts">
+            <button type="button" class="ui-icon-btn fav" [attr.aria-pressed]="isFavourite()"
+                    [attr.aria-label]="(isFavourite() ? 'Remove ' : 'Add ') + d.city + (isFavourite() ? ' from' : ' to') + ' starred'"
+                    (click)="toggleFavourite.emit()">
+              <app-icon name="star" [size]="20" [filled]="isFavourite()" />
+            </button>
+            <button type="button" class="ui-icon-btn" aria-label="Share link" (click)="share.emit()">
+              <app-icon name="share" [size]="20" />
+            </button>
+            <button #closeBtn type="button" class="ui-icon-btn close" aria-label="Close" (click)="close()">
+              <app-icon name="close" [size]="20" />
+            </button>
           </div>
         </div>
-      </ng-container>
-
-      <div class="modal__also" *ngIf="alsoFrom.length">
-        Also from:
-        {{ alsoFrom.join(' · ') }}
       </div>
-    </div>
+
+      <div class="body">
+        <section class="ticket" aria-label="Route summary">
+          <div class="route">
+            <div class="end">
+              <span class="ui-label">From</span>
+              <span class="code">{{ hubCode() }}</span>
+              <span class="city">{{ hubName() }}</span>
+            </div>
+            <div class="ui-route-line" [style.--plane-x]="hero().direct ? '56%' : '80%'">
+              <span class="ui-route-line__bar"></span>
+              @if (!hero().direct && hero().hub) {
+                <span class="ui-route-line__hub" style="--hub-x: 42%">{{ hero().hub }}</span>
+              }
+              <app-plane-icon class="ui-route-line__plane" [size]="16" />
+            </div>
+            <div class="end end--r">
+              <span class="ui-label">To</span>
+              <span class="code">{{ d.code }}</span>
+              <span class="city">{{ d.city }}</span>
+            </div>
+          </div>
+          <div class="ui-stub" style="--notch-bg: var(--surface)">
+            <div class="ui-stub__grid">
+              <div><div class="ui-label">This week</div><div class="ui-stub__value">{{ hero().operates }}</div></div>
+              <div><div class="ui-label">{{ hero().direct ? 'Flight time' : 'Fastest' }}</div><div class="ui-stub__value">{{ hero().duration }}</div></div>
+              <div><div class="ui-label">Aircraft</div><div class="ui-stub__value">{{ hero().aircraft }}</div></div>
+            </div>
+          </div>
+        </section>
+
+        @if (nextDirect(); as n) {
+          <div class="next">
+            <app-icon name="clock" [size]="16" />
+            <span>No direct flight this week. Next: <strong>{{ n.label }}</strong></span>
+            <button type="button" class="ui-btn" (click)="selectDate.emit(n.key)">Go to date</button>
+          </div>
+        }
+
+        <div class="tabs-wrap">
+          <div class="tabs" role="tablist" aria-label="Plan">
+            @for (t of tabs; track t.id) {
+              <button type="button" role="tab" class="tab" [id]="'fm-tab-' + t.id" [attr.aria-selected]="tab() === t.id"
+                      [attr.aria-controls]="'fm-panel-' + t.id" [tabindex]="tab() === t.id ? 0 : -1"
+                      (click)="tab.set(t.id)" (keydown)="onTabKey($event)">{{ t.label }}</button>
+            }
+            <span class="tabs__pill" [style.--i]="tabIndex()" aria-hidden="true"></span>
+          </div>
+        </div>
+
+        <div class="panel" role="tabpanel" [id]="'fm-panel-' + tab()" [attr.aria-labelledby]="'fm-tab-' + tab()" tabindex="0">
+          @switch (tab()) {
+            @case ('outbound') {
+              <app-outbound-panel [days]="days()" [showConnections]="showConnections()" [timeFormat]="timeFormat()"
+                [connect]="connect()" [destName]="d.city" (selectDate)="selectDate.emit($event)"
+                (chosen)="outbound.set($event)" />
+            }
+            @case ('return') {
+              <app-return-panel [outbound]="returnBasis()" [hubCode]="hubCode()" [destCode]="d.code" [destName]="d.city"
+                [connect]="connect()" [showConnections]="showConnections()" [timeFormat]="timeFormat()"
+                [coverage]="coverage()" />
+            }
+            @case ('calendar') {
+              <app-month-calendar [home]="hubCode()" [dest]="d.code" [anchorKey]="selectedDateKey() ?? weekStartKey()"
+                [selectedDateKey]="selectedDateKey()" [todayKey]="todayKey()" [coverage]="coverage()"
+                [connect]="connect()" [showConnections]="showConnections()" (selectDate)="selectDate.emit($event)" />
+            }
+          }
+        </div>
+
+        <footer class="foot">
+          @if (!entry()) {
+            <p class="note"><app-icon name="info" [size]="14" /> Hidden from your list by the current filters.</p>
+          }
+          @if (alsoFrom().length) {
+            <p><span class="ui-label">Also flies from</span> {{ alsoFrom().join(' · ') }}</p>
+          }
+          <p class="ui-muted">Published schedules only, times local at each airport. Not seat availability: verify in the Air Canada app.</p>
+        </footer>
+      </div>
+    </dialog>
   `,
   styles: [`
-    :host {
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
+    :host { display: contents; }
+    .fm { padding: 0; overflow: hidden auto; }
+    .fm[open] { display: flex; flex-direction: column; }
+    .top { position: sticky; top: 0; z-index: 3; background: var(--surface); touch-action: none; padding: 0 12px 0 20px; }
+    .bar { display: flex; align-items: center; gap: 12px; padding: 10px 0 8px; }
+    .flag { font-size: 30px; line-height: 1; }
+    .names { flex: 1; min-width: 0; }
+    .title { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 22px; font-weight: 700; letter-spacing: -.01em; line-height: 1.15; outline: none; }
+    .sub { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
+    .region { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-3); }
+    .region::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+    .acts { display: flex; gap: 2px; }
+    .fav[aria-pressed='true'] { color: var(--accent); }
+    .ui-icon-btn:focus-visible, .tab:focus-visible, .panel:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .body { padding: 4px 16px 20px; display: grid; gap: 14px; }
+    .ticket { position: relative; padding: 16px; border-radius: var(--radius-card); background: var(--surface-2); border: 1px solid var(--line); }
+    .route { display: flex; align-items: center; gap: 14px; }
+    .end { display: grid; gap: 3px; min-width: 0; }
+    .end--r { text-align: right; justify-items: end; }
+    .code { font-family: var(--font-code); font-size: clamp(30px, 9vw, 40px); font-weight: 600; line-height: 1; letter-spacing: .01em; }
+    .city { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+    .route .ui-route-line__hub { background: var(--surface-2); }
+    .next {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px;
+      border-radius: 12px; background: var(--accent-soft); color: var(--accent-strong); font-size: 13.5px;
     }
-    .backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.4);
-      cursor: pointer;
+    .next span { flex: 1; min-width: 160px; }
+    .next .ui-btn { height: 32px; font-size: 13px; }
+    .tabs-wrap { position: sticky; top: calc(var(--fm-top-h, 79px) - 1px); z-index: 2; background: var(--surface); padding: 4px 0 6px; margin: 0 -16px; padding-inline: 16px; }
+    .tabs { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border-radius: 12px; background: var(--surface-2); }
+    .tab {
+      all: unset; position: relative; z-index: 1; text-align: center; height: 34px; line-height: 34px; cursor: pointer;
+      font-size: 13.5px; font-weight: 600; color: var(--ink-2); border-radius: 9px; transition: color var(--dur) var(--ease-out);
     }
-    .modal {
-      position: relative;
-      background: #fff;
-      border-radius: 20px;
-      width: 100%;
-      max-width: 480px;
-      max-height: 90vh;
-      overflow-y: auto;
-      padding: 24px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+    .tab[aria-selected='true'] { color: var(--ink); }
+    .tabs__pill {
+      position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); border-radius: 9px;
+      background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 0 0 1px var(--line);
+      transform: translateX(calc(var(--i) * 100%)); transition: transform var(--dur) var(--ease-out);
     }
-    .modal__close {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: none;
-      background: #f5f5f7;
-      color: #1d1d1f;
-      font-size: 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: inherit;
+    .panel { margin: 0 -12px; border-radius: 12px; }
+    .foot { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 12px; }
+    .foot p { margin: 0; }
+    .foot .ui-label { margin-right: 6px; }
+    .note { display: flex; align-items: center; gap: 6px; color: var(--warn); }
+    @media (min-width: 720px) {
+      .fm { width: min(600px, calc(100% - 48px)); }
+      .top { padding: 8px 14px 0 24px; }
+      .body { padding: 4px 24px 24px; }
+      .tabs-wrap { margin: 0 -24px; padding-inline: 24px; }
+      .city { max-width: 160px; }
     }
-    .modal__close:focus-visible { outline: 2px solid #C8102E; outline-offset: 2px; }
-    .modal__hero {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-      padding-right: 40px;
-    }
-    .modal__flag { font-size: 32px; line-height: 1; flex-shrink: 0; }
-    .modal__titles { flex: 1; }
-    .modal__city { font-size: 22px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.4px; line-height: 1.1; }
-    .modal__sub { font-size: 12px; color: #86868b; margin-top: 3px; }
-    .modal__code { font-size: 28px; font-weight: 800; letter-spacing: -1px; flex-shrink: 0; }
-    .modal__route {
-      font-size: 12px;
-      color: #86868b;
-      margin-bottom: 16px;
-      padding: 8px 12px;
-      background: #f5f5f7;
-      border-radius: 8px;
-    }
-    .modal__route--connecting {
-      background: #fef7ed;
-      color: #E89020;
-      font-weight: 600;
-    }
-    .modal__pills { display: flex; gap: 4px; margin-bottom: 16px; }
-    .day-pill {
-      flex: 1; height: 24px; border-radius: 6px;
-      font-size: 9px; font-weight: 700;
-      display: flex; align-items: center; justify-content: center;
-    }
-    .day-pill--on  { background: #fff0f2; color: #C8102E; border: 1px solid #ffc7cf; }
-    .day-pill:not(.day-pill--on) { background: #f5f5f7; color: #c7c7cc; border: 1px solid #e8e8ed; }
-
-    .modal__section-label {
-      font-size: 10px; font-weight: 700; color: #86868b;
-      letter-spacing: 1px; text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .modal__empty {
-      font-size: 13px; color: #86868b; text-align: center; padding: 16px 0;
-    }
-
-    .flight-row {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 0;
-      border-bottom: 1px solid #f5f5f5;
-      font-size: 12px;
-    }
-    .flight-row:last-of-type { border-bottom: none; }
-    .flight-row__date { font-weight: 600; color: #1d1d1f; min-width: 80px; }
-    .flight-row__num { color: #86868b; min-width: 48px; }
-    .flight-row__time { color: #1d1d1f; font-weight: 600; margin-left: auto; }
-    .flight-row--none { opacity: 0.4; }
-    .flight-row--selected { background: #fff0f2; border-radius: 6px; padding: 8px 6px; }
-    .flight-row__none { color: #86868b; font-style: italic; }
-
-    .conn-card {
-      background: #fef7ed;
-      border: 1px solid #fde0b0;
-      border-radius: 10px;
-      padding: 10px 12px;
-      margin-bottom: 8px;
-    }
-    .conn-card--selected { border-color: #E89020; box-shadow: 0 0 0 2px rgba(232,144,32,0.15); }
-    .conn-card__date { font-size: 12px; font-weight: 700; color: #1d1d1f; margin-bottom: 6px; }
-    .conn-card__legs { font-size: 12px; }
-    .conn-card__leg {
-      display: flex; align-items: center; gap: 8px; padding: 3px 0;
-    }
-    .conn-card__codes { font-weight: 600; color: #1d1d1f; min-width: 70px; }
-    .conn-card__times { font-weight: 700; color: #E89020; }
-    .conn-card__flight { font-size: 11px; color: #86868b; margin-left: auto; }
-    .conn-card__layover {
-      text-align: center; font-size: 10px; color: #86868b;
-      padding: 3px 0; margin: 2px 0;
-      border-top: 1px dashed #e0d0b0;
-      border-bottom: 1px dashed #e0d0b0;
-    }
-
-    .modal__also {
-      font-size: 12px; color: #86868b;
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid #f2f2f2;
-    }
-
-    @media (max-width: 600px) {
-      :host { padding: 0; align-items: flex-end; }
-      .modal {
-        border-radius: 20px 20px 0 0;
-        max-height: 80vh;
-      }
-    }
-  `]
+  `],
 })
-export class FlightModalComponent implements OnInit {
-  // WS3 binding contract (stubs; WS6 implements the UI). Dates are 'YYYY-MM-DD' keys.
-  @Input() destination!: Destination;
-  @Input() hubCode = 'YUL';
-  @Input() set entry(e: RouteEntry | null) { this.route = e; }
-  @Input() set hubName(n: string) { this.hubCityName = n; }
-  @Input() set weekStartKey(k: string) { this.weekStart = keyToDate(k); }
-  @Input() set selectedDateKey(k: string | null) { this.selectedDate = k ? keyToDate(k) : null; }
-  @Input() todayKey: string | null = null;
-  @Input() coverage: Coverage | null = null;
-  @Input() showConnections = true;
-  @Input() connect: ConnectOptions = {};
-  @Input() timeFormat: TimeFormat = '24h';
-  @Input() isFavourite = false;
-  @Output() closed = new EventEmitter<void>();
-  @Output() selectDate = new EventEmitter<string>();
-  @Output() share = new EventEmitter<void>();
-  @Output() toggleFavourite = new EventEmitter<void>();
+export class FlightModalComponent {
+  // ── Binding contract (see app.component) ──────────────────────────────────
+  readonly destination = input.required<Destination>();
+  /** Null when the current filters hide this destination. */
+  readonly entry = input<RouteEntry | null>(null);
+  readonly hubCode = input('YUL');
+  readonly hubName = input('');
+  readonly weekStartKey = input.required<string>();
+  readonly selectedDateKey = input<string | null>(null);
+  readonly todayKey = input<string | null>(null);
+  readonly coverage = input<Coverage | null>(null);
+  readonly showConnections = input(true);
+  readonly connect = input<ConnectOptions>(NO_OPTS);
+  readonly timeFormat = input<TimeFormat>('24h');
+  readonly isFavourite = input(false);
 
-  hubCityName = 'Montreal';
-  weekStart!: Date;
-  selectedDate: Date | null = null;
-  route: RouteEntry | null = null;
+  readonly closed = output<void>();
+  readonly selectDate = output<string>();
+  readonly share = output<void>();
+  readonly toggleFavourite = output<void>();
 
-  readonly dayInitials = DAY_INITIALS;
-  readonly formatLayover = formatLayover;
+  // ── State ─────────────────────────────────────────────────────────────────
+  protected readonly tabs = TABS;
+  readonly tab = signal<ModalTab>('outbound');
+  protected readonly tabIndex = computed(() => TABS.findIndex(t => t.id === this.tab()));
+  /** The outbound option expanded in the Outbound tab. */
+  readonly outbound = signal<Itinerary | null>(null);
 
-  constructor(private el: ElementRef) {}
+  private readonly doc = inject(DOCUMENT);
+  private readonly dlg = viewChild.required<ElementRef<HTMLDialogElement>>('dlg');
+  private readonly closeBtn = viewChild.required<ElementRef<HTMLButtonElement>>('closeBtn');
+  private readonly top = viewChild.required<ElementRef<HTMLElement>>('top');
+  /** Element focused when the modal opened (the route card), restored on close. */
+  private readonly opener: HTMLElement | null;
+  private prevOverflow = '';
+  private emitted = false;
+  private drag: { y: number; dy: number } | null = null;
+  private resize: ResizeObserver | null = null;
 
-  ngOnInit(): void {
-    setTimeout(() => {
-      const btn = this.el.nativeElement.querySelector('.modal__close');
-      btn?.focus();
-    }, 50);
+  // ── Derived data ──────────────────────────────────────────────────────────
+  protected readonly flag = computed(() => getFlag(this.destination()));
+  protected readonly region = computed(() => regionVar(this.destination().region));
+
+  readonly days = computed<OutboundDay[]>(() => {
+    const hub = this.hubCode();
+    const dest = this.destination().code;
+    const withConn = this.showConnections();
+    const opts = this.connect();
+    const cov = this.coverage();
+    const sel = this.selectedDateKey();
+    const today = this.todayKey();
+    return weekKeys(this.weekStartKey()).map(dateKey => {
+      const outside = isOutside(dateKey, cov);
+      return {
+        dateKey,
+        outside,
+        direct: outside ? [] : directItineraries(hub, dest, dateKey),
+        connections: outside || !withConn ? [] : findItineraries(hub, dest, dateKey, opts),
+        isToday: dateKey === today,
+        isSelected: dateKey === sel,
+        isPast: !!today && dateKey < today,
+      };
+    });
+  });
+
+  protected readonly hero = computed(() => {
+    const days = this.days();
+    const direct = days.flatMap(d => d.direct);
+    const conns = days.flatMap(d => d.connections);
+    if (direct.length) {
+      const mins = direct.map(i => i.totalMin);
+      const lo = Math.min(...mins);
+      const hi = Math.max(...mins);
+      const aircraft = [...new Set(direct.flatMap(i => i.legs.map(l => l.aircraft)).filter(Boolean))];
+      return {
+        direct: true,
+        hub: null as string | null,
+        operates: operatesLabel(days.filter(d => d.direct.length).map(d => d.dateKey)),
+        duration: hi - lo > 20 ? `${formatDuration(lo)}+` : formatDuration(lo),
+        aircraft: aircraft.join(' · ') || '—',
+      };
+    }
+    if (conns.length) {
+      const best = conns.reduce((a, b) => (b.totalMin < a.totalMin ? b : a));
+      const hubs = [...new Set(conns.flatMap(c => c.hubs))];
+      return {
+        direct: false,
+        hub: best.hubs[0] ?? null,
+        operates: `Via ${hubs.slice(0, 2).join('/')}`,
+        duration: formatDuration(best.totalMin),
+        aircraft: [...new Set(best.legs.map(l => l.aircraft).filter(Boolean))].join(' · ') || '—',
+      };
+    }
+    const outside = days.every(d => d.outside);
+    return { direct: true, hub: null, operates: outside ? 'Not published' : 'No flights', duration: '—', aircraft: '—' };
+  });
+
+  /** Next direct date when this week has none (bounded by coverage). */
+  protected readonly nextDirect = computed(() => {
+    const days = this.days();
+    if (days.some(d => d.direct.length)) return null;
+    const today = this.todayKey();
+    const start = today && today > days[0].dateKey ? today : days[0].dateKey;
+    const key = nextFlightDate(this.hubCode(), this.destination().code, start);
+    return key ? { key, label: shortDay(key) } : null;
+  });
+
+  /** Outbound for the Return tab: the expanded option, else the selected day's first, else the week's first. */
+  protected readonly returnBasis = computed<Itinerary | null>(() => {
+    const chosen = this.outbound();
+    if (chosen) return chosen;
+    const days = this.days();
+    const pick = (d: OutboundDay | undefined) => d?.direct[0] ?? d?.connections[0] ?? null;
+    const today = this.todayKey();
+    return pick(days.find(d => d.isSelected))
+      ?? pick(days.find(d => (d.direct.length || d.connections.length) && (!today || d.dateKey >= today)))
+      ?? pick(days.find(d => d.direct.length || d.connections.length))
+      ?? null;
+  });
+
+  protected readonly alsoFrom = computed(() =>
+    getOrigins(this.destination().code).filter(o => o.code !== this.hubCode()).map(o => o.name));
+
+  constructor() {
+    const active = this.doc.activeElement;
+    this.opener = active instanceof HTMLElement && active !== this.doc.body ? active : null;
+
+    afterNextRender(() => {
+      const root = this.doc.documentElement;
+      this.prevOverflow = root.style.overflow;
+      root.style.overflow = 'hidden';
+      root.classList.add('modal-open');
+      const d = this.dlg().nativeElement;
+      if (!d.open) d.showModal();
+      this.closeBtn().nativeElement.focus();
+      // The tab bar sticks right under the sticky header, whatever its height.
+      const top = this.top().nativeElement;
+      const sync = () => d.style.setProperty('--fm-top-h', `${Math.round(top.getBoundingClientRect().height)}px`);
+      sync();
+      if (typeof ResizeObserver !== 'undefined') {
+        this.resize = new ResizeObserver(sync);
+        this.resize.observe(top);
+      }
+    });
+
+    inject(DestroyRef).onDestroy(() => {
+      const root = this.doc.documentElement;
+      root.style.overflow = this.prevOverflow;
+      root.classList.remove('modal-open');
+      this.resize?.disconnect();
+      this.restoreFocus();
+    });
   }
 
-  @HostListener('document:keydown.escape')
-  onEsc(): void {
+  /** Closes the dialog; its 'close' event emits (closed). */
+  close(): void {
+    const d = this.dlg().nativeElement;
+    if (d.open) d.close();
+    else this.onClose();
+  }
+
+  protected onClose(): void {
+    if (this.emitted) return;
+    this.emitted = true;
     this.closed.emit();
   }
 
-  get flights(): DayFlight[] {
-    return getFlightsForWeek(this.hubCode, this.destination.code, this.weekStart);
-  }
-
-  get weekConnections(): ConnectionOption[] {
-    const all: ConnectionOption[] = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(this.weekStart);
-      date.setDate(date.getDate() + i);
-      const dayConns = findConnections(this.hubCode, this.destination.code, date);
-      if (dayConns.length > 0) {
-        const best = dayConns.reduce((b, c) => c.layoverMinutes < b.layoverMinutes ? c : b);
-        all.push(best);
-      }
+  /** Esc closes deterministically (also where the platform lacks a native cancel). */
+  protected onKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.close();
     }
-    return all;
   }
 
-  get flag(): string {
-    return getFlag(this.destination);
+  /** A click on the ::backdrop targets the dialog itself, outside its box. */
+  protected onDialogClick(e: MouseEvent): void {
+    const d = this.dlg().nativeElement;
+    if (e.target !== d) return;
+    const r = d.getBoundingClientRect();
+    const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    if (!inside) this.close();
   }
 
-  /** Other airports with published flights here (derived from schedules). */
-  get alsoFrom(): string[] {
-    return getOrigins(this.destination.code).filter(o => o.code !== this.hubCode).map(o => o.name);
+  protected onTabKey(e: KeyboardEvent): void {
+    const i = this.tabIndex();
+    const next = e.key === 'ArrowRight' ? (i + 1) % TABS.length
+      : e.key === 'ArrowLeft' ? (i + TABS.length - 1) % TABS.length
+      : e.key === 'Home' ? 0
+      : e.key === 'End' ? TABS.length - 1
+      : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    this.tab.set(TABS[next].id);
+    const btn = this.dlg().nativeElement.querySelector<HTMLElement>(`#fm-tab-${TABS[next].id}`);
+    btn?.focus();
   }
 
-  get regionColor(): string {
-    return REGION_COLORS[this.destination.region] || '#86868b';
+  // ── Bottom-sheet drag to dismiss ──────────────────────────────────────────
+  private isSheet(): boolean {
+    const w = this.doc.defaultView;
+    return !!w?.matchMedia && w.matchMedia(SHEET_QUERY).matches;
   }
 
-  isSelectedDay(date: Date): boolean {
-    return this.selectedDate?.toDateString() === date.toDateString();
+  protected dragStart(e: PointerEvent): void {
+    if (!this.isSheet() || (e.target as Element | null)?.closest('button')) return;
+    this.drag = { y: e.clientY, dy: 0 };
+    (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+    this.dlg().nativeElement.style.transition = 'none';
   }
 
-  formatDay(date: Date): string {
-    return formatDayLabel(date);
+  protected dragMove(e: PointerEvent): void {
+    if (!this.drag) return;
+    this.drag.dy = Math.max(0, e.clientY - this.drag.y);
+    this.dlg().nativeElement.style.transform = `translateY(${this.drag.dy}px)`;
+  }
+
+  protected dragEnd(e: PointerEvent): void {
+    if (!this.drag) return;
+    const dy = Math.max(this.drag.dy, e.clientY - this.drag.y);
+    this.drag = null;
+    const style = this.dlg().nativeElement.style;
+    style.transition = 'transform var(--dur) var(--ease-out)';
+    if (dy >= DRAG_CLOSE_PX) {
+      this.close();
+    } else {
+      style.transform = '';
+    }
+  }
+
+  private restoreFocus(): void {
+    const code = this.destination().code;
+    const target = this.opener?.isConnected
+      ? this.opener
+      : this.doc.querySelector<HTMLElement>(`[data-dest-code="${code}"]`);
+    target?.focus({ preventScroll: true });
   }
 }

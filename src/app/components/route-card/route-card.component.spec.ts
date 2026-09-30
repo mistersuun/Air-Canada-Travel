@@ -144,6 +144,15 @@ describe('RouteCardComponent', () => {
     expect(el.querySelector('.card__countdown')).toBeNull();
   });
 
+  it('on a double day the card shows the flight the countdown is for', () => {
+    const e = entry('YUL', 'ATH', '2026-10-05');
+    const [first, second] = e.flights;
+    const { el, text } = render({ entry: e, selectedDateKey: '2026-10-05', now: first.depUtc + 60_000 });
+    expect(el.querySelector('.card__countdown')!.textContent).toContain('Departs in 4h 04m');
+    expect(text()).toContain(second.depLocal);
+    expect(el.querySelector('.card__stub')!.textContent).toContain('AC 922');
+  });
+
   it('the card is a dialog button; the star toggles without opening', () => {
     const { el, fixture } = render({ entry: entry('YUL', 'LHR', null), selectedDateKey: null, isFavourite: true });
     const out: string[] = [];

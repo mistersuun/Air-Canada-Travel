@@ -81,9 +81,42 @@ def test_fetch_pdf_gives_up_after_four_attempts(fs):
     assert sleeps == [1, 2, 4]
 
 
-def test_fetch_pdf_rejects_non_pdf_and_foreign_hosts(fs):
-    with pytest.raises(ValueError):
+def test_fetch_pdf_retries_non_pdf_bodies(fs):
+    calls, sleeps = [], []
+
+    def opener(req, timeout):
+        calls.append(1)
+        return FakeResp(b"<html>error</html>" if len(calls) < 2 else b"%PDF-1.7")
+
+    body, _ = fs.fetch_pdf(BASE + "a.pdf", opener=opener, sleep=sleeps.append)
+    assert body.startswith(b"%PDF-") and sleeps == [1]
+    with pytest.raises(RuntimeError, match="not a PDF"):
         fs.fetch_pdf(BASE + "a.pdf", opener=lambda r, timeout: FakeResp(b"<html>"), sleep=lambda s: None)
+
+
+def test_fetch_pdf_does_not_retry_http_4xx(fs):
+    calls, sleeps = [], []
+
+    def opener(req, timeout):
+        calls.append(1)
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    with pytest.raises(RuntimeError, match="404"):
+        fs.fetch_pdf(BASE + "a.pdf", opener=opener, sleep=sleeps.append)
+    assert calls == [1] and sleeps == []
+
+    calls.clear()
+
+    def flaky(req, timeout):
+        calls.append(1)
+        if len(calls) < 2:
+            raise urllib.error.HTTPError(req.full_url, 503, "Unavailable", {}, None)
+        return FakeResp(b"%PDF-1.7")
+
+    assert fs.fetch_pdf(BASE + "a.pdf", opener=flaky, sleep=sleeps.append)[0].startswith(b"%PDF-")
+
+
+def test_fetch_pdf_rejects_foreign_hosts_and_huge_files(fs):
     with pytest.raises(ValueError):
         fs.fetch_pdf("https://example.com/a.pdf", opener=None, sleep=lambda s: None)
     big = FakeResp(b"%PDF-", {"Content-Length": str(31 * 1024 * 1024)})
@@ -297,8 +330,14 @@ def test_run_writes_deterministic_output_with_meta(fs, out):
     first = out.read_text()
     assert _run(fs, out, now=t2) == 0
     second = out.read_text()
-    assert first.replace("2026-09-30T12:00:00Z", "X") == second.replace("2026-10-01T08:30:00Z", "X")
-    assert first != second
+    # Same data: the file is left alone, generatedAt included (no empty commit/redeploy).
+    assert first == second
+    # Different data: rewritten with the new generatedAt.
+    out.write_text(first.replace('"AC7"', '"AC9"'))
+    assert _run(fs, out, now=t2) == 0
+    third = out.read_text()
+    assert 'generatedAt: "2026-10-01T08:30:00Z"' in third
+    assert first.replace("2026-09-30T12:00:00Z", "X") == third.replace("2026-10-01T08:30:00Z", "X")
 
     assert 'generatedAt: "2026-09-30T12:00:00Z"' in first
     assert "export const SCHEDULES_META = {" in first
@@ -318,3 +357,117 @@ def test_step_summary_written(fs, out, tmp_path, monkeypatch):
     assert _run(fs, out, ["--dry-run"]) == 0
     text = summary.read_text()
     assert "Routes: 1 ->" in text and "Coverage:" in text
+
+
+# --- failed sources, ratchets, orphans -------------------------------------------
+
+PREV_WITH_RECORDS = (
+    '// previous file\nexport const ROUTE_SCHEDULES = [\n'
+    '  { originCode: "YUL", destinationCode: "CDG", schedules: [\n'
+    '    { fromDate: "2026-09-01", toDate: "2027-03-31", days: "Mon", flightNumber: "AC870", '
+    'departure: "18:00", arrival: "07:30", aircraft: "333" },\n'
+    '  ] },\n'
+    '  { originCode: "YUL", destinationCode: "OLD", schedules: [\n'
+    '    { fromDate: "2026-01-01", toDate: "2026-03-31", days: "Mon", flightNumber: "AC1", '
+    'departure: "18:00", arrival: "07:30", aircraft: "333" },\n'
+    '  ] },\n'
+    '  { originCode: "YUL", destinationCode: "YYZ", schedules: [\n'
+    '    { fromDate: "2026-09-01", toDate: "2027-03-31", days: "Mon", flightNumber: "AC400", '
+    'departure: "08:00", arrival: "09:20", aircraft: "321" },\n'
+    '  ] },\n'
+    '];\n')
+
+
+def test_load_previous_routes(fs, tmp_path):
+    p = tmp_path / "s.ts"
+    p.write_text(PREV_WITH_RECORDS)
+    prev = fs.load_previous_routes(str(p))
+    assert set(prev) == {("YUL", "CDG"), ("YUL", "OLD"), ("YUL", "YYZ")}
+    assert prev[("YUL", "CDG")][0]["flightNumber"] == "AC870"
+    assert fs.load_previous_routes(str(tmp_path / "missing.ts")) == {}
+
+
+def test_single_failed_source_is_tolerated_and_carried_forward(fs, out, monkeypatch):
+    from datetime import datetime, timezone
+    monkeypatch.setattr(fs, "MAX_FAILED_FRACTION", 1.0)
+    out.write_text(PREV_WITH_RECORDS)
+
+    def fetch(url):
+        if "Asia" in url:
+            raise RuntimeError("HTTP 404: Not Found")
+        return _fetch_ok(url)
+
+    now = lambda: datetime(2026, 9, 30, tzinfo=timezone.utc)
+    assert _run(fs, out, fetch=fetch, now=now) == 0
+    text = out.read_text()
+    assert 'originCode: "YUL", destinationCode: "CDG"' in text      # carried forward
+    assert 'destinationCode: "OLD"' not in text                     # expired: not carried
+    assert 'destinationCode: "YYZ"' not in text                     # hub-to-hub: not domestic run
+
+
+def test_too_many_failed_sources_still_fail(fs, out):
+    # 1 of 4 sources is over MAX_FAILED_FRACTION.
+    def fetch(url):
+        if "Asia" in url:
+            raise RuntimeError("down")
+        return _fetch_ok(url)
+    before = out.read_bytes()
+    assert _run(fs, out, fetch=fetch) == 1
+    assert out.read_bytes() == before
+
+
+def test_zero_route_or_orphaned_source_is_a_failure(fs, out):
+    before = out.read_bytes()
+
+    def extract_empty(b):
+        return ["nothing here"] if b"Asia" in b or b"return_first" in b else _extract(b)
+    assert _run(fs, out, extract=extract_empty) == 1
+
+    def extract_orphans(b):
+        if b"return_first" in b:
+            return ["2026-10-01 2026-10-31 MTWRFSU AC7 13:00 15:30 789\n" * 3
+                    + "Toronto (YYZ)\nToronto to Tokyo, Japan\nHaneda Airport (HND)\nto ...\n"
+                    "2026-10-01 2026-10-31 MTWRFSU AC9 13:00 15:30 789\n"]
+        return _extract(b)
+    assert _run(fs, out, extract=extract_orphans) == 1
+    assert out.read_bytes() == before
+
+
+def test_gate_orphans_count_as_rejects(fs, monkeypatch):
+    monkeypatch.setattr(fs, "MIN_RECORDS", 1)
+    # run() passes rejects + orphans as rejected_rows.
+    assert any("rejected rows" in e for e in gates(fs, accepted_rows=90, rejected_rows=10)[0])
+
+
+def test_allow_route_drop_flag(fs, out):
+    many = "".join(f'  {{ originCode: "YUL", destinationCode: "X{i:02d}", schedules: [] }},\n' for i in range(40))
+    out.write_text(many)
+    assert _run(fs, out, ["--dry-run"]) == 1
+    assert _run(fs, out, ["--dry-run", "--allow-route-drop"]) == 0
+
+
+def test_gate_record_count_ratchet(fs, monkeypatch):
+    monkeypatch.setattr(fs, "MIN_RECORDS", 1)
+    errors, _ = gates(fs, prev_records=10)    # 3 records < 80% of 10
+    assert any("record count dropped" in e for e in errors)
+    errors, warnings = gates(fs, prev_records=10, allow_drop=True)
+    assert errors == [] and any("record count dropped" in w for w in warnings)
+
+
+def test_domestic_download_failure_is_not_fatal(fs, out):
+    def fetch(url):
+        if "CANADA" in url:
+            raise RuntimeError("down")
+        return _fetch_ok(url)
+
+    urls = ALL_URLS + [BASE + "EN-CANADA-EasternCanada.pdf"]
+    assert _run(fs, out, ["--include-domestic"], discover=lambda: urls, fetch=fetch) == 0
+
+
+def test_domestic_baseline_excluded_without_flag(fs, out):
+    # Previous file has 20 hub-to-hub routes (from a --include-domestic run): not counted.
+    hubhub = "".join(
+        f'  {{ originCode: "{a}", destinationCode: "{b}", schedules: [] }},\n'
+        for a in HUBS for b in HUBS if a != b) * 2
+    out.write_text(PREVIOUS + hubhub)
+    assert _run(fs, out, ["--dry-run"]) == 0

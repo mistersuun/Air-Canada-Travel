@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { SettingsComponent } from './settings.component';
 import { DEFAULT_PREFS, PREFS_KEY, PREFS_STORAGE, PrefsService } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
+import { AppStateService } from '../../state/app-state.service';
 
 async function setup() {
   const storage = new MemoryStorage();
@@ -56,6 +57,28 @@ describe('SettingsComponent', () => {
     await fixture.whenStable();
     [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes('Reset'))!.click();
     expect(prefs.prefs()).toEqual({ ...DEFAULT_PREFS, favourites: ['LHR'] });
+  });
+
+  it('changing the home airport wins over a hub from the URL, and reset clears URL overrides', async () => {
+    history.replaceState(null, '', '/?from=YYZ&region=Europe');
+    try {
+      const { el, fixture, prefs } = await setup();
+      const state = TestBed.inject(AppStateService);
+      expect(state.hub()).toBe('YYZ');
+      expect(state.region()).toBe('Europe');
+      const select = el.querySelector<HTMLSelectElement>('#settings-hub')!;
+      select.value = 'YVR';
+      select.dispatchEvent(new Event('change'));
+      await fixture.whenStable();
+      expect(prefs.hub()).toBe('YVR');
+      expect(state.hub()).toBe('YVR');
+
+      [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes('Reset'))!.click();
+      expect(state.region()).toBe(DEFAULT_PREFS.region);
+      expect(state.hub()).toBe(DEFAULT_PREFS.hub);
+    } finally {
+      history.replaceState(null, '', '/');
+    }
   });
 
   it('Done, the close button and a backdrop click close it and emit (closed)', async () => {

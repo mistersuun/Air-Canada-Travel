@@ -8,6 +8,11 @@ on:
   #   # Every Monday at 6am UTC (AC typically updates schedules on weekends)
   #   - cron: '0 6 * * 1'
   workflow_dispatch:  # Manual trigger from the GitHub Actions UI
+    inputs:
+      allow_route_drop:
+        description: 'Accept a route/record count below 80% of the committed file (a real seasonal cut)'
+        type: boolean
+        default: false
 
 concurrency:
   group: update-schedules
@@ -47,7 +52,10 @@ jobs:
 
       - name: Fetch latest schedules
         # Exits non-zero (and leaves schedules.ts untouched) if any safety gate fails.
-        run: python3 scripts/fetch-schedules.py
+        # Leaves the file untouched too when only generatedAt would change.
+        env:
+          ALLOW_ROUTE_DROP: ${{ inputs.allow_route_drop && '--allow-route-drop' || '' }}
+        run: python3 scripts/fetch-schedules.py $ALLOW_ROUTE_DROP
 
       - name: Diff summary
         run: |

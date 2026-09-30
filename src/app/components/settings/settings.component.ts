@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, afterNextRender, inject, output, viewChild,
 } from '@angular/core';
 import { HUBS } from '../../data/destinations';
+import { AppStateService } from '../../state/app-state.service';
 import {
   MAX_LAYOVER_OPTIONS, MIN_CONNECT_OPTIONS, PrefsService, THEMES, ThemePref, TimeFormat,
 } from '../../state/prefs.service';
@@ -206,6 +207,7 @@ import { IconComponent } from '../shared/icons.component';
 export class SettingsComponent {
   protected readonly prefs = inject(PrefsService);
   protected readonly p = this.prefs.prefs;
+  private readonly state = inject(AppStateService);
   readonly closed = output<void>();
 
   protected readonly hubs = HUBS;
@@ -239,7 +241,8 @@ export class SettingsComponent {
   }
 
   protected setHub(e: Event): void {
-    this.prefs.update({ hub: (e.target as HTMLSelectElement).value });
+    // Through AppStateService so a URL `from=` override is cleared too.
+    this.state.setHub((e.target as HTMLSelectElement).value);
   }
 
   protected setOvernight(e: Event): void {
@@ -248,6 +251,7 @@ export class SettingsComponent {
 
   protected reset(): void {
     this.prefs.reset();
+    this.state.resetOverrides();
   }
 
   protected themeLabel(t: ThemePref): string {

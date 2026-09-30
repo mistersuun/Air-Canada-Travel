@@ -55,6 +55,26 @@ describe('flightsOn / getFlightsForWeek', () => {
     expect(week.map(d => d.flights.length)).toEqual([2, 0, 2, 0, 2, 0, 0]);
   });
 
+  it('keeps one instance per flight number, preferring the newer filing when times overlap', () => {
+    setScheduleSource([route('YUL', 'LHR',
+      rec('AC864', '22:00', '10:00', '2026-09-01', '2027-03-31', undefined, '333'),
+      rec('AC864', '18:40', '06:40', '2026-10-05', '2026-10-07', undefined, '333'),
+    )]);
+    expect(flightsOn('YUL', 'LHR', '2026-10-06').map(f => f.depLocal)).toEqual(['18:40']);
+    expect(flightsOn('YUL', 'LHR', '2026-10-08').map(f => f.depLocal)).toEqual(['22:00']);
+  });
+
+  it('drops instances with implausible block times (parse errors)', () => {
+    setScheduleSource([
+      route('YUL', 'FRA', rec('AC845', '09:55', '12:00', '2026-09-01', '2027-03-31', undefined, '333')),
+      route('YVR', 'SEA', rec('AC8798', '10:00', '10:07', '2026-09-01', '2027-03-31', undefined, 'DH4')),
+      route('YUL', 'LHR', rec('AC864', '22:10', '10:00', '2026-09-01', '2027-03-31', undefined, '333')),
+    ]);
+    expect(flightsOn('YUL', 'FRA', '2026-10-06')).toEqual([]); // ~20h "+1"
+    expect(flightsOn('YVR', 'SEA', '2026-10-06')).toEqual([]); // 7 min
+    expect(flightsOn('YUL', 'LHR', '2026-10-06')).toHaveLength(1);
+  });
+
   it('infers +1 for an overnight eastbound flight (YUL→LHR 22:10→10:00)', () => {
     const [f] = flightsOn('YUL', 'LHR', '2026-10-05');
     expect(f.flightNumber).toBe('AC864');

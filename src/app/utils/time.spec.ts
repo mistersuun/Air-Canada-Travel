@@ -131,6 +131,17 @@ describe('time zones', () => {
     expect(toUtcMs('2027-03-14', '02:30', 'America/Toronto')).toBe(Date.UTC(2027, 2, 14, 7, 30));
     // 2026-11-01 01:30 happens twice → first (EDT) = 05:30Z.
     expect(toUtcMs('2026-11-01', '01:30', 'America/Toronto')).toBe(Date.UTC(2026, 10, 1, 5, 30));
+    // East of UTC too: the first occurrence is the summer-time one.
+    expect(toUtcMs('2026-10-25', '01:30', 'Europe/London')).toBe(Date.UTC(2026, 9, 25, 0, 30));
+    expect(toUtcMs('2026-10-25', '02:30', 'Europe/Paris')).toBe(Date.UTC(2026, 9, 25, 0, 30));
+    expect(toUtcMs('2026-10-25', '03:30', 'Europe/Athens')).toBe(Date.UTC(2026, 9, 25, 0, 30));
+    expect(toUtcMs('2026-04-05', '02:30', 'Australia/Sydney')).toBe(Date.UTC(2026, 3, 4, 15, 30));
+    expect(toUtcMs('2027-04-04', '02:30', 'Pacific/Auckland')).toBe(Date.UTC(2027, 3, 3, 13, 30));
+    // Gaps east of UTC resolve forward: London 01:30 on 2027-03-28 → 02:30 BST = 01:30Z.
+    expect(toUtcMs('2027-03-28', '01:30', 'Europe/London')).toBe(Date.UTC(2027, 2, 28, 1, 30));
+    // Unambiguous times next to a transition are unaffected.
+    expect(toUtcMs('2026-10-25', '00:30', 'Europe/London')).toBe(Date.UTC(2026, 9, 24, 23, 30));
+    expect(toUtcMs('2026-10-25', '02:30', 'Europe/London')).toBe(Date.UTC(2026, 9, 25, 2, 30));
   });
 
   it('converts UTC to local date and time', () => {

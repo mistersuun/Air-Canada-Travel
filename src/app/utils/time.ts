@@ -214,16 +214,21 @@ export function tzOffsetMin(tz: string, utcMs: number): number {
  */
 export function toUtcMs(dateKey: string, hhmm: string, tz: string): number {
   const naive = keyToUtcDay(dateKey) * 86_400_000 + hhmmToMin(hhmm) * MINUTE_MS;
-  const off1 = tzOffsetMin(tz, naive);
-  let t = naive - off1 * MINUTE_MS;
-  const off2 = tzOffsetMin(tz, t);
-  if (off2 !== off1) {
-    const t2 = naive - off2 * MINUTE_MS;
-    // t2 is self-consistent unless the wall time falls in a DST gap, in which
-    // case take the later instant (the wall clock "springs forward").
-    t = tzOffsetMin(tz, t2) === off2 ? t2 : Math.max(t, t2);
+  // The offsets a day either side bracket any transition near this wall time
+  // (zones change offset at most once in 48h). Each yields one candidate; a
+  // candidate is valid when the zone really has that offset at that instant.
+  const offBefore = tzOffsetMin(tz, naive - 86_400_000);
+  const offAfter = tzOffsetMin(tz, naive + 86_400_000);
+  const a = naive - offBefore * MINUTE_MS;
+  if (offBefore === offAfter) {
+    const off = tzOffsetMin(tz, a);
+    return off === offBefore ? a : naive - off * MINUTE_MS;
   }
-  return t;
+  const b = naive - offAfter * MINUTE_MS;
+  const valid = [a, b].filter((t, i) => tzOffsetMin(tz, t) === (i ? offAfter : offBefore));
+  // Both valid: ambiguous (fall-back), take the first occurrence. None: a DST
+  // gap, take the later instant (the wall clock "springs forward").
+  return valid.length ? Math.min(...valid) : Math.max(a, b);
 }
 
 /** Local calendar date and 'HH:MM' of an instant in `tz`. */

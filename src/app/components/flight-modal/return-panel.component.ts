@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, model, signal } from '@angular/core';
 import { findReturnOptions, NO_OPTS, type ConnectOptions, type Itinerary } from '../../utils/connections';
 import type { Coverage } from '../../data/schedule-index';
 import { IconComponent } from '../shared/icons.component';
@@ -123,7 +123,8 @@ export class ReturnPanelComponent {
   /** Coverage of the return's origin (the destination's schedules follow the hub PDF). */
   readonly coverage = input<Coverage | null>(null);
 
-  readonly nights = signal(4);
+  /** Two-way bound by the modal so the stay length survives tab switches. */
+  readonly nights = model(4);
   protected readonly presets = NIGHT_PRESETS;
   protected readonly maxNights = MAX_NIGHTS;
   protected readonly key = itinKey;

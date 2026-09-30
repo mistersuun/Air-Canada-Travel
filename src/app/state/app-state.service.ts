@@ -192,6 +192,15 @@ export class AppStateService {
     this.prefs.update({ hub: code });
   }
 
+  /**
+   * Drop the URL-supplied hub/region so the saved prefs show again (Settings
+   * reset). Without this a `from=`/`region=` in the URL keeps winning.
+   */
+  resetOverrides(): void {
+    this.hubOverride.set(null);
+    this.regionOverride.set(null);
+  }
+
   setRegion(region: string): void {
     if (!isRegion(region)) return;
     this.regionOverride.set(null);

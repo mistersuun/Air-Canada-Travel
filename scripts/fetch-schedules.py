@@ -4,7 +4,7 @@ Fetches Air Canada Vacations schedule PDFs and regenerates src/app/data/schedule
 Run manually or via GitHub Actions.
 
 Usage:
-  python3 scripts/fetch-schedules.py [--dry-run] [--include-domestic] [--out PATH]
+  python3 scripts/fetch-schedules.py [--dry-run] [--include-domestic] [--allow-route-drop] [--out PATH]
 
 --include-domestic also parses the domestic "CANADA-" PDFs and keeps only
 hub-to-hub legs (both ends in destinations.ts HUBS). Off by default: it adds
@@ -12,9 +12,22 @@ hub-to-hub legs (both ends in destinations.ts HUBS). Off by default: it adds
 3 MB angular.json budget while schedules.ts is still bundled into JS.
 
 The script refuses to write anything when a safety gate fails (no PDFs found,
-a download failed, too few routes/records compared with the previous file, a
-core hub missing, too many unparseable rows). --dry-run runs every step and
-every gate and exits with the same status, but never writes the output file.
+too many international PDFs failed, too few routes/records compared with the
+previous file, a core hub missing, too many unparseable or orphaned rows).
+--dry-run runs every step and every gate and exits with the same status, but
+never writes the output file.
+
+A single international PDF that fails (download error, unreadable PDF, zero
+routes, or mostly orphaned rows) is tolerated when at most MAX_FAILED_SOURCES
+(and MAX_FAILED_FRACTION of all sources) fail: the routes missing from the new
+data are carried forward from the previous file (unexpired records only), so a
+dead link cannot silently drop a region nor block every future update.
+
+--allow-route-drop accepts a route/record count below MIN_ROUTE_RATIO of the
+previous file (a real seasonal cut); the workflow exposes it as an input.
+
+When nothing but generatedAt would change, the file is left untouched so the
+workflow commits (and redeploys) only on real data changes.
 
 The parser is pure (parse_pages / parse_text) so it can be tested with plain
 text fixtures; pdfplumber is only imported when a real PDF is opened.
@@ -55,7 +68,10 @@ MAX_PDF_BYTES = 30 * 1024 * 1024
 # Safety gates
 MIN_ROUTE_RATIO = 0.80             # vs. routes (originCode: entries) in the previous file
 MIN_RECORDS = 5000
-MAX_REJECT_RATIO = 0.05            # rejected rows / (accepted + rejected)
+MAX_REJECT_RATIO = 0.05            # (rejected + orphan rows) / (accepted + rejected + orphans)
+MAX_SOURCE_ORPHAN_RATIO = 0.05     # a PDF with more orphans than this has a broken layout
+MAX_FAILED_SOURCES = 2             # international PDFs that may fail in one run...
+MAX_FAILED_FRACTION = 0.10         # ...as long as they are at most this share of all sources
 REQUIRED_HUBS = ("YUL", "YYZ", "YVR")   # hard-fail if any has 0 departures
 
 FALLBACK_HUBS = ("YYZ", "YUL", "YVR", "YYC", "YOW", "YHZ", "YEG", "YQB", "YWG")
@@ -559,10 +575,17 @@ def fetch_pdf(url: str, opener=urllib.request.urlopen, sleep=time.sleep) -> tupl
                 if len(body) > MAX_PDF_BYTES:
                     raise ValueError("PDF too large")
                 if not body.startswith(b"%PDF-"):
-                    raise ValueError("response is not a PDF")
+                    # Often a transient CDN error page served with 200: retry.
+                    last_err = ValueError("response is not a PDF")
+                    continue
                 return body, _last_modified(resp.headers)
         except ValueError:
             raise
+        except urllib.error.HTTPError as e:
+            # 4xx (bar timeouts/rate limits) will not fix itself: fail fast.
+            if 400 <= e.code < 500 and e.code not in (408, 429):
+                raise RuntimeError(f"HTTP {e.code}: {e.reason}") from e
+            last_err = e
         except (urllib.error.URLError, OSError, TimeoutError) as e:
             last_err = e
     raise RuntimeError(f"download failed after {len(FETCH_BACKOFF_S) + 1} attempts: {last_err}")
@@ -584,6 +607,38 @@ def load_hub_codes(path: str = DESTINATIONS_TS) -> list[str]:
     return list(FALLBACK_HUBS)
 
 
+_PREV_ROUTE_RE = re.compile(r'originCode:\s*"([A-Z0-9]{3})",\s*destinationCode:\s*"([A-Z0-9]{3})"')
+_PREV_REC_RE = re.compile(
+    r'\{\s*fromDate:\s*"([^"]*)",\s*toDate:\s*"([^"]*)",\s*days:\s*"([^"]*)",\s*'
+    r'flightNumber:\s*"([^"]*)",\s*departure:\s*"([^"]*)",\s*arrival:\s*"([^"]*)",\s*aircraft:\s*"([^"]*)"\s*\}')
+_REC_KEYS = ("fromDate", "toDate", "days", "flightNumber", "departure", "arrival", "aircraft")
+
+
+def load_previous_routes(path: str) -> dict:
+    """{(origin, dest): [record]} from a previously generated schedules.ts ({} if unreadable)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().split("\n")
+    except OSError:
+        return {}
+    routes: dict = {}
+    key = None
+    for line in lines:
+        m = _PREV_ROUTE_RE.search(line)
+        if m:
+            key = (m.group(1), m.group(2))
+            routes.setdefault(key, [])
+            continue
+        r = _PREV_REC_RE.search(line)
+        if r and key:
+            routes[key].append(dict(zip(_REC_KEYS, r.groups())))
+    return routes
+
+
+def strip_generated_at(text: str) -> str:
+    return re.sub(r'^\s*generatedAt:.*$', "", text, flags=re.M)
+
+
 def previous_route_count(path: str) -> int:
     try:
         with open(path, encoding="utf-8") as f:
@@ -596,17 +651,23 @@ def previous_route_count(path: str) -> int:
 # Gates
 # ---------------------------------------------------------------------------
 def check_gates(*, pdf_count: int, download_errors: list, routes: dict, prev_routes: int,
-                hubs: Iterable[str], accepted_rows: int, rejected_rows: int) -> tuple[list[str], list[str]]:
+                hubs: Iterable[str], accepted_rows: int, rejected_rows: int,
+                prev_records: int = 0, allow_drop: bool = False) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     if pdf_count == 0:
         errors.append("no schedule PDFs discovered")
     for name, err in download_errors:
-        errors.append(f"download failed: {name}: {err}")
+        errors.append(f"source failed: {name}: {err}")
     route_count = len(routes)
     record_count = sum(len(v) for v in routes.values())
+    drops = []
     if prev_routes and route_count < MIN_ROUTE_RATIO * prev_routes:
-        errors.append(f"route count dropped: {route_count} < {MIN_ROUTE_RATIO:.0%} of previous {prev_routes}")
+        drops.append(f"route count dropped: {route_count} < {MIN_ROUTE_RATIO:.0%} of previous {prev_routes}")
+    if prev_records and record_count < MIN_ROUTE_RATIO * prev_records:
+        drops.append(f"record count dropped: {record_count} < {MIN_ROUTE_RATIO:.0%} of previous {prev_records}")
+    for d in drops:
+        (warnings if allow_drop else errors).append(d + (" (allowed by --allow-route-drop)" if allow_drop else ""))
     if record_count < MIN_RECORDS:
         errors.append(f"too few records: {record_count} < {MIN_RECORDS}")
     origins = {o for (o, _d) in routes}
@@ -619,7 +680,7 @@ def check_gates(*, pdf_count: int, download_errors: list, routes: dict, prev_rou
             warnings.append(f"hub {hub} has 0 departing routes (seasonal?)")
     total = accepted_rows + rejected_rows
     if total and rejected_rows / total > MAX_REJECT_RATIO:
-        errors.append(f"too many rejected rows: {rejected_rows}/{total}")
+        errors.append(f"too many rejected rows (incl. orphans): {rejected_rows}/{total}")
     elif rejected_rows:
         warnings.append(f"{rejected_rows} rejected row(s)")
     return errors, warnings
@@ -646,6 +707,7 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)) -> int:
     dry_run = "--dry-run" in argv
     include_domestic = "--include-domestic" in argv
+    allow_drop = "--allow-route-drop" in argv
     if "--out" in argv:
         out_path = argv[argv.index("--out") + 1]
     out_path = out_path or DEFAULT_OUT
@@ -678,6 +740,9 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         try:
             pdf_bytes, published = fetch(url)
         except Exception as e:  # noqa: BLE001
+            if domestic:
+                print(f"WARNING: domestic PDF did not download ({e}); skipping")
+                continue
             print(f"DOWNLOAD ERROR: {e}")
             download_errors.append((name, str(e)))
             continue
@@ -697,12 +762,45 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         print(f"{len(res.routes)} routes, {res.record_count} rows"
               + (f", {len(res.orphans)} orphans" if res.orphans else "")
               + (f", {len(res.rejects)} rejects" if res.rejects else ""))
+        if not domestic:
+            rows = res.record_count + len(res.orphans)
+            if not res.routes:
+                download_errors.append((name, "parsed to 0 routes (layout change?)"))
+            elif rows and len(res.orphans) / rows > MAX_SOURCE_ORPHAN_RATIO:
+                download_errors.append((name, f"{len(res.orphans)}/{rows} orphan rows (layout change?)"))
         parsed.append((Source(name=name, url=url, published=published, domestic=domestic), res))
         all_orphans += res.orphans
         all_rejects += res.rejects
 
     routes, conflicts = merge_routes(parsed)
     accepted = sum(r.record_count for _, r in parsed)
+
+    previous = load_previous_routes(out_path)
+    if not include_domestic:
+        # Hub-to-hub legs only exist with --include-domestic: never compare against them.
+        previous = {k: v for k, v in previous.items() if not (k[0] in hub_set and k[1] in hub_set)}
+    prev_records = sum(len(v) for v in previous.values())
+
+    # A few failed sources are tolerated; their routes are carried forward.
+    source_count = sum(1 for u in pdf_urls if include_domestic or not is_domestic(u))
+    source_warnings: list[str] = []
+    if download_errors and len(download_errors) <= MAX_FAILED_SOURCES \
+            and len(download_errors) <= MAX_FAILED_FRACTION * source_count:
+        today = now().strftime("%Y-%m-%d")
+        carried = 0
+        for key, recs in previous.items():
+            if key in routes:
+                continue
+            live = [r for r in recs if r["toDate"] >= today]
+            if live:
+                routes[key] = sorted(live, key=record_sort_key)
+                carried += 1
+        routes = dict(sorted(routes.items()))
+        for name, err in download_errors:
+            source_warnings.append(f"source failed, tolerated: {name}: {err}")
+        if carried:
+            source_warnings.append(f"{carried} route(s) carried forward from the previous file")
+        download_errors = []
 
     if all_orphans:
         print(f"\n{len(all_orphans)} orphan row(s) (no origin/destination/direction):")
@@ -713,10 +811,13 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         for r in all_rejects[:50]:
             print(f"  REJECT {r['source']} p{r['page']} l{r['line']} ({r['reason']}): {r['text']}")
 
-    prev = previous_route_count(out_path)
+    prev = len(previous) if previous else previous_route_count(out_path)
     errors, warnings = check_gates(
         pdf_count=len(pdf_urls), download_errors=download_errors, routes=routes,
-        prev_routes=prev, hubs=hubs, accepted_rows=accepted, rejected_rows=len(all_rejects))
+        prev_routes=prev, hubs=hubs, accepted_rows=accepted,
+        rejected_rows=len(all_rejects) + len(all_orphans),
+        prev_records=prev_records, allow_drop=allow_drop)
+    warnings = source_warnings + warnings
     if conflicts:
         warnings.append(f"{len(conflicts)} CONFLICT(s) logged")
     if all_orphans:
@@ -751,6 +852,15 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
 
     if dry_run:
         print("\n--- DRY RUN: all gates passed, not writing file ---")
+        return 0
+
+    try:
+        with open(out_path, encoding="utf-8") as f:
+            existing = f.read()
+    except OSError:
+        existing = None
+    if existing is not None and strip_generated_at(existing) == strip_generated_at(ts):
+        print(f"\nNo schedule changes; {out_path} left untouched (generatedAt kept).")
         return 0
 
     tmp_path = out_path + ".tmp"

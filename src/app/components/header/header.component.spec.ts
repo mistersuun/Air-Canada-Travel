@@ -98,6 +98,32 @@ describe('HeaderComponent', () => {
     expect(host.events.filter(e => e[1] === 'x')).toEqual([]);
   });
 
+  it('keeps a trailing space when the parent stores the trimmed query', async () => {
+    const { el, host, fixture } = await setup();
+    vi.useFakeTimers();
+    const input = el.querySelector<HTMLInputElement>('#dest-search')!;
+    input.value = 'new ';
+    input.dispatchEvent(new Event('input'));
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    expect(host.events).toEqual([['query', 'new ']]);
+    host.query.set('new'); // AppStateService trims
+    fixture.detectChanges();
+    expect(input.value).toBe('new ');
+  });
+
+  it('drops a pending typed value when the parent changes the query first', async () => {
+    const { el, host, fixture } = await setup();
+    vi.useFakeTimers();
+    const input = el.querySelector<HTMLInputElement>('#dest-search')!;
+    input.value = 'lis';
+    input.dispatchEvent(new Event('input'));
+    host.query.set('paris'); // e.g. Back restores an older URL
+    fixture.detectChanges();
+    vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+    expect(host.events).toEqual([]);
+    expect(input.value).toBe('paris');
+  });
+
   it('follows the query input when the parent changes it', async () => {
     const { el, host, fixture } = await setup();
     host.query.set('portugal');

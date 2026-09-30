@@ -9,7 +9,7 @@ import { ROUTE_INDEX, getCoverage, getRouteSchedules } from './schedule-index';
 import { flagFromIso2, getFlag } from '../utils/flags';
 import { hasKnownTz } from '../utils/airports';
 import { addDays, hhmmToMin, isDateKey, isValidTimeZone, weekStartKey } from '../utils/time';
-import { flightsOn, nextFlightDate, parseDayMask } from '../utils/week';
+import { MAX_BLOCK_MIN, MIN_BLOCK_MIN, buildInstance, flightsOn, nextFlightDate, parseDayMask } from '../utils/week';
 import { computeRoutes } from '../utils/routes';
 
 describe('destinations and hubs', () => {
@@ -79,21 +79,30 @@ describe('schedules', () => {
     for (const h of HUBS) expect(unknown.has(h.code)).toBe(false);
   });
 
-  it('flags implausible block times (report only)', () => {
+  it('flags implausible block times (report only; the app drops them)', () => {
+    // flightsOn already drops instances outside MIN/MAX_BLOCK_MIN, so check the
+    // raw records with buildInstance. Not gating: schedules.ts is generated and
+    // the current scrape still contains a few such rows.
     const odd = new Set<string>();
     for (const r of getRouteSchedules()) {
       if (!hasKnownTz(r.originCode) || !hasKnownTz(r.destinationCode)) continue;
       for (const s of r.schedules) {
-        const f = flightsOn(r.originCode, r.destinationCode, nextOperating(s.fromDate, s.days));
-        for (const x of f) {
-          if (x.flightNumber === s.flightNumber && (x.durationMin < 20 || x.durationMin > 19 * 60)) {
-            odd.add(`${x.origin}-${x.dest} ${x.flightNumber} ${x.depLocal}→${x.arrLocal} (${x.durationMin}m)`);
-          }
+        const x = buildInstance(s, r.originCode, r.destinationCode, nextOperating(s.fromDate, s.days));
+        if (x.durationMin < MIN_BLOCK_MIN || x.durationMin > MAX_BLOCK_MIN) {
+          odd.add(`${x.origin}-${x.dest} ${x.flightNumber} ${x.depLocal}→${x.arrLocal} (${x.durationMin}m)`);
         }
       }
     }
-    if (odd.size) console.warn(`[data-integrity] implausible block times (likely parse errors):\n  ${[...odd].join('\n  ')}`);
-    expect(true).toBe(true);
+    if (odd.size) console.warn(`[data-integrity] implausible block times (dropped by flightsOn):\n  ${[...odd].join('\n  ')}`);
+    for (const r of getRouteSchedules()) {
+      const s = r.schedules[0];
+      if (!s || !hasKnownTz(r.originCode) || !hasKnownTz(r.destinationCode)) continue;
+      // The filter must never hide a whole route that parses sanely.
+      const x = buildInstance(s, r.originCode, r.destinationCode, nextOperating(s.fromDate, s.days));
+      if (x.durationMin >= MIN_BLOCK_MIN && x.durationMin <= MAX_BLOCK_MIN) {
+        expect(flightsOn(r.originCode, r.destinationCode, x.dateKey).length, `${r.originCode}-${r.destinationCode}`).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('has a coverage window', () => {

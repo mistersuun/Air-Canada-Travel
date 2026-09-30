@@ -346,13 +346,27 @@ export class RouteCardComponent {
   /** Day mode: the flights of the selected day (direct entries only). */
   private readonly dayFlights = computed(() => (this.selectedDateKey() && this.entry().isDirect ? this.entry().flights : []));
 
+  /**
+   * Day mode, direct: the flight the card shows. The next one still to leave
+   * when `now` is known (so times, flight number and countdown agree), else
+   * the first of the day.
+   */
+  private readonly shownFlight = computed(() => {
+    const flights = this.dayFlights();
+    const now = this.now();
+    return (now != null ? flights.find(f => f.depUtc > now) : undefined) ?? flights[0] ?? null;
+  });
+
   /** Best connecting itinerary for the week (first day that has one). */
   private readonly weekBest = computed(() => this.entry().weekSummary?.days.find(x => x.best)?.best ?? null);
 
   readonly trip = computed<Trip | null>(() => {
     const e = this.entry();
     if (this.selectedDateKey()) {
-      if (e.isDirect) return e.flights[0] ? fromFlight(e.flights[0]) : null;
+      if (e.isDirect) {
+        const f = this.shownFlight() ?? e.flights[0];
+        return f ? fromFlight(f) : null;
+      }
       return e.itinerary ? fromItinerary(e.itinerary) : null;
     }
     if (e.isDirect) {
@@ -443,7 +457,7 @@ export class RouteCardComponent {
 
   readonly stub = computed(() => {
     const flights = this.dayFlights();
-    const f = flights[0];
+    const f = this.shownFlight();
     if (!f) return null;
     const dayFmt: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
     const flying = this.entry().weekDays.map((w, i) => (w.flights.length ? WEEKDAY_SHORT[i] : null)).filter(Boolean);
@@ -465,7 +479,8 @@ export class RouteCardComponent {
     const now = this.now();
     const t = this.trip();
     if (now == null || !t || !this.selectedDateKey()) return null;
-    const next = this.entry().isDirect ? this.dayFlights().find(f => f.depUtc > now) : t.depUtc > now ? t : null;
+    const shown = this.entry().isDirect ? this.shownFlight() : t;
+    const next = shown && shown.depUtc > now ? shown : null;
     if (!next) return null;
     return formatDuration(Math.ceil((next.depUtc - now) / 60_000));
   });

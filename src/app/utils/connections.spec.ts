@@ -193,7 +193,7 @@ describe('summarizeWeek', () => {
   });
 
   it('applies optional predicates', () => {
-    const s = summarizeWeek('YHZ', 'LHR', '2026-10-05', {}, () => true, it => it.estimated);
+    const s = summarizeWeek('YHZ', 'LHR', '2026-10-05', {}, () => true, { key: 'est', keep: it => it.estimated });
     expect(s.hubs).toEqual(['YUL']);
     expect(s.estimated).toBe(true);
   });

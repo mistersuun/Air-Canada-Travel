@@ -206,8 +206,15 @@ export class HeaderComponent {
   protected readonly shortcutsOpen = signal(false);
   /** Mobile: brand row and starred strip fold away once the list is scrolled (hysteresis avoids flicker). */
   readonly compact = signal(false);
-  /** What the input shows; follows the query input whenever the parent changes it. */
-  readonly draft = linkedSignal(() => this.query());
+  /**
+   * What the input shows; follows the query input whenever the parent changes
+   * it, except when the new query is just the draft trimmed (the state layer
+   * trims), so a trailing space the user just typed is not eaten.
+   */
+  readonly draft = linkedSignal<string, string>({
+    source: this.query,
+    computation: (q, prev) => (prev && prev.value.trim() === q ? prev.value : q),
+  });
   private timer: ReturnType<typeof setTimeout> | undefined;
   private readonly searchEl = viewChild.required<ElementRef<HTMLInputElement>>('search');
 
@@ -237,7 +244,12 @@ export class HeaderComponent {
     const v = (e.target as HTMLInputElement).value;
     this.draft.set(v);
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.queryChange.emit(v), SEARCH_DEBOUNCE_MS);
+    // If the parent changes the query meanwhile (Back, a chip, clear-all),
+    // that change wins: drop this stale typed value.
+    const base = this.query();
+    this.timer = setTimeout(() => {
+      if (this.query() === base) this.queryChange.emit(v);
+    }, SEARCH_DEBOUNCE_MS);
   }
 
   /** Emit immediately (chip removal, clear button, Esc). */

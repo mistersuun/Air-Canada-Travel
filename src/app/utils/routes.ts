@@ -10,6 +10,7 @@ import {
   ConnectOptions,
   ConnectionOption,
   Itinerary,
+  ItineraryFilter,
   NO_OPTS,
   WeekSummary,
   findItineraries,
@@ -133,11 +134,16 @@ function flightPredicate(f: Filters): (x: FlightInstance) => boolean {
     && (!f.widebodyOnly || isWidebody(x.aircraft));
 }
 
-function itineraryPredicate(f: Filters): (x: Itinerary) => boolean {
-  return x =>
-    inWindow(x.legs[0].depLocal, f.departWindows)
-    && (!f.sameDayArrival || x.arrDayOffset <= 0)
-    && (!f.widebodyOnly || x.legs.some(l => isWidebody(l.aircraft)));
+/** Itinerary filter, or undefined when no itinerary-level filter is active. */
+function itineraryFilter(f: Filters): ItineraryFilter | undefined {
+  if (!f.departWindows.length && !f.sameDayArrival && !f.widebodyOnly) return undefined;
+  return {
+    key: `${[...f.departWindows].sort()}|${f.sameDayArrival}|${f.widebodyOnly}`,
+    keep: x =>
+      inWindow(x.legs[0].depLocal, f.departWindows)
+      && (!f.sameDayArrival || x.arrDayOffset <= 0)
+      && (!f.widebodyOnly || x.legs.some(l => isWidebody(l.aircraft))),
+  };
 }
 
 function filteredWeek(home: string, dest: string, weekStartKey: string, keep: (x: FlightInstance) => boolean, trivial: boolean): DayFlight[] {
@@ -171,7 +177,7 @@ export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
     viaHubs: filters.viaHubs.length ? filters.viaHubs : p.connect?.viaHubs,
   };
   const keepFlight = flightPredicate(filters);
-  const keepItin = itineraryPredicate(filters);
+  const keepItin = itineraryFilter(filters);
   const trivialFlightFilter = !filters.departWindows.length && !filters.sameDayArrival && !filters.widebodyOnly;
   const starredOnly = filters.starredOnly || p.region === STARRED_REGION;
 
@@ -195,12 +201,14 @@ export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
       if (flights.length) {
         direct.push({ destination: d, isDirect: true, weekDays, flights, daysFlying: directDays, isFavourite });
       } else if (p.showConnections) {
-        const itineraries = findItineraries(p.home, d.code, p.dateKey, connect).filter(keepItin);
+        const itineraries = findItineraries(p.home, d.code, p.dateKey, connect, keepItin);
         if (itineraries.length) {
           const itinerary = itineraries[0];
           connecting.push({
             destination: d, isDirect: false, weekDays, flights: [], itinerary, itineraries,
-            daysFlying: directDays, isFavourite,
+            // Connection days this week (not direct days), so the 'days' sort ranks connecting routes meaningfully.
+            daysFlying: summarizeWeek(p.home, d.code, p.weekStartKey, connect, keepFlight, keepItin).connectDays,
+            isFavourite,
             bestConnection: toConnectionOption(itinerary) ?? undefined,
           });
         }

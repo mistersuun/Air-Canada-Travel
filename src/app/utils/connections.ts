@@ -66,6 +66,17 @@ export interface ConnectOptions {
   viaHubs?: readonly string[];
 }
 
+/**
+ * A keyed itinerary predicate. findItineraries applies it BEFORE choosing one
+ * feeder per onward leg, so a feeder that satisfies the filter is kept even
+ * when a later (unfiltered-best) feeder into the same onward flight is not.
+ * `key` must identify the predicate's behaviour (it is part of the cache key).
+ */
+export interface ItineraryFilter {
+  key: string;
+  keep: (it: Itinerary) => boolean;
+}
+
 /** Shared empty options. ConnectOptions objects are treated as immutable (memoised by identity). */
 export const NO_OPTS: ConnectOptions = Object.freeze({});
 
@@ -283,14 +294,20 @@ const itinCache = new Map<string, Itinerary[]>();
  * the latest first leg that makes the connection. Sorted by arrival, then
  * total time. Direct flights are not included.
  */
-export function findItineraries(from: string, to: string, dateKey: string, opts: ConnectOptions = NO_OPTS): Itinerary[] {
+export function findItineraries(
+  from: string,
+  to: string,
+  dateKey: string,
+  opts: ConnectOptions = NO_OPTS,
+  filter?: ItineraryFilter,
+): Itinerary[] {
   if (from === to) return [];
   const o = resolved(opts);
   if (itinVersion !== scheduleVersion()) {
     itinCache.clear();
     itinVersion = scheduleVersion();
   }
-  const cacheKey = `${from}-${to}|${dateKey}|${o.key}`;
+  const cacheKey = `${from}-${to}|${dateKey}|${o.key}|${filter?.key ?? ''}`;
   const hit = itinCache.get(cacheKey);
   if (hit) return hit;
 
@@ -323,6 +340,7 @@ export function findItineraries(from: string, to: string, dateKey: string, opts:
         if (overnight && !o.allowOvernight) continue;
         const max = overnight ? Math.max(o.maxLayover, OVERNIGHT_MAX_LAYOVER) : o.maxLayover;
         if (lay > max) continue;
+        if (filter && !filter.keep(makeItinerary([l1, l2]))) continue;
         pairs.push([l1, l2]);
       }
     }
@@ -392,7 +410,8 @@ export interface WeekSummary {
 
 /**
  * Per-day direct and connection counts for a week. Optional predicates let
- * callers (computeRoutes) apply UI filters to flights and itineraries.
+ * callers (computeRoutes) apply UI filters to flights and itineraries (the
+ * itinerary filter is applied before feeder selection, see ItineraryFilter).
  */
 export function summarizeWeek(
   from: string,
@@ -400,13 +419,13 @@ export function summarizeWeek(
   weekStart: string,
   opts: ConnectOptions = NO_OPTS,
   keepFlight: (f: FlightInstance) => boolean = () => true,
-  keepItinerary: (it: Itinerary) => boolean = () => true,
+  keepItinerary?: ItineraryFilter,
 ): WeekSummary {
   const hubCount = new Map<string, number>();
   let directDays = 0, connectDays = 0, connectOnlyDays = 0, estimated = false;
   const days = weekKeys(weekStart).map(k => {
     const direct = flightsOn(from, to, k).filter(keepFlight).length;
-    const its = findItineraries(from, to, k, opts).filter(keepItinerary);
+    const its = findItineraries(from, to, k, opts, keepItinerary);
     const best = its[0] ?? null;
     if (direct) directDays++;
     if (its.length) connectDays++;

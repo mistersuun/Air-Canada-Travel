@@ -255,6 +255,29 @@ describe('FlightModalComponent', () => {
       expect(el.querySelector('[data-return="2026-10-11"]')!.classList.contains('ret--exact')).toBe(true);
     });
 
+    it('Return: nights survive a tab switch', async () => {
+      const { el, fixture } = await setup({ dest: 'LHR', day: '2026-10-07' });
+      await clickTab(fixture, 'return');
+      el.querySelector<HTMLButtonElement>('button[aria-label="One night more"]')!.click();
+      await fixture.whenStable();
+      await clickTab(fixture, 'calendar');
+      await clickTab(fixture, 'return');
+      expect(fixture.componentInstance.returnNights()).toBe(5);
+      expect(el.querySelector('[data-return="2026-10-13"]')!.classList.contains('ret--exact')).toBe(true);
+    });
+
+    it('Return: an outbound expanded in a week no longer shown is not used', async () => {
+      const { el, fixture } = await setup({ dest: 'LHR', day: '2026-10-07' });
+      expect(fixture.componentInstance.outbound()?.dateKey).toBe('2026-10-07');
+      await clickTab(fixture, 'calendar');
+      // The parent moves to another week (a Calendar pick): the Outbound panel is not mounted.
+      fixture.componentRef.setInput('weekStartKey', '2026-10-19');
+      fixture.componentRef.setInput('selectedDateKey', '2026-10-21');
+      await fixture.whenStable();
+      await clickTab(fixture, 'return');
+      expect(text(el.querySelector('.basis'))).toContain('lands Thu, Oct 22');
+    });
+
     it('Calendar: a cell click emits the date key; outside coverage is disabled', async () => {
       const cov = { from: '2026-09-01', to: '2026-10-20', generatedAt: null, hub: 'YUL' };
       const { el, fixture, selectDate } = await setup({ dest: 'ATH', coverage: cov, today: '2026-10-07' });

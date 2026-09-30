@@ -114,7 +114,31 @@ describe('computeRoutes: filters, search and sort', () => {
     const day = { ...base, dateKey: '2026-10-05' };
     expect(codes(computeRoutes({ ...day, filters: { departWindows: ['evening'] } }))).toEqual(['ATH', 'SYD']);
     expect(codes(computeRoutes({ ...day, filters: { departWindows: ['redeye'] } }))).toEqual(['LHR']);
-    expect(codes(computeRoutes({ ...day, filters: { departWindows: ['morning'] } }))).toEqual([]);
+    // No direct flight leaves in the morning, but a morning YUL→YYZ feeder makes AC848 to LHR.
+    expect(codes(computeRoutes({ ...day, filters: { departWindows: ['morning'] } }))).toEqual(['LHR']);
+    expect(codes(computeRoutes({ ...day, showConnections: false, filters: { departWindows: ['morning'] } }))).toEqual([]);
+  });
+
+  it('applies the depart-window filter before choosing a feeder for a connection', () => {
+    // YUL→YYZ is estimated hourly; the latest feeder into AC848 leaves 15:00,
+    // but the 11:00 feeder (340 min layover) also makes it and is a morning departure.
+    setScheduleSource([route('YYZ', 'LHR', rec('AC848', '18:00', '06:15', '2026-10-01', '2026-10-31', undefined, '789'))], FIXTURE_META);
+    const rs = computeRoutes({ ...base, dateKey: '2026-10-06', filters: { departWindows: ['morning'] } });
+    const lhr = rs.find(r => r.destination.code === 'LHR')!;
+    expect(lhr).toBeDefined();
+    expect(lhr.itinerary?.legs[0].depLocal).toBe('11:00');
+    expect(lhr.itinerary?.layovers).toEqual([340]);
+    // Unfiltered, the shortest (latest-feeder) option is still preferred.
+    const plain = computeRoutes({ ...base, dateKey: '2026-10-06' }).find(r => r.destination.code === 'LHR')!;
+    expect(plain.itinerary?.legs[0].depLocal).toBe('15:00');
+    // Week mode sees the same filtered connections.
+    const week = computeRoutes({ ...base, filters: { departWindows: ['morning'] } }).find(r => r.destination.code === 'LHR')!;
+    expect(week.weekSummary?.connectDays).toBe(7);
+  });
+
+  it('counts connection days (not direct days) for connecting routes in day mode', () => {
+    const syd = computeRoutes({ ...base, dateKey: '2026-10-06' }).find(r => r.destination.code === 'SYD')!;
+    expect(syd.daysFlying).toBe(7);
   });
 
   it('filters to same-day arrivals', () => {

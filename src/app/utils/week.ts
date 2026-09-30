@@ -151,6 +151,11 @@ export function buildInstance(rec: ScheduleRecord, origin: string, dest: string,
   };
 }
 
+/** Shortest plausible block time in minutes; anything shorter is a parse error. */
+export const MIN_BLOCK_MIN = 20;
+/** Longest plausible block time in minutes (the longest AC flight is ~16h). */
+export const MAX_BLOCK_MIN = 19 * 60;
+
 let cacheVersion = -1;
 const dayCache = new Map<string, FlightInstance[]>();
 
@@ -176,15 +181,24 @@ export function flightsOn(origin: string, dest: string, dateKey: string): Flight
   let out: FlightInstance[] = [];
   if (records.length) {
     const bit = 1 << weekdayIndex(dateKey);
-    const seen = new Set<string>();
+    // One instance per flight number per date. Same departure: the first row
+    // wins. Different departures (overlapping filings with a retime): the row
+    // whose date range starts later (the newer filing) wins.
+    const byFlight = new Map<string, { rec: ScheduleRecord; inst: FlightInstance }>();
+    const unnumbered: FlightInstance[] = [];
     for (const c of compile(records)) {
       const r = c.rec;
       if (!(c.mask & bit) || dateKey < r.fromDate || dateKey > r.toDate) continue;
-      const id = `${r.flightNumber}|${r.departure}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      out.push(buildInstance(r, origin, dest, dateKey));
+      const cur = r.flightNumber ? byFlight.get(r.flightNumber) : undefined;
+      if (cur && (cur.rec.departure === r.departure || cur.rec.fromDate >= r.fromDate)) continue;
+      const inst = buildInstance(r, origin, dest, dateKey);
+      // Implausible block times are parse errors (a reverse leg filed under
+      // this route, or a misread time): never show them as real flights.
+      if (inst.durationMin < MIN_BLOCK_MIN || inst.durationMin > MAX_BLOCK_MIN) continue;
+      if (r.flightNumber) byFlight.set(r.flightNumber, { rec: r, inst });
+      else if (!unnumbered.some(u => u.depLocal === inst.depLocal)) unnumbered.push(inst);
     }
+    out = [...[...byFlight.values()].map(v => v.inst), ...unnumbered];
     out.sort((a, b) => a.depUtc - b.depUtc || String(a.flightNumber).localeCompare(String(b.flightNumber)));
   }
   if (dayCache.size > 60_000) dayCache.clear();

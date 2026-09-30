@@ -18,7 +18,7 @@ import { PlaneIconComponent } from '../shared/plane-icon.component';
 import { OutboundPanelComponent } from './outbound-panel.component';
 import { ReturnPanelComponent } from './return-panel.component';
 import { MonthCalendarComponent } from './month-calendar.component';
-import { isOutside, operatesLabel, shortDay, type OutboundDay } from './modal-model';
+import { isOutside, itinKey, operatesLabel, shortDay, type OutboundDay } from './modal-model';
 
 export type ModalTab = 'outbound' | 'return' | 'calendar';
 const TABS: readonly { id: ModalTab; label: string }[] = [
@@ -139,7 +139,7 @@ const SHEET_QUERY = '(max-width: 719px)';
             @case ('return') {
               <app-return-panel [outbound]="returnBasis()" [hubCode]="hubCode()" [destCode]="d.code" [destName]="d.city"
                 [connect]="connect()" [showConnections]="showConnections()" [timeFormat]="timeFormat()"
-                [coverage]="coverage()" />
+                [coverage]="coverage()" [(nights)]="returnNights" />
             }
             @case ('calendar') {
               <app-month-calendar [home]="hubCode()" [dest]="d.code" [anchorKey]="selectedDateKey() ?? weekStartKey()"
@@ -243,6 +243,8 @@ export class FlightModalComponent {
   protected readonly tabIndex = computed(() => TABS.findIndex(t => t.id === this.tab()));
   /** The outbound option expanded in the Outbound tab. */
   readonly outbound = signal<Itinerary | null>(null);
+  /** Stay length on the Return tab; kept here so it survives tab switches. */
+  readonly returnNights = signal(4);
 
   private readonly doc = inject(DOCUMENT);
   private readonly dlg = viewChild.required<ElementRef<HTMLDialogElement>>('dlg');
@@ -325,9 +327,15 @@ export class FlightModalComponent {
 
   /** Outbound for the Return tab: the expanded option, else the selected day's first, else the week's first. */
   protected readonly returnBasis = computed<Itinerary | null>(() => {
-    const chosen = this.outbound();
-    if (chosen) return chosen;
     const days = this.days();
+    // The expanded option only counts while it is still on screen: the Outbound
+    // panel (and its (chosen) output) is destroyed on other tabs, so a date
+    // picked in the Calendar can move the week without clearing it.
+    const chosen = this.outbound();
+    if (chosen) {
+      const k = itinKey(chosen);
+      if (days.some(d => d.direct.some(i => itinKey(i) === k) || d.connections.some(i => itinKey(i) === k))) return chosen;
+    }
     const pick = (d: OutboundDay | undefined) => d?.direct[0] ?? d?.connections[0] ?? null;
     const today = this.todayKey();
     return pick(days.find(d => d.isSelected))

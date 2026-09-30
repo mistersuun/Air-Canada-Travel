@@ -1,3 +1,158 @@
+// =============================================================================
+// Design foundation ("departure board"): tokens, themes, global primitives.
+//
+// Contract for other workstreams:
+//  - Theme: <html data-theme="light|dark">; no attribute = follow the OS.
+//    Persisted as JSON field `theme` ('auto' | 'light' | 'dark') inside
+//    localStorage['ac.prefs.v1']; index.html's pre-paint script reads it.
+//  - Colours: only use var(--token). Hex appears only in the :root token
+//    blocks below.
+//  - Global classes are namespaced `ui-` so they never collide with
+//    component-scoped class names.
+// =============================================================================
+
+// ---- Tokens (light) ----------------------------------------------------------
+// AA contrast (WCAG 2.x), computed with scratch script, light theme:
+//   ink-2  on bg/surface/surface-2           5.68 / 6.20 / 5.49
+//   ink-3  on bg/surface/surface-2           5.22 / 5.69 / 5.04
+//   accent on surface/bg (text)              5.01 / 4.59
+//   accent-strong on accent-soft             5.94
+//   accent-ink (#fff) on accent-fill         5.01
+//   connect on connect-soft                  5.89
+//   chip text on its 12% tint (surface/bg):  ok 5.62/5.17  connect 5.35/4.92
+//                                            warn 5.51/5.08  new 5.62/5.18
+//                                            seasonal 5.24/4.83
+:root {
+  color-scheme: light;
+
+  --bg: #F4F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #F0F1F4;
+  --line: #E6E8EC;
+  --line-strong: #D3D6DC;
+  --ink: #0E0F12;
+  --ink-2: #5B6170;
+  --ink-3: #62676F;
+
+  --accent: #D8232A;          // brand red: strokes, icons, large text
+  --accent-strong: #B31B21;   // red text on --accent-soft / tints
+  --accent-fill: #D8232A;     // solid buttons, active pills
+  --accent-ink: #FFFFFF;      // text on --accent-fill
+  --accent-soft: #FDECEC;
+
+  --connect: #9A4708;         // connection text
+  --connect-fill: #E8890C;    // connection bars, stripes (non-text)
+  --connect-soft: #FFF4E5;
+
+  --ok: #16693D;
+  --ok-fill: #1FA05A;
+  --warn: #735A00;            // gold/olive, distinct from connect orange
+  --warn-fill: #D9A400;
+  --warn-soft: #FFF7D6;
+
+  --route-grad: linear-gradient(90deg, #D8232A, #FF7A45);
+  --scrim: rgba(14, 15, 18, .45);
+  --shadow-card: 0 1px 2px rgba(14, 15, 18, .06);
+  --shadow-pop: 0 12px 32px rgba(14, 15, 18, .16);
+  --scrollbar: #C9CCD3;
+  --theme-meta: #F4F5F7;
+
+  // Region colours (non-text: dots, strips, bars). Slugs from regionSlug().
+  --region-caribbean: #0EA5E9;
+  --region-mexico: #E89020;
+  --region-usa: #6366F1;
+  --region-europe: #8B5CF6;
+  --region-asia-pacific: #10B981;
+  --region-south-america: #F97316;
+  --region-central-america: #65A30D;
+  --region-africa-middle-east: #E05090;
+  --region-other: #8A8F99;
+
+  // Type
+  --font-ui: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-code: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  // Shape and space
+  --radius-card: 16px;
+  --radius-inner: 10px;
+  --radius-chip: 999px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --gutter: 16px;
+
+  // Motion
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --dur-fast: 120ms;
+  --dur: 280ms;
+  --dur-slow: 400ms;
+}
+
+// ---- Tokens (dark) -----------------------------------------------------------
+// Dark theme contrast:
+//   ink-2  on bg/surface/surface-2           7.67 / 6.98 / 6.41
+//   ink-3  on bg/surface/surface-2           5.90 / 5.37 / 4.93
+//   accent on surface/bg (text)              5.08 / 5.59
+//   accent-strong on accent-soft             5.63
+//   accent-ink (#fff) on accent-fill         5.14
+//   connect on connect-soft                  7.00
+//   chip text on its 12% tint (surface/bg):  ok 6.70/7.59  connect 7.31/8.39
+//                                            warn 8.75/9.98  new 5.77/6.44
+@mixin dark-tokens {
+  color-scheme: dark;
+
+  --bg: #0B0B0D;
+  --surface: #17171A;
+  --surface-2: #1F1F23;
+  --line: #2A2A2F;
+  --line-strong: #3A3A41;
+  --ink: #F5F5F7;
+  --ink-2: #A1A1AA;
+  --ink-3: #8C8C95;
+
+  --accent: #FF3B47;
+  --accent-strong: #FF6B73;
+  --accent-fill: #D42330;
+  --accent-ink: #FFFFFF;
+  --accent-soft: rgba(255, 59, 71, .14);
+
+  --connect: #FFA53D;
+  --connect-fill: #F0962A;
+  --connect-soft: rgba(255, 165, 61, .14);
+
+  --ok: #34C77B;
+  --ok-fill: #34C77B;
+  --warn: #F2C94C;
+  --warn-fill: #F2C94C;
+  --warn-soft: rgba(242, 201, 76, .14);
+
+  --route-grad: linear-gradient(90deg, #FF3B47, #FF8A3D);
+  --scrim: rgba(0, 0, 0, .6);
+  --shadow-card: none;
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, .5);
+  --scrollbar: #3A3A41;
+  --theme-meta: #0B0B0D;
+
+  --region-caribbean: #38BDF8;
+  --region-mexico: #F0A64A;
+  --region-usa: #818CF8;
+  --region-europe: #A78BFA;
+  --region-asia-pacific: #34D399;
+  --region-south-america: #FB923C;
+  --region-central-america: #A3E635;
+  --region-africa-middle-east: #F472B6;
+  --region-other: #8C8C95;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { @include dark-tokens; }
+}
+:root[data-theme='dark'] { @include dark-tokens; }
+
+// ---- Base -------------------------------------------------------------------
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -6,32 +161,626 @@
 
 html, body {
   height: 100%;
-  background: #f5f5f7;
-  color: #1d1d1f;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
   overflow-y: auto;
 }
 
-button, input, select, a {
+button, input, select, textarea { font: inherit; color: inherit; }
+
+button, input, select, textarea, a, summary, [tabindex] {
   &:focus-visible {
-    outline: 2px solid #C8102E;
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
 }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
+select {
+  background-color: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-inner);
+}
+
+::selection { background: var(--accent-soft); color: var(--ink); }
+
+* { scrollbar-color: var(--scrollbar) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d0d0d8; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+// ---- Typography primitives -------------------------------------------------
+.ui-num { font-variant-numeric: tabular-nums; }
+
+.ui-code {
+  font-family: var(--font-code);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: .02em;
+}
+
+.ui-time {
+  font-family: var(--font-code);
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+// Superscript "+1" day offset after a .ui-time.
+.ui-dayoff {
+  font-family: var(--font-code);
+  font-size: 10px;
+  font-weight: 600;
+  vertical-align: super;
+  margin-left: 1px;
+  color: var(--accent);
+}
+
+.ui-city { font-size: 15px; font-weight: 600; line-height: 1.25; }
+
+.ui-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.ui-muted { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.ui-visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+// ---- Card --------------------------------------------------------------------
+.ui-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.ui-pressable {
+  transition: transform var(--dur-fast) var(--ease-out);
+  &:active { transform: scale(.985); }
+}
+
+// ---- Chips -------------------------------------------------------------------
+// <span class="ui-chip ui-chip--ok">Direct</span>
+.ui-chip {
+  --c: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px 0 8px;
+  border-radius: var(--radius-chip);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  color: var(--c);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+}
+.ui-chip--ok { --c: var(--ok); }
+.ui-chip--connect { --c: var(--connect); }
+.ui-chip--new { --c: var(--accent-strong); }
+.ui-chip--seasonal { --c: var(--ink-2); }
+.ui-chip--warn { --c: var(--warn); }
+.ui-chip--nodot::before { display: none; }
+
+// Mono chip for flight numbers and aircraft: <span class="ui-chip-mono">AC 880</span>
+.ui-chip-mono {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// Filter / toggle pill (buttons). aria-pressed="true" or .is-active = selected.
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+
+  &:hover { color: var(--ink); border-color: var(--line-strong); }
+  &[aria-pressed='true'], &.is-active {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--bg);
+  }
+}
+
+// Horizontal scroll row with edge fades (region chips).
+.ui-scroll-row {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-inline: var(--gutter);
+  scroll-padding-inline: var(--gutter);
+  mask-image: linear-gradient(90deg, transparent 0, black var(--gutter), black calc(100% - var(--gutter)), transparent 100%);
+  &::-webkit-scrollbar { display: none; }
+}
+
+// ---- Buttons -----------------------------------------------------------------
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  &:hover { background: var(--surface-2); }
+  &:active { transform: scale(.98); }
+  &:disabled { opacity: .5; cursor: not-allowed; }
+}
+.ui-btn--primary {
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--accent-ink);
+  &:hover { background: color-mix(in srgb, var(--accent-fill) 88%, black); }
+}
+
+.ui-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  &:hover { background: var(--surface-2); color: var(--ink); }
+}
+
+// ---- Route line --------------------------------------------------------------
+// <div class="ui-route-line" style="--plane-x: 60%">
+//   <span class="ui-route-line__bar"></span>
+//   <span class="ui-route-line__hub" style="--hub-x: 45%">YYZ</span>   (optional)
+//   <app-plane-icon class="ui-route-line__plane" />
+// </div>
+.ui-route-line {
+  --plane-x: 60%;
+  position: relative;
+  flex: 1;
+  height: 16px;
+  min-width: 48px;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+
+  &__bar {
+    position: absolute;
+    inset: 7px 0 auto;
+    height: 2px;
+    border-radius: 1px;
+    background:
+      var(--route-grad) left / var(--plane-x) 100% no-repeat,
+      var(--line);
+  }
+
+  &--estimated &__bar,
+  &__bar--dashed {
+    background: repeating-linear-gradient(90deg, var(--warn-fill) 0 6px, transparent 6px 10px);
+  }
+
+  &__plane {
+    position: absolute;
+    left: var(--plane-x);
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--accent);
+    transition: left var(--dur-slow) var(--ease-out);
+  }
+
+  &__hub {
+    --hub-x: 50%;
+    position: absolute;
+    left: var(--hub-x);
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 4px;
+    background: var(--surface);
+    color: var(--connect);
+    font-family: var(--font-code);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .02em;
+
+    &::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      border: 2px solid var(--connect-fill);
+      background: var(--surface);
+    }
+  }
+}
+
+// Hover glide: put .ui-glide on the card that contains the route line.
+.ui-glide:hover .ui-route-line { --plane-x: 62%; }
+
+// ---- Week segment bars -------------------------------------------------------
+// <div class="ui-segs"><span class="ui-seg ui-seg--direct"></span>...</div>
+.ui-segs {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.ui-seg {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  &--direct { background: var(--accent); }
+  &--connect {
+    background: repeating-linear-gradient(135deg, var(--connect-fill) 0 3px, color-mix(in srgb, var(--connect-fill) 35%, transparent) 3px 6px);
+  }
+  &--outside {
+    background: repeating-linear-gradient(135deg, var(--line-strong) 0 2px, transparent 2px 5px);
+  }
+}
+
+// ---- Ticket stub -------------------------------------------------------------
+// <div class="ui-stub"><div class="ui-stub__grid">
+//   <div><div class="ui-label">Departs</div><div class="ui-stub__value">22:10</div></div> ...
+// </div></div>
+.ui-stub {
+  --notch: 7px;               // radius; 14px notch
+  --notch-bg: var(--bg);      // colour behind the card
+  position: relative;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+
+  // dashed perforation
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: calc(var(--notch) + 2px - var(--space-4));
+    right: calc(var(--notch) + 2px - var(--space-4));
+    border-top: 1.5px dashed var(--line-strong);
+  }
+
+  // semicircle notches that bite into the card edges (card padding = --space-4)
+  &::after {
+    content: '';
+    position: absolute;
+    top: calc(-1 * var(--notch));
+    left: calc(-1 * var(--space-4) - var(--notch) - 1px);
+    right: calc(-1 * var(--space-4) - var(--notch) - 1px);
+    height: calc(2 * var(--notch));
+    pointer-events: none;
+    background:
+      radial-gradient(circle at left center, var(--notch-bg) calc(var(--notch) - .5px), var(--line) var(--notch), transparent calc(var(--notch) + .5px)),
+      radial-gradient(circle at right center, var(--notch-bg) calc(var(--notch) - .5px), var(--line) var(--notch), transparent calc(var(--notch) + .5px));
+    background-size: 50% 100%;
+    background-position: left center, right center;
+    background-repeat: no-repeat;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3) var(--space-4);
+  }
+
+  &__value {
+    margin-top: 2px;
+    font-family: var(--font-code);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+}
+
+// ---- Connection timeline -----------------------------------------------------
+// <ol class="ui-timeline">
+//   <li class="ui-timeline__stop"> code / city / time </li>
+//   <li class="ui-timeline__layover [ui-timeline__layover--alert]">1h 45m layover · Toronto</li>
+//   <li class="ui-timeline__stop"> ... </li>
+// </ol>
+// <div class="ui-timeline__footer">Total 12h 40m</div>
+// Add .ui-timeline__seg--estimated to the items of an estimated leg to dash its rail.
+.ui-timeline {
+  list-style: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+
+  &__stop {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: 2px var(--space-3);
+    padding-left: 26px;
+
+    // ring dot
+    &::before {
+      content: '';
+      position: absolute;
+      left: 3px;
+      top: 4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      background: var(--surface);
+      z-index: 1;
+    }
+    // rail down to the next item's dot
+    &:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 16px;
+      bottom: calc(-1 * var(--space-3) - 4px);
+      width: 2px;
+      background: var(--line-strong);
+    }
+  }
+
+  // Layover pills and captions sit on the rail too (they are offset 26px).
+  &__layover::before,
+  &__caption::before {
+    content: '';
+    position: absolute;
+    left: -18px;
+    top: 0;
+    bottom: calc(-1 * var(--space-3) - 4px);
+    width: 2px;
+    background: var(--line-strong);
+  }
+
+  // Put --estimated on every item (stop, caption) of an estimated leg to dash its rail.
+  &__stop#{&}__seg--estimated:not(:last-child)::after,
+  &__layover#{&}__seg--estimated::before,
+  &__caption#{&}__seg--estimated::before {
+    background: repeating-linear-gradient(180deg, var(--warn-fill) 0 4px, transparent 4px 8px);
+  }
+
+  &__code {
+    font-family: var(--font-code);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: .02em;
+  }
+  &__city { color: var(--ink-2); font-size: 13px; }
+  &__time {
+    font-family: var(--font-code);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  &__meta {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    color: var(--ink-3);
+    font-size: 12px;
+  }
+
+  &__layover {
+    position: relative;
+    margin-left: 26px;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-chip);
+    background: var(--connect-soft);
+    color: var(--connect);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+
+    &--alert {
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+    }
+  }
+
+  &__caption {
+    position: relative;
+    margin-left: 26px;
+    color: var(--warn);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  &__footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line);
+    color: var(--ink-2);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+// ---- Calendar heatmap cell ---------------------------------------------------
+// <button class="ui-heat ui-heat--direct [is-today]">12</button>
+.ui-heat {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 36px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-family: var(--font-code);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+
+  &--direct { background: var(--accent-fill); color: var(--accent-ink); }
+  &--connect {
+    background: repeating-linear-gradient(135deg, var(--connect-soft) 0 4px, color-mix(in srgb, var(--connect-fill) 40%, transparent) 4px 8px);
+    color: var(--connect);
+  }
+  &--outside {
+    background: repeating-linear-gradient(135deg, var(--surface-2) 0 3px, transparent 3px 6px);
+    color: var(--ink-3);
+    cursor: default;
+  }
+  &.is-today { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ink); }
+  &:disabled { cursor: default; }
+}
+
+// ---- Sticky shell ------------------------------------------------------------
+.ui-sticky-shell {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding-top: env(safe-area-inset-top);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  -webkit-backdrop-filter: saturate(1.4) blur(20px);
+  backdrop-filter: saturate(1.4) blur(20px);
+  border-bottom: 1px solid var(--line);
+}
+
+// ---- Dialog / bottom sheet ---------------------------------------------------
+// <dialog class="ui-sheet"><div class="ui-sheet__grabber"></div>...</dialog>
+.ui-sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: 92dvh;
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop);
+  padding: 0 0 env(safe-area-inset-bottom);
+  overflow: auto;
+  overscroll-behavior: contain;
+
+  &::backdrop {
+    background: var(--scrim);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  &[open] { animation: ui-sheet-up var(--dur) var(--ease-out); }
+
+  &__grabber {
+    width: 36px;
+    height: 4px;
+    margin: 8px auto 4px;
+    border-radius: 2px;
+    background: var(--line-strong);
+  }
+
+  @media (min-width: 720px) {
+    margin: auto;
+    width: min(640px, calc(100% - 48px));
+    max-height: 86dvh;
+    border-radius: 20px;
+    border: 1px solid var(--line);
+    &[open] { animation: ui-fade-in var(--dur) var(--ease-out); }
+    &__grabber { display: none; }
+  }
+}
+
+// ---- Motion ------------------------------------------------------------------
+// Staggered list entrance: <li class="ui-enter" [style.--i]="index">
+.ui-enter {
+  animation: enter-up var(--dur) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 20ms);
+}
+
+@keyframes enter-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ui-fade-in {
+  from { opacity: 0; transform: scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ui-sheet-up {
+  from { transform: translateY(24px); opacity: .6; }
+  to { transform: none; opacity: 1; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
     transition-duration: 0.01ms !important;
   }
 }

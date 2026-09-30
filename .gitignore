@@ -33,3 +33,4 @@ Thumbs.db
 
 # Playwright MCP scratch output
 .playwright-mcp/
+__pycache__/

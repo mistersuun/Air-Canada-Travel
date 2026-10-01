@@ -108,7 +108,7 @@ export const PREFS_STORAGE = new InjectionToken<Storage | null>('PREFS_STORAGE',
   },
 });
 
-const THEME_META: Record<'light' | 'dark', string> = { light: '#F4F5F7', dark: '#0B0B0D' };
+export const THEME_META: Record<'light' | 'dark', string> = { light: '#CFE6FF', dark: '#0F2238' };
 
 /**
  * Apply the theme contract from WS4: html[data-theme] is 'light' | 'dark', or

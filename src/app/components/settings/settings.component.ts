@@ -1,46 +1,37 @@
-import {
-  ChangeDetectionStrategy, Component, ElementRef, afterNextRender, inject, output, viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
 import { HUBS } from '../../data/destinations';
 import { AppStateService } from '../../state/app-state.service';
 import {
   MAX_LAYOVER_OPTIONS, MIN_CONNECT_OPTIONS, PrefsService, THEMES, ThemePref, TimeFormat,
 } from '../../state/prefs.service';
+import { GlassSheetComponent } from '../../ui/glass-sheet.component';
+import { SegComponent, SegOption } from '../../ui/seg.component';
+import { hubDisplayName } from '../../ui/format';
 import { IconComponent } from '../shared/icons.component';
 
+const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+
 /**
- * Settings sheet (native <dialog>): bottom sheet on mobile, centred panel from
- * 720px (the .ui-sheet primitive). Writes straight to PrefsService, so every
- * change applies and persists immediately. The parent renders it with @if and
- * removes it on (closed); the dialog opens itself after first render.
+ * Settings sheet (app-glass-sheet: bottom sheet on mobile, centred card from
+ * 720px). Writes straight to PrefsService, so every change applies and
+ * persists immediately. The shell renders it with @if and removes it on
+ * (closed).
  */
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [IconComponent],
+  imports: [GlassSheetComponent, SegComponent, IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <dialog #dlg class="ui-sheet settings" aria-labelledby="settings-title" (close)="closed.emit()"
-            (click)="onBackdrop($event)">
-      <div class="ui-sheet__grabber" aria-hidden="true"></div>
-      <header class="settings__head">
-        <h2 id="settings-title" class="settings__title">Settings</h2>
-        <button type="button" class="ui-icon-btn" (click)="close()" aria-label="Close settings">
-          <app-icon name="close" [size]="20" />
-        </button>
-      </header>
-
-      <div class="settings__body">
-        <section class="settings__group">
-          <label class="settings__row" for="settings-hub">
-            <span class="settings__row-label">
-              <span class="settings__name">Home airport</span>
-              <span class="settings__hint">Where the app opens</span>
-            </span>
-            <span class="settings__select">
+    <app-glass-sheet #sheet title="Settings" [open]="true" (closed)="closed.emit()">
+      <div class="st">
+        <section class="grp">
+          <label class="row" for="settings-hub">
+            <span class="row__tx"><span class="nm">Home airport</span><span class="hint">Where the app opens</span></span>
+            <span class="sel">
               <select id="settings-hub" [value]="p().hub" (change)="setHub($event)">
                 @for (h of hubs; track h.code) {
-                  <option [value]="h.code" [selected]="h.code === p().hub">{{ h.code }} · {{ h.name }}</option>
+                  <option [value]="h.code" [selected]="h.code === p().hub">{{ h.code }} · {{ display(h.code) }}</option>
                 }
               </select>
               <app-icon name="chevron-down" [size]="16" />
@@ -48,196 +39,117 @@ import { IconComponent } from '../shared/icons.component';
           </label>
         </section>
 
-        <section class="settings__group">
-          <fieldset class="settings__field">
-            <legend class="settings__name">Theme</legend>
-            <div class="seg" role="presentation">
-              @for (t of themes; track t) {
-                <label class="seg__opt">
-                  <input type="radio" name="settings-theme" [value]="t" [checked]="p().theme === t"
-                         (change)="prefs.setTheme(t)">
-                  <span><app-icon [name]="t === 'auto' ? 'auto' : t === 'light' ? 'sun' : 'moon'" [size]="16" />{{ themeLabel(t) }}</span>
-                </label>
-              }
-            </div>
-          </fieldset>
-          <fieldset class="settings__field">
-            <legend class="settings__name">Time format</legend>
-            <div class="seg">
-              @for (f of timeFormats; track f) {
-                <label class="seg__opt">
-                  <input type="radio" name="settings-time" [value]="f" [checked]="p().timeFormat === f"
-                         (change)="prefs.update({ timeFormat: f })">
-                  <span class="ui-num">{{ f === '24h' ? '22:10' : '10:10 pm' }}</span>
-                </label>
-              }
-            </div>
-          </fieldset>
+        <section class="grp">
+          <div class="field">
+            <span class="nm">Appearance</span>
+            <app-seg stretch ariaLabel="Appearance" data-setting="theme" [options]="themeOptions"
+                     [value]="p().theme" (valueChange)="setTheme($event)" />
+          </div>
+          <div class="field">
+            <span class="nm">Time format</span>
+            <app-seg stretch ariaLabel="Time format" data-setting="time" [options]="timeOptions"
+                     [value]="p().timeFormat" (valueChange)="setTime($event)" />
+          </div>
         </section>
 
-        <section class="settings__group">
-          <p class="ui-label settings__group-label">Connections</p>
-          <fieldset class="settings__field">
-            <legend class="settings__name">Minimum connection</legend>
-            <div class="seg">
-              @for (m of minConnectOptions; track m) {
-                <label class="seg__opt">
-                  <input type="radio" name="settings-min" [value]="m" [checked]="p().minConnect === m"
-                         (change)="prefs.update({ minConnect: m })">
-                  <span class="ui-num">{{ m }}m</span>
-                </label>
-              }
-            </div>
-          </fieldset>
-          <fieldset class="settings__field">
-            <legend class="settings__name">Maximum layover</legend>
-            <div class="seg">
-              @for (m of maxLayoverOptions; track m) {
-                <label class="seg__opt">
-                  <input type="radio" name="settings-max" [value]="m" [checked]="p().maxLayover === m"
-                         (change)="prefs.update({ maxLayover: m })">
-                  <span class="ui-num">{{ m / 60 }}h</span>
-                </label>
-              }
-            </div>
-          </fieldset>
-          <label class="settings__row" for="settings-overnight">
-            <span class="settings__row-label">
-              <span class="settings__name">Overnight connections</span>
-              <span class="settings__hint">Allow a layover that crosses midnight at the hub</span>
-            </span>
+        <section class="grp">
+          <p class="ui-label">Connections</p>
+          <label class="row" for="settings-connections">
+            <span class="row__tx"><span class="nm">Show connections</span><span class="hint">Include one-stop trips through a hub</span></span>
+            <input id="settings-connections" type="checkbox" role="switch" class="switch"
+                   [checked]="p().showConnections" (change)="setConnections($event)">
+          </label>
+          <div class="field">
+            <span class="nm">Minimum connection</span>
+            <app-seg stretch ariaLabel="Minimum connection" data-setting="min" [options]="minOptions"
+                     [value]="'' + p().minConnect" (valueChange)="prefs.update({ minConnect: +$event! })" />
+          </div>
+          <div class="field">
+            <span class="nm">Maximum layover</span>
+            <app-seg stretch ariaLabel="Maximum layover" data-setting="max" [options]="maxOptions"
+                     [value]="'' + p().maxLayover" (valueChange)="prefs.update({ maxLayover: +$event! })" />
+          </div>
+          <label class="row" for="settings-overnight">
+            <span class="row__tx"><span class="nm">Overnight connections</span><span class="hint">Allow a layover that crosses midnight at the hub</span></span>
             <input id="settings-overnight" type="checkbox" role="switch" class="switch"
                    [checked]="p().allowOvernight" (change)="setOvernight($event)">
           </label>
         </section>
 
-        <footer class="settings__foot">
-          <button type="button" class="ui-btn" (click)="reset()">Reset to defaults</button>
-          <button type="button" class="ui-btn ui-btn--primary" (click)="close()">Done</button>
-        </footer>
-        <p class="settings__note">Starred places are kept when you reset.</p>
+        <section class="grp">
+          <button type="button" class="row row--btn" (click)="openShortcuts()">
+            <span class="nm">Keyboard shortcuts</span><span class="chev" aria-hidden="true">›</span>
+          </button>
+          <div class="info">
+            <span class="nm">Schedules</span>
+            <span class="hint tn">{{ state.dataInfo().updatedLabel }}</span>
+            @if (state.dataInfo().staleDays !== null) {
+              <span class="ui-tag ui-tag--amber">Data {{ state.dataInfo().staleDays }} days old</span>
+            }
+          </div>
+        </section>
+
+        <div class="foot">
+          <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">Reset to defaults</button>
+          <button type="button" class="ui-btn ui-btn--dark" data-done (click)="sheet.close()">Done</button>
+        </div>
+        <p class="note">Saved destinations are kept when you reset.</p>
       </div>
-    </dialog>
+    </app-glass-sheet>
   `,
   styles: [`
-    .settings { color: var(--ink); }
-    .settings__head {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: var(--space-2) var(--space-2) 0 var(--space-5);
+    .st { display: grid; gap: 14px; }
+    .grp { display: grid; gap: 14px; padding: 14px 16px; border-radius: 18px; background: var(--fill); }
+    .field { display: grid; gap: 8px; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; width: 100%; text-align: left; }
+    .row__tx { display: grid; gap: 2px; }
+    .nm { font-size: 15px; font-weight: 600; }
+    .hint { font-size: 13px; color: var(--ink-2); }
+    .chev { color: var(--ink-3); font-size: 18px; }
+    .info { display: grid; gap: 4px; justify-items: start; }
+    .sel { position: relative; display: inline-flex; align-items: center; color: var(--ink-2); flex: none; }
+    .sel select {
+      appearance: none; height: 40px; padding: 0 32px 0 12px; max-width: 200px;
+      border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); color: var(--ink);
+      font: 600 14px var(--sans); cursor: pointer;
     }
-    .settings__title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
-    .settings__body { padding: var(--space-3) var(--space-5) var(--space-5); display: grid; gap: var(--space-4); }
-    .settings__group {
-      display: grid; gap: var(--space-4);
-      padding: var(--space-4);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-card);
-      background: var(--surface-2);
-    }
-    .settings__group-label { margin: 0 0 calc(-1 * var(--space-2)); }
-    .settings__field { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: var(--space-2); }
-    .settings__field legend { padding: 0; margin-bottom: var(--space-2); }
-    .settings__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); cursor: pointer; }
-    .settings__row-label { display: grid; gap: 2px; }
-    .settings__name { font-size: 15px; font-weight: 600; }
-    .settings__hint { font-size: 13px; color: var(--ink-2); }
-
-    .settings__select { position: relative; display: inline-flex; align-items: center; color: var(--ink-2); }
-    .settings__select select {
-      appearance: none;
-      height: 40px;
-      padding: 0 32px 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--surface);
-      color: var(--ink);
-      font: 600 14px var(--font-code);
-      cursor: pointer;
-    }
-    .settings__select app-icon { position: absolute; right: 10px; pointer-events: none; }
-
-    .seg {
-      display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
-      padding: 3px; gap: 3px;
-      border-radius: 12px;
-      background: var(--surface);
-      border: 1px solid var(--line);
-    }
-    .seg__opt { position: relative; display: block; }
-    .seg__opt input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-    .seg__opt span {
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      min-height: 40px; padding: 0 var(--space-2);
-      border-radius: 9px;
-      font-size: 13px; font-weight: 600; color: var(--ink-2);
-      transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-    }
-    .seg__opt input:checked + span { background: var(--ink); color: var(--bg); }
-    .seg__opt input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
-
+    .sel app-icon { position: absolute; right: 10px; pointer-events: none; }
+    app-seg ::ng-deep .seg { background: var(--surface); }
+    app-seg ::ng-deep .seg__b.on { background: var(--ink); color: var(--bg); box-shadow: none; }
     .switch {
-      appearance: none; flex: none;
-      width: 48px; height: 28px; margin: 0;
-      border-radius: 999px;
-      background: var(--line-strong);
-      position: relative; cursor: pointer;
+      appearance: none; flex: none; width: 50px; height: 30px; margin: 0; border-radius: 999px;
+      background: var(--hair); position: relative; cursor: pointer;
       transition: background var(--dur-fast) var(--ease-out);
     }
     .switch::after {
-      content: ''; position: absolute; top: 3px; left: 3px;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: var(--surface);
-      box-shadow: var(--shadow-card);
+      content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+      background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .2);
       transition: transform var(--dur-fast) var(--ease-out);
     }
-    .switch:checked { background: var(--accent-fill); }
+    .switch:checked { background: var(--teal); }
     .switch:checked::after { transform: translateX(20px); }
-    .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-    .settings__foot {
-      position: sticky; bottom: 0; z-index: 1;
-      display: flex; justify-content: space-between; gap: var(--space-3);
-      padding: var(--space-3) 0 calc(var(--space-3) + env(safe-area-inset-bottom));
-      background: var(--surface); border-top: 1px solid var(--line);
-    }
-    .settings__foot .ui-btn { flex: 1; }
-    .settings__note { margin: calc(-1 * var(--space-2)) 0 0; font-size: 12px; color: var(--ink-3); text-align: center; }
+    .foot { display: flex; gap: 10px; }
+    .foot .ui-btn { flex: 1; }
+    .note { font-size: 12px; color: var(--ink-2); text-align: center; }
   `],
 })
 export class SettingsComponent {
   protected readonly prefs = inject(PrefsService);
+  protected readonly state = inject(AppStateService);
   protected readonly p = this.prefs.prefs;
-  private readonly state = inject(AppStateService);
   readonly closed = output<void>();
 
   protected readonly hubs = HUBS;
-  protected readonly themes = THEMES;
-  protected readonly timeFormats: readonly TimeFormat[] = ['24h', '12h'];
-  protected readonly minConnectOptions = MIN_CONNECT_OPTIONS;
-  protected readonly maxLayoverOptions = MAX_LAYOVER_OPTIONS;
+  protected readonly themeOptions: SegOption[] = THEMES.map(t => ({ value: t, label: THEME_LABEL[t] }));
+  protected readonly timeOptions: SegOption[] = [
+    { value: '24h', label: '22:10' },
+    { value: '12h', label: '10:10 PM' },
+  ];
+  protected readonly minOptions: SegOption[] = MIN_CONNECT_OPTIONS.map(m => ({ value: String(m), label: `${m}m` }));
+  protected readonly maxOptions: SegOption[] = MAX_LAYOVER_OPTIONS.map(m => ({ value: String(m), label: `${m / 60}h` }));
 
-  private readonly dlg = viewChild.required<ElementRef<HTMLDialogElement>>('dlg');
-
-  constructor() {
-    afterNextRender(() => {
-      const d = this.dlg().nativeElement;
-      if (!d.open) d.showModal();
-    });
-  }
-
-  close(): void {
-    // Fires the dialog's 'close' event, which emits (closed).
-    this.dlg().nativeElement.close();
-  }
-
-  protected onBackdrop(e: MouseEvent): void {
-    // A click on the ::backdrop targets the dialog element itself, but so does
-    // a click on the dialog's own padding: check the point is outside its box.
-    const d = this.dlg().nativeElement;
-    if (e.target !== d) return;
-    const r = d.getBoundingClientRect();
-    const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-    if (!inside) this.close();
+  protected display(code: string): string {
+    return hubDisplayName(code);
   }
 
   protected setHub(e: Event): void {
@@ -245,16 +157,29 @@ export class SettingsComponent {
     this.state.setHub((e.target as HTMLSelectElement).value);
   }
 
+  protected setTheme(t: string | undefined): void {
+    if (t && (THEMES as readonly string[]).includes(t)) this.prefs.setTheme(t as ThemePref);
+  }
+
+  protected setTime(t: string | undefined): void {
+    if (t === '12h' || t === '24h') this.prefs.update({ timeFormat: t as TimeFormat });
+  }
+
+  protected setConnections(e: Event): void {
+    this.state.setShowConnections((e.target as HTMLInputElement).checked);
+  }
+
   protected setOvernight(e: Event): void {
     this.prefs.update({ allowOvernight: (e.target as HTMLInputElement).checked });
+  }
+
+  protected openShortcuts(): void {
+    this.state.closeSettings();
+    this.state.openShortcuts();
   }
 
   protected reset(): void {
     this.prefs.reset();
     this.state.resetOverrides();
-  }
-
-  protected themeLabel(t: ThemePref): string {
-    return t === 'auto' ? 'Auto' : t === 'light' ? 'Light' : 'Dark';
   }
 }

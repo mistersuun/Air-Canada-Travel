@@ -1,13 +1,19 @@
-import { DOCUMENT, DestroyRef, Injectable, InjectionToken, computed, effect, inject, signal, untracked } from '@angular/core';
-import { Destination } from '../data/destinations';
+import {
+  DOCUMENT, DestroyRef, Injectable, InjectionToken, Signal, computed, effect, inject, signal, untracked,
+} from '@angular/core';
+import { PlatformLocation } from '@angular/common';
+import { NavigationEnd, NavigationStart, Params, Router } from '@angular/router';
+import { HUBS, Hub } from '../data/destinations';
 import { Coverage, getCoverage } from '../data/schedule-index';
 import { findDestination, findHub } from '../utils/airports';
 import { summarizeWeek } from '../utils/connections';
 import { EMPTY_FILTERS, Filters, RouteEntry, SortKey, activeFilterCount, computeRoutes, hubStats } from '../utils/routes';
-import { WEEKDAY_SHORT, addDays, isDateKey, todayKey, weekStartKey, weekdayIndex } from '../utils/time';
+import { WEEKDAY_SHORT, addDays, dateKey, formatKey, isDateKey, todayKey, weekStartKey, weekdayIndex } from '../utils/time';
 import { getFlightsForWeek } from '../utils/week';
+import { STALE_AFTER_DAYS, freshnessAge } from '../ui/format';
+import { destPath } from '../ui/links';
 import { DEFAULT_HUB, PrefsService, isHubCode, isRegion } from './prefs.service';
-import { UrlState, parseUrlState, serializeUrlState } from './url-state';
+import { UrlState, parseUrlState } from './url-state';
 
 /**
  * The schedule functions the shell calls, behind a token so specs can count
@@ -32,7 +38,18 @@ export const NOW = new InjectionToken<() => number>('NOW', {
   factory: () => () => Date.now(),
 });
 
-/** One entry of the header's "Your starred places this week" strip. */
+/** How often `nowMs` ticks while the page is visible (countdowns). */
+export const COUNTDOWN_TICK_MS = 30_000;
+
+/** How long a notice stays up, without and with an action. */
+export const NOTICE_MS = 2500;
+export const NOTICE_ACTION_MS = 5000;
+
+/** The query keys AppStateService owns; every other key belongs to a page. */
+export const GLOBAL_QUERY_KEYS = ['from', 'week', 'day', 'region', 'q'] as const;
+export type GlobalQueryKey = (typeof GLOBAL_QUERY_KEYS)[number];
+
+/** One favourite with this week's operating days (Saved › Watching). */
 export interface StarredItem {
   code: string;
   city: string;
@@ -45,19 +62,31 @@ export interface StarredItem {
   direct: boolean;
 }
 
-/** history.state marker for the entry pushed when the modal opens. */
-const MODAL_STATE = 'acModal';
+export interface Notice {
+  message: string;
+  actionLabel?: string;
+  action?: () => void;
+}
+
+export interface DataInfo {
+  /** ISO timestamp of the last scrape, when known. */
+  generatedAt: string | null;
+  /** Last published date for the hub. */
+  to: string | null;
+  /** 'Updated Sep 30 · data to Sep 26, 2027'. */
+  updatedLabel: string;
+  /** Age in days when the data is stale (≥ STALE_AFTER_DAYS), else null. */
+  staleDays: number | null;
+}
 
 /**
- * The app's view state as signals, plus actions. AppComponent is a thin
- * template over this service.
+ * The app's view state as signals, plus actions. Pages are thin templates
+ * over this service.
  *
- * - `hub` and `region` come from the URL for this session when present,
- *   otherwise from the saved prefs; choosing one in the UI saves it.
- * - `routes` is a computed over the inputs, so the engine runs only when an
- *   input changes, never on unrelated change detection.
- * - The URL mirrors the state (replaceState), except opening a destination,
- *   which pushes an entry so Back closes the modal.
+ * URL contract (spec §2.3): the global keys from, week, day, region and q
+ * mirror the state with replaceUrl navigations (`merge`, so page keys such as
+ * ?tab= survive). The Router owns the path. Back/Forward moves between pages
+ * while the global state stays as the user left it.
  */
 @Injectable({ providedIn: 'root' })
 export class AppStateService {
@@ -65,6 +94,8 @@ export class AppStateService {
   private readonly engine = inject(ROUTES_ENGINE);
   private readonly now = inject(NOW);
   private readonly doc = inject(DOCUMENT);
+  private readonly platformLocation = inject(PlatformLocation);
+  private readonly router = inject(Router);
   private readonly win = this.doc.defaultView;
 
   // ── Inputs ────────────────────────────────────────────────────────────────
@@ -76,22 +107,39 @@ export class AppStateService {
   readonly query = signal('');
   readonly sort = signal<SortKey>('az');
   readonly filters = signal<Filters>(EMPTY_FILTERS);
-  /** Destination code whose modal is open. */
-  readonly openCode = signal<string | null>(null);
   /** True once the user (or a deep link) picked a week, so rollover leaves it alone. */
   private navigated = false;
-  /** True while the open modal owns a history entry we pushed. */
-  private pushedModal = false;
 
   readonly hub = computed(() => this.hubOverride() ?? this.prefs.hub() ?? DEFAULT_HUB);
   readonly region = computed(() => this.regionOverride() ?? this.prefs.region());
   readonly showConnections = this.prefs.showConnections;
   readonly favourites = this.prefs.favourites;
   readonly connect = this.prefs.connectOptions;
+  readonly timeFormat = this.prefs.timeFormat;
+
+  /** Epoch ms, refreshed every COUNTDOWN_TICK_MS while the document is visible. */
+  readonly nowMs = signal(this.now());
+
+  // ── Shell UI state ────────────────────────────────────────────────────────
+  readonly settingsOpen = signal(false);
+  readonly shortcutsOpen = signal(false);
+  readonly notice = signal<Notice | null>(null);
+  private noticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** The current path without query or fragment ('/', '/to/LIS', '/flight/LIS/2026-10-01/AC812'). */
+  readonly path = signal<string>('/');
+  /** Push navigations made inside the app (Back stays in the app when > 0). */
+  private pushes = 0;
+  /** True when boot staged an in-app entry under a deep link (see shell/deep-link.ts). */
+  private stagedBack = false;
+  /** Set on an imperative push NavigationStart, consumed on NavigationEnd. */
+  private pendingPush = false;
 
   // ── Derived ───────────────────────────────────────────────────────────────
   readonly hubName = computed(() => findHub(this.hub())?.name ?? this.hub());
+  readonly hubInfo = computed<Hub>(() => findHub(this.hub()) ?? HUBS.find(h => h.code === DEFAULT_HUB)!);
 
+  /** Filtered, searched and sorted routes (Home results mode). */
   readonly routes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
       home: this.hub(),
@@ -107,6 +155,23 @@ export class AppStateService {
     }),
   );
 
+  /** Every route from the hub in scope (week or selected day), ignoring search, filters and region. */
+  readonly allRoutes = computed<RouteEntry[]>(() =>
+    this.engine.computeRoutes({
+      home: this.hub(),
+      weekStartKey: this.weekStartKey(),
+      dateKey: this.selectedDateKey(),
+      region: 'All',
+      showConnections: this.showConnections(),
+      favourites: this.favourites(),
+      connect: this.connect(),
+    }),
+  );
+
+  readonly routeByCode = computed<ReadonlyMap<string, RouteEntry>>(
+    () => new Map(this.allRoutes().map(r => [r.destination.code, r])),
+  );
+
   readonly stats = computed(() => this.engine.hubStats(this.hub(), this.weekStartKey(), this.connect()));
 
   readonly coverage = computed<Coverage>(() => this.engine.getCoverage(this.hub()));
@@ -115,11 +180,7 @@ export class AppStateService {
   readonly activeFilterCount = computed(() => activeFilterCount(this.filters()) + (this.query() ? 1 : 0));
   readonly hasActiveFilters = computed(() => this.activeFilterCount() > 0 || this.region() !== 'All');
 
-  readonly openDestination = computed<Destination | null>(() => findDestination(this.openCode()));
-  readonly openEntry = computed<RouteEntry | null>(() => {
-    const code = this.openCode();
-    return code ? this.routes().find(r => r.destination.code === code) ?? null : null;
-  });
+  readonly favouriteSet = computed<ReadonlySet<string>>(() => new Set(this.favourites()));
 
   readonly starredThisWeek = computed<StarredItem[]>(() => {
     const hub = this.hub();
@@ -143,7 +204,26 @@ export class AppStateService {
     return items.sort((a, b) => a.city.localeCompare(b.city));
   });
 
-  /** The URL for the current state; defaults are left out. */
+  readonly dataInfo = computed<DataInfo>(() => {
+    const cov = this.coverage();
+    const generatedAt = cov.generatedAt;
+    const age = generatedAt ? freshnessAge(generatedAt, this.todayKey()) : null;
+    const parts: string[] = [];
+    if (generatedAt && age) {
+      const key = dateKey(new Date(Date.parse(generatedAt)));
+      parts.push(`Updated ${formatKey(key, { month: 'short', day: 'numeric' })}`);
+    }
+    if (cov.to) parts.push(`data to ${formatKey(cov.to, { month: 'short', day: 'numeric', year: 'numeric' })}`);
+    else parts.push('No published schedules');
+    return {
+      generatedAt,
+      to: cov.to,
+      updatedLabel: parts.join(' · '),
+      staleDays: age && age.days >= STALE_AFTER_DAYS ? age.days : null,
+    };
+  });
+
+  /** The global state as URL fields; defaults are left out. */
   readonly urlState = computed<UrlState>(() => {
     const week = this.weekStartKey();
     const day = this.selectedDateKey();
@@ -153,35 +233,59 @@ export class AppStateService {
       week: !day && week !== weekStartKey(this.todayKey()) ? week : undefined,
       day: day ?? undefined,
       region: region !== 'All' ? region : undefined,
-      dest: this.openCode() ?? undefined,
       q: this.query() || undefined,
     };
   });
 
-  constructor() {
-    this.applyUrl(parseUrlState(this.win?.location.search ?? ''), true);
+  /**
+   * The global keys as router queryParams, for links:
+   *   <a [routerLink]="destPath(code)" [queryParams]="state.globalParams()">
+   */
+  readonly globalParams: Signal<Params> = computed(() => {
+    const s = this.urlState();
+    const out: Params = {};
+    for (const k of GLOBAL_QUERY_KEYS) if (s[k]) out[k] = s[k];
+    return out;
+  });
 
-    // A deep link that opens a destination: rewrite the landing entry without
-    // `dest` and push the modal entry on top, so Back closes the modal and
-    // stays in the app instead of leaving the page.
-    if (this.openCode() && !this.win?.history.state?.[MODAL_STATE]) {
-      const base = untracked(() => ({ ...this.urlState(), dest: undefined }));
-      this.writeUrl(serializeUrlState(base), false);
-      this.writeUrl(serializeUrlState(untracked(() => this.urlState())), true);
-      this.pushedModal = true;
-    } else if (this.openCode()) {
-      this.pushedModal = true; // reloaded on our own modal entry
-    }
+  constructor() {
+    this.applyUrl(parseUrlState(this.platformLocation.search ?? ''));
+    this.path.set(this.platformLocation.pathname || '/');
 
     effect(() => {
-      const url = serializeUrlState(this.urlState());
-      untracked(() => this.writeUrl(url, false));
+      const params = this.globalParams();
+      untracked(() => this.writeUrl(params));
     });
 
+    const destroyRef = inject(DestroyRef);
+    const sub = this.router.events.subscribe(e => {
+      if (e instanceof NavigationStart) {
+        const nav = this.router.currentNavigation();
+        if (e.navigationTrigger === 'imperative' && !nav?.extras.replaceUrl && !nav?.extras.skipLocationChange) {
+          this.pendingPush = true;
+        }
+      } else if (e instanceof NavigationEnd) {
+        const url = this.router.parseUrl(e.urlAfterRedirects);
+        const path = '/' + (url.root.children['primary']?.segments.map(s => s.path).join('/') ?? '');
+        if (this.pendingPush && path !== this.path()) this.pushes++;
+        this.pendingPush = false;
+        this.path.set(path);
+        // A page link (or Back) can land on a URL without the global keys, or
+        // with stale ones: the state wins, rewritten with replaceUrl once this
+        // navigation has finished.
+        queueMicrotask(() => this.writeUrl(untracked(() => this.globalParams())));
+      }
+    });
+    destroyRef.onDestroy(() => sub.unsubscribe());
+
     if (this.win) {
-      const onPop = () => this.onPopState();
-      this.win.addEventListener('popstate', onPop);
-      inject(DestroyRef).onDestroy(() => this.win?.removeEventListener('popstate', onPop));
+      const tick = setInterval(() => {
+        if (this.doc.visibilityState !== 'hidden') this.nowMs.set(this.now());
+      }, COUNTDOWN_TICK_MS);
+      destroyRef.onDestroy(() => {
+        clearInterval(tick);
+        clearTimeout(this.noticeTimer);
+      });
     }
   }
 
@@ -255,7 +359,7 @@ export class AppStateService {
     if (!key && this.sort() === 'departure') this.sort.set('az');
   }
 
-  /** Jump to any date: its week, with that day selected (date picker, Today, modal calendar). */
+  /** Jump to any date: its week, with that day selected (Today, calendar Done). */
   jumpTo(key: string): void {
     this.selectDay(key);
   }
@@ -269,28 +373,74 @@ export class AppStateService {
     if (target) this.goToWeek(target);
   }
 
-  openDestinationByCode(code: string): void {
-    if (!findDestination(code) || this.openCode() === code) return;
-    const wasOpen = this.openCode() !== null;
-    this.openCode.set(code);
-    if (!wasOpen) {
-      this.writeUrl(serializeUrlState(this.urlState()), true);
-      this.pushedModal = true;
-    }
+  toggleFavourite(code: string): void {
+    this.prefs.toggleFavourite(code);
   }
 
-  closeDestination(): void {
-    if (this.openCode() === null) return;
-    this.openCode.set(null);
-    if (this.pushedModal && this.win?.history.state?.[MODAL_STATE]) {
-      this.pushedModal = false;
-      // Pop our entry so Back does not reopen the modal; popstate re-syncs the URL.
+  openSettings(): void {
+    this.settingsOpen.set(true);
+  }
+
+  closeSettings(): void {
+    this.settingsOpen.set(false);
+  }
+
+  openShortcuts(): void {
+    this.shortcutsOpen.set(true);
+  }
+
+  closeShortcuts(): void {
+    this.shortcutsOpen.set(false);
+  }
+
+  /** Show a toast for 2.5 s (5 s with an action). The PWA update toast takes priority. */
+  flash(message: string, action?: { label: string; run: () => void }): void {
+    clearTimeout(this.noticeTimer);
+    this.notice.set(
+      action
+        ? { message, actionLabel: action.label, action: () => { this.notice.set(null); action.run(); } }
+        : { message },
+    );
+    this.noticeTimer = setTimeout(() => this.notice.set(null), action ? NOTICE_ACTION_MS : NOTICE_MS);
+  }
+
+  dismissNotice(): void {
+    clearTimeout(this.noticeTimer);
+    this.notice.set(null);
+  }
+
+  /** Open /to/CODE (a new history entry), keeping the global params. */
+  goToDestination(code: string): void {
+    void this.router.navigate(destPath(code), { queryParams: this.globalParams() });
+  }
+
+  /** True when Back would stay inside the app. */
+  canGoBack(): boolean {
+    return this.stagedBack || this.pushes > 0;
+  }
+
+  /**
+   * Back button / Esc on detail pages: history back when the previous entry
+   * is ours, else navigate to `fallback` (a deep link opened in a new tab).
+   */
+  goBack(fallback: readonly unknown[] = ['/']): void {
+    if (this.canGoBack() && this.win) {
+      if (this.pushes > 0) this.pushes--;
+      else this.stagedBack = false;
       this.win.history.back();
+      return;
     }
+    void this.router.navigate(fallback as unknown[], { queryParams: this.globalParams() });
+  }
+
+  /** Called once at boot when shell/deep-link.ts staged an in-app entry under the landing URL. */
+  markStagedBack(): void {
+    this.stagedBack = true;
   }
 
   /** Recompute today (tab became visible, possibly after midnight) and roll the week forward if untouched. */
   refreshToday(): void {
+    this.nowMs.set(this.now());
     const t = todayKey(undefined, this.now());
     if (t === this.todayKey()) return;
     this.todayKey.set(t);
@@ -304,7 +454,7 @@ export class AppStateService {
   }
 
   // ── URL plumbing ──────────────────────────────────────────────────────────
-  private applyUrl(s: UrlState, boot: boolean): void {
+  private applyUrl(s: UrlState): void {
     if (s.from) this.hubOverride.set(s.from);
     if (s.region) this.regionOverride.set(s.region);
     if (s.week) {
@@ -313,33 +463,22 @@ export class AppStateService {
     }
     this.selectedDateKey.set(s.day ?? null);
     if (s.q !== undefined) this.query.set(s.q);
-    this.openCode.set(s.dest ?? null);
-    if (boot) this.pushedModal = false;
   }
 
-  /**
-   * Back/Forward: only the modal follows history. Other state (week, hub)
-   * stays as the user left it, and the URL is rewritten to match it.
-   */
-  private onPopState(): void {
-    const s = parseUrlState(this.win?.location.search ?? '');
-    this.pushedModal = !!(s.dest && this.win?.history.state?.[MODAL_STATE]);
-    this.openCode.set(s.dest ?? null);
-    this.writeUrl(serializeUrlState(this.urlState()), false);
-  }
-
-  private writeUrl(search: string, push: boolean): void {
-    const w = this.win;
-    if (!w) return;
-    try {
-      const url = `${w.location.pathname}${search}${w.location.hash}`;
-      if (push) {
-        w.history.pushState({ [MODAL_STATE]: true }, '', url);
-      } else if (url !== `${w.location.pathname}${w.location.search}${w.location.hash}`) {
-        w.history.replaceState(w.history.state, '', url);
-      }
-    } catch {
-      // Sandboxed iframes can throw on history writes; the app still works.
+  /** replaceUrl-merge the global keys, unless the URL already has them or a navigation is running. */
+  private writeUrl(params: Params): void {
+    // Before the first navigation, and while one runs, NavigationEnd re-syncs.
+    if (!this.router.navigated || this.router.currentNavigation()) return;
+    const current = this.router.parseUrl(this.router.url).queryParams;
+    const patch: Params = {};
+    let changed = false;
+    for (const k of GLOBAL_QUERY_KEYS) {
+      const want = params[k] ?? null;
+      const have = current[k] ?? null;
+      if (want !== have) changed = true;
+      patch[k] = want;
     }
+    if (!changed) return;
+    void this.router.navigate([], { queryParams: patch, queryParamsHandling: 'merge', replaceUrl: true });
   }
 }

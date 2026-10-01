@@ -26,26 +26,38 @@ export type IconName =
   | 'auto'
   | 'swap'
   | 'download'
-  | 'info';
+  | 'info'
+  | 'compass'
+  | 'map'
+  | 'arrow-left'
+  | 'filter'
+  | 'locate'
+  | 'currency';
 
 /** Path data per icon. Paths are stroked; FILLABLE icons also take fill when `filled`. */
 export const ICON_PATHS: Record<IconName, string[]> = {
   // points up (north); rotate with CSS for other headings
   plane: ['M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5Z'],
-  star: [
-    'm12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z',
-  ],
+  // Clear Sky tab bar set (src-2.html ico.e/m/s/g), drawn at stroke-width 2.
+  star: ['m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z'],
   gear: [
-    'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z',
-    'M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.5-2-3.4-2.3 1a7.5 7.5 0 0 0-2.6-1.5L14.2 2.6h-4l-.3 2.5a7.5 7.5 0 0 0-2.6 1.5l-2.3-1-2 3.4 2 1.5a7.6 7.6 0 0 0 0 3l-2 1.5 2 3.4 2.3-1a7.5 7.5 0 0 0 2.6 1.5l.3 2.5h4l.3-2.5a7.5 7.5 0 0 0 2.6-1.5l2.3 1 2-3.4-2-1.5Z',
+    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+    'M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',
   ],
+  compass: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'm15.5 8.5-2 5-5 2 2-5Z'],
+  map: ['M9 4 3 6v14l6-2 6 2 6-2V4l-6 2Z', 'M9 4v14M15 6v14'],
   calendar: [
     'M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-12Z',
     'M4.5 9.5h15M8.5 2.5v4M15.5 2.5v4',
   ],
-  share: [
-    'M12 15V3.5M7.5 8 12 3.5 16.5 8',
-    'M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6',
+  // ↗ (open / share out)
+  share: ['M7 17 17 7', 'M8.5 7H17v8.5'],
+  'arrow-left': ['M19 12H5', 'm11 18-6-6 6-6'],
+  filter: ['M4 7h16M7 12h10M10 17h4'],
+  locate: ['M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
+  currency: [
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+    'M14.6 9.2c-.5-.8-1.5-1.3-2.6-1.3-1.5 0-2.6.8-2.6 2s1.1 1.7 2.6 1.9 2.6.8 2.6 2-1.1 2-2.6 2c-1.1 0-2.1-.5-2.6-1.3M12 6.5v11',
   ],
   warning: [
     'M10.3 4.2 2.6 17.5a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z',

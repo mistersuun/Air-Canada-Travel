@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { ApplicationRef, Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
+import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource, getCoverage } from '../data/schedule-index';
 import { FIXTURE_META, FIXTURE_ROUTES } from '../data/testing/schedule-fixtures';
 import { computeRoutes, hubStats } from '../utils/routes';
 import { summarizeWeek } from '../utils/connections';
 import { getFlightsForWeek } from '../utils/week';
-import { AppStateService, NOW, ROUTES_ENGINE, RoutesEngine } from './app-state.service';
+import { AppStateService, NOTICE_MS, NOW, ROUTES_ENGINE, RoutesEngine } from './app-state.service';
 import { PREFS_KEY, PREFS_STORAGE, PrefsService } from './prefs.service';
 import { MemoryStorage } from './testing';
 
@@ -18,6 +21,25 @@ function engineSpy() {
   return { spy, engine };
 }
 
+@Component({ standalone: true, template: '' })
+class BlankPage {}
+
+const TEST_ROUTES = [
+  { path: '', component: BlankPage },
+  { path: 'to/:code', component: BlankPage },
+  { path: 'map', component: BlankPage },
+  { path: '**', redirectTo: '' },
+];
+
+/** Let effects run and pending navigations finish. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    TestBed.tick();
+    await TestBed.inject(ApplicationRef).whenStable();
+    await new Promise(r => setTimeout(r, 0)); // popstate navigations are scheduled
+  }
+}
+
 function setup(opts: { url?: string; storage?: Storage; now?: () => number } = {}) {
   window.history.replaceState(null, '', `/${opts.url ?? ''}`);
   const { spy, engine } = engineSpy();
@@ -27,6 +49,8 @@ function setup(opts: { url?: string; storage?: Storage; now?: () => number } = {
       { provide: PREFS_STORAGE, useValue: opts.storage ?? new MemoryStorage() },
       { provide: ROUTES_ENGINE, useValue: engine },
       { provide: NOW, useValue: opts.now ?? (() => clock.now) },
+      provideRouter(TEST_ROUTES),
+      { provide: PlatformLocation, useClass: BrowserPlatformLocation },
     ],
   });
   const state = TestBed.inject(AppStateService);
@@ -218,110 +242,184 @@ describe('AppStateService', () => {
   });
 
   describe('URL', () => {
-    it('boots from ?from=YYZ&day=…&dest=LHR without saving the hub', () => {
+    async function boot(url = '', storage?: Storage) {
+      const env = setup({ url, storage });
+      const router = TestBed.inject(Router);
+      router.initialNavigation();
+      await settle();
+      return { ...env, router };
+    }
+
+    it('boots from ?from=YYZ&day=…&region=…&q=… without saving the hub', async () => {
       const storage = new MemoryStorage();
-      const { state, prefs } = setup({ url: '?from=YYZ&day=2026-10-07&dest=LHR&region=Europe&q=lon', storage });
+      const { state, prefs } = await boot('?from=YYZ&day=2026-10-07&region=Europe&q=lon', storage);
       expect(state.hub()).toBe('YYZ');
       expect(prefs.hub()).toBe('YUL');
       expect(state.weekStartKey()).toBe('2026-10-05');
       expect(state.selectedDateKey()).toBe('2026-10-07');
-      expect(state.openCode()).toBe('LHR');
-      expect(state.openDestination()?.city).toBe('London');
-      expect(state.openEntry()?.destination.code).toBe('LHR');
       expect(state.region()).toBe('Europe');
       expect(state.query()).toBe('lon');
     });
 
-    it('falls back to prefs for invalid params', () => {
-      const { state } = setup({ url: '?from=NOPE&day=bad&dest=ZZZ' });
+    it('falls back to prefs for invalid params', async () => {
+      const { state } = await boot('?from=NOPE&day=bad');
       expect(state.hub()).toBe('YUL');
       expect(state.selectedDateKey()).toBeNull();
-      expect(state.openCode()).toBeNull();
     });
 
-    it('mirrors state with replaceState, leaving defaults out', () => {
-      const { state } = setup();
+    it('mirrors the global keys with replaceUrl, leaving defaults out', async () => {
+      const { state } = await boot();
       const before = window.history.length;
-      TestBed.tick();
       expect(search()).toBe('?from=YUL');
       state.setRegion('Europe');
       state.selectDay('2026-10-02');
       state.setQuery('lon');
-      TestBed.tick();
-      expect(search()).toBe('?from=YUL&day=2026-10-02&region=Europe&q=lon');
+      await settle();
+      expect(new URLSearchParams(search()).toString()).toBe('from=YUL&day=2026-10-02&region=Europe&q=lon');
       state.selectDay(null);
       state.nextWeek();
-      TestBed.tick();
-      expect(search()).toBe('?from=YUL&week=2026-10-05&region=Europe&q=lon');
+      await settle();
+      const p = new URLSearchParams(search());
+      expect(p.get('week')).toBe('2026-10-05');
+      expect(p.has('day')).toBe(false);
       expect(window.history.length).toBe(before);
     });
 
-    it('pushes a history entry when a destination opens, and Back closes it', async () => {
-      const { state } = setup();
-      TestBed.tick();
-      const before = window.history.length;
-      state.openDestinationByCode('LHR');
-      TestBed.tick();
-      expect(window.history.length).toBe(before + 1);
-      expect(search()).toContain('dest=LHR');
-
-      // Simulate the browser's Back button.
-      const popped = new Promise(r => window.addEventListener('popstate', r, { once: true }));
-      window.history.back();
-      await popped;
-      expect(state.openCode()).toBeNull();
-      expect(search()).not.toContain('dest=');
+    it('keeps page-owned keys when a global key changes', async () => {
+      const { state, router } = await boot();
+      await router.navigate(['/to', 'LHR'], { queryParams: { tab: 'map', from: 'YUL' } });
+      await settle();
+      state.selectDay('2026-10-02');
+      await settle();
+      const p = new URLSearchParams(search());
+      expect(window.location.pathname).toBe('/to/LHR');
+      expect(p.get('tab')).toBe('map');
+      expect(p.get('day')).toBe('2026-10-02');
     });
 
-    it('closing the modal in the UI pops the pushed entry and keeps later state', async () => {
-      const { state } = setup();
-      TestBed.tick();
-      state.openDestinationByCode('LHR');
-      TestBed.tick();
-      state.jumpTo('2026-10-14'); // e.g. a calendar tap inside the modal
-      TestBed.tick();
+    it('restores the global keys after a navigation that dropped them', async () => {
+      const { state, router } = await boot('?q=lis');
+      expect(state.query()).toBe('lis');
+      await router.navigate(['/map']);
+      await settle();
+      expect(window.location.pathname).toBe('/map');
+      expect(new URLSearchParams(search()).get('q')).toBe('lis');
+      expect(state.path()).toBe('/map');
+    });
+
+    it('Back returns to the previous page with the global state as the user left it', async () => {
+      const { state } = await boot();
+      state.goToDestination('LHR');
+      await settle();
+      expect(window.location.pathname).toBe('/to/LHR');
+      expect(state.canGoBack()).toBe(true);
+      state.jumpTo('2026-10-14');
+      await settle();
       const popped = new Promise(r => window.addEventListener('popstate', r, { once: true }));
-      state.closeDestination();
-      expect(state.openCode()).toBeNull();
+      state.goBack();
       await popped;
-      TestBed.tick();
+      await settle();
+      expect(window.location.pathname).toBe('/');
+      expect(state.path()).toBe('/');
       expect(state.selectedDateKey()).toBe('2026-10-14');
-      expect(search()).toBe('?from=YUL&day=2026-10-14');
+      expect(new URLSearchParams(search()).get('day')).toBe('2026-10-14');
     });
 
-    it('a deep-linked modal sits on its own history entry, so Back closes it and stays in the app', async () => {
-      const { state } = setup({ url: '?from=YYZ&dest=LHR' });
-      TestBed.tick();
-      expect(state.openCode()).toBe('LHR');
-      expect(window.history.state?.acModal).toBe(true);
-      expect(search()).toBe('?from=YYZ&dest=LHR');
-
-      const popped = new Promise(r => window.addEventListener('popstate', r, { once: true }));
-      window.history.back();
-      await popped;
-      TestBed.tick();
-      expect(state.openCode()).toBeNull();
-      expect(search()).toBe('?from=YYZ');
+    it('goBack without an in-app entry navigates to the fallback', async () => {
+      const { state } = await boot();
+      expect(state.canGoBack()).toBe(false);
+      state.goBack(['/map']);
+      await settle();
+      expect(window.location.pathname).toBe('/map');
     });
 
-    it('closing a deep-linked modal in the UI pops its entry', async () => {
-      const { state } = setup({ url: '?dest=LHR' });
-      TestBed.tick();
-      const popped = new Promise(r => window.addEventListener('popstate', r, { once: true }));
-      state.closeDestination();
-      await popped;
-      TestBed.tick();
-      expect(state.openCode()).toBeNull();
-      expect(search()).toBe('?from=YUL');
+    it('a staged deep link counts as an in-app Back', async () => {
+      const { state } = await boot();
+      state.markStagedBack();
+      expect(state.canGoBack()).toBe(true);
     });
 
-    it('ignores unknown destination codes', () => {
-      const { state } = setup();
-      state.openDestinationByCode('ZZZ');
-      expect(state.openCode()).toBeNull();
+    it('globalParams carries the non-default keys for links', async () => {
+      const { state } = await boot('?region=Europe');
+      expect(state.globalParams()).toEqual({ from: 'YUL', region: 'Europe' });
     });
   });
 
+  describe('shell state', () => {
+    it('opens and closes settings and shortcuts', () => {
+      const { state } = setup();
+      state.openSettings();
+      state.openShortcuts();
+      expect(state.settingsOpen()).toBe(true);
+      expect(state.shortcutsOpen()).toBe(true);
+      state.closeSettings();
+      state.closeShortcuts();
+      expect(state.settingsOpen()).toBe(false);
+      expect(state.shortcutsOpen()).toBe(false);
+    });
+
+    it('flash shows a notice that expires, longer with an action', () => {
+      vi.useFakeTimers();
+      try {
+        const { state } = setup();
+        state.flash('Link copied');
+        expect(state.notice()).toEqual({ message: 'Link copied' });
+        vi.advanceTimersByTime(NOTICE_MS);
+        expect(state.notice()).toBeNull();
+        const run = vi.fn();
+        state.flash('Removed Lisbon', { label: 'Undo', run });
+        vi.advanceTimersByTime(NOTICE_MS);
+        expect(state.notice()?.actionLabel).toBe('Undo');
+        state.notice()!.action!();
+        expect(run).toHaveBeenCalled();
+        expect(state.notice()).toBeNull();
+        state.flash('x');
+        state.dismissNotice();
+        expect(state.notice()).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('toggleFavourite and favouriteSet', () => {
+      const { state } = setup();
+      state.toggleFavourite('LHR');
+      expect(state.favouriteSet().has('LHR')).toBe(true);
+      state.toggleFavourite('LHR');
+      expect(state.favouriteSet().size).toBe(0);
+    });
+
+    it('allRoutes ignores search, filters and region; routeByCode indexes them', () => {
+      const { state } = setup();
+      state.setQuery('athens');
+      state.setRegion('Europe');
+      expect(state.routes().map(r => r.destination.code)).toEqual(['ATH']);
+      expect(state.allRoutes().length).toBeGreaterThan(1);
+      expect(state.routeByCode().get('LHR')?.destination.city).toBe('London');
+    });
+
+    it('hubInfo, timeFormat and nowMs', () => {
+      const { state, prefs, clock } = setup();
+      expect(state.hubInfo().code).toBe('YUL');
+      prefs.update({ timeFormat: '12h' });
+      expect(state.timeFormat()).toBe('12h');
+      clock.now += 60_000;
+      state.refreshToday();
+      expect(state.nowMs()).toBe(clock.now);
+    });
+
+    it('dataInfo describes the coverage and flags stale data', () => {
+      const { state, clock } = setup();
+      const info = state.dataInfo();
+      expect(info.to).toBe('2027-03-31');
+      expect(info.updatedLabel).toContain('data to Mar 31, 2027');
+      clock.now = new Date('2027-01-20T12:00:00').getTime();
+      state.refreshToday();
+      expect(info.updatedLabel).toBe('Updated Sep 28 · data to Mar 31, 2027');
+      expect(info.staleDays).toBeNull();
+      expect(state.dataInfo().staleDays).toBe(114);
+    });
+  });
   describe('starredThisWeek', () => {
     it('lists starred places with their operating days, sorted by city', () => {
       const { state, prefs } = setup();

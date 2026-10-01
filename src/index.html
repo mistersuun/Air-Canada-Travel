@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Air Canada Trips</title>
+  <title>Routes</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#F4F5F7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0B0B0D" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#CFE6FF" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0F2238" media="(prefers-color-scheme: dark)">
   <script>
     // Pre-paint theme: avoid a flash of the wrong theme. The single source of
     // truth is localStorage['ac.prefs.v1'] (JSON) field `theme`:
@@ -20,7 +20,7 @@
           document.documentElement.setAttribute('data-theme', theme);
           var metas = document.querySelectorAll('meta[name="theme-color"]');
           for (var i = 0; i < metas.length; i++) {
-            metas[i].setAttribute('content', theme === 'dark' ? '#0B0B0D' : '#F4F5F7');
+            metas[i].setAttribute('content', theme === 'dark' ? '#0F2238' : '#CFE6FF');
           }
         }
       } catch (e) { /* storage blocked or malformed: follow the OS */ }
@@ -34,7 +34,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <app-root></app-root>

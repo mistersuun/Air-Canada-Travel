@@ -1,209 +1,88 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, signal } from '@angular/core';
-import { HeaderComponent } from './components/header/header.component';
-import { WeekStripComponent } from './components/week-strip/week-strip.component';
-import { RouteListComponent } from './components/route-list/route-list.component';
-import { FlightModalComponent } from './components/flight-modal/flight-modal.component';
+import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
 import { SettingsComponent } from './components/settings/settings.component';
 import { ToastComponent } from './components/toast/toast.component';
 import { AppStateService } from './state/app-state.service';
-import { PrefsService } from './state/prefs.service';
 import { PwaUpdateService } from './state/pwa-update.service';
+import { ShortcutsSheetComponent } from './shell/shortcuts-sheet.component';
+import { ShellShortcutsDirective } from './shell/shortcuts';
+import { TabBarComponent } from './shell/tab-bar.component';
+import { TopNavComponent } from './shell/top-nav.component';
+import { hasSkywash } from './shell/nav-model';
 
-/** @deprecated Import RouteEntry from './utils/routes' (re-exported here until WS5/WS6 land). */
-export type { RouteEntry } from './utils/routes';
+interface ToastView {
+  message: string;
+  actionLabel: string | null;
+  onAction: () => void;
+  onDismiss: () => void;
+}
 
 /**
- * App shell: a thin template over AppStateService (view state, URL sync,
- * computed routes), PrefsService (persisted settings, theme, favourites) and
- * PwaUpdateService (new-deploy toast). This component is the only place the
- * children are wired together; the binding contract is documented per child.
+ * App shell: top nav (≥ 720px), the routed page, the floating tab bar
+ * (< 720px), the settings and shortcuts sheets and the toast. View state
+ * lives in AppStateService; this component only wires the chrome.
  */
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [HeaderComponent, WeekStripComponent, RouteListComponent, FlightModalComponent, SettingsComponent, ToastComponent],
+  imports: [RouterOutlet, TopNavComponent, TabBarComponent, SettingsComponent, ShortcutsSheetComponent, ToastComponent],
+  hostDirectives: [ShellShortcutsDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
+    '[class.ui-skywash]': 'skywash()',
     '(document:visibilitychange)': 'onVisibilityChange()',
   },
   template: `
-    <a class="skip-link" href="#main">Skip to destinations</a>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <app-top-nav />
+    <main id="main" tabindex="-1"><router-outlet /></main>
+    <app-tab-bar />
 
-    <div class="ui-sticky-shell">
-      <app-header
-        [hubCode]="state.hub()"
-        [query]="state.query()"
-        [sort]="state.sort()"
-        [filters]="state.filters()"
-        [region]="state.region()"
-        [showConnections]="state.showConnections()"
-        [selectedDateKey]="state.selectedDateKey()"
-        [theme]="prefs.theme()"
-        [favourites]="state.favourites()"
-        [starredThisWeek]="state.starredThisWeek()"
-        [activeFilterCount]="state.activeFilterCount()"
-        [routeCount]="state.routes().length"
-        (hubCodeChange)="state.setHub($event)"
-        (queryChange)="state.setQuery($event)"
-        (sortChange)="state.setSort($event)"
-        (filtersChange)="state.setFilters($event)"
-        (regionChange)="state.setRegion($event)"
-        (showConnectionsChange)="state.setShowConnections($event)"
-        (themeChange)="prefs.setTheme($event)"
-        (openSettings)="settingsOpen.set(true)"
-        (openDestination)="state.openDestinationByCode($event)"
-        (clearFilters)="state.clearFilters()"
-      />
-      <app-week-strip
-        [weekStartKey]="state.weekStartKey()"
-        [selectedDateKey]="state.selectedDateKey()"
-        [todayKey]="state.todayKey()"
-        [coverage]="state.coverage()"
-        [routeCount]="state.routes().length"
-        (prev)="state.prevWeek()"
-        (next)="state.nextWeek()"
-        (selectDay)="state.selectDay($event)"
-        (jumpTo)="state.jumpTo($event)"
-      />
-    </div>
-
-    <main id="main" tabindex="-1" class="app-main">
-      <app-route-list
-        [entries]="state.routes()"
-        [coverage]="state.coverage()"
-        [stats]="state.stats()"
-        [favourites]="state.favourites()"
-        [timeFormat]="prefs.timeFormat()"
-        [weekStartKey]="state.weekStartKey()"
-        [selectedDateKey]="state.selectedDateKey()"
-        [todayKey]="state.todayKey()"
-        [hubCode]="state.hub()"
-        [hubName]="state.hubName()"
-        [showConnections]="state.showConnections()"
-        [hasActiveFilters]="state.hasActiveFilters()"
-        (open)="state.openDestinationByCode($event)"
-        (toggleFavourite)="prefs.toggleFavourite($event)"
-        (clearFilters)="state.clearFilters()"
-        (jumpToCoverage)="state.jumpToCoverage($event)"
-      />
-    </main>
-
-    @if (state.openDestination(); as dest) {
-      <app-flight-modal
-        [destination]="dest"
-        [entry]="state.openEntry()"
-        [hubCode]="state.hub()"
-        [hubName]="state.hubName()"
-        [weekStartKey]="state.weekStartKey()"
-        [selectedDateKey]="state.selectedDateKey()"
-        [todayKey]="state.todayKey()"
-        [coverage]="state.coverage()"
-        [showConnections]="state.showConnections()"
-        [connect]="state.connect()"
-        [timeFormat]="prefs.timeFormat()"
-        [isFavourite]="state.favourites().includes(dest.code)"
-        (closed)="state.closeDestination()"
-        (selectDate)="state.jumpTo($event)"
-        (share)="share()"
-        (toggleFavourite)="prefs.toggleFavourite(dest.code)"
-      />
+    @if (state.settingsOpen()) {
+      <app-settings (closed)="state.closeSettings()" />
     }
-
-    @if (settingsOpen()) {
-      <app-settings (closed)="settingsOpen.set(false)" />
+    @if (state.shortcutsOpen()) {
+      <app-shortcuts-sheet (closed)="state.closeShortcuts()" />
     }
-
     @if (toast(); as t) {
-      <app-toast
-        [message]="t.message"
-        [actionLabel]="t.actionLabel"
-        (action)="t.onAction()"
-        (dismiss)="t.onDismiss()"
-      />
+      <app-toast [message]="t.message" [actionLabel]="t.actionLabel" (action)="t.onAction()" (dismiss)="t.onDismiss()" />
     }
   `,
   styles: [`
-    :host {
-      display: block;
-      min-height: 100vh;
-      min-height: 100dvh;
-      background: var(--bg);
-      color: var(--ink);
-    }
-    .app-main { display: block; outline: none; padding-bottom: env(safe-area-inset-bottom); }
-    .skip-link {
-      position: absolute;
-      left: var(--space-2);
-      top: var(--space-2);
-      z-index: 60;
-      padding: var(--space-2) var(--space-3);
-      border-radius: 10px;
-      background: var(--ink);
-      color: var(--bg);
-      font-weight: 600;
-      transform: translateY(-200%);
-    }
-    .skip-link:focus { transform: none; }
+    :host { display: block; position: relative; min-height: 100vh; min-height: 100dvh; background-color: var(--bg); color: var(--ink); }
+    main { display: block; outline: none; }
   `],
 })
 export class AppComponent {
   protected readonly state = inject(AppStateService);
-  protected readonly prefs = inject(PrefsService);
   protected readonly pwa = inject(PwaUpdateService);
   private readonly doc = inject(DOCUMENT);
 
-  readonly settingsOpen = signal(false);
-  /** Transient message (e.g. "Link copied"); the update toast takes priority. */
-  readonly notice = signal<string | null>(null);
-  private noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  protected readonly skywash = computed(() => hasSkywash(this.state.path()));
 
-  protected readonly toast = computed(() => {
+  /** The PWA update toast wins over transient notices. */
+  protected readonly toast = computed<ToastView | null>(() => {
     if (this.pwa.ready()) {
       return {
         message: 'New schedules available',
-        actionLabel: 'Reload' as string | null,
+        actionLabel: 'Reload',
         onAction: () => this.pwa.reload(),
         onDismiss: () => this.pwa.dismiss(),
       };
     }
-    const msg = this.notice();
-    return msg
-      ? { message: msg, actionLabel: null, onAction: () => undefined, onDismiss: () => this.notice.set(null) }
-      : null;
+    const n = this.state.notice();
+    if (!n) return null;
+    return {
+      message: n.message,
+      actionLabel: n.actionLabel ?? null,
+      onAction: () => n.action?.(),
+      onDismiss: () => this.state.dismissNotice(),
+    };
   });
 
   onVisibilityChange(): void {
     if (this.doc.visibilityState !== 'visible') return;
     this.state.refreshToday();
     this.pwa.check();
-  }
-
-  /** Share the current URL (it carries hub, week, day and the open destination). */
-  async share(): Promise<void> {
-    const nav = this.doc.defaultView?.navigator;
-    const url = this.doc.defaultView?.location.href ?? '';
-    const dest = this.state.openDestination();
-    const title = dest ? `${this.state.hub()} → ${dest.code} · ${dest.city}` : 'Air Canada Trips';
-    if (nav?.share) {
-      try {
-        await nav.share({ title, url });
-        return;
-      } catch (e) {
-        if ((e as DOMException)?.name === 'AbortError') return; // user cancelled
-      }
-    }
-    try {
-      if (!nav?.clipboard) throw new Error('no clipboard');
-      await nav.clipboard.writeText(url);
-      this.flash('Link copied');
-    } catch {
-      this.flash('Could not copy the link');
-    }
-  }
-
-  private flash(message: string): void {
-    this.notice.set(message);
-    clearTimeout(this.noticeTimer);
-    this.noticeTimer = setTimeout(() => this.notice.set(null), 2500);
   }
 }

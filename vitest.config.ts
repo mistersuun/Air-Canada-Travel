@@ -80,6 +80,8 @@ export default defineConfig({
         'src/app/data/destinations.ts': { lines: 80, statements: 80, functions: 80, branches: 80 },
         // Shared UI primitives are small and fully testable.
         'src/app/components/shared/**/*.ts': { lines: 80, statements: 80, functions: 80, branches: 70 },
+        // Clear Sky primitives every page builds on.
+        'src/app/ui/**/*.ts': { lines: 80, statements: 80, functions: 75, branches: 70 },
       },
     },
   },

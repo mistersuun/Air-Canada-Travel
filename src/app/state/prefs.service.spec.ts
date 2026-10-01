@@ -151,11 +151,11 @@ describe('applyTheme', () => {
 
   it('forces both theme-color metas for a fixed theme and restores them for auto', () => {
     applyTheme(document, 'dark');
-    expect(metas.map(m => m.content)).toEqual(['#0B0B0D', '#0B0B0D']);
+    expect(metas.map(m => m.content)).toEqual(['#0F2238', '#0F2238']);
     applyTheme(document, 'light');
     expect(document.documentElement.dataset['theme']).toBe('light');
-    expect(metas.map(m => m.content)).toEqual(['#F4F5F7', '#F4F5F7']);
+    expect(metas.map(m => m.content)).toEqual(['#CFE6FF', '#CFE6FF']);
     applyTheme(document, 'auto');
-    expect(metas.map(m => m.content)).toEqual(['#F4F5F7', '#0B0B0D']);
+    expect(metas.map(m => m.content)).toEqual(['#CFE6FF', '#0F2238']);
   });
 });

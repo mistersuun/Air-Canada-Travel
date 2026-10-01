@@ -1,5 +1,5 @@
 /**
- * Shared guard for the app's single-key shortcuts (header: '/', '?';
+ * Shared guard for the app's single-key shortcuts (shell: '/', '?', Esc;
  * week strip: arrows, 0-7). A shortcut is ignored when:
  * - a modifier is held (so Ctrl+F, Cmd+1 etc. keep their browser meaning),
  * - focus is in a text field, select or contenteditable,

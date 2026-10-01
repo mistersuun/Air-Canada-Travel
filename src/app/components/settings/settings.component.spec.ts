@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
+import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import { SettingsComponent } from './settings.component';
 import { DEFAULT_PREFS, PREFS_KEY, PREFS_STORAGE, PrefsService } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -9,7 +10,11 @@ async function setup() {
   const storage = new MemoryStorage();
   TestBed.configureTestingModule({
     imports: [SettingsComponent],
-    providers: [{ provide: PREFS_STORAGE, useValue: storage }],
+    providers: [
+      { provide: PREFS_STORAGE, useValue: storage },
+      // Real history, so a ?from= in the URL reaches AppStateService.
+      { provide: PlatformLocation, useClass: BrowserPlatformLocation },
+    ],
   });
   const fixture = TestBed.createComponent(SettingsComponent);
   await fixture.whenStable();
@@ -25,8 +30,8 @@ describe('SettingsComponent', () => {
     const { el } = await setup();
     const dialog = el.querySelector('dialog')!;
     expect(dialog.hasAttribute('open')).toBe(true);
-    expect(dialog.getAttribute('aria-labelledby')).toBe('settings-title');
-    expect(el.querySelector('#settings-title')?.textContent).toBe('Settings');
+    const titleId = dialog.getAttribute('aria-labelledby')!;
+    expect(el.querySelector(`#${titleId}`)?.textContent).toBe('Settings');
   });
 
   it('writes each control to prefs', async () => {
@@ -35,17 +40,21 @@ describe('SettingsComponent', () => {
     select.value = 'YVR';
     select.dispatchEvent(new Event('change'));
 
-    const radio = (name: string, value: string) =>
-      el.querySelector<HTMLInputElement>(`input[name="${name}"][value="${value}"]`)!;
-    radio('settings-theme', 'dark').click();
-    radio('settings-time', '12h').click();
-    radio('settings-min', '90').click();
-    radio('settings-max', '480').click();
+    const seg = (name: string, label: string) =>
+      [...el.querySelectorAll<HTMLButtonElement>(`app-seg[data-setting="${name}"] button`)].find(b => b.textContent?.trim() === label)!;
+    seg('theme', 'Dark').click();
+    seg('time', '10:10 PM').click();
+    seg('min', '90m').click();
+    seg('max', '8h').click();
     el.querySelector<HTMLInputElement>('#settings-overnight')!.click();
+    el.querySelector<HTMLInputElement>('#settings-connections')!.click();
+    await fixture.whenStable();
+    expect(seg('theme', 'Dark').getAttribute('aria-pressed')).toBe('true');
     await fixture.whenStable();
 
     expect(prefs.prefs()).toMatchObject({
       hub: 'YVR', theme: 'dark', timeFormat: '12h', minConnect: 90, maxLayover: 480, allowOvernight: true,
+      showConnections: false,
     });
     expect(JSON.parse(storage.getItem(PREFS_KEY)!).theme).toBe('dark');
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
@@ -81,21 +90,39 @@ describe('SettingsComponent', () => {
     }
   });
 
+  it('the Keyboard shortcuts row swaps settings for the shortcuts sheet', async () => {
+    const { el } = await setup();
+    const state = TestBed.inject(AppStateService);
+    state.openSettings();
+    [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.includes('Keyboard shortcuts'))!.click();
+    expect(state.settingsOpen()).toBe(false);
+    expect(state.shortcutsOpen()).toBe(true);
+  });
+
+  it('shows the schedule coverage line', async () => {
+    const { el } = await setup();
+    expect(el.textContent).toContain('data to');
+  });
+
   it('Done, the close button and a backdrop click close it and emit (closed)', async () => {
     const { el, fixture } = await setup();
     const closed = vi.fn();
     fixture.componentInstance.closed.subscribe(closed);
     el.querySelector<HTMLButtonElement>('[aria-label="Close settings"]')!.click();
     expect(closed).toHaveBeenCalledTimes(1);
+    el.querySelector('dialog')!.showModal();
+    el.querySelector<HTMLButtonElement>('[data-done]')!.click();
+    expect(closed).toHaveBeenCalledTimes(2);
+    closed.mockClear();
 
     const dialog = el.querySelector('dialog')!;
     dialog.showModal();
     // Click inside the dialog's box (its padding): stays open.
     dialog.getBoundingClientRect = () => ({ left: 0, top: 0, right: 100, bottom: 100 }) as DOMRect;
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 50 }));
-    expect(closed).toHaveBeenCalledTimes(1);
+    expect(closed).not.toHaveBeenCalled();
     // Click on the backdrop, outside the box.
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 300 }));
-    expect(closed).toHaveBeenCalledTimes(2);
+    expect(closed).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,0 +1,14 @@
+==Airlines and destinations==
+===Passenger===
+{{Airport destination list
+| 3rdcoltitle = Refs
+| 3rdcolunsortable = yes
+| [[Air Canada]] | [[Tokyo–Haneda]], [[Calgary International Airport|Calgary]], <!-- [[Fake Airport|Fake]] --> [[Toronto–Pearson]]<br />'''Seasonal:''' [[Kahului Airport|Kahului]] (ends January 26, 2027), [[Old Airport|Oldtown]] (ends January 26, 2020)
+| <ref>{{cite web |title=Air Canada schedule |url=https://example.org/a|b |access-date=1 June 2026}}</ref>
+| {{nowrap|[[Air Canada Express]]}} | [[Kamloops Airport|Kamloops]], [[Prince George Airport|Prince George]], [[Penticton Regional Airport|Penticton]] (begins December 13, 2026)
+| <ref name="ac|x">x</ref>
+| [[Air Canada Rouge]] | '''Seasonal:''' [[Cancún International Airport|Cancún]] (suspended until December 3, 2026)
+|
+| [[WestJet]] | [[Calgary International Airport|Calgary]]
+|
+}}

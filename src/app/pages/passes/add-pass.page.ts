@@ -1,11 +1,11 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { passPath } from '../../extras/links';
 import { FilesService } from '../../files/files.service';
-import { FILES_ERROR_TEXT, type FilesError } from '../../files/model';
+import { FILES_ERROR_TEXT, MAX_FILE_BYTES, type FilesError } from '../../files/model';
 import { BarcodeService } from '../../passes/barcode.service';
 import { displayText, parseBcbp } from '../../passes/bcbp';
 import { NOT_BCBP_TEXT, NO_BARCODE_TEXT, type DecodedRead, type PassRecord } from '../../passes/model';
@@ -23,7 +23,7 @@ import {
 import { PassScannerComponent, type ScanResult } from './pass-scanner.component';
 
 type Step = 'pick' | 'scan' | 'reading' | 'fail' | 'check';
-type Failure = 'none' | 'notBcbp' | 'unreadable';
+type Failure = 'none' | 'notBcbp' | 'unreadable' | 'tooLarge';
 
 interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; source: PassSource; file: File | null }
 
@@ -46,7 +46,7 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
           <button type="button" class="ui-circ ui-circ--glass" aria-label="Back to the sources" data-back (click)="restart()">
             <app-icon name="arrow-left" [size]="18" />
           </button>
-          <h1 class="ap__ttl">Check the details</h1>
+          <h1 #checkTtl class="ap__ttl" tabindex="-1" data-check-title>Check the details</h1>
         } @else {
           <button type="button" class="ui-circ ui-circ--glass" aria-label="Close" data-close (click)="close()">
             <app-icon name="close" [size]="18" />
@@ -90,6 +90,8 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
                 <b>{{ failText() }}</b>
                 @if (failure() === 'notBcbp') {
                   <span>The barcode was read, but it isn't a boarding pass. Use the one printed on the pass.</span>
+                } @else if (failure() === 'tooLarge') {
+                  <span>A screenshot of the pass, or a photo cropped close to the barcode, works best.</span>
                 } @else {
                   <span>Crop close to the barcode, or use a sharper screenshot.</span>
                 }
@@ -214,6 +216,8 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
     .ap { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; }
     .ap__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
     .ap__ttl { margin: 0; font-size: 16px; font-weight: 650; text-align: center; line-height: 1.25; }
+    .ap__ttl:focus { outline: none; }
+    .ap__ttl:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 6px; }
     .ap__ttl small { display: block; font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
     .ap__sp { width: 40px; flex: none; }
 
@@ -264,7 +268,7 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
     .ap__fl { margin: 2px 0 0; }
     .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 8px; margin: 12px 0 0; }
     .kv .w2 { grid-column: span 2; }
-    .kv dt { font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+    .kv dt { font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
     .kv dd { margin: 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
     .kv dd small { display: block; font-size: 11.5px; font-weight: 500; color: var(--ink-2); }
     .raw { margin-top: 10px; background: var(--fill); border-radius: 10px; }
@@ -327,6 +331,9 @@ export class AddPassPage {
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   private readonly photoBtn = viewChild<ElementRef<HTMLButtonElement>>('photoBtn');
+  private readonly checkTtl = viewChild<ElementRef<HTMLElement>>('checkTtl');
+  /** Bumped by every new read, restart and destroy: a late result of an older read is ignored. */
+  private gen = 0;
   private readonly photoIn = viewChild<ElementRef<HTMLInputElement>>('photoIn');
   private readonly pdfIn = viewChild<ElementRef<HTMLInputElement>>('pdfIn');
 
@@ -361,7 +368,10 @@ export class AddPassPage {
   protected readonly checkIn = signal(false);
   protected readonly deleteAfter = signal(false);
 
-  protected readonly failText = computed(() => (this.failure() === 'notBcbp' ? NOT_BCBP_TEXT : NO_BARCODE_TEXT));
+  protected readonly failText = computed(() => {
+    const f = this.failure();
+    return f === 'notBcbp' ? NOT_BCBP_TEXT : f === 'tooLarge' ? FILES_ERROR_TEXT.tooLarge : NO_BARCODE_TEXT;
+  });
 
   /** The legs "Set leg to Checked in" would change (planned or listed, chosen for an included draft). */
   protected readonly checkInLegs = computed<FlightLeg[]>(() => {
@@ -400,6 +410,7 @@ export class AddPassPage {
   });
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => this.gen++);
     void this.passes.ensureReady();
     void this.files.ensureReady().then(() => this.deleteAfter.set(this.files.prefs().deletePassesAfterTrip));
     this.deleteAfter.set(this.files.prefs().deletePassesAfterTrip);
@@ -418,6 +429,7 @@ export class AddPassPage {
   }
 
   protected scan(): void {
+    this.gen++;
     this.camera.set('idle');
     this.failure.set('none');
     this.active.set('camera');
@@ -447,30 +459,39 @@ export class AddPassPage {
   async readFile(file: File, kind: 'image' | 'pdf'): Promise<void> {
     const t = this.trip();
     if (!t) return;
+    const gen = ++this.gen;
     this.active.set(kind);
     this.camera.set('idle');
-    this.lastFile.set(file);
     this.fileError.set(null);
+    if (file.size > MAX_FILE_BYTES) {
+      this.lastFile.set(null);
+      this.fail('tooLarge');
+      return;
+    }
+    this.lastFile.set(file);
     this.step.set('reading');
     try {
       if (kind === 'pdf') {
         const { reads, pageImages } = await this.barcode.decodePdf(file, 3);
+        if (gen !== this.gen) return;
         const pages = [...new Set(reads.map(r => r.page ?? 0))];
         const images = new Map<number, Blob | null>();
         pages.forEach((p, i) => images.set(p, pageImages[i] ?? null));
         this.show(reads, t, images, 'pdf', file);
       } else {
         const read = await this.barcode.decodeImage(file);
+        if (gen !== this.gen) return;
         this.show(read ? [read] : [], t, new Map([[0, file]]), 'image', file);
       }
     } catch {
-      this.fail('unreadable');
+      if (gen === this.gen) this.fail('unreadable');
     }
   }
 
   protected onScan(r: ScanResult): void {
     const t = this.trip();
     if (!t) return;
+    this.gen++;
     this.lastFile.set(null);
     this.show([r.read], t, new Map([[0, r.frame]]), 'camera', null);
   }
@@ -492,6 +513,8 @@ export class AddPassPage {
     this.saveError.set(null);
     this.step.set('check');
     window.scrollTo?.({ top: 0 });
+    // The source buttons are gone: move focus to the new step's title so it is announced.
+    afterNextRender(() => this.checkTtl()?.nativeElement.focus({ preventScroll: true }), { injector: this.injector });
   }
 
   private fail(f: Failure): void {
@@ -522,9 +545,11 @@ export class AddPassPage {
   }
 
   protected restart(): void {
+    this.gen++;
     this.decoded.set(null);
     this.step.set('pick');
     this.active.set(null);
+    afterNextRender(() => this.photoBtn()?.nativeElement.focus(), { injector: this.injector });
   }
 
   protected close(): void {
@@ -643,7 +668,9 @@ export class AddPassPage {
       saved.push(res);
     }
     if (saved.length && this.checkIn()) {
-      for (const l of this.checkInLegs()) this.tripsSvc.setLegStatus(t.id, l.id, 'checkedIn');
+      // Only legs whose pass was actually saved.
+      const savedLegs = new Set(saved.map(r => r.legId).filter((x): x is string => !!x));
+      for (const l of this.checkInLegs()) if (savedLegs.has(l.id)) this.tripsSvc.setLegStatus(t.id, l.id, 'checkedIn');
     }
     this.busy.set(false);
     if (error && !saved.length) {

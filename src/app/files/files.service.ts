@@ -15,7 +15,7 @@ import { FilesDb } from './files-db';
 import { FilesStore } from './files-store';
 import {
   Attachment, AttachmentKind, AttachmentScope, DEFAULT_FILES_PREFS, FILES_PREFS_KEY, FilesError, FilesPrefs, FilesStatus,
-  MAX_FILE_BYTES, StoredBlob, UsageSummary, sameScope,
+  MAX_FILE_BYTES, RASTER_IMAGE_MIMES, StoredBlob, UsageSummary, safeMime, sameScope,
 } from './model';
 import { compressPhoto } from './photo';
 import { StorageInfo, checkRoom, estimate, storageInfo } from './quota';
@@ -39,10 +39,11 @@ export function sanitizeFilesPrefs(raw: unknown): FilesPrefs {
   return { includeInBackup: b('includeInBackup'), deletePassesAfterTrip: b('deletePassesAfterTrip'), compressPhotos: b('compressPhotos') };
 }
 
-/** 'application/pdf' → pdf, 'image/*' → image, anything else → file. */
+/** 'application/pdf' → pdf, raster 'image/*' → image, anything else (SVG too) → file. */
 export function kindForMime(mime: string): AttachmentKind {
-  if (mime === 'application/pdf') return 'pdf';
-  if (mime.startsWith('image/')) return 'image';
+  const m = mime.toLowerCase().split(';')[0].trim();
+  if (m === 'application/pdf') return 'pdf';
+  if (RASTER_IMAGE_MIMES.includes(m)) return 'image';
   return 'file';
 }
 
@@ -110,7 +111,7 @@ export class FilesService {
     return this.list().filter(a => a.tripId === tripId && sameScope(a.scope, scope));
   }
 
-  /** A PDF, photo or any file. Large photos are re-encoded when compressPhotos is on. */
+  /** A PDF, photo or any file. Large photos and JPEG/HEIC photos (EXIF) are re-encoded when compressPhotos is on. */
   async addFile(tripId: string, scope: AttachmentScope, file: File, title?: string): Promise<Attachment | { error: FilesError }> {
     const store = await this.storeOrNull();
     if (!store) return { error: 'unsupported' };
@@ -139,19 +140,22 @@ export class FilesService {
     return this.addText(tripId, scope, 'address', title.trim() || 'Address', address);
   }
 
-  /** Rename, edit the text, or move to another scope. */
-  async update(id: string, patch: Partial<Pick<Attachment, 'title' | 'text' | 'scope'>>): Promise<void> {
+  /** Rename, edit the text, or move to another scope. Resolves to null when saved, else why not. */
+  async update(id: string, patch: Partial<Pick<Attachment, 'title' | 'text' | 'scope'>>): Promise<FilesError | null> {
     const store = await this.storeOrNull();
+    if (!store) return 'unsupported';
+    if (store.readOnly) return 'readOnly';
     const cur = this.list().find(a => a.id === id);
-    if (!store || store.readOnly || !cur) return;
+    if (!cur) return 'failed';
     const next: Attachment = { ...cur, ...patch, updatedAt: new Date(this.now()).toISOString() };
     if (patch.title !== undefined) next.title = patch.title.trim() || cur.title;
     try {
       await store.putAttachment(next);
-    } catch {
-      return;
+    } catch (e) {
+      return errorOf(e);
     }
     this.list.update(l => l.map(a => (a.id === id ? next : a)));
+    return null;
   }
 
   /** Deletes the file and its blob; flashes "File deleted" with Undo. */
@@ -165,17 +169,22 @@ export class FilesService {
     this.db.flash('File deleted', { label: 'Undo', run: () => void this.restore(rec, content) });
   }
 
-  /** An object URL for a stored blob; the caller revokes it. */
-  async objectUrl(blobId: string): Promise<string | null> {
+  /**
+   * An object URL for a stored blob; the caller revokes it. The blob is
+   * re-typed with safeMime, so an HTML or SVG file never gets a URL that
+   * would run its script at the app's origin.
+   */
+  async objectUrl(blobId: string, mime?: string | null): Promise<string | null> {
     const store = await this.storeOrNull();
     const blob = store ? await store.getBlob(blobId) : null;
-    return blob ? URL.createObjectURL(blob) : null;
+    return blob ? URL.createObjectURL(new Blob([blob], { type: safeMime(mime ?? blob.type) })) : null;
   }
 
   /**
-   * Opens a file: PDFs and other files (and images, for callers without a
-   * viewer) in a new tab, else as a download; an address in Google Maps.
-   * Notes have nothing to open.
+   * Opens a file: PDFs, plain text and raster images in a new tab (or as a
+   * download when popups are blocked); every other type only as a download,
+   * typed application/octet-stream so it never runs in the app's origin. An
+   * address opens in Google Maps. Notes have nothing to open.
    */
   async open(a: Attachment): Promise<void> {
     const win = this.doc.defaultView;
@@ -184,9 +193,12 @@ export class FilesService {
       return;
     }
     if (!a.blobId) return;
-    const url = await this.objectUrl(a.blobId);
-    if (!url) return;
-    const tab = win?.open(url, '_blank');
+    const store = await this.storeOrNull();
+    const stored = store ? await store.getBlob(a.blobId) : null;
+    if (!stored) return;
+    const type = safeMime(a.mime ?? stored.type);
+    const url = URL.createObjectURL(new Blob([stored], { type }));
+    const tab = type === 'application/octet-stream' ? null : win?.open(url, '_blank');
     if (!tab) {
       const link = this.doc.createElement('a');
       link.href = url;
@@ -279,12 +291,16 @@ export class FilesService {
       let blob: StoredBlob | undefined;
       let rec = meta;
       if (meta.blobId) {
-        const bytes = data ? base64Decode(data) : null;
+        const bytes = data !== null ? base64Decode(data) : null;
         if (!bytes) {
           skipped++;
           continue;
         }
         const id = newId();
+        if (bytes.length > MAX_FILE_BYTES) {
+          skipped++;
+          continue;
+        }
         const mime = meta.mime || 'application/octet-stream';
         blob = { id, blob: new Blob([bytes as BlobPart], { type: mime }), bytes: bytes.length, mime, createdAt: meta.createdAt };
         rec = { ...meta, blobId: id, thumbBlobId: null, bytes: bytes.length };
@@ -363,5 +379,8 @@ function extensionFor(mime: string | null): string {
   if (mime === 'application/pdf') return '.pdf';
   if (mime === 'image/jpeg') return '.jpg';
   if (mime === 'image/png') return '.png';
+  if (mime === 'text/plain') return '.txt';
+  if (mime === 'text/html' || mime === 'application/xhtml+xml') return '.html';
+  if (mime === 'image/svg+xml') return '.svg';
   return '';
 }

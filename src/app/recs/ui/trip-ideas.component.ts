@@ -61,7 +61,7 @@ import { RecCardComponent, dismissWithUndo } from './rec-card.component';
     .tell__tx b { font-size: 14.5px; font-weight: 650; }
     .tell__tx span { font-size: 12.5px; color: var(--ink-2); }
     .tell .chev { color: var(--ink-3); }
-    .foot { margin: 10px 2px 0; font-size: 12px; color: var(--ink-3); }
+    .foot { margin: 10px 2px 0; font-size: 12px; color: var(--ink-2); }
   `],
 })
 export class TripIdeasComponent {

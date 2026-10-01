@@ -211,7 +211,7 @@ import { PhotoViewerComponent } from './photo-viewer.component';
     .fic--photo { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); }
     .fic--note { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
     .fic--ground { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); }
-    .lock { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; color: var(--ink-3); white-space: nowrap; }
+    .lock { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; color: var(--teal-ink); white-space: nowrap; }
     .thumbs { display: flex; gap: 6px; padding: 10px 0 8px; border-bottom: 1px solid var(--hair); }
     .thumbs:last-child { border-bottom: 0; }
     .thumb {
@@ -278,17 +278,21 @@ export class TripFilesPage {
 
     // Object URLs for this trip's photos (loaded once each, revoked on leave).
     const asked = new Set<string>();
+    let destroyed = false;
     effect(() => {
       for (const a of this.mine()) {
         if (a.kind !== 'image' || !a.blobId || asked.has(a.blobId)) continue;
         const id = a.blobId;
         asked.add(id);
-        void this.files.objectUrl(id).then(url => {
-          if (url) this.urls.update(m => ({ ...m, [id]: url }));
+        void this.files.objectUrl(id, a.mime).then(url => {
+          if (!url) return;
+          if (destroyed) URL.revokeObjectURL(url); // the page left while this was loading
+          else this.urls.update(m => ({ ...m, [id]: url }));
         });
       }
     });
     destroyRef.onDestroy(() => {
+      destroyed = true;
       for (const url of Object.values(this.urls())) URL.revokeObjectURL(url);
     });
   }

@@ -95,7 +95,7 @@ export function dismissWithUndo(profile: ProfileService, state: AppStateService,
     .chev { color: var(--ink-3); flex: none; }
     .x {
       width: 44px; height: 44px; margin: 0 -12px 0 0; flex: none; display: grid; place-items: center;
-      color: var(--ink-3); border-radius: 12px; cursor: pointer;
+      color: var(--ink-2); border-radius: 12px; cursor: pointer;
     }
     .x:hover { color: var(--ink); background: var(--fill); }
   `],

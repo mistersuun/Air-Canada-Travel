@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { Router } from '@angular/router';
+import { FILES_ERROR_TEXT, safeMime } from '../../files/model';
 import { IconComponent } from '../../components/shared/icons.component';
 import { passPath } from '../../extras/links';
 import { renderBarcodeSvg } from '../../passes/barcode-render';
@@ -41,7 +42,8 @@ interface Slide {
  * codes keep a 1:1 box, so they never distort.
  */
 export function fitSvg(svg: string): string {
-  return svg.replace(/<svg\b/, '<svg preserveAspectRatio="none"');
+  // The wrapper is the labelled role=img; the SVG itself is hidden from assistive tech.
+  return svg.replace(/<svg\b/, '<svg preserveAspectRatio="none" aria-hidden="true" focusable="false"');
 }
 
 /** 'Montréal' style names for the route header (the code when unknown). */
@@ -67,7 +69,7 @@ function cityOf(code: string): string {
     <div class="pv" role="dialog" aria-modal="true" aria-label="Boarding pass" data-pass-view>
       <div class="pv__col">
         <div class="pv__top">
-          <button type="button" class="pv__x" aria-label="Close" data-close (click)="close()"><app-icon name="close" [size]="18" [strokeWidth]="2.2" /></button>
+          <button #closeBtn type="button" class="pv__x" aria-label="Close" data-close (click)="close()"><app-icon name="close" [size]="18" [strokeWidth]="2.2" /></button>
           @if (awake()) {
             <span class="pv__awake" data-awake><app-icon name="sun" [size]="14" [strokeWidth]="2.2" />Screen stays on</span>
           } @else if (wakeTried()) {
@@ -87,7 +89,8 @@ function cityOf(code: string): string {
             <button type="button" class="pv__btn" (click)="close()">Back to the trip</button>
           </div>
         } @else {
-          <div #track class="pv__track" (scroll)="onScroll()" [attr.aria-label]="slides().length > 1 ? 'Passes on this leg' : null">
+          <div #track class="pv__track" (scroll)="onScroll()"
+               [attr.role]="slides().length > 1 ? 'group' : null" [attr.aria-label]="slides().length > 1 ? 'Passes on this leg' : null">
             @for (s of slides(); track s.pass.id; let i = $index) {
               <article class="pv__slide" [attr.aria-hidden]="i !== index()" [attr.data-slide]="s.pass.id">
                 <div class="pv__route tn">
@@ -294,6 +297,7 @@ export class PassViewPage {
   private readonly doc = inject(DOCUMENT);
   private readonly injector = inject(Injector);
   private readonly track = viewChild<ElementRef<HTMLElement>>('track');
+  private readonly closeBtn = viewChild<ElementRef<HTMLButtonElement>>('closeBtn');
 
   readonly id = input.required<string>();
   readonly passId = input.required<string>();
@@ -336,6 +340,8 @@ export class PassViewPage {
 
   constructor() {
     void this.passes.ensureReady().then(() => this.ready.set(true));
+    // A modal dialog: focus starts inside it, on Close.
+    afterNextRender(() => this.closeBtn()?.nativeElement.focus({ preventScroll: true }));
 
     // Start on the pass in the URL.
     effect(() => {
@@ -425,7 +431,7 @@ export class PassViewPage {
     if (!p?.imageBlobId) return;
     const blob = await this.passes.image(p.id);
     if (!blob || this.destroyed || this.current()?.id !== p.id || this.mode() !== 'image') return;
-    this.imageUrl.set(URL.createObjectURL(blob));
+    this.imageUrl.set(URL.createObjectURL(new Blob([blob], { type: safeMime(blob.type) })));
   }
 
   private revoke(): void {
@@ -482,8 +488,9 @@ export class PassViewPage {
     this.confirming.set(false);
   }
 
-  protected setDeleteAfter(p: PassRecord, on: boolean): void {
-    void this.passes.setDeleteAfterTrip(p.id, on);
+  protected async setDeleteAfter(p: PassRecord, on: boolean): Promise<void> {
+    const err = await this.passes.setDeleteAfterTrip(p.id, on);
+    if (err) this.state.flash(FILES_ERROR_TEXT[err]);
   }
 
   protected async move(p: PassRecord, legId: string): Promise<void> {
@@ -491,8 +498,9 @@ export class PassViewPage {
     const leg = t ? legById(t, legId || null) : null;
     const refs = leg?.kind === 'flight' ? leg.refs : [];
     const ri = refs.findIndex(r => r.origin === p.from && r.dest === p.to);
-    await this.passes.relink(p.id, leg ? leg.id : null, leg ? Math.max(0, ri) : null, leg ? 'manual' : 'none');
+    const err = await this.passes.relink(p.id, leg ? leg.id : null, leg ? Math.max(0, ri) : null, leg ? 'manual' : 'none');
     this.closeMenu();
+    if (err) return this.state.flash(FILES_ERROR_TEXT[err]);
     this.state.flash(leg && leg.kind === 'flight' ? `Pass moved to ${leg.refs.map(r => r.flightNumber).join(' + ')}` : 'Pass kept with the trip');
   }
 

@@ -67,7 +67,7 @@ export const FOR_YOU_LINE = 'Scheduled flights, not seats. No boarding chances.'
     .tell__tx b { font-size: 14.5px; font-weight: 650; }
     .tell__tx span { font-size: 12.5px; color: var(--ink-2); }
     .tell .chev { color: var(--ink-3); }
-    .foot { margin: 10px 2px 0; font-size: 12px; color: var(--ink-3); }
+    .foot { margin: 10px 2px 0; font-size: 12px; color: var(--ink-2); }
     @media (min-width: 900px) {
       .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
     }

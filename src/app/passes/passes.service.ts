@@ -7,7 +7,7 @@ import { Injectable, Signal, computed, inject, signal } from '@angular/core';
 import { NOW } from '../state/app-state.service';
 import { FilesDb } from '../files/files-db';
 import { FilesStore, ReadOnlyStoreError } from '../files/files-store';
-import { FilesError, StoredBlob } from '../files/model';
+import { FilesError, MAX_FILE_BYTES, StoredBlob } from '../files/model';
 import { checkRoom, estimate, isQuotaError } from '../files/quota';
 import { deadlineUtc } from '../trips/engine/homeby';
 import { newId } from '../trips/ids';
@@ -48,6 +48,8 @@ export class PassesService {
   private cleaned = false;
   /** The blob id each image Blob was stored under, so a multi-leg pass keeps one copy. */
   private readonly savedImages = new WeakMap<Blob, StoredBlob>();
+  /** Patches run one after another, each on the latest record. */
+  private patches: Promise<unknown> = Promise.resolve();
 
   /** Every saved pass, oldest first. */
   readonly passes: Signal<PassRecord[]> = this.list.asReadonly();
@@ -100,6 +102,7 @@ export class PassesService {
     if (store.readOnly) return { error: 'readOnly' };
     let blob: StoredBlob | undefined;
     let imageBlobId: string | null = null;
+    if (image && image.size > MAX_FILE_BYTES) return { error: 'tooLarge' };
     if (image) {
       const prev = this.savedImages.get(image);
       if (prev && this.sizes().has(prev.id)) {
@@ -125,12 +128,14 @@ export class PassesService {
     return rec;
   }
 
-  async relink(id: string, legId: string | null, refIndex: number | null, matched: PassRecord['matched']): Promise<void> {
-    await this.patch(id, { legId, refIndex, matched });
+  /** Resolves to null when saved, else why not. */
+  relink(id: string, legId: string | null, refIndex: number | null, matched: PassRecord['matched']): Promise<FilesError | null> {
+    return this.patch(id, { legId, refIndex, matched });
   }
 
-  async setDeleteAfterTrip(id: string, on: boolean): Promise<void> {
-    await this.patch(id, { deleteAfterTrip: on });
+  /** Resolves to null when saved, else why not. */
+  setDeleteAfterTrip(id: string, on: boolean): Promise<FilesError | null> {
+    return this.patch(id, { deleteAfterTrip: on });
   }
 
   /** Deletes the pass (and its image when no other pass uses it), with Undo. */
@@ -205,13 +210,25 @@ export class PassesService {
     await this.refreshSizes(store);
   }
 
-  private async patch(id: string, patch: Partial<PassRecord>): Promise<void> {
-    const store = await this.storeOrNull();
-    const rec = this.list().find(p => p.id === id);
-    if (!store || !rec || store.readOnly) return;
-    const next = { ...rec, ...patch };
-    await store.putPass(next);
-    this.list.update(l => l.map(p => (p.id === id ? next : p)));
+  /** Read-modify-write of one record, queued so concurrent patches never undo each other. Never rejects. */
+  private patch(id: string, patch: Partial<PassRecord>): Promise<FilesError | null> {
+    const run = this.patches.then(async (): Promise<FilesError | null> => {
+      const store = await this.storeOrNull();
+      if (!store) return 'unsupported';
+      if (store.readOnly) return 'readOnly';
+      const rec = this.list().find(p => p.id === id);
+      if (!rec) return 'failed';
+      const next = { ...rec, ...patch };
+      try {
+        await store.putPass(next);
+      } catch (e) {
+        return errorOf(e);
+      }
+      this.list.update(l => l.map(p => (p.id === id ? next : p)));
+      return null;
+    }).catch(() => 'failed' as const);
+    this.patches = run;
+    return run;
   }
 
   private async refreshSizes(store: FilesStore): Promise<void> {

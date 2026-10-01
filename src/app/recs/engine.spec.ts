@@ -3,7 +3,7 @@ import { resetScheduleSource, setScheduleSource } from '../data/schedule-index';
 import type { Outcome, OutcomeKind } from '../trips/model';
 import { decodeClimate } from './climate';
 import {
-  RecInput, dayItineraries, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
+  RecInput, dayItineraries, pairable, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
   scheduleLine, seasonWindow, shortDuration, styleRecs, whyText,
 } from './engine';
 import { longWeekends } from './long-weekends';
@@ -274,5 +274,24 @@ describe('scheduleLine wording', () => {
     expect(scheduleLine(non, '2026-10-01')).toBe('2 flights in the next 2 weeks · about 7h55');
     expect(scheduleLine(one, '2026-10-01')).toBe('2 one-stop options in the next 2 weeks · about 7h55');
     expect(scheduleLine(mix, '2026-10-01')).toBe('2 options, some with a stop, in the next 2 weeks · about 7h55');
+  });
+});
+
+describe('holiday recs never suggest the past, and pair out and back', () => {
+  it('during the Thanksgiving weekend itself (Sun Oct 11) nothing departs before today', () => {
+    const groups = recommend(input({ todayKey: '2026-10-11', nowMs: Date.parse('2026-10-11T12:00:00-04:00') }));
+    for (const r of allRecs(groups)) if (r.out) expect(r.out.dateKey >= '2026-10-11').toBe(true);
+    expect(groups.some(g => g.id === 'lw:2026-10-12')).toBe(false);
+  });
+
+  it('pairable drops returns that leave before the outbound lands (plus a 3h stay)', () => {
+    const h = 3_600_000;
+    const it = (dep: number, arr: number) => ({ departUtc: dep * h, arriveUtc: arr * h }) as never;
+    const { out, back } = pairable([it(8, 10), it(14, 16)], [it(9, 11), it(13, 15), it(18, 20)]);
+    expect(out.map((x: { departUtc: number }) => x.departUtc / h)).toEqual([8]);
+    expect(back.map((x: { departUtc: number }) => x.departUtc / h)).toEqual([13, 18]);
+    const none = pairable([it(12, 15)], [it(9, 11)]);
+    expect(none.out).toEqual([]);
+    expect(none.back).toEqual([]);
   });
 });

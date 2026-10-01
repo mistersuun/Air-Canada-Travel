@@ -79,3 +79,41 @@ describe('pickDays', () => {
     expect(pickDays(thanksgiving, { ...RECS_PROFILE, days: [2, 3] })).toBeNull();
   });
 });
+
+describe('long weekends: provinces, observed days and past days', () => {
+  it('Civic Holiday is never a long weekend at YUL, but is at YYZ', () => {
+    expect(longWeekends('2027-07-20', 30, 'YUL').map(l => l.name)).not.toContain('Civic Holiday');
+    expect(longWeekends('2027-07-20', 30, 'YYZ').map(l => l.name)).toContain('Civic Holiday');
+  });
+
+  it('Boxing Day on a weekday counts in Ontario, not in QC, BC or AB', () => {
+    // Tue 2028-12-26
+    expect(longWeekends('2028-12-01', 40, 'YYZ').map(l => l.name)).toContain('Boxing Day');
+    for (const hub of ['YUL', 'YVR', 'YYC']) expect(longWeekends('2028-12-01', 40, hub).map(l => l.name)).not.toContain('Boxing Day');
+  });
+
+  it('a Saturday Canada Day is observed on Monday', () => {
+    const [cd] = longWeekends('2028-06-20', 20, 'YYZ');
+    expect(cd.name).toBe('Canada Day');
+    expect(cd.holiday.dateKey).toBe('2028-07-01');
+    expect(cd.observedKey).toBe('2028-07-03');
+    expect(cd.outKeys).toEqual(['2028-06-30', '2028-07-01']);
+    expect(cd.backKeys).toEqual(['2028-07-03', '2028-07-02']);
+    expect(longWeekends('2029-06-20', 20, 'YYZ')[0].observedKey).toBe('2029-07-02');
+  });
+
+  it('Christmas Sat and Boxing Day Sun 2027 → Mon Dec 27 and Tue Dec 28 at YYZ', () => {
+    const lws = longWeekends('2027-12-01', 40, 'YYZ').filter(l => l.observedKey < '2028-01-01');
+    expect(lws.map(l => `${l.name} ${l.observedKey}`)).toEqual(['Christmas Day 2027-12-27', 'Boxing Day 2027-12-28']);
+  });
+
+  it('never picks a departure day before today', () => {
+    const [tg] = longWeekends('2026-10-01', 60, 'YUL');
+    expect(pickDays(tg, RECS_PROFILE, '2026-10-09')).toEqual({ outKey: '2026-10-09', backKey: '2026-10-12' });
+    expect(pickDays(tg, RECS_PROFILE, '2026-10-10')).toEqual({ outKey: '2026-10-10', backKey: '2026-10-12' });
+    expect(pickDays(tg, { ...RECS_PROFILE, days: [5] }, '2026-10-10')).toBeNull();
+    expect(pickDays(tg, EMPTY_PROFILE, '2026-10-10')).toEqual({ outKey: '2026-10-10', backKey: '2026-10-12' });
+    expect(pickDays(tg, { ...RECS_PROFILE, length: 'week' }, '2026-10-11')).toBeNull();
+    expect(pickDays(tg, { ...RECS_PROFILE, length: 'day' }, '2026-10-11')).toEqual({ outKey: '2026-10-12', backKey: '2026-10-12' });
+  });
+});

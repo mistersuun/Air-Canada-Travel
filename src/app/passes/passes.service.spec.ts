@@ -100,6 +100,25 @@ describe('PassesService', () => {
     expect((await store.listPasses())[0]).toMatchObject({ legId: null, deleteAfterTrip: true });
   });
 
+  it('concurrent patches never undo each other, and a failed write is reported', async () => {
+    const svc = make();
+    const p = await svc.save(newPass(), null);
+    if ('error' in p) throw new Error(p.error);
+    const [a, b] = await Promise.all([svc.setDeleteAfterTrip(p.id, true), svc.relink(p.id, null, null, 'none')]);
+    expect([a, b]).toEqual([null, null]);
+    expect((await store.listPasses())[0]).toMatchObject({ legId: null, matched: 'none', deleteAfterTrip: true });
+    vi.spyOn(store, 'putPass').mockRejectedValueOnce(new Error('disk'));
+    expect(await svc.setDeleteAfterTrip(p.id, false)).toBe('failed');
+    expect(svc.passes()[0].deleteAfterTrip).toBe(true);
+  });
+
+  it('refuses a pass image over 50 MB', async () => {
+    const svc = make();
+    const big = { size: 50 * 1024 * 1024 + 1, type: 'image/png' } as Blob;
+    expect(await svc.save(newPass(), big)).toEqual({ error: 'tooLarge' });
+    expect(svc.passes()).toEqual([]);
+  });
+
   it('deletes with Undo that brings back the pass and its image', async () => {
     const svc = make();
     const p = await svc.save(newPass(), new Blob(['png'], { type: 'image/png' }));

@@ -4,7 +4,7 @@ import { FilesService } from '../../files/files.service';
 import type { Attachment } from '../../files/model';
 import type { Trip } from '../../trips/model';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
-import { itemMeta, scopeFromKey, scopeKey, scopeOptions } from './files-model';
+import { filesErrorText, itemMeta, scopeFromKey, scopeKey, scopeOptions } from './files-model';
 
 type Mode = 'menu' | 'rename' | 'move' | 'text';
 
@@ -22,6 +22,9 @@ type Mode = 'menu' | 'rename' | 'move' | 'text';
     <app-glass-sheet #sheet [title]="item().title" [open]="true" (closed)="closed.emit()">
       @let a = item();
       <p class="fs__meta tn">{{ meta() }}</p>
+      @if (error(); as e) {
+        <p class="fs__err" role="alert" data-item-error>{{ e }}</p>
+      }
       @switch (mode()) {
         @case ('rename') {
           <form class="fs__form" (submit)="$event.preventDefault(); rename(nameIn.value, sheet)">
@@ -88,6 +91,7 @@ type Mode = 'menu' | 'rename' | 'move' | 'text';
   `,
   styles: [`
     .fs__meta { font-size: 13px; color: var(--ink-2); margin: -2px 0 12px; overflow-wrap: anywhere; }
+    .fs__err { font-size: 13px; font-weight: 600; color: var(--red-ink); margin: 0 0 10px; }
     .fs__list { display: grid; }
     .fs__row {
       display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 2px; width: 100%;
@@ -123,26 +127,33 @@ export class FileItemSheetComponent {
 
   protected readonly mode = signal<Mode>('menu');
   protected readonly pick = signal<string | null>(null);
+  /** Why the last save failed; the sheet stays open so nothing typed is lost. */
+  protected readonly error = signal<string | null>(null);
   protected readonly meta = computed(() => itemMeta(this.item()));
   protected readonly options = computed(() => scopeOptions(this.trip()));
   protected readonly current = computed(() => scopeKey(this.item().scope));
   protected readonly currentLabel = computed(() => this.options().find(o => o.key === this.current())?.label ?? 'Whole trip');
-
   protected async rename(value: string, sheet: GlassSheetComponent): Promise<void> {
     const v = value.trim();
-    if (v && v !== this.item().title) await this.files.update(this.item().id, { title: v });
-    sheet.close();
+    if (v && v !== this.item().title) await this.save({ title: v }, sheet);
+    else sheet.close();
   }
 
-  protected async saveText(value: string, sheet: GlassSheetComponent): Promise<void> {
-    await this.files.update(this.item().id, { text: value.trim() });
-    sheet.close();
+  protected saveText(value: string, sheet: GlassSheetComponent): Promise<void> {
+    return this.save({ text: value.trim() }, sheet);
   }
 
   protected async move(sheet: GlassSheetComponent): Promise<void> {
     const key = this.pick();
-    if (key && key !== this.current()) await this.files.update(this.item().id, { scope: scopeFromKey(key) });
-    sheet.close();
+    if (key && key !== this.current()) await this.save({ scope: scopeFromKey(key) }, sheet);
+    else sheet.close();
+  }
+
+  private async save(patch: Parameters<FilesService['update']>[1], sheet: GlassSheetComponent): Promise<void> {
+    this.error.set(null);
+    const err = await this.files.update(this.item().id, patch);
+    if (err) this.error.set(filesErrorText(err));
+    else sheet.close();
   }
 
   protected open(sheet: GlassSheetComponent): void {

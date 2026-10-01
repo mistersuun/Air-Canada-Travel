@@ -63,7 +63,7 @@ export function legPassesMeta(seats: readonly (string | null)[]): string {
       padding: 2px 7px; border-radius: var(--radius-tag); background: color-mix(in srgb, var(--teal) 13%, transparent); color: var(--teal-ink);
     }
     .lp__chev { color: var(--ink-3); flex: none; }
-    .lp__more { justify-self: start; display: inline-flex; align-items: center; min-height: 36px; font-size: 13.5px; }
+    .lp__more { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; font-size: 13.5px; }
     .lp__add { min-height: 44px; }
   `],
 })

@@ -197,6 +197,71 @@ describe('AddPassPage', () => {
     expect(flash).toHaveBeenCalledWith('Image saved as a file on this leg');
   });
 
+  it('moves focus to "Check the details" after a read, and back to Photo after Back', async () => {
+    const { el, stable, pick, fixture } = await render({ read: pdf417(BCBP_MINIMAL) });
+    document.body.appendChild(el);
+    try {
+      await pick();
+      await vi.waitFor(() => expect(document.activeElement?.hasAttribute('data-check-title')).toBe(true));
+      el.querySelector<HTMLButtonElement>('[data-back]')!.click();
+      await stable();
+      await vi.waitFor(() => expect(document.activeElement?.getAttribute('data-src')).toBe('image'));
+    } finally {
+      fixture.destroy();
+      el.remove();
+    }
+  });
+
+  it('a late result from an older read never replaces a newer one', async () => {
+    const { el, stable, barcode, fixture } = await render({ read: pdf417(BCBP_MINIMAL) });
+    let finishPdf!: (v: { reads: DecodedRead[]; pageImages: Blob[] }) => void;
+    barcode.decodePdf.mockImplementationOnce(() => new Promise(r => (finishPdf = r)));
+    const page = fixture.componentInstance;
+    const slow = page.readFile(new File(['pdf'], 'pass.pdf', { type: 'application/pdf' }), 'pdf');
+    await page.readFile(new File(['png'], 'pass.png', { type: 'image/png' }), 'image');
+    await stable();
+    expect(el.querySelector('[data-draft]')).not.toBeNull();
+    finishPdf({ reads: [], pageImages: [] });
+    await slow;
+    await stable();
+    expect(el.querySelector('[data-fail]')).toBeNull();
+    expect(el.querySelector('[data-draft]')).not.toBeNull();
+  });
+
+  it('refuses a file over 50 MB before decoding it', async () => {
+    const { el, text, stable, barcode, fixture } = await render({ read: pdf417(BCBP_MINIMAL) });
+    const big = new File(['x'], 'huge.png', { type: 'image/png' });
+    Object.defineProperty(big, 'size', { value: 50 * 1024 * 1024 + 1 });
+    await fixture.componentInstance.readFile(big, 'image');
+    await stable();
+    expect(barcode.decodeImage).not.toHaveBeenCalled();
+    expect(text('[data-fail] b')).toBe('This file is over 50 MB. Pick a smaller one.');
+    expect(el.querySelector('[data-save-file]')).toBeNull();
+  });
+
+  it('"Set leg to Checked in" only changes legs whose pass was saved', async () => {
+    const { el, stable, pick, trips, passes, fixture } = await render({ read: pdf417(BCBP_MULTILEG) });
+    await pick();
+    const page = fixture.componentInstance as unknown as {
+      drafts(): { key: string }[]; choose(d: unknown, legId: string): void; toggleInclude(k: string, on: boolean): void; checkIn: { set(v: boolean): void };
+    };
+    const [d1, d2] = page.drafts();
+    page.choose(d1, SEVILLE_IDS.outbound);
+    page.choose(d2, SEVILLE_IDS.ret);
+    page.toggleInclude(d1.key, true);
+    page.toggleInclude(d2.key, true);
+    page.checkIn.set(true);
+    await stable();
+    expect((fixture.componentInstance as unknown as { checkInLegs(): unknown[] }).checkInLegs()).toHaveLength(2);
+    const real = passes.save.bind(passes);
+    vi.spyOn(passes, 'save').mockImplementationOnce(real).mockResolvedValueOnce({ error: 'quota' });
+    el.querySelector<HTMLButtonElement>('[data-save]')!.click();
+    await vi.waitFor(() => expect(passes.passes()).toHaveLength(1));
+    const t = trips.trip(SEVILLE_IDS.trip)!;
+    expect(t.legs.find(l => l.id === SEVILLE_IDS.outbound)!.status).toBe('checkedIn');
+    expect(t.legs.find(l => l.id === SEVILLE_IDS.ret)!.status).not.toBe('checkedIn');
+  });
+
   it('a QR code with a link: "Not a boarding pass barcode."', async () => {
     const { text, pick } = await render({ read: { text: 'https://example.com', format: 'QRCode', step: 'as-is', page: null } });
     await pick();

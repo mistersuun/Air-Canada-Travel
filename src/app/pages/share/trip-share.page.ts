@@ -244,6 +244,8 @@ export class TripSharePage {
 
   private async draw(trip: Trip, opts: ShareOptions): Promise<void> {
     const n = ++this.drawn;
+    // The old image no longer matches the options: Share and Save wait for this draw.
+    this.blob.set(null);
     try {
       const blob = await this.render(trip, opts);
       if (n !== this.drawn) return;

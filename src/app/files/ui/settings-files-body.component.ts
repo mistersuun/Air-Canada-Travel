@@ -10,6 +10,11 @@ import { formatBytes } from '../quota';
 /** Largest "backup with files" Import reads (bytes): 50 MB of files grow by a third in base64. */
 export const MAX_FILES_BACKUP_BYTES = 400 * 1024 * 1024;
 
+/** About how big a backup with these files will be (base64 adds a third, plus the trips JSON). */
+export function estimateBackupBytes(fileBytes: number): number {
+  return Math.ceil(fileBytes * 4 / 3) + 1024 * 1024;
+}
+
 /** '14.2 MB · 9 files in 2 trips'. */
 export function settingsUsageLine(count: number, bytes: number, trips: number): string {
   if (!count) return 'No files yet';
@@ -68,7 +73,7 @@ export function orphansLine(count: number, bytes: number): string {
                [checked]="prefs().deletePassesAfterTrip" (change)="files.setPrefs({ deletePassesAfterTrip: checked($event) })">
       </label>
       <label class="row" for="sf-photos">
-        <span class="row__tx"><span class="nm">Make large photos smaller</span><span class="hint">Saves space and removes the photo's location</span></span>
+        <span class="row__tx"><span class="nm">Make photos smaller</span><span class="hint">Saves space and removes the location from camera photos</span></span>
         <input id="sf-photos" type="checkbox" role="switch" class="switch" data-sf-photos
                [checked]="prefs().compressPhotos" (change)="files.setPrefs({ compressPhotos: checked($event) })">
       </label>
@@ -163,6 +168,14 @@ export class SettingsFilesBodyComponent {
   }
 
   async exportFiles(): Promise<void> {
+    const est = estimateBackupBytes(this.files.attachments().reduce((n, a) => n + a.bytes, 0));
+    if (est > MAX_FILES_BACKUP_BYTES) {
+      this.result.set({
+        text: `This backup would be about ${formatBytes(est)}, too large to import again. Delete some large files, or use Export trips.`,
+        error: true,
+      });
+      return;
+    }
     this.busy.set(true);
     const win = this.doc.defaultView;
     try {

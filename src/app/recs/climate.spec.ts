@@ -64,9 +64,24 @@ describe('ClimateService', () => {
     expect(climateFor(s.index(), 'LIS', 10)!.tmaxC).toBe(30);
   });
 
-  it('maps a 404 (null), a throw or bad JSON to missing, silently', async () => {
+  it('a network error goes back to idle and a later call retries', async () => {
+    let calls = 0;
+    const s = setup(async () => {
+      calls++;
+      if (calls === 1) throw new TypeError('Failed to fetch');
+      return CLIMATE_FIXTURE;
+    });
+    await s.ensureLoaded();
+    expect(s.status()).toBe('idle');
+    expect(s.index()).toBeNull();
+    await s.ensureLoaded();
+    expect(calls).toBe(2);
+    expect(s.status()).toBe('ready');
+  });
+
+  it('maps a 404 (null) or bad JSON to missing, silently', async () => {
     const errors = vi.spyOn(console, 'error');
-    for (const fetcher of [async () => null, async () => { throw new Error('offline'); }, async () => ({ nope: 1 })]) {
+    for (const fetcher of [async () => null, async () => ({ nope: 1 })]) {
       TestBed.resetTestingModule();
       const s = setup(fetcher);
       await s.ensureLoaded();

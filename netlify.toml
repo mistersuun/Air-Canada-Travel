@@ -10,6 +10,14 @@
   [headers.values]
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+    # Boarding passes, booking codes and files live on this device: keep
+    # scripts to this origin. The two hashes are the pre-paint theme script in
+    # src/index.html and Angular's critical-CSS onload="this.media='all'"
+    # (csp.spec.ts fails if either changes). 'wasm-unsafe-eval' is for the
+    # zxing barcode reader; worker-src covers the service worker and pdf.js.
+    # connect-src lists the font hosts because the service worker fetches them.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-hashes' 'sha256-RRtvQ/ngPYYKxMKmwEGOBCInozN2Nad/RW3leEYlGYY=' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; worker-src 'self' blob:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 # Files that must always revalidate so a new deploy (and new schedules) is picked up.
 [[headers]]

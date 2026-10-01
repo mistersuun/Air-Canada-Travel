@@ -92,6 +92,6 @@ describe('add-pass model', () => {
   });
 
   it('fitSvg lets the barcode fill its box', () => {
-    expect(fitSvg('<svg viewBox="0 0 10 10"></svg>')).toBe('<svg preserveAspectRatio="none" viewBox="0 0 10 10"></svg>');
+    expect(fitSvg('<svg viewBox="0 0 10 10"></svg>')).toBe('<svg preserveAspectRatio="none" aria-hidden="true" focusable="false" viewBox="0 0 10 10"></svg>');
   });
 });

@@ -5,13 +5,17 @@ import type { ClimateIndex } from './model';
 /** Where the app fetches the normals (relative to the base href). */
 export const CLIMATE_URL = 'data/climate.json';
 
-/** Fetches climate.json; resolves null on a 404 or network error (no console output). Specs replace it. */
+/**
+ * Fetches climate.json. Resolves null on an HTTP error or bad JSON (final);
+ * rejects on a network error (offline: tried again later). Specs replace it.
+ */
 export const CLIMATE_FETCH = new InjectionToken<() => Promise<unknown>>('CLIMATE_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
+    const res = await fetch(CLIMATE_URL);
+    if (!res.ok) return null;
     try {
-      const res = await fetch(CLIMATE_URL);
-      return res.ok ? await res.json() : null;
+      return await res.json();
     } catch {
       return null;
     }
@@ -35,14 +39,26 @@ export class ClimateService {
   readonly status = this.statusSig.asReadonly();
   readonly index = this.indexSig.asReadonly();
 
-  /** Loads the file once. Never rejects. */
+  /**
+   * Loads the file once. A missing or broken file is final ('missing'); a
+   * network error goes back to 'idle' so a later call tries again. Never rejects.
+   */
   ensureLoaded(): Promise<void> {
     if (this.statusSig() === 'ready' || this.statusSig() === 'missing') return Promise.resolve();
     this.pending ??= (async () => {
       this.statusSig.set('loading');
+      let raw: unknown;
+      try {
+        raw = await this.fetcher();
+      } catch {
+        this.statusSig.set('idle');
+        this.pending = null;
+        globalThis.addEventListener?.('online', () => void this.ensureLoaded(), { once: true });
+        return;
+      }
       let idx: ClimateIndex | null = null;
       try {
-        idx = decodeClimate(await this.fetcher());
+        idx = decodeClimate(raw);
       } catch {
         idx = null;
       }

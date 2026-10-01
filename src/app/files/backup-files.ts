@@ -6,15 +6,17 @@
  * Boarding passes are never included: not their records, raw text or images.
  * Nothing in this file reads passes.
  */
-import { Attachment, AttachmentKind, AttachmentScope } from './model';
+import { Attachment, AttachmentKind, AttachmentScope, RASTER_IMAGE_MIMES } from './model';
 
 export const FILES_BACKUP_SCHEMA = 1;
 
 export interface BackupFileEntry { meta: Attachment; data: string | null }
 
-/** 'routes-backup-with-files-2026-10-01.json' (UTC date of `now`). */
+/** 'routes-backup-with-files-2026-10-01.json' (local date of `now`, like the app's date keys). */
 export function backupWithFilesFilename(now: number): string {
-  return `routes-backup-with-files-${new Date(now).toISOString().slice(0, 10)}.json`;
+  const d = new Date(now);
+  const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `routes-backup-with-files-${key}.json`;
 }
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -112,6 +114,23 @@ function sanitizeScope(x: unknown): AttachmentScope | null {
   return null;
 }
 
+const MIME = /^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/;
+
+/**
+ * kind and mime from untrusted JSON that agree with each other: 'pdf' only
+ * with application/pdf, 'image' only with a raster image type (never SVG).
+ * Anything else with content becomes a plain 'file' with a well-formed mime
+ * (application/octet-stream when malformed); notes and addresses have none.
+ */
+function kindAndMime(kind: AttachmentKind, raw: unknown): { kind: AttachmentKind; mime: string | null } {
+  if (kind === 'note' || kind === 'address') return { kind, mime: null };
+  const m = str(raw) ? raw.toLowerCase().trim() : '';
+  const mime = MIME.test(m) ? m : 'application/octet-stream';
+  if (mime === 'application/pdf') return { kind: 'pdf', mime };
+  if (RASTER_IMAGE_MIMES.includes(mime)) return { kind: 'image', mime };
+  return { kind: 'file', mime };
+}
+
 /** A well-formed Attachment from untrusted JSON, or null. Never throws. */
 export function sanitizeAttachment(x: unknown): Attachment | null {
   if (!isRec(x)) return null;
@@ -120,17 +139,18 @@ export function sanitizeAttachment(x: unknown): Attachment | null {
   if (!scope || !KINDS.includes(kind) || !str(x['id']) || !x['id'] || !str(x['tripId']) || !x['tripId']) return null;
   const nullableStr = (v: unknown): string | null => (str(v) ? v : null);
   const createdAt = str(x['createdAt']) ? x['createdAt'] : new Date(0).toISOString();
+  const km = kindAndMime(kind, x['mime']);
   return {
     v: 1,
     id: x['id'],
     tripId: x['tripId'],
     scope,
-    kind,
+    kind: km.kind,
     title: str(x['title']) ? x['title'].slice(0, 200) : '',
     text: nullableStr(x['text']),
     blobId: nullableStr(x['blobId']),
     thumbBlobId: nullableStr(x['thumbBlobId']),
-    mime: nullableStr(x['mime']),
+    mime: km.mime,
     bytes: typeof x['bytes'] === 'number' && x['bytes'] >= 0 ? x['bytes'] : 0,
     pages: typeof x['pages'] === 'number' ? x['pages'] : null,
     createdAt,

@@ -36,6 +36,10 @@ describe('photo compression decision', () => {
     expect(shouldCompress(3 * MB, 2000, 1500)).toBe(true);
     expect(shouldCompress(1 * MB, 4032, 3024)).toBe(true);
     expect(shouldCompress(1 * MB, 2560, 1440)).toBe(false);
+    // small camera photos are re-encoded too, so their EXIF location is dropped
+    expect(shouldCompress(1 * MB, 2000, 1500, 'image/jpeg')).toBe(true);
+    expect(shouldCompress(1 * MB, 2000, 1500, 'image/heic')).toBe(true);
+    expect(shouldCompress(1 * MB, 2000, 1500, 'image/png')).toBe(false);
     expect(fitSize(4032, 3024)).toEqual({ w: 2560, h: 1920 });
     expect(fitSize(800, 600)).toEqual({ w: 800, h: 600 });
   });

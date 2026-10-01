@@ -24,11 +24,10 @@ export function extrasLabels(passes: number, files: number): { passes: string; f
   template: `
     <nav class="tx" aria-label="Passes and files">
       <a class="tx__chip" [routerLink]="passLink()" data-chip="passes"
-         [attr.aria-label]="passCount() ? passCount() + (passCount() === 1 ? ' boarding pass' : ' boarding passes') : 'Add a boarding pass'">
+         [attr.aria-label]="passAria()">
         <app-icon name="barcode" [size]="16" /><span class="tn">{{ labels().passes }}</span>
       </a>
-      <a class="tx__chip" [routerLink]="filesLink()" data-chip="files"
-         [attr.aria-label]="fileCount() ? fileCount() + (fileCount() === 1 ? ' file' : ' files') : 'Files'">
+      <a class="tx__chip" [routerLink]="filesLink()" data-chip="files">
         <app-icon name="paperclip" [size]="16" /><span class="tn">{{ labels().files }}</span>
       </a>
     </nav>
@@ -55,6 +54,11 @@ export class TripExtrasComponent {
   protected readonly passCount = computed(() => this.tripPasses().length);
   protected readonly fileCount = computed(() => this.files.attachments().filter(a => a.tripId === this.trip().id).length);
   protected readonly labels = computed(() => extrasLabels(this.passCount(), this.fileCount()));
+  /** Starts with the visible label (WCAG 2.5.3): 'Passes · 2 boarding passes', 'Add pass (boarding pass)'. */
+  protected readonly passAria = computed(() => {
+    const n = this.passCount();
+    return n ? `${this.labels().passes} boarding ${n === 1 ? 'pass' : 'passes'}` : `${this.labels().passes} (boarding pass)`;
+  });
   protected readonly passLink = computed(() => {
     const first = this.tripPasses()[0];
     return first ? passPath(this.trip().id, first.id) : addPassPath(this.trip().id);

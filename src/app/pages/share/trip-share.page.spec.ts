@@ -112,6 +112,17 @@ describe('TripSharePage', () => {
     expect(clean(el.querySelector('[data-checklist] li')?.textContent)).toBe('Legs and times');
   });
 
+  it('Share and Save are disabled while the card for new options is still drawing', async () => {
+    const { el, toggle, renderer } = await render();
+    let finish!: (b: Blob) => void;
+    renderer.mockImplementationOnce(() => new Promise<Blob>(r => (finish = r)));
+    await toggle('[data-split]');
+    expect((el.querySelector('[data-share]') as HTMLButtonElement).disabled).toBe(true);
+    expect((el.querySelector('[data-save]') as HTMLButtonElement).disabled).toBe(true);
+    finish(png());
+    await vi.waitFor(() => expect((el.querySelector('[data-save]') as HTMLButtonElement).disabled).toBe(false));
+  });
+
   it('text tab: the plain text follows the switches, with the lock note and "Copy text"', async () => {
     const { el, text, tab, toggle } = await render();
     await tab('Text');

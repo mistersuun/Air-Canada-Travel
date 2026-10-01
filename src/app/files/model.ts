@@ -11,6 +11,27 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 /** Compress larger photos (when FilesPrefs.compressPhotos). */
 export const PHOTO_MAX_SIDE = 2560;
 
+/**
+ * Raster image types shown as photos. SVG is never an image here: it can
+ * carry script, so it is stored and downloaded as a plain file.
+ */
+export const RASTER_IMAGE_MIMES: readonly string[] = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'image/avif', 'image/bmp',
+];
+
+/**
+ * Types that are safe to open in a tab from a same-origin blob: URL (they
+ * cannot run script). Anything else (HTML, SVG, XML, ...) is only ever
+ * downloaded, as application/octet-stream.
+ */
+export const SAFE_OPEN_MIMES: readonly string[] = ['application/pdf', 'text/plain', ...RASTER_IMAGE_MIMES];
+
+/** The mime to open or show a stored blob with: itself when safe, else application/octet-stream. */
+export function safeMime(mime: string | null | undefined): string {
+  const m = (mime ?? '').toLowerCase().split(';')[0].trim();
+  return SAFE_OPEN_MIMES.includes(m) ? m : 'application/octet-stream';
+}
+
 export type AttachmentScope =
   | { kind: 'trip' }
   | { kind: 'leg'; legId: string }

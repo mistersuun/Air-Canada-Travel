@@ -40,7 +40,7 @@
     },
     {
       "name": "vendor",
-      "installMode": "lazy",
+      "installMode": "prefetch",
       "updateMode": "prefetch",
       "resources": {
         "files": [

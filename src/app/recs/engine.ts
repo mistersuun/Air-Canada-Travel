@@ -205,9 +205,28 @@ export function scheduleLine(u: Upcoming, todayKey: string, fmt?: TimeFormat): s
 
 // ── Kind: holiday ───────────────────────────────────────────────────────────
 
+/** Minimum time at the destination between an outbound arrival and a return departure. */
+export const MIN_STAY_MIN = 3 * 60;
+
+/**
+ * Keeps only out and back options that can be combined: a return that leaves
+ * at least MIN_STAY_MIN after the earliest outbound arrival, and an outbound
+ * that arrives at least MIN_STAY_MIN before the latest return. Matters when
+ * out and back are on the same day (day trips) or close together.
+ */
+export function pairable(out: Itinerary[], back: Itinerary[]): { out: Itinerary[]; back: Itinerary[] } {
+  const stay = MIN_STAY_MIN * 60_000;
+  const firstArrive = Math.min(...out.map(it => it.arriveUtc));
+  const lastDepart = Math.max(...back.map(it => it.departUtc));
+  return {
+    out: out.filter(it => it.arriveUtc + stay <= lastDepart),
+    back: back.filter(it => it.departUtc >= firstArrive + stay),
+  };
+}
+
 /** Recommendations for one long weekend: the top 2, of different types where possible. */
 export function holidayRecs(input: RecInput, lw: LongWeekend): Recommendation[] {
-  const days = pickDays(lw, input.profile);
+  const days = pickDays(lw, input.profile, input.todayKey);
   if (!days) return [];
   const { outKey, backKey } = days;
   const p = input.profile;
@@ -222,8 +241,9 @@ export function holidayRecs(input: RecInput, lw: LongWeekend): Recommendation[] 
   const recs: Recommendation[] = [];
   for (const d of CANDIDATES) {
     if (!styleOk(p, d)) continue;
-    const out = dayItineraries(input, input.hub, d.code, outKey);
-    const back = dayItineraries(input, d.code, input.hub, backKey);
+    let out = dayItineraries(input, input.hub, d.code, outKey);
+    let back = dayItineraries(input, d.code, input.hub, backKey);
+    if (out.length && back.length) ({ out, back } = pairable(out, back));
     if (!out.length || !back.length) continue;
     const id = recId('holiday', d.code, outKey);
     if (p.dismissed.includes(id)) continue;
@@ -515,7 +535,7 @@ function takeUnique(recs: readonly Recommendation[], used: Set<string>, max: num
 export function recommend(input: RecInput): RecGroup[] {
   const empty = isEmptyProfile(input.profile);
   const lws = longWeekends(input.todayKey, LW_HORIZON, input.hub)
-    .filter(lw => pickDays(lw, input.profile) !== null)
+    .filter(lw => pickDays(lw, input.profile, input.todayKey) !== null)
     .slice(0, LW_MAX);
 
   if (input.context === 'trips') {
@@ -534,7 +554,7 @@ export function recommend(input: RecInput): RecGroup[] {
   for (const lw of lws) {
     const items = takeUnique(holidayRecs(input, lw), used, 2);
     if (!items.length) continue;
-    const { outKey, backKey } = pickDays(lw, input.profile)!;
+    const { outKey, backKey } = pickDays(lw, input.profile, input.todayKey)!;
     groups.push({
       id: lw.id,
       title: holidayGroupTitle(lw.name, input.todayKey, outKey),

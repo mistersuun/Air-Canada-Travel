@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DOCUMENT } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { IDBFactory } from 'fake-indexeddb';
@@ -203,6 +204,49 @@ describe('FilesService', () => {
     expect(TestBed.inject(PassesService).passes()).toEqual([]);
   });
 
+  it('never opens HTML or SVG in a tab: they download as application/octet-stream', async () => {
+    const svc = make(provideFilesStore(new MemoryFilesStore()));
+    const html = await svc.addFile(SEVILLE_IDS.trip, { kind: 'trip' }, textFile('confirmation.html', 10, 'text/html'));
+    const svg = await svc.addFile(SEVILLE_IDS.trip, { kind: 'trip' }, textFile('photo.svg', 10, 'image/svg+xml'));
+    const pdf = await svc.addFile(SEVILLE_IDS.trip, { kind: 'trip' }, textFile('Hotel.pdf', 10));
+    if ('error' in html || 'error' in svg || 'error' in pdf) throw new Error('add');
+    expect(svg.kind).toBe('file');
+    const win = TestBed.inject(DOCUMENT).defaultView!;
+    const opened = vi.spyOn(win, 'open').mockReturnValue({} as Window);
+    const clicks: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicks.push(this.download);
+    });
+    try {
+      const blobs = await withObjectUrls(async () => {
+        await svc.open(html);
+        await svc.open(svg);
+        await svc.open(pdf);
+      });
+      expect(blobs.map(b => b.type)).toEqual(['application/octet-stream', 'application/octet-stream', 'application/pdf']);
+      expect(opened).toHaveBeenCalledTimes(1);
+      expect(clicks).toEqual(['confirmation.html', 'photo.svg']);
+      // object URLs for <img> are re-typed the same way
+      const typed = await withObjectUrls(() => svc.objectUrl(html.blobId!, html.mime));
+      expect(typed[0].type).toBe('application/octet-stream');
+    } finally {
+      opened.mockRestore();
+      click.mockRestore();
+    }
+  });
+
+  it('keeps the sheet informed when a save fails', async () => {
+    const store = new MemoryFilesStore();
+    const svc = make(provideFilesStore(store));
+    const a = await svc.addNote(SEVILLE_IDS.trip, { kind: 'trip' }, 'Platform', 'Coach 4');
+    if ('error' in a) throw new Error(a.error);
+    vi.spyOn(store, 'putAttachment').mockRejectedValueOnce(new DOMException('full', 'QuotaExceededError'));
+    expect(await svc.update(a.id, { text: 'Coach 5' })).toBe('quota');
+    expect(svc.attachments()[0].text).toBe('Coach 4');
+    expect(await svc.update(a.id, { text: 'Coach 5' })).toBeNull();
+    expect(svc.attachments()[0].text).toBe('Coach 5');
+  });
+
   it('opens an address in Google Maps', () => {
     expect(mapsUrl('Calle Betis 12, Sevilla')).toBe('https://www.google.com/maps/search/?api=1&query=Calle%20Betis%2012%2C%20Sevilla');
   });
@@ -211,6 +255,8 @@ describe('FilesService', () => {
     expect(kindForMime('application/pdf')).toBe('pdf');
     expect(kindForMime('image/heic')).toBe('image');
     expect(kindForMime('text/plain')).toBe('file');
+    expect(kindForMime('image/svg+xml')).toBe('file');
+    expect(kindForMime('image/PNG')).toBe('image');
     expect(titleFromName('Train tickets.pdf')).toBe('Train tickets');
     expect(titleFromName('.env')).toBe('.env');
     expect(summarizeUsage([attachment({ kind: 'address', bytes: 0 })], 0, 0).count).toBe(1);
@@ -295,6 +341,24 @@ describe('backup with files', () => {
     const r = await svc.importWithFiles(new Blob([JSON.stringify(base)]));
     expect(r).toEqual({ trips: { added: 0, updated: 0 }, files: { added: 1, skipped: 2 } });
     expect(await svc.importWithFiles(new Blob(['nope']))).toEqual({ error: "This file isn't a Routes backup." });
+  });
+
+  it('imports a crafted entry safely: kind follows mime, never HTML as a PDF; empty files survive', async () => {
+    const svc = make(provideFilesStore(new MemoryFilesStore()));
+    const base = JSON.parse(TestBed.inject(TripsService).exportBackup());
+    base.files = { schema: 1, attachments: [
+      { meta: attachment({ id: 'h1', blobId: 'b1', kind: 'pdf', mime: 'text/html', title: 'Train tickets' }), data: btoa('<script>x</script>') },
+      { meta: attachment({ id: 's1', blobId: 'b2', kind: 'image', mime: 'image/svg+xml' }), data: btoa('<svg/>') },
+      { meta: attachment({ id: 'e1', blobId: 'b3', kind: 'pdf', mime: 'application/pdf' }), data: '' },
+      { meta: attachment({ id: 'm1', blobId: 'b4', kind: 'image', mime: 'image/png; x="<b>"' }), data: btoa('png') },
+    ] };
+    const r = await svc.importWithFiles(new Blob([JSON.stringify(base)]));
+    expect(r).toEqual({ trips: { added: 0, updated: 0 }, files: { added: 4, skipped: 0 } });
+    const by = (id: string) => svc.attachments().find(a => a.id === id)!;
+    expect([by('h1').kind, by('h1').mime]).toEqual(['file', 'text/html']);
+    expect([by('s1').kind, by('s1').mime]).toEqual(['file', 'image/svg+xml']);
+    expect([by('e1').kind, by('e1').bytes]).toEqual(['pdf', 0]);
+    expect([by('m1').kind, by('m1').mime]).toEqual(['file', 'application/octet-stream']);
   });
 
   it('a share link never carries a saved pass', async () => {

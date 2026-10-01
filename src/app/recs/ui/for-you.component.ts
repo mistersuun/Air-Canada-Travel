@@ -3,13 +3,42 @@ import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { profilePath } from '../../extras/links';
 import { AppStateService } from '../../state/app-state.service';
-import type { Recommendation } from '../model';
+import type { RecGroup, Recommendation } from '../model';
 import { ProfileService } from '../profile.service';
 import { RecsService } from '../recs.service';
 import { RecCardComponent, cardsFor, dismissWithUndo } from './rec-card.component';
 
 /** The fixed honesty line under the heading (extras spec §0.3). */
 export const FOR_YOU_LINE = 'Scheduled flights, not seats. No boarding chances.';
+
+/** The key of the "Tell us what you like" card in wideCards(). */
+export const TELL_KEY = 'tell';
+
+/**
+ * Which cards span both columns of the two-column (desktop) grid, so no card
+ * sits alone next to an empty column. Cards flow in runs broken by the
+ * full-width "More for you" heading; a run with an odd count widens one card
+ * that has an even number of cards before it (so the rows before it stay
+ * full): a long weekend first, then a card without a photo, else the last.
+ */
+export function wideCards(groups: readonly RecGroup[], withTell: boolean): Set<string> {
+  type Cell = { key: string; lw: boolean; hero: boolean };
+  const runs: Cell[][] = [[]];
+  for (const g of groups) {
+    if (g.id === 'more') runs.push([]);
+    const run = runs[runs.length - 1];
+    for (const c of cardsFor(g)) run.push({ key: c.key, lw: g.id.startsWith('lw:'), hero: !!c.hero });
+  }
+  if (withTell) runs[runs.length - 1].push({ key: TELL_KEY, lw: false, hero: false });
+  const wide = new Set<string>();
+  for (const run of runs) {
+    if (run.length % 2 === 0) continue;
+    const even = run.filter((_, i) => i % 2 === 0);
+    const pick = even.find(c => c.lw) ?? even.find(c => !c.hero) ?? run[run.length - 1];
+    wide.add(pick.key);
+  }
+  return wide;
+}
 
 /**
  * Explore: "For you" (extras spec §6.3, mock x13 left). Long weekends with
@@ -34,11 +63,12 @@ export const FOR_YOU_LINE = 'Scheduled flights, not seats. No boarding chances.'
           @for (g of groups(); track g.id) {
             @if (g.id === 'more') { <h3 class="ui-label more" data-more>{{ g.title }}</h3> }
             @for (c of cards(g); track c.key) {
-              <app-rec-card [items]="c.items" [group]="c.group" [hero]="c.hero" [heroTag]="c.heroTag" (dismiss)="dismiss($event)" />
+              <app-rec-card [class.wide]="wide().has(c.key)" [items]="c.items" [group]="c.group" [hero]="c.hero" [heroTag]="c.heroTag"
+                            (dismiss)="dismiss($event)" />
             }
           }
           @if (profile.isEmpty()) {
-            <a class="ui-card tell" [routerLink]="profileLink" [queryParams]="state.globalParams()" data-tell>
+            <a class="ui-card tell" [class.wide]="wide().has(tellKey)" [routerLink]="profileLink" [queryParams]="state.globalParams()" data-tell>
               <span class="tell__ic"><app-icon name="sparkle" [size]="18" /></span>
               <span class="tell__tx"><b>Tell us what you like</b>&ngsp;<span>Travel profile</span></span>
               <app-icon class="chev" name="chevron-right" [size]="16" />
@@ -70,6 +100,7 @@ export const FOR_YOU_LINE = 'Scheduled flights, not seats. No boarding chances.'
     .foot { margin: 10px 2px 0; font-size: 12px; color: var(--ink-2); }
     @media (min-width: 900px) {
       .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .wide { grid-column: 1 / -1; }
     }
     @media (max-width: 719px) {
       .fy-sec { margin-top: 22px; }
@@ -87,6 +118,9 @@ export class ForYouComponent {
   protected readonly profileLink = profilePath();
   protected readonly cards = cardsFor;
   protected readonly groups = this.recs.forExplore;
+  protected readonly tellKey = TELL_KEY;
+  /** Cards that span both desktop columns (see wideCards). */
+  protected readonly wide = computed(() => wideCards(this.groups(), this.profile.isEmpty()));
   protected readonly hasWeather = computed(() => this.groups().some(g => g.items.some(r => r.weather)));
 
   constructor() {

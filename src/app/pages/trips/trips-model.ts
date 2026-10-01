@@ -195,6 +195,12 @@ export function legRows(trip: Trip, fmt: TimeFormat = '24h'): LegRow[] {
 }
 
 /** 'Home, Montréal'. */
+/** True when the trip has no live return flight yet (none planned, or every one abandoned or missed). */
+export function needsReturn(trip: Trip): boolean {
+  const dead = new Set<string>(['abandoned', 'notBoarded', 'didntTry']);
+  return !trip.legs.some(l => l.kind === 'flight' && l.role === 'return' && l.refs.length > 0 && !dead.has(l.status));
+}
+
 export function homeLabel(trip: Trip): string {
   return `Home, ${hubDisplayName(trip.homeAirport)}`;
 }

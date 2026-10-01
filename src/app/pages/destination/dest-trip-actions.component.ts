@@ -81,8 +81,11 @@ export class DestTripActionsComponent {
   protected readonly city = computed(() => placeFromDestination(this.code()).name);
   private readonly day = computed(() => this.state.selectedDateKey());
 
+  /** The day "Add to … trip" looks at: the selected day, else today at the hub (so a trip under way is offered). */
+  private readonly coverDay = computed(() => this.day() ?? todayKey(airportTz(this.state.hub()), this.state.nowMs()));
+
   readonly addition = computed<TripAddition | null>(() => {
-    const day = this.day();
+    const day = this.coverDay();
     const trip = coveringTrip(this.trips.activeTrips(), day);
     return trip && day ? tripAddition(trip, this.code(), day) : null;
   });

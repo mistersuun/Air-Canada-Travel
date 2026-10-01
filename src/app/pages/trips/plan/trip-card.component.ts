@@ -7,7 +7,7 @@ import type { Trip } from '../../../trips/model';
 import { LegStatusTagComponent } from '../../../trips/ui/leg-status-tag.component';
 import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.component';
 import { tripPath, tripQuery } from '../../../ui/links';
-import { compactSummary, countdown, homeLabel, legRows, partyLabel, tripDatesLabel } from '../trips-model';
+import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel, tripDatesLabel } from '../trips-model';
 
 /**
  * The trip timeline card (mockup g2): the goal, the dates, a countdown tag,
@@ -73,7 +73,11 @@ import { compactSummary, countdown, homeLabel, legRows, partyLabel, tripDatesLab
           } @empty {
             <li class="tl__none ui-sub">No legs yet. Add a flight from a destination or a flight page.</li>
           }
-          <li class="tl__end"><i aria-hidden="true"><app-icon name="home" [size]="12" [filled]="true" /></i><span>{{ home() }}</span></li>
+          <li class="tl__end"><i aria-hidden="true"><app-icon name="home" [size]="12" [filled]="true" /></i><span>{{ home() }}</span>
+            @if (noReturn() && mode() !== 'static') {
+              <a class="tl__ret ui-link" data-no-return [routerLink]="tripLink()" [queryParams]="returnQuery()">No return flight yet · see Return</a>
+            }
+          </li>
         </ol>
       }
     </article>
@@ -129,7 +133,8 @@ import { compactSummary, countdown, homeLabel, legRows, partyLabel, tripDatesLab
     .is-done .tl__t { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--ink-3); }
     .is-done .tl__ic b { background: var(--fill); color: var(--ink-3); }
     .tl__none { padding: 0 0 12px 32px; }
-    .tl__end { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 14px; }
+    .tl__end { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-weight: 650; font-size: 14px; }
+    .tl__ret { flex-basis: 100%; padding-left: 32px; font-size: 12.5px; font-weight: 500; }
     .tl__end i {
       width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #FFFFFF;
       display: grid; place-items: center; flex: none;
@@ -154,6 +159,12 @@ export class TripCardComponent {
   protected readonly home = computed(() => homeLabel(this.trip()));
   protected readonly summary = computed(() => compactSummary(this.trip()));
   protected readonly tripLink = computed(() => tripPath(this.trip().id));
+
+  protected readonly noReturn = computed(() => this.trip().legs.length > 0 && needsReturn(this.trip()));
+
+  protected returnQuery(): Record<string, string> {
+    return { ...this.state.globalParams(), ...tripQuery('return') };
+  }
 
   protected legQuery(legId: string): Record<string, string> {
     return { ...this.state.globalParams(), ...tripQuery(null, legId) };

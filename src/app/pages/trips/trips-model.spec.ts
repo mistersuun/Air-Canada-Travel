@@ -4,7 +4,7 @@ import { FlightLeg, GroundLeg } from '../../trips/model';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../../trips/testing/seville-fixture';
 import { toUtcMs } from '../../utils/time';
 import {
-  compactSummary, countdown, deadlineNote, groundLabel, homeLabel, legRows, offlineAirports, offlineAirportsLabel,
+  compactSummary, countdown, deadlineNote, groundLabel, homeLabel, legRows, needsReturn, offlineAirports, offlineAirportsLabel,
   offlineUntil, partyLabel, returnNotListed, savedAtLabel, sharedLabel, tripDatesLabel, tripSubtitle,
 } from './trips-model';
 
@@ -98,5 +98,15 @@ describe('trips-model', () => {
     const rows = legRows(t);
     expect(rows[0].done).toBe(true);
     expect(rows.find(r => r.id === SEVILLE_IDS.ret)!.done).toBe(false);
+  });
+
+  it('knows when the trip still needs a return flight', () => {
+    const t = sevilleTrip();
+    expect(needsReturn(t)).toBe(false);
+    const ret = t.legs.find(l => l.id === SEVILLE_IDS.ret) as FlightLeg;
+    ret.status = 'notBoarded';
+    expect(needsReturn(t)).toBe(true);
+    t.legs = t.legs.filter(l => l.id !== SEVILLE_IDS.ret);
+    expect(needsReturn(t)).toBe(true);
   });
 });

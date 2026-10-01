@@ -14,13 +14,13 @@ import { DestTripActionsComponent, coveringTrip, tripAddition } from './dest-tri
 
 const NOW_MS = toUtcMs('2026-10-01', '09:41', 'America/Toronto');
 
-function configure(seed: boolean) {
+function configure(seed: boolean, now = NOW_MS) {
   const store = new MemoryStorage();
   if (seed) store.setItem(TRIPS_KEY, JSON.stringify(SEVILLE_TRIPS_FILE));
   TestBed.configureTestingModule({
     providers: [
       provideRouter([{ path: '**', children: [] }]),
-      { provide: NOW, useValue: () => NOW_MS },
+      { provide: NOW, useValue: () => now },
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
     ],
@@ -62,6 +62,12 @@ describe('DestTripActionsComponent', () => {
     // Outside the trip dates: Start again.
     const g = await render('LIS', '2026-10-20');
     expect((g.nativeElement as HTMLElement).textContent!.trim()).toBe('Start a trip to Lisbon');
+  });
+
+  it('with no day selected, offers the trip that is under way today', async () => {
+    configure(true, toUtcMs('2026-10-10', '09:00', 'America/Toronto'));
+    const f = await render('LIS', null);
+    expect((f.nativeElement as HTMLElement).textContent!.trim()).toBe('Add to Seville trip');
   });
 
   it('adds a same-day flight as a backup of the outbound leg, or a new leg otherwise', () => {

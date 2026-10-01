@@ -106,7 +106,7 @@ describe('FlightPage', () => {
     el.querySelectorAll<HTMLButtonElement>('app-seg button')[2].click();
     await stable();
     expect(nav).toHaveBeenCalledWith(['/flight', 'ATH', '2026-10-07', 'AC898'], {
-      queryParams: { pick: 'fastest' }, queryParamsHandling: 'merge', replaceUrl: true,
+      queryParams: { pick: 'fastest' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
     });
   });
 
@@ -114,7 +114,7 @@ describe('FlightPage', () => {
     configure();
     const { cmp, nav } = await render({ flight: 'AC864' });
     cmp.goDate('2026-10-09');
-    expect(nav).toHaveBeenCalledWith(['/flight', 'LHR', '2026-10-09'], { queryParamsHandling: 'merge', replaceUrl: true });
+    expect(nav).toHaveBeenCalledWith(['/flight', 'LHR', '2026-10-09'], { queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
     nav.mockClear();
     cmp.goDate('2026-10-07');
     cmp.goDate(null);
@@ -168,9 +168,9 @@ describe('FlightPage', () => {
     const chips = [...a.el.querySelectorAll<HTMLButtonElement>('app-return-panel .chip')];
     expect(chips.find(c => c.getAttribute('aria-pressed') === 'true')!.textContent!.trim()).toBe('7 nights');
     chips[0].click();
-    expect(a.nav).toHaveBeenCalledWith([], { queryParams: { nights: 2, ret: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    expect(a.nav).toHaveBeenCalledWith([], { queryParams: { nights: 2, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
     a.el.querySelector<HTMLButtonElement>('button[aria-label="One night more"]')!.click();
-    expect(a.nav).toHaveBeenLastCalledWith([], { queryParams: { nights: 8, ret: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    expect(a.nav).toHaveBeenLastCalledWith([], { queryParams: { nights: 8, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
 
     TestBed.resetTestingModule();
     configure();
@@ -206,7 +206,7 @@ describe('FlightPage', () => {
     const jump = vi.spyOn(state, 'jumpToCoverage');
     el.querySelector<HTMLButtonElement>('.state .ui-btn')!.click();
     expect(jump).toHaveBeenCalledWith('2026-10-07');
-    expect(nav).toHaveBeenCalledWith(['/flight', 'LHR', '2026-10-07'], { queryParamsHandling: 'merge', replaceUrl: true });
+    expect(nav).toHaveBeenCalledWith(['/flight', 'LHR', '2026-10-07'], { queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   });
 
   it('back falls back to the destination; share uses the share service', async () => {

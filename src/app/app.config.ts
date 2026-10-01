@@ -8,6 +8,7 @@ import {
   provideZonelessChangeDetection,
 } from '@angular/core';
 import {
+  type ActivatedRouteSnapshot,
   provideRouter,
   withComponentInputBinding,
   withInMemoryScrolling,
@@ -20,6 +21,15 @@ import { PhotoService } from './state/photo.service';
 import { AppStateService } from './state/app-state.service';
 import { stageDeepLink } from './shell/deep-link';
 
+/** '/to/LIS' for a route snapshot tree (query params and fragment ignored). */
+export function snapshotPath(root: ActivatedRouteSnapshot): string {
+  const parts: string[] = [];
+  for (let s: ActivatedRouteSnapshot | null = root; s; s = s.firstChild) {
+    for (const seg of s.url) parts.push(seg.path);
+  }
+  return '/' + parts.join('/');
+}
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
@@ -29,7 +39,14 @@ export const appConfig: ApplicationConfig = {
       routes,
       withComponentInputBinding(),
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
-      withViewTransitions({ skipInitialTransition: true }),
+      withViewTransitions({
+        skipInitialTransition: true,
+        // Query-param-only writes (search, ?sel=, ?tab=, week moves) stay on the
+        // same page: no crossfade.
+        onViewTransitionCreated: ({ transition, from, to }) => {
+          if (snapshotPath(from) === snapshotPath(to)) transition.skipTransition();
+        },
+      }),
     ),
     // Before the first navigation: stage an Explore entry under a deep link,
     // and load the schedules (data, not code) and the photo credits in parallel.

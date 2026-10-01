@@ -62,6 +62,8 @@ QUALITY_CATS = ("Quality images", "Featured pictures", "Valued images", "Picture
 
 MAIN_W, MAIN_Q, MAIN_MAX = 960, 62, 110_000
 SMALL_W, SMALL_Q, SMALL_MAX = 400, 60, 30_000
+# Full-bleed desktop hero (retina): written only when the source is wide enough.
+HERO_W, HERO_Q, HERO_MAX = 1920, 58, 280_000
 MAX_ASPECT, MIN_ASPECT = 1.5, 0.8  # crop to at most 3:2 wide and 4:5 tall
 
 session = requests.Session()
@@ -305,7 +307,7 @@ def encode(im: Image.Image, width: int, q: int, cap: int) -> bytes:
 
 
 def tone(im: Image.Image) -> str:
-    mean = sum(g.tobytes()) / (64 * 32)
+    w, h = im.size
     g = im.crop((0, int(h * 0.6), w, h)).convert("L").resize((64, 32))
     mean = sum(g.getdata()) / (64 * 32)
     return "dark" if mean < 128 else "light"
@@ -341,6 +343,15 @@ def load_image(url: str) -> Image.Image:
     raise RuntimeError("unreachable")
 
 
+def fetched_key(v) -> tuple | None:
+    """(id, position) of a fetched.json entry; old entries are a bare id (default crop)."""
+    if isinstance(v, dict):
+        return (v.get("id"), v.get("position", "50% 50%"))
+    if isinstance(v, str):
+        return (v, "50% 50%")
+    return None
+
+
 def cmd_fetch(args) -> None:
     picks = json.loads(PICKS.read_text())
     OUT.mkdir(parents=True, exist_ok=True)
@@ -358,20 +369,28 @@ def cmd_fetch(args) -> None:
             continue
         pos = pick.get("position", "50% 50%")
         have = main.exists() and small.exists() and code in old
-        same = have and fetched.get(code) == (pick.get("commons") or pick.get("unsplash"))
+        pid = pick.get("commons") or pick.get("unsplash")
+        same = have and fetched_key(fetched.get(code)) == (pid, pos)
         if same and not args.force_all and code not in force:
             entry = dict(old[code])
             entry["position"] = pos
             photos[code] = entry
             continue
+
+        def keep_old() -> None:
+            # A failed refetch keeps the working photo and credit (never deletes them).
+            if have:
+                photos[code] = old[code]
         if "commons" in pick:
             page = info.get(pick["commons"])
             if not page:
                 print(f"{code}: {pick['commons']} not found", file=sys.stderr)
+                keep_old()
                 continue
             meta = describe(page)
             if not meta:
                 print(f"{code}: licence not allowed", file=sys.stderr)
+                keep_old()
                 continue
         else:
             meta = unsplash_meta(pick["unsplash"])
@@ -381,14 +400,21 @@ def cmd_fetch(args) -> None:
             im = load_image(meta["_download"])
         except Exception as e:
             print(f"{code}: download failed: {e}", file=sys.stderr)
+            keep_old()
             continue
         im = crop_aspect(im, pos)
         main.write_bytes(encode(im, MAIN_W, MAIN_Q, MAIN_MAX))
         small.write_bytes(encode(im, SMALL_W, SMALL_Q, SMALL_MAX))
+        hero = OUT / f"{code}-{HERO_W}.webp"
         entry = {k: v for k, v in meta.items() if not k.startswith("_")}
+        if im.width >= HERO_W:
+            hero.write_bytes(encode(im, HERO_W, HERO_Q, HERO_MAX))
+            entry["hero"] = True
+        else:
+            hero.unlink(missing_ok=True)
         entry["position"] = pos
         entry["tone"] = tone(im)
-        fetched[code] = pick.get("commons") or pick.get("unsplash")
+        fetched[code] = {"id": pid, "position": pos}
         photos[code] = entry
         print(f"{code}: {main.stat().st_size // 1024} KB / {small.stat().st_size // 1024} KB  {entry['license']}  {entry['author']}")
         time.sleep(0.3)

@@ -143,7 +143,8 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
       transition: height var(--dur) var(--ease-out);
     }
     .panel.is-open { height: 75dvh; }
-    .handle { display: block; width: 100%; padding: 0 0 12px; touch-action: none; cursor: grab; flex: none; }
+    /* 32px tall hit area (WCAG 2.5.8) without moving the sheet's content. */
+    .handle { display: block; width: 100%; padding: 12px 0 15px; margin-top: -10px; touch-action: none; cursor: grab; flex: none; }
     .handle i { display: block; width: 36px; height: 5px; border-radius: 3px; background: var(--hair); margin: 0 auto; }
     .hd { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex: none; }
     .hd h2 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -360,6 +361,9 @@ export class MapPage {
       this.framedOn.set(code);
       this.map()?.resetView();
     } else {
+      // Until something is framed the map follows ?sel=; freeze the current
+      // framing so a dot tap only selects and does not reframe.
+      if (this.framedOn() === undefined) this.framedOn.set(this.sel());
       this.scrollToRow(code, 'smooth');
     }
     this.writeParams({ sel: code });
@@ -408,6 +412,6 @@ export class MapPage {
   }
 
   private writeParams(params: Record<string, string | null>): void {
-    void this.router.navigate([], { queryParams: params, queryParamsHandling: 'merge', replaceUrl: true });
+    void this.router.navigate([], { queryParams: params, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   }
 }

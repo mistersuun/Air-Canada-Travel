@@ -51,8 +51,9 @@ export class WeekCardComponent {
   protected readonly tiles = computed(() => {
     const s = this.stats();
     return [
+      // All three count nonstop flying only, so the figures agree.
       { value: s?.directDestinations ?? 0, label: 'destinations' },
-      { value: s?.countries ?? 0, label: 'countries' },
+      { value: s?.directCountries ?? 0, label: 'countries' },
       { value: s?.flightsThisWeek ?? 0, label: 'departures' },
     ];
   });

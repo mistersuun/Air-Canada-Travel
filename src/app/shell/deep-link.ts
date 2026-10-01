@@ -16,6 +16,7 @@ const GLOBAL_KEYS = ['from', 'week', 'day', 'region', 'q'] as const;
 export function stageDeepLink(win: Window | null | undefined): boolean {
   if (!win) return false;
   try {
+    if (!freshLanding(win)) return false;
     const { pathname, search, hash } = win.location;
     const params = new URLSearchParams(search);
     let target: string | null = null;
@@ -46,4 +47,17 @@ export function stageDeepLink(win: Window | null | undefined): boolean {
   } catch {
     return false; // sandboxed frames can refuse history writes
   }
+}
+
+/**
+ * Only a fresh landing is staged. A reload or a back/forward load of an
+ * entry the app already wrote (the router stores its navigationId in
+ * history.state) keeps the history as it is: staging again would stack
+ * another Explore entry per reload, or truncate the forward history.
+ */
+function freshLanding(win: Window): boolean {
+  const state = win.history?.state as { navigationId?: unknown; ɵrouterPageId?: unknown } | null;
+  if (state && typeof state === 'object' && ('navigationId' in state || 'ɵrouterPageId' in state)) return false;
+  const nav = win.performance?.getEntriesByType?.('navigation')?.[0] as PerformanceNavigationTiming | undefined;
+  return !nav || (nav.type !== 'reload' && nav.type !== 'back_forward');
 }

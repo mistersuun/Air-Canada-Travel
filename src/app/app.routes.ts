@@ -1,4 +1,4 @@
-import { Routes } from '@angular/router';
+import { Routes, UrlMatchResult, UrlSegment } from '@angular/router';
 import { destTitle, flightTitle, knownDestination, legacyDestRedirect, validDate } from './shell/route-guards';
 
 /**
@@ -6,6 +6,14 @@ import { destTitle, flightTitle, knownDestination, legacyDestRedirect, validDate
  * (withComponentInputBinding): code = input.required<string>(), date, flight.
  * Build links with ui/links.ts (destPath, flightPath, calendarPath).
  */
+/** Matches flight/:code/:date with an optional trailing :flight slug. */
+export function flightMatcher(segments: UrlSegment[]): UrlMatchResult | null {
+  if ((segments.length !== 3 && segments.length !== 4) || segments[0].path !== 'flight') return null;
+  const posParams: Record<string, UrlSegment> = { code: segments[1], date: segments[2] };
+  if (segments[3]) posParams['flight'] = segments[3];
+  return { consumed: segments, posParams };
+}
+
 export const routes: Routes = [
   {
     path: '',
@@ -21,13 +29,9 @@ export const routes: Routes = [
     title: destTitle,
   },
   {
-    path: 'flight/:code/:date',
-    canActivate: [knownDestination, validDate],
-    loadComponent: () => import('./pages/flight/flight.page').then(m => m.FlightPage),
-    title: flightTitle,
-  },
-  {
-    path: 'flight/:code/:date/:flight',
+    // One config for /flight/:code/:date and /flight/:code/:date/:flight, so
+    // moving between them reuses FlightPage (and keeps its picked return).
+    matcher: flightMatcher,
     canActivate: [knownDestination, validDate],
     loadComponent: () => import('./pages/flight/flight.page').then(m => m.FlightPage),
     title: flightTitle,

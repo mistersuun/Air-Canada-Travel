@@ -283,6 +283,8 @@ export interface HubStats {
   connectingDestinations: number;
   /** Distinct countries reachable this week (direct or one connection). */
   countries: number;
+  /** Distinct countries with a direct flight this week. */
+  directCountries: number;
   /** Direct departures this week. */
   flightsThisWeek: number;
   /** Direct departures per weekday, Mon..Sun. */
@@ -294,8 +296,10 @@ export function hubStats(home: string, weekStartKey: string, connect: ConnectOpt
   const byDay = [0, 0, 0, 0, 0, 0, 0];
   let flightsThisWeek = 0;
   const countries = new Set<string>();
+  const directCountries = new Set<string>();
   for (const r of routes) {
     countries.add(r.destination.country);
+    if (r.isDirect) directCountries.add(r.destination.country);
     for (const f of r.flights) {
       byDay[weekdayIndex(f.dateKey)]++;
       flightsThisWeek++;
@@ -306,6 +310,7 @@ export function hubStats(home: string, weekStartKey: string, connect: ConnectOpt
     directDestinations,
     connectingDestinations: routes.length - directDestinations,
     countries: countries.size,
+    directCountries: directCountries.size,
     flightsThisWeek,
     departuresByWeekday: byDay,
   };

@@ -30,11 +30,11 @@ export function shortAircraft(code: string | null | undefined): string {
 /** The most frequent value (ties: first seen), or null for an empty list. */
 export function mostFrequent<T>(xs: readonly T[]): T | null {
   const n = new Map<T, number>();
+  for (const x of xs) n.set(x, (n.get(x) ?? 0) + 1);
   let best: T | null = null;
   let bestN = 0;
-  for (const x of xs) {
-    const c = (n.get(x) ?? 0) + 1;
-    n.set(x, c);
+  // Map iterates in first-seen order; a strict > keeps the earliest on a tie.
+  for (const [x, c] of n) {
     if (c > bestN) {
       best = x;
       bestN = c;

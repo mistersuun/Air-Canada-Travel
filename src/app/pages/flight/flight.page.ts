@@ -343,9 +343,14 @@ export class FlightPage {
         win?.removeEventListener('resize', sync);
       });
     });
-    // A different outbound day or return date drops the picked return.
+    // A different outbound (day or option) or return date drops the picked return.
+    const outKey = computed(() => {
+      const it = this.current();
+      return it ? itinKey(it) : null;
+    });
     effect(() => {
       this.dateKey();
+      outKey();
       this.ret();
       this.nights();
       untracked(() => {
@@ -378,7 +383,7 @@ export class FlightPage {
   /** Day chips and week arrows: same page, another date (the slug is dropped). */
   goDate(key: string | null): void {
     if (!key || !isDateKey(key) || key === this.dateKey()) return;
-    void this.router.navigate(flightPath(this.dest(), key), { queryParamsHandling: 'merge', replaceUrl: true });
+    void this.router.navigate(flightPath(this.dest(), key), { queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   }
 
   setPick(value: string | undefined): void {
@@ -389,6 +394,7 @@ export class FlightPage {
       queryParams: { pick: p },
       queryParamsHandling: 'merge',
       replaceUrl: true,
+      scroll: 'manual',
     });
   }
 
@@ -397,6 +403,7 @@ export class FlightPage {
       queryParams: { nights: n, ret: null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
+      scroll: 'manual',
     });
   }
 

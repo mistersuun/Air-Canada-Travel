@@ -1,4 +1,4 @@
-import { Injectable, InjectionToken, inject, signal } from '@angular/core';
+import { Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
 
 /** One entry of public/img/dest/credits.json (written by scripts/photos). */
 export interface PhotoCredit {
@@ -13,6 +13,8 @@ export interface PhotoCredit {
   position?: string;
   /** Luminance of the bottom 40% of the photo. */
   tone?: 'light' | 'dark';
+  /** A 1920w variant (CODE-1920.webp) exists, for the full-bleed hero. */
+  hero?: boolean;
 }
 
 export interface PhotoManifest {
@@ -25,10 +27,15 @@ export const PHOTO_BASE = 'img/dest/';
 export const CREDITS_URL = `${PHOTO_BASE}credits.json`;
 
 /** How the manifest is fetched; specs replace it. Resolves to the parsed JSON. */
+/*
+ * The manifest uses the normal HTTP cache, like the photos it describes
+ * (netlify.toml gives /img/dest/* one lifetime), so a cached photo is never
+ * shown with a freshly fetched credit for a different photo.
+ */
 export const PHOTO_FETCH = new InjectionToken<(url: string) => Promise<unknown>>('PHOTO_FETCH', {
   providedIn: 'root',
   factory: () => async (url: string) => {
-    const res = await fetch(url, { cache: 'no-cache' });
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },
@@ -77,9 +84,16 @@ export class PhotoService {
   }
 
   /** 'img/dest/LIS-400.webp 400w, img/dest/LIS.webp 960w'. */
-  srcset(code: string): string {
-    return `${this.src(code, 400)} 400w, ${this.src(code, 960)} 960w`;
+  srcset(code: string, hero = false): string {
+    const base = `${this.src(code, 400)} 400w, ${this.src(code, 960)} 960w`;
+    return hero && this.manifest().photos[code]?.hero ? `${base}, ${PHOTO_BASE}${code}-1920.webp 1920w` : base;
   }
+
+  /** Every credited photo, by code (Settings → Photo credits). */
+  readonly credits = computed(() =>
+    Object.entries(this.manifest().photos)
+      .map(([code, credit]) => ({ code, credit }))
+      .sort((a, b) => a.code.localeCompare(b.code)));
 
   credit(code: string): PhotoCredit | null {
     return this.manifest().photos[code] ?? null;

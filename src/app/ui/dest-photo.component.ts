@@ -1,13 +1,15 @@
-import { ChangeDetectionStrategy, booleanAttribute, Component, computed, inject, input, linkedSignal } from '@angular/core';
+import { ChangeDetectionStrategy, booleanAttribute, Component, computed, effect, inject, input, linkedSignal, output } from '@angular/core';
 import { findDestination } from '../utils/airports';
 import { regionVar } from '../utils/region-color';
 import { PhotoService } from '../state/photo.service';
 
-export type DestPhotoSize = 'thumb' | 'card' | 'hero';
+export type DestPhotoSize = 'thumb' | 'card' | 'wide' | 'hero';
 
 const SIZES: Record<DestPhotoSize, string> = {
   thumb: '44px',
   card: '(max-width: 719px) 60vw, 320px',
+  // Saved's wide cards: full width on phones, up to the whole grid on desktop.
+  wide: '(max-width: 719px) 100vw, 66vw',
   hero: '100vw',
 };
 
@@ -47,7 +49,7 @@ const SIZES: Record<DestPhotoSize, string> = {
     :host(:not(.is-thumb)) .mono__code { font-family: var(--cond); font-size: 64px; font-weight: 600; line-height: .95; letter-spacing: -.01em; }
     .mono__city { font-size: 14px; font-weight: 600; opacity: .9; }
     /* Cards carry a glass bar at the bottom: centre the monogram in the space above it. */
-    :host(.is-card) .mono { padding-bottom: 34%; }
+    :host(.is-card) .mono, :host(.is-wide) .mono { padding-bottom: 34%; }
   `],
 })
 export class DestPhotoComponent {
@@ -63,8 +65,14 @@ export class DestPhotoComponent {
   protected readonly failed = linkedSignal({ source: this.code, computation: () => false });
 
   protected readonly showPhoto = computed(() => this.photos.has(this.code()) && !this.failed());
+  /** True while the photo shows, false when the monogram does (e.g. to hide a credit). */
+  readonly photoShown = output<boolean>();
+
+  constructor() {
+    effect(() => this.photoShown.emit(this.showPhoto()));
+  }
   protected readonly src = computed(() => this.photos.src(this.code(), this.size() === 'thumb' ? 400 : 960));
-  protected readonly srcset = computed(() => (this.size() === 'thumb' ? null : this.photos.srcset(this.code())));
+  protected readonly srcset = computed(() => (this.size() === 'thumb' ? null : this.photos.srcset(this.code(), this.size() === 'hero')));
   protected readonly sizes = computed(() => (this.size() === 'thumb' ? null : SIZES[this.size()]));
   protected readonly position = computed(() => this.photos.position(this.code()));
   protected readonly altText = computed(() => this.alt());

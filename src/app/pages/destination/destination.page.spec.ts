@@ -47,7 +47,12 @@ describe('DestinationPage', () => {
     });
     TestBed.inject(PhotoService).setManifest({
       version: 1,
-      photos: { LHR: { author: 'Colin', source: 'wikimedia', sourceUrl: 'https://commons.example/LHR', license: 'CC BY-SA 4.0' } },
+      photos: {
+        LHR: {
+          author: 'Colin', authorUrl: 'https://commons.example/User:Colin', source: 'wikimedia',
+          sourceUrl: 'https://commons.example/LHR', license: 'CC BY-SA 4.0', licenseUrl: 'https://cc.example/by-sa/4.0',
+        },
+      },
     });
   });
 
@@ -69,13 +74,19 @@ describe('DestinationPage', () => {
     expect(el.querySelector('.head__btns a.wide')!.getAttribute('href')).toBe('https://www.aircanada.com/');
   });
 
-  it('shows the photo credit linking to its source', async () => {
+  it('shows the photo credit linking to its source, author and licence', async () => {
     await render('LHR');
-    const credit = el.querySelector<HTMLAnchorElement>('a.credit')!;
-    expect(credit.textContent!.trim()).toBe('Photo · Colin · CC BY-SA 4.0');
-    expect(credit.href).toBe('https://commons.example/LHR');
+    const credit = el.querySelector<HTMLElement>('.credit')!;
+    expect(credit.textContent!.replace(/\s+/g, ' ').trim()).toBe('Photo · Colin · CC BY-SA 4.0');
+    expect([...credit.querySelectorAll('a')].map(a => a.getAttribute('href'))).toEqual([
+      'https://commons.example/LHR', 'https://commons.example/User:Colin', 'https://cc.example/by-sa/4.0',
+    ]);
+    // The credit hides when the photo fails and the monogram shows.
+    el.querySelector('app-dest-photo img')!.dispatchEvent(new Event('error'));
+    await fixture.whenStable();
+    expect(el.querySelector('.credit')).toBeNull();
     await render('ATH');
-    expect(el.querySelector('a.credit')).toBeNull();
+    expect(el.querySelector('.credit')).toBeNull();
     expect(el.querySelector('app-dest-photo')!.classList).toContain('is-mono');
   });
 
@@ -148,6 +159,15 @@ describe('DestinationPage', () => {
     expect(text('.dist b')).toMatch(/^5,\d{3} km$/);
   });
 
+  it('starts the timelines at the browsed week, not today', async () => {
+    await render('LHR', s => s.goToWeek('2026-10-12'));
+    const href = el.querySelector('a.next')!.getAttribute('href')!;
+    expect(href.split('/')[3] >= '2026-10-12').toBe(true);
+    for (const a of el.querySelectorAll<HTMLAnchorElement>('.dep a.ui-tl__it')) {
+      expect(a.getAttribute('href')!.split('/')[3] >= '2026-10-12').toBe(true);
+    }
+  });
+
   it('flags an unpublished week and jumps back to coverage', async () => {
     await render('LHR', s => s.goToWeek('2027-05-03'));
     expect(text('.notice')).toContain("Schedules for May 3 – 9 aren't published yet.");
@@ -197,9 +217,9 @@ describe('DestinationPage', () => {
     expect(el.querySelector('.side')!.classList).not.toContain('m-hide');
     const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     el.querySelectorAll<HTMLButtonElement>('.tabs button')[1].click();
-    expect(nav).toHaveBeenCalledWith([], { queryParams: { tab: 'returns' }, queryParamsHandling: 'merge', replaceUrl: true });
+    expect(nav).toHaveBeenCalledWith([], { queryParams: { tab: 'returns' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
     el.querySelectorAll<HTMLButtonElement>('.tabs button')[0].click();
-    expect(nav).toHaveBeenLastCalledWith([], { queryParams: { tab: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    expect(nav).toHaveBeenLastCalledWith([], { queryParams: { tab: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   });
 
   it('moves the app to a day picked in the month availability', async () => {

@@ -155,6 +155,25 @@ export class AppStateService {
     }),
   );
 
+  /**
+   * routes() without the text query (region, filters, favourites and sort
+   * kept): the base list for flight-number search. Lazy: only read then.
+   */
+  readonly unsearchedRoutes = computed<RouteEntry[]>(() =>
+    this.engine.computeRoutes({
+      home: this.hub(),
+      weekStartKey: this.weekStartKey(),
+      dateKey: this.selectedDateKey(),
+      region: this.region(),
+      showConnections: this.showConnections(),
+      query: '',
+      sort: this.sort(),
+      filters: this.filters(),
+      favourites: this.favourites(),
+      connect: this.connect(),
+    }),
+  );
+
   /** Every route from the hub in scope (week or selected day), ignoring search, filters and region. */
   readonly allRoutes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
@@ -479,6 +498,6 @@ export class AppStateService {
       patch[k] = want;
     }
     if (!changed) return;
-    void this.router.navigate([], { queryParams: patch, queryParamsHandling: 'merge', replaceUrl: true });
+    void this.router.navigate([], { queryParams: patch, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   }
 }

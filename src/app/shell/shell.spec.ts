@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { stageDeepLink } from './deep-link';
 import { hasSkywash, hidesTopNav, isDetailPath, navSection } from './nav-model';
 import { SHORTCUTS } from './shortcuts-sheet.component';
@@ -51,5 +51,19 @@ describe('stageDeepLink', () => {
     expect(stageDeepLink(null)).toBe(false);
     const broken = { location: { pathname: '/to/LIS', search: '', hash: '' }, history: { replaceState: () => { throw new Error('x'); } } };
     expect(stageDeepLink(broken as unknown as Window)).toBe(false);
+  });
+
+  it('leaves the history alone on a reload or back/forward load of an app entry', () => {
+    window.history.replaceState({ navigationId: 3 }, '', '/to/LIS');
+    const before = window.history.length;
+    expect(stageDeepLink(window)).toBe(false);
+    expect(window.history.length).toBe(before);
+    const reload = {
+      location: { pathname: '/to/LIS', search: '', hash: '' },
+      history: { state: null, replaceState: vi.fn(), pushState: vi.fn() },
+      performance: { getEntriesByType: () => [{ type: 'reload' }] },
+    };
+    expect(stageDeepLink(reload as unknown as Window)).toBe(false);
+    expect(reload.history.pushState).not.toHaveBeenCalled();
   });
 });

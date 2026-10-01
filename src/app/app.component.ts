@@ -33,9 +33,10 @@ interface ToastView {
     '(document:visibilitychange)': 'onVisibilityChange()',
   },
   template: `
-    <a class="skip-link" href="#main">Skip to content</a>
+    <!-- Handled in code: with <base href="/"> a bare #main resolves to /#main and would leave the page. -->
+    <a class="skip-link" href="#main" (click)="skipToMain($event, main)">Skip to content</a>
     <app-top-nav />
-    <main id="main" tabindex="-1"><router-outlet /></main>
+    <main #main id="main" tabindex="-1"><router-outlet /></main>
     <app-tab-bar />
 
     @if (state.settingsOpen()) {
@@ -57,6 +58,12 @@ export class AppComponent {
   protected readonly state = inject(AppStateService);
   protected readonly pwa = inject(PwaUpdateService);
   private readonly doc = inject(DOCUMENT);
+
+  protected skipToMain(e: Event, main: HTMLElement): void {
+    e.preventDefault();
+    main.focus();
+    main.scrollIntoView?.({ block: 'start' });
+  }
 
   protected readonly skywash = computed(() => hasSkywash(this.state.path()));
 

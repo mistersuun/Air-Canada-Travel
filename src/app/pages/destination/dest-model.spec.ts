@@ -22,6 +22,7 @@ describe('small helpers', () => {
     expect(shortAircraft('333')).toBe('A330-300');
     expect(shortAircraft(null)).toBe('');
     expect(mostFrequent(['a', 'b', 'b', 'a', 'b'])).toBe('b');
+    expect(mostFrequent(['a', 'b', 'b', 'a'])).toBe('a'); // a tie goes to the first seen
     expect(mostFrequent([])).toBeNull();
   });
 

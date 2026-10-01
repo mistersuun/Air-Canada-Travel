@@ -41,7 +41,9 @@
     Content-Type = "application/manifest+json"
 
 # Destination photos: file names are stable, so cache for a week and let the
-# service worker (dest-photos group) revalidate in the background.
+# service worker (dest-photos group) revalidate in the background. credits.json
+# shares this lifetime and PhotoService fetches it through the normal HTTP
+# cache, so the credit shown always ages with the photo it describes.
 [[headers]]
   for = "/img/dest/*"
   [headers.values]

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, booleanAttribute, Component, ElementRef, input, model, viewChildren } from '@angular/core';
+import { ChangeDetectionStrategy, booleanAttribute, Component, ElementRef, computed, input, model, viewChildren } from '@angular/core';
 import { IconComponent, IconName } from '../components/shared/icons.component';
 
 export interface SegOption {
@@ -33,7 +33,7 @@ export interface SegOption {
       @for (o of options(); track o.value) {
         <button #btn type="button" class="seg__b" [class.on]="o.value === value()"
                 [attr.aria-pressed]="o.value === value()" [disabled]="o.disabled || null"
-                [attr.tabindex]="o.value === value() || (!hasValue() && $first) ? 0 : -1"
+                [attr.tabindex]="$index === tabStop() ? 0 : -1"
                 (click)="pick(o)" (keydown)="onKey($event, $index)">
           @if (o.icon) { <app-icon [name]="o.icon" [size]="16" /> }
           {{ o.label }}
@@ -73,10 +73,13 @@ export class SegComponent {
 
   private readonly buttons = viewChildren<ElementRef<HTMLButtonElement>>('btn');
 
-  protected hasValue(): boolean {
+  /** The roving tab stop: the selected option, else the first enabled one. */
+  protected readonly tabStop = computed(() => {
+    const opts = this.options();
     const v = this.value();
-    return this.options().some(o => o.value === v);
-  }
+    const i = opts.findIndex(o => o.value === v && !o.disabled);
+    return i >= 0 ? i : opts.findIndex(o => !o.disabled);
+  });
 
   protected pick(o: SegOption): void {
     if (o.disabled) return;

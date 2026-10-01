@@ -82,7 +82,7 @@ const WEEK_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
     .d.off { color: var(--ink-3); cursor: default; }
     .d.today { color: var(--blue); font-weight: 650; }
     .d.sel { color: #FFFFFF; }
-    .d.sel::before { content: ''; position: absolute; inset: 2px 4px; border-radius: 12px; background: var(--red); z-index: -1; }
+    .d.sel::before { content: ''; position: absolute; inset: 2px 4px; border-radius: 12px; background: var(--red-fill); z-index: -1; }
     .bar { width: 16px; height: 3px; border-radius: 2px; background: var(--hair); overflow: hidden; position: relative; }
     .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--teal); border-radius: 2px; }
     .bar--c { width: 6px; background: var(--amber); }

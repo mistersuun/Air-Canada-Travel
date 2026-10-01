@@ -82,7 +82,7 @@ describe('CalendarPage', () => {
     day('2026-10-08').click();
     await stable();
     expect(nav).toHaveBeenLastCalledWith([], {
-      queryParams: { dep: '2026-10-08', ret: null }, queryParamsHandling: 'merge', replaceUrl: true,
+      queryParams: { dep: '2026-10-08', ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
     });
     expect(cmp.dir()).toEqual({ from: 'LHR', to: 'YUL' });
     expect(day('2026-10-08').getAttribute('aria-label')).toBe('Thursday, October 8, 1 return departure');
@@ -91,7 +91,7 @@ describe('CalendarPage', () => {
     day('2026-10-15').click();
     await stable();
     expect(nav).toHaveBeenLastCalledWith([], {
-      queryParams: { dep: '2026-10-08', ret: '2026-10-15' }, queryParamsHandling: 'merge', replaceUrl: true,
+      queryParams: { dep: '2026-10-08', ret: '2026-10-15' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
     });
     expect(day('2026-10-15').classList).toContain('e');
     expect(day('2026-10-10').classList).toContain('mid');

@@ -179,6 +179,7 @@ describe('hubStats', () => {
       directDestinations: 2,
       connectingDestinations: 1,
       countries: 3,
+      directCountries: 2,
       flightsThisWeek: 13,
       departuresByWeekday: [3, 1, 3, 1, 3, 1, 1],
     });

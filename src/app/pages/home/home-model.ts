@@ -251,15 +251,17 @@ export function entryHasFlight(e: RouteEntry, fn: string): boolean {
 }
 
 /**
- * Results for the list: the engine's filtered routes, plus (for a flight
- * number query, which the engine's text search does not match) every route
- * in scope that operates that flight.
+ * Results for the list. The engine's text search does not match flight
+ * numbers, so for a flight-number query the list is `unsearched` (the same
+ * region, filters, favourites and sort, without the text query) narrowed to
+ * the engine's matches plus every route that operates that flight. Order and
+ * filters therefore stay those of the list.
  */
-export function withFlightMatches(routes: readonly RouteEntry[], all: readonly RouteEntry[], q: string): RouteEntry[] {
+export function withFlightMatches(routes: readonly RouteEntry[], unsearched: readonly RouteEntry[], q: string): RouteEntry[] {
   const fn = flightNumberQuery(q);
   if (!fn) return [...routes];
   const seen = new Set(routes.map(r => r.destination.code));
-  return [...routes, ...all.filter(e => !seen.has(e.destination.code) && entryHasFlight(e, fn))];
+  return unsearched.filter(e => seen.has(e.destination.code) || entryHasFlight(e, fn));
 }
 
 // ── Coverage ─────────────────────────────────────────────────────────────────

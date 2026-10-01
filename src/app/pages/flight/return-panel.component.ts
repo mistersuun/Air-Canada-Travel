@@ -8,6 +8,8 @@ import { MAX_NIGHTS, NIGHT_PRESETS, optionRow, type OptionRow } from './flight-m
 import { OptionRowComponent } from './option-row.component';
 
 const SHOWN = 4;
+/** Minimum turnaround (minutes) when the connection settings give none. */
+const DEFAULT_MIN_CONNECT = 60;
 
 interface Nearby {
   nights: number;
@@ -135,14 +137,22 @@ export class ReturnPanelComponent {
     return this.showConnections() ? its : its.filter(i => !i.hubs.length);
   }
 
-  readonly rows = computed<OptionRow[]>(() =>
-    this.optionsOn(this.retDate()).map(i => optionRow(i, this.timeFormat())));
+  /** Returns must leave at least the minimum connection time after the outbound lands. */
+  readonly rows = computed<OptionRow[]>(() => {
+    const earliest = this.outbound().arriveUtc + (this.connect().minConnect ?? DEFAULT_MIN_CONNECT) * 60_000;
+    return this.optionsOn(this.retDate())
+      .filter(i => i.departUtc >= earliest)
+      .map(i => optionRow(i, this.timeFormat()));
+  });
 
   protected readonly visible = computed(() => (this.showAll() ? this.rows() : this.rows().slice(0, SHOWN)));
 
+  /** Time at the destination: to the picked return, else to the first one listed. */
   protected readonly stay = computed(() => {
-    const first = this.rows()[0];
-    return first ? formatStay(first.it.departUtc - this.outbound().arriveUtc) : '';
+    const rows = this.rows();
+    const key = this.selectedKey();
+    const row = (key && rows.find(r => itinKey(r.it) === key)) || rows[0];
+    return row ? formatStay(row.it.departUtc - this.outbound().arriveUtc) : '';
   });
 
   /** A day either side, when the exact day has nothing. */

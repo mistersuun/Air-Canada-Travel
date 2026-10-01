@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
 import { HUBS } from '../../data/destinations';
 import { AppStateService } from '../../state/app-state.service';
+import { PhotoService } from '../../state/photo.service';
 import {
   MAX_LAYOVER_OPTIONS, MIN_CONNECT_OPTIONS, PrefsService, THEMES, ThemePref, TimeFormat,
 } from '../../state/prefs.service';
@@ -89,6 +90,25 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
           </div>
         </section>
 
+        @if (photos.credits().length) {
+          <details class="grp credits">
+            <summary class="row"><span class="nm">Photo credits</span><span class="chev" aria-hidden="true">›</span></summary>
+            <ul class="cr">
+              @for (p of photos.credits(); track p.code) {
+                <li>
+                  <b>{{ p.code }}</b>
+                  <a [href]="p.credit.sourceUrl" target="_blank" rel="noopener">{{ p.credit.subject || 'Photo' }}</a>
+                  by
+                  @if (p.credit.authorUrl) { <a [href]="p.credit.authorUrl" target="_blank" rel="noopener">{{ p.credit.author }}</a> }
+                  @else { {{ p.credit.author }} },
+                  @if (p.credit.licenseUrl) { <a [href]="p.credit.licenseUrl" target="_blank" rel="noopener license">{{ p.credit.license }}</a> }
+                  @else { {{ p.credit.license }} }
+                </li>
+              }
+            </ul>
+          </details>
+        }
+
         <div class="foot">
           <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">Reset to defaults</button>
           <button type="button" class="ui-btn ui-btn--dark" data-done (click)="sheet.close()">Done</button>
@@ -118,7 +138,8 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
     app-seg ::ng-deep .seg__b.on { background: var(--ink); color: var(--bg); box-shadow: none; }
     .switch {
       appearance: none; flex: none; width: 50px; height: 30px; margin: 0; border-radius: 999px;
-      background: var(--hair); position: relative; cursor: pointer;
+      /* Off track: >= 3:1 against the group fill and the thumb (WCAG 1.4.11). */
+      background: color-mix(in srgb, var(--ink-2) 70%, var(--ink-3)); position: relative; cursor: pointer;
       transition: background var(--dur-fast) var(--ease-out);
     }
     .switch::after {
@@ -128,6 +149,13 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
     }
     .switch:checked { background: var(--teal); }
     .switch:checked::after { transform: translateX(20px); }
+    .credits summary { list-style: none; }
+    .credits summary::-webkit-details-marker { display: none; }
+    .credits .chev { transition: transform var(--dur-fast) var(--ease-out); }
+    .credits[open] .chev { transform: rotate(90deg); }
+    .cr { list-style: none; display: grid; gap: 8px; max-height: 260px; overflow: auto; font-size: 12.5px; color: var(--ink-2); }
+    .cr b { color: var(--ink); font-weight: 650; margin-right: 4px; }
+    .cr a { color: var(--blue); overflow-wrap: anywhere; }
     .foot { display: flex; gap: 10px; }
     .foot .ui-btn { flex: 1; }
     .note { font-size: 12px; color: var(--ink-2); text-align: center; }
@@ -136,6 +164,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
 export class SettingsComponent {
   protected readonly prefs = inject(PrefsService);
   protected readonly state = inject(AppStateService);
+  protected readonly photos = inject(PhotoService);
   protected readonly p = this.prefs.prefs;
   readonly closed = output<void>();
 

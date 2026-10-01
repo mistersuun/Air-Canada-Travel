@@ -19,7 +19,8 @@ import { WeekStripComponent } from '../../ui/week-strip.component';
 import { FilterChipsComponent } from './filters/filter-chips.component';
 import { FilterSheetComponent, REGION_CHIPS } from './filters/filter-sheet.component';
 import {
-  coverageStatus, editorsPicks, focusDayIndex, nonstopByFrequency, rowMeta, seasonEvents, seasonMeta, withFlightMatches,
+  coverageStatus, editorsPicks, flightNumberQuery, focusDayIndex, nonstopByFrequency, rowMeta, seasonEvents, seasonMeta,
+  withFlightMatches,
 } from './home-model';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
@@ -153,7 +154,7 @@ interface ListRow {
           @if (seasonal().length) {
             <section class="lc ui-card" aria-labelledby="h-season">
               <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-season">Seasonal &amp; ending soon</h2>
-                @if (seasonal().length > 6) {
+                @if (seasonal().length > seasonLimit()) {
                   <button type="button" class="ui-link more" (click)="seasonOpen.set(!seasonOpen())" [attr.aria-expanded]="seasonOpen()">
                     {{ seasonOpen() ? 'Show less' : 'All ' + seasonal().length }}</button>
                 }
@@ -195,7 +196,7 @@ interface ListRow {
     .x:hover { color: var(--ink); background: var(--fill); }
     .badge {
       position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-      display: grid; place-items: center; background: var(--red); color: #FFFFFF; font-size: 11px; font-weight: 700;
+      display: grid; place-items: center; background: var(--red-fill); color: #FFFFFF; font-size: 11px; font-weight: 700;
       box-shadow: 0 0 0 2px var(--bg);
     }
     .conn { align-self: center; }
@@ -209,6 +210,8 @@ interface ListRow {
     .lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 40px; align-items: start; }
     .lc { padding: 18px 22px 6px; min-width: 0; }
     .lh { margin-bottom: 4px; align-items: center; }
+    /* Text links in section heads: a 44px-tall hit area without moving the layout. */
+    .ui-sec-h > a, .ui-sec-h > .more { position: relative; padding: 13px 8px; margin: -13px -8px; }
     .dow { display: flex; gap: 4px; margin-right: 29px; }
     .dow i { width: 7px; display: flex; justify-content: center; font-style: normal; font-size: 10px; font-weight: 600; color: var(--ink-3); }
     .lc--wide { grid-column: 1 / -1; }
@@ -330,7 +333,10 @@ export class HomePage {
     !!this.state.query() || this.state.hasActiveFilters() || this.state.sort() !== 'az' || this.viewAll(),
   );
 
-  readonly results = computed(() => withFlightMatches(this.state.routes(), this.state.allRoutes(), this.state.query()));
+  readonly results = computed(() => {
+    const q = this.state.query();
+    return withFlightMatches(this.state.routes(), flightNumberQuery(q) ? this.state.unsearchedRoutes() : [], q);
+  });
 
   protected readonly resultsTitle = computed(() => {
     if (this.state.query()) return 'Results';
@@ -367,11 +373,14 @@ export class HomePage {
 
   readonly seasonal = computed(() => seasonEvents(this.state.hub(), this.hubToday()));
 
+  /** Seasonal rows shown before "All N" (fewer on phones). */
+  readonly seasonLimit = computed(() => (this.narrow() ? 4 : 6));
+
   readonly seasonRows = computed<ListRow[]>(() => {
     const short = this.narrow();
     const fmt = this.state.timeFormat();
     const all = this.seasonal();
-    return (this.seasonOpen() ? all : all.slice(0, short ? 4 : 6)).map(ev => ({
+    return (this.seasonOpen() ? all : all.slice(0, this.seasonLimit())).map(ev => ({
       code: ev.code, small: ev.code, meta: seasonMeta(ev, fmt, short), dots: null,
       tag: { text: ev.label, tone: ev.kind === 'starts' ? 'teal' : 'amber' },
     }));
@@ -421,6 +430,6 @@ export class HomePage {
 
   /** After the chip row's Clear, leave the "See all" view too. */
   leaveAll(): void {
-    if (this.viewAll()) void this.router.navigate([], { queryParams: { view: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    if (this.viewAll()) void this.router.navigate([], { queryParams: { view: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   }
 }

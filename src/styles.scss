@@ -12,9 +12,11 @@
 // =============================================================================
 
 // ---- Tokens (light) ----------------------------------------------------------
-// Contrast on --surface (#FFF): ink 18.9, ink-2 5.9, ink-3 2.6 (decorative /
-// secondary labels only, as in the mockup), red 5.0, blue 3.6 (links, 13px+
-// medium), teal 4.4, amber 3.6 (11px tags on their 13–15% tints).
+// Contrast on --surface (#FFF): ink 18.9, ink-2 5.9, ink-3 2.6 (decorative
+// only: IATA codes, weekday initials; text that carries information uses
+// --ink-2 or stronger), red 5.0, blue 3.6 (links, 13px+ medium), teal 4.4,
+// amber 3.6. Small tag text uses the --*-ink tokens (>= 5:1 on its tint),
+// and filled surfaces with white text use --red-fill (>= 4.5:1 in both themes).
 :root {
   color-scheme: light;
 
@@ -32,12 +34,19 @@
   --blue: #0A84FF;
   --teal: #1F8A7A;
   --amber: #B7791F;
+  --red-fill: #D8222A;
   --land: #E6ECF3;
   --sea: #F7F9FC;
   --canvas: #E9EEF4;
   --shadow: 0 1px 2px rgba(11, 18, 32, .04), 0 8px 24px -8px rgba(11, 18, 32, .12);
   --shadow-l: 0 24px 60px -24px rgba(11, 18, 32, .28);
   --backdrop: rgba(11, 18, 32, .35);
+
+  // Tag text on its own 12–15% tint (light: darkened toward --ink for AA).
+  --teal-ink: color-mix(in srgb, var(--teal) 65%, var(--ink));
+  --amber-ink: color-mix(in srgb, var(--amber) 65%, var(--ink));
+  --blue-ink: color-mix(in srgb, var(--blue) 65%, var(--ink));
+  --red-ink: color-mix(in srgb, var(--red) 65%, var(--ink));
 
   // Monogram shade (mockup literal), the same in both themes.
   --mono-shade: #0B1220;
@@ -129,12 +138,19 @@
   --blue: #409CFF;
   --teal: #3FC1AC;
   --amber: #E0A546;
+  --red-fill: #E0242C;
   --land: #1A212C;
   --sea: #0E131A;
   --canvas: #05070A;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 30px -10px rgba(0, 0, 0, .6);
   --shadow-l: 0 30px 60px -20px rgba(0, 0, 0, .7);
   --backdrop: rgba(0, 0, 0, .55);
+
+  // Bright hues already reach 5:1+ on their dark tints.
+  --teal-ink: var(--teal);
+  --amber-ink: var(--amber);
+  --blue-ink: var(--blue);
+  --red-ink: var(--red);
 
   // Region colours are the same in both themes (kept here so a theme block
   // always defines the full set).
@@ -326,10 +342,10 @@ img, svg { display: block; }
   white-space: nowrap;
   background: var(--fill);
   color: var(--ink-2);
-  &--teal { background: color-mix(in srgb, var(--teal) 13%, transparent); color: var(--teal); }
-  &--amber { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber); }
-  &--blue { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue); }
-  &--red { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+  &--teal { background: color-mix(in srgb, var(--teal) 13%, transparent); color: var(--teal-ink); }
+  &--amber { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber-ink); }
+  &--blue { background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue-ink); }
+  &--red { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red-ink); }
   &--neutral { background: var(--fill); color: var(--ink-2); }
 }
 button.ui-tag { cursor: pointer; }
@@ -342,7 +358,7 @@ button.ui-tag { cursor: pointer; }
   gap: 8px;
   padding: 14px 18px;
   border-radius: var(--radius-btn);
-  background: var(--red);
+  background: var(--red-fill);
   color: #FFFFFF;
   font-size: 15px;
   font-weight: 600;
@@ -386,7 +402,7 @@ button.ui-tag { cursor: pointer; }
     &::placeholder { color: var(--ink-3); opacity: 1; }
     &::-webkit-search-cancel-button { display: none; }
   }
-  &:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 25%, transparent); }
+  &:focus-within { box-shadow: 0 0 0 2px var(--blue); }
   .f {
     position: relative;
     margin-left: auto;
@@ -439,7 +455,7 @@ button.ui-tag { cursor: pointer; }
       background: var(--blue);
       box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 20%, transparent);
     }
-    .d { font-size: 12px; color: var(--ink-3); font-weight: 600; }
+    .d { font-size: 12px; color: var(--ink-2); font-weight: 600; }
     .x { display: flex; align-items: baseline; gap: 10px; margin-top: 2px; flex-wrap: wrap; }
     .x b { font-size: 20px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
     .x span { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }

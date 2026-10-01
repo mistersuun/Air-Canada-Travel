@@ -22,7 +22,7 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h3 class="ui-h3 mh" [class.mh--dim]="unpublished()" [id]="'m-' + ym()">{{ title() }}</h3>
+    <h2 class="ui-h3 mh" [class.mh--dim]="unpublished()" [id]="'m-' + ym()">{{ title() }}</h2>
     @if (unpublished()) { <p class="ms">Not yet published</p> }
     <div class="wkh wkh--own" aria-hidden="true">
       @for (w of weekdays; track $index) { <span>{{ w }}</span> }
@@ -84,7 +84,7 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     .d.s, .d.e { color: #FFFFFF; }
     .d.s:hover .n, .d.e:hover .n { color: #FFFFFF; }
     .d.s::before, .d.e::before {
-      content: ''; position: absolute; inset: 2px 4px; border-radius: 14px; background: var(--red); z-index: -1;
+      content: ''; position: absolute; inset: 2px 4px; border-radius: 14px; background: var(--red-fill); z-index: -1;
     }
     .d.s { background: linear-gradient(90deg, transparent 50%, color-mix(in srgb, var(--red) 10%, transparent) 50%); }
     .d.e { background: linear-gradient(90deg, color-mix(in srgb, var(--red) 10%, transparent) 50%, transparent 50%); }

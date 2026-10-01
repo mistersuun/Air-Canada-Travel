@@ -72,7 +72,7 @@ const EAGER_MONTHS = 3;
                                [dep]="sel().dep" [ret]="sel().ret" [field]="sel().active" [focusKey]="focusKey()"
                                (pick)="pick($event)" />
               } @else {
-                @defer (on viewport) {
+                @defer (on viewport; when i <= renderUpTo()) {
                   <app-cal-month class="mo" [ym]="m" [from]="dir().from" [to]="dir().to" [today]="state.todayKey()"
                                  [coverage]="coverage()" [withConnections]="state.showConnections()" [connect]="state.connect()"
                                  [dep]="sel().dep" [ret]="sel().ret" [field]="sel().active" [focusKey]="focusKey()"
@@ -168,7 +168,7 @@ const EAGER_MONTHS = 3;
     .fld:disabled { cursor: default; }
     .fld__l { font-size: 11px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .02em; }
     .fld b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .fld b.ph { color: var(--ink-3); font-weight: 600; }
+    .fld b.ph { color: var(--ink-2); font-weight: 600; }
     .wkh {
       display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
       font-size: 11px; font-weight: 600; color: var(--ink-3); padding: 8px 12px;
@@ -257,6 +257,15 @@ export class CalendarPage {
 
   /** The roving tabindex target in the grid. */
   readonly focusKey = linkedSignal(() => this.sel().dep ?? this.firstPickable());
+  /**
+   * Deferred months up to the one holding the focus (keyboard moves, a deep
+   * ?dep=) render without waiting for the viewport, so the roving tab stop
+   * always exists.
+   */
+  protected readonly renderUpTo = computed(() => {
+    const k = this.focusKey();
+    return k ? this.months().indexOf(k.slice(0, 7)) : -1;
+  });
 
   readonly select = computed(() => selectLabel(this.sel().dep, this.sel().ret));
   readonly depLabel = computed(() => (this.sel().dep ? shortDay(this.sel().dep!) : 'Add date'));
@@ -287,6 +296,7 @@ export class CalendarPage {
       queryParams: { dep: next.dep, ret: next.ret },
       queryParamsHandling: 'merge',
       replaceUrl: true,
+      scroll: 'manual',
     });
   }
 
@@ -320,10 +330,22 @@ export class CalendarPage {
     const max = `${lastYm}-${String(monthKeys(lastYm).length).padStart(2, '0')}`;
     const next = clampKey(moved, min, max);
     this.focusKey.set(next);
+    this.focusDay(next, 3);
+  }
+
+  /**
+   * Focus a day once it is rendered. A deferred month renders a tick after
+   * renderUpTo reaches it, so a missing button is retried a few times.
+   */
+  private focusDay(key: string, tries: number): void {
     afterNextRender(() => {
-      const el = this.host.nativeElement.querySelector<HTMLElement>(`[data-key="${next}"]`);
-      el?.focus();
-      el?.scrollIntoView?.({ block: 'nearest' });
+      const el = this.host.nativeElement.querySelector<HTMLElement>(`[data-key="${key}"]`);
+      if (!el) {
+        if (tries > 0) setTimeout(() => this.focusDay(key, tries - 1));
+        return;
+      }
+      el.focus();
+      el.scrollIntoView?.({ block: 'nearest' });
     }, { injector: this.injector });
   }
 }

@@ -25,6 +25,8 @@ interface Drawn {
 /** Scale bounds relative to the fitted scale (zoom input × user zoom). */
 export const MIN_ZOOM = 0.6;
 export const MAX_ZOOM = 12;
+/** Pointer travel (px) before a press becomes a drag. */
+export const DRAG_PX = 4;
 
 /**
  * Route map: land, great-circle arcs from the hub, destination dots, labels
@@ -218,6 +220,7 @@ export class RouteMapComponent {
 
   private readonly pointers = new Map<number, { x: number; y: number }>();
   private moved = false;
+  private captureEl: Element | null = null;
 
   constructor() {
     void this.geo.ensureLoaded();
@@ -247,10 +250,16 @@ export class RouteMapComponent {
     this.userView.set({ dx: 0, dy: 0, k: 1 });
   }
 
-  /** Zoom by a factor about the centre (+/- buttons). */
+  /**
+   * Zoom by a factor about the centre (+/- buttons). The user factor is
+   * clamped against the framed [zoom], so the effective scale covers
+   * [MIN_ZOOM, MAX_ZOOM] with no dead presses at either end.
+   */
   zoomBy(f: number): void {
     const v = this.userView();
-    const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.k * f));
+    const base = this.zoom() || 1;
+    const k = Math.min(MAX_ZOOM / base, Math.max(MIN_ZOOM / base, v.k * f));
+    if (k === v.k) return;
     const r = k / v.k;
     this.userView.set({ dx: v.dx * r, dy: v.dy * r, k });
   }
@@ -259,7 +268,17 @@ export class RouteMapComponent {
     if (!this.interactive()) return;
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     this.moved = false;
-    (e.currentTarget as Element | null)?.setPointerCapture?.(e.pointerId);
+    // Capture only once a drag starts (onMove): capturing here would send the
+    // click to the host instead of the dot under the pointer.
+    this.captureEl = e.currentTarget as Element | null;
+  }
+
+  private capture(id: number): void {
+    try {
+      this.captureEl?.setPointerCapture?.(id);
+    } catch {
+      // The pointer may already be gone (NotFoundError): nothing to capture.
+    }
   }
 
   protected onMove(e: PointerEvent): void {
@@ -267,6 +286,8 @@ export class RouteMapComponent {
     if (!this.interactive() || !prev) return;
     const v = this.userView();
     if (this.pointers.size === 2) {
+      this.moved = true;
+      this.capture(e.pointerId);
       const other = [...this.pointers.entries()].find(([id]) => id !== e.pointerId)![1];
       const before = Math.hypot(prev.x - other.x, prev.y - other.y);
       const after = Math.hypot(e.clientX - other.x, e.clientY - other.y);
@@ -274,10 +295,13 @@ export class RouteMapComponent {
     } else {
       const dx = e.clientX - prev.x;
       const dy = e.clientY - prev.y;
-      if (Math.abs(dx) + Math.abs(dy) > 0) {
+      // A few pixels of jitter is still a tap on a dot.
+      if (!this.moved && Math.hypot(dx, dy) < DRAG_PX) return;
+      if (!this.moved) {
         this.moved = true;
-        this.userView.set({ ...v, dx: v.dx + dx, dy: v.dy + dy });
+        this.capture(e.pointerId);
       }
+      this.userView.set({ ...v, dx: v.dx + dx, dy: v.dy + dy });
     }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   }

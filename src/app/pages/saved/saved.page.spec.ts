@@ -88,9 +88,9 @@ describe('SavedPage', () => {
     const { cmp, nav } = await render();
     expect(cmp.view()).toBe('upcoming');
     cmp.setTab('watching');
-    expect(nav).toHaveBeenLastCalledWith([], { queryParams: { tab: 'watching' }, queryParamsHandling: 'merge', replaceUrl: true });
+    expect(nav).toHaveBeenLastCalledWith([], { queryParams: { tab: 'watching' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
     cmp.setTab('upcoming');
-    expect(nav).toHaveBeenLastCalledWith([], { queryParams: { tab: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    expect(nav).toHaveBeenLastCalledWith([], { queryParams: { tab: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   });
 
   it('Watching lists every favourite with dots; unstarring offers undo', async () => {

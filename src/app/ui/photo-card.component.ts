@@ -26,7 +26,7 @@ import { DestPhotoComponent } from './dest-photo.component';
   },
   template: `
     <ng-template #body>
-      <app-dest-photo class="ph" [code]="code()" size="card" />
+      <app-dest-photo class="ph" [code]="code()" [size]="variant() === 'wide' ? 'wide' : 'card'" />
       @if (badge()) { <span class="bdg ui-glass-photo ui-glass-photo--badge tn">{{ badge() }}</span> }
       <div class="glassbar ui-glass-photo">
         <div class="gb-row">

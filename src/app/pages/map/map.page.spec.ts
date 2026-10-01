@@ -89,7 +89,7 @@ describe('MapPage', () => {
     await render();
     const before = map().center();
     rows()[2].click();
-    expect(lastParams()).toEqual([[], { queryParams: { sel: 'SYD' }, queryParamsHandling: 'merge', replaceUrl: true }]);
+    expect(lastParams()).toEqual([[], { queryParams: { sel: 'SYD' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' }]);
     fixture.componentRef.setInput('sel', 'SYD');
     await fixture.whenStable();
     expect(map().center()).not.toEqual(before);

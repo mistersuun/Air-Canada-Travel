@@ -99,14 +99,14 @@ import type { TicketModel } from './flight-model';
     .mid svg { width: 100%; height: 34px; overflow: visible; }
     .times { display: flex; justify-content: space-between; padding: 0 20px 16px; }
     .times b { font-size: 22px; font-weight: 650; letter-spacing: -.02em; }
-    .times span { display: block; font-size: 11.5px; color: var(--ink-3); }
+    .times span { display: block; font-size: 11.5px; color: var(--ink-2); }
     .times .r { text-align: right; }
     .cut { border-top: 2px dashed var(--hair); margin: 0 22px; }
     .cells { display: grid; grid-template-columns: repeat(3, 1fr); padding: 14px 20px 20px; gap: 14px 10px; margin: 0; }
     .cells--tight { padding-top: 8px; padding-bottom: 14px; }
     .cells div { min-width: 0; }
     .cells dt { font-size: 10.5px; color: var(--ink-3); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-    .cells dd { margin: 2px 0 0; font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cells dd { margin: 2px 0 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
     .leg { padding: 12px 20px 0; font-size: 12px; font-weight: 650; color: var(--ink-2); letter-spacing: .02em; }
     .leg--first { padding-top: 14px; }
     .est { margin: -6px 20px 14px; font-size: 12px; font-weight: 600; color: var(--amber); }

@@ -203,6 +203,7 @@ export class SavedPage {
       queryParams: { tab: value === 'watching' ? 'watching' : null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
+      scroll: 'manual',
     });
   }
 

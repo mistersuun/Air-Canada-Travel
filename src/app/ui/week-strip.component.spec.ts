@@ -60,7 +60,10 @@ describe('ui WeekStripComponent', () => {
     expect(btns[2].classList).toContain('is-today');
     expect(btns.map(b => b.querySelector('.dt')!.classList.contains('is-on'))).toEqual([true, true, false, true, true, true, true]);
     expect(el.querySelector('.wk')!.classList).toContain('ui-glass');
-    expect(el.querySelector('.cap')).toBeNull(); // the current week has no caption row
+    // The current week's caption (mobile/tablet only) has the chevrons but no "This week".
+    expect(el.querySelector('.cap')!.classList).toContain('is-current');
+    expect(el.querySelector('.cap__today')).toBeNull();
+    expect(el.querySelectorAll('.cap__nav')).toHaveLength(2);
   });
 
   it('the pill follows the selected day, hides in week mode, and a second tap deselects', async () => {

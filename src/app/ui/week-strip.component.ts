@@ -25,9 +25,11 @@ export const SWIPE_PX = 50;
 /**
  * Week strip (`.wk` in the mockup): seven day cells on a glass track with one
  * sliding red pill. Tapping the selected day again returns to the whole week
- * (the pill hides). Desktop shows circular chevrons outside the track; touch
- * swipes change the week. When another week than today's is shown, a caption
- * row offers the week label (opens the native date picker) and "This week".
+ * (the pill hides). Desktop shows circular chevrons outside the track; below
+ * desktop a caption row under the track carries the week label (opens the
+ * native date picker) and small chevrons, and touch swipes also change the
+ * week. Off the current week the caption adds "This week" (on desktop it only
+ * shows then).
  *
  * With [shortcuts]="true" (Home only): ←/→ weeks, 1–7 days, 0 all week,
  * T today (ignored in fields and while a dialog is open).
@@ -64,15 +66,25 @@ export const SWIPE_PX = 50;
         <app-icon name="chevron-right" [size]="18" [strokeWidth]="2" />
       </button>
     </div>
-    @if (!isCurrentWeek()) {
-      <div class="cap">
-        <button type="button" class="cap__label" (click)="openPicker()"
-                [attr.aria-label]="'Week of ' + fullLabel() + '. Choose a date'">
-          <app-icon name="calendar" [size]="15" /><span class="tn">{{ rangeLabel() }}</span>
+    <div class="cap" [class.is-current]="isCurrentWeek()">
+      <button type="button" class="cap__label" (click)="openPicker()"
+              [attr.aria-label]="'Week of ' + fullLabel() + '. Choose a date'">
+        <app-icon name="calendar" [size]="15" /><span class="tn">{{ rangeLabel() }}</span>
+      </button>
+      <span class="cap__end">
+        @if (!isCurrentWeek()) {
+          <button type="button" class="ui-link cap__today" (click)="jumpTo.emit(todayKey())">This week</button>
+        }
+        <button type="button" class="cap__nav" (click)="prev.emit()" [disabled]="prevDisabled()"
+                [attr.aria-label]="'Previous week, ' + weekRange(-7)">
+          <app-icon name="chevron-left" [size]="16" [strokeWidth]="2" />
         </button>
-        <button type="button" class="ui-link cap__today" (click)="jumpTo.emit(todayKey())">This week</button>
-      </div>
-    }
+        <button type="button" class="cap__nav" (click)="next.emit()" [disabled]="nextDisabled()"
+                [attr.aria-label]="'Next week, ' + weekRange(7)">
+          <app-icon name="chevron-right" [size]="16" [strokeWidth]="2" />
+        </button>
+      </span>
+    </div>
     <input #picker type="date" class="picker" tabindex="-1" aria-label="Jump to date"
            [min]="coverage()?.from ?? ''" [max]="coverage()?.to ?? ''"
            [value]="selectedDateKey() ?? weekStartKey()" (change)="onPick($event)">
@@ -84,7 +96,7 @@ export const SWIPE_PX = 50;
     .wk:not(.ui-glass) { background: var(--fill); }
     .pill {
       position: absolute; top: 5px; bottom: 5px; width: calc((100% - 10px) / 7);
-      border-radius: 14px; background: var(--red);
+      border-radius: 14px; background: var(--red-fill);
       box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--red) 70%, transparent);
       transition: left var(--dur) var(--ease-out), opacity var(--dur-fast);
     }
@@ -101,16 +113,29 @@ export const SWIPE_PX = 50;
     .dt.is-on { background: var(--teal); }
     .d.is-out b { color: var(--ink-3); }
     .d.on { color: #FFFFFF; }
-    .d.on .dow { color: rgba(255, 255, 255, .8); }
+    .d.on .dow { color: #FFFFFF; }
     .d.on .dt.is-on { background: #FFFFFF; }
     .nav { width: 32px; height: 32px; display: none; }
-    .cap { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 13px; }
-    .cap__label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-weight: 600; padding: 2px 0; }
+    .cap { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 13px; }
+    .cap__label {
+      display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 4px; margin-left: -4px;
+      color: var(--ink-2); font-weight: 600;
+    }
     .cap__label app-icon { color: var(--blue); }
+    .cap__end { display: inline-flex; align-items: center; gap: 4px; }
+    .cap__today { padding: 6px 8px; margin-right: 2px; }
+    /* Below desktop the chevrons live here, so every pointer, keyboard and AT user can change week. */
+    .cap__nav {
+      display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+      color: var(--ink-2); background: var(--fill);
+    }
+    .cap__nav:disabled { opacity: .4; cursor: default; }
+    .cap__nav:hover:not(:disabled) { color: var(--ink); }
     .picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }
     @media (min-width: 1024px) {
       .nav { display: inline-grid; }
       .cap { padding: 0 42px; }
+      .cap.is-current, .cap__nav { display: none; }
     }
   `],
 })

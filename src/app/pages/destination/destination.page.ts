@@ -63,7 +63,7 @@ const AC_URL = 'https://www.aircanada.com/';
     @let d = dest();
     @let s = summary();
     <header class="hero">
-      <app-dest-photo class="hero__img" [code]="code()" size="hero" eager [alt]="photoAlt()" />
+      <app-dest-photo class="hero__img" [code]="code()" size="hero" eager [alt]="photoAlt()" (photoShown)="heroShown.set($event)" />
       <div class="hero__bar">
         <button type="button" class="ui-circ" aria-label="Back" (click)="back()">
           <app-icon name="arrow-left" [size]="18" />
@@ -79,8 +79,12 @@ const AC_URL = 'https://www.aircanada.com/';
           </button>
         </div>
       </div>
-      @if (credit(); as c) {
-        <a class="credit" [href]="c.sourceUrl" target="_blank" rel="noopener">Photo · {{ c.author }} · {{ c.license }}</a>
+      @if (heroShown() && credit(); as c) {
+        <p class="credit">
+          <a [href]="c.sourceUrl" target="_blank" rel="noopener">Photo</a> ·
+          @if (c.authorUrl) { <a [href]="c.authorUrl" target="_blank" rel="noopener">{{ c.author }}</a> } @else { {{ c.author }} } ·
+          @if (c.licenseUrl) { <a [href]="c.licenseUrl" target="_blank" rel="noopener license">{{ c.license }}</a> } @else { {{ c.license }} }
+        </p>
       }
     </header>
 
@@ -172,6 +176,10 @@ const AC_URL = 'https://www.aircanada.com/';
           <h2 id="dep-h" class="ui-h3">Next departures</h2>
           <span class="ui-tag ui-tag--blue">{{ state.hub() }} → {{ code() }}</span>
         </div>
+        @if (outOptions().length) {
+          <app-seg class="out-seg" [options]="outOptions()" [value]="outMode()" (valueChange)="setOutMode($event)"
+                   ariaLabel="Departures" />
+        }
         <app-dest-timeline [items]="outItems()" [code]="code()" linked [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
                            [label]="'Departures from ' + hubName()">
           <div class="empty">
@@ -195,7 +203,7 @@ const AC_URL = 'https://www.aircanada.com/';
         <div class="ui-sec-h ret__h">
           <h2 id="ret-h" class="ui-h3">Return flights</h2>
           @if (retOptions().length > 1) {
-            <app-seg [options]="retOptions()" [value]="retMode()" (valueChange)="retMode.set($any($event))"
+            <app-seg [options]="retOptions()" [value]="retMode()" (valueChange)="setRetMode($event)"
                      ariaLabel="Return flights" />
           }
         </div>
@@ -262,7 +270,8 @@ const AC_URL = 'https://www.aircanada.com/';
       font-size: 11px; color: #FFFFFF; background: rgba(0, 0, 0, .35); padding: 4px 9px; border-radius: 999px;
       -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
     }
-    .credit:hover { text-decoration: underline; }
+    .credit a { color: inherit; }
+    .credit a:hover { text-decoration: underline; }
 
     /* ── Head ─────────────────────────────────────────────────────────── */
     .head__main { min-width: 0; }
@@ -289,6 +298,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .empty .ui-link { font-size: 13.5px; }
 
     .ret__h { align-items: center; }
+    .out-seg { margin: -4px 0 12px; }
     .map { display: block; height: 260px; border-radius: 16px; overflow: hidden; background: var(--sea); }
     .dist { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 0; font-size: 13px; }
     .ess__h { margin-bottom: 12px; }
@@ -399,14 +409,19 @@ export class DestinationPage {
   protected readonly hubName = computed(() => hubDisplayName(this.state.hub()));
   protected readonly isFav = computed(() => this.state.favouriteSet().has(this.code()));
   protected readonly credit = computed(() => this.photos.credit(this.code()));
+  /** False when the hero fell back to its monogram: the credit hides then. */
+  protected readonly heroShown = signal(true);
   protected readonly photoAlt = computed(() => this.credit()?.subject ?? '');
 
   // ── Timelines ─────────────────────────────────────────────────────────────
-  /** Timelines start at today, or at the selected day when it is later. */
+  /**
+   * Timelines start at the selected day, else at the browsed week's start,
+   * and never before today.
+   */
   private readonly startKey = computed(() => {
     const today = this.state.todayKey();
-    const sel = this.state.selectedDateKey();
-    return sel && sel > today ? sel : today;
+    const base = this.state.selectedDateKey() ?? this.state.weekStartKey();
+    return base > today ? base : today;
   });
 
   private readonly outDirect = computed(() =>
@@ -414,9 +429,37 @@ export class DestinationPage {
   /** Connections, looked up only when there is no nonstop ahead. */
   protected readonly outVia = computed(() =>
     this.outDirect().length ? [] : upcoming(this.state.hub(), this.code(), this.startKey(), this.state.nowMs(), 'via', this.state.connect()));
-  /** What the outbound timeline lists: nonstops, else connections when shown. */
-  private readonly outList = computed(() =>
-    this.outDirect().length ? this.outDirect() : this.state.showConnections() ? this.outVia() : []);
+  /** Connections alongside nonstops, looked up only when connections are shown. */
+  private readonly outViaAlso = computed(() =>
+    this.state.showConnections() && this.outDirect().length
+      ? upcoming(this.state.hub(), this.code(), this.startKey(), this.state.nowMs(), 'via', this.state.connect())
+      : []);
+  /** The user's Nonstop / Via choice for departures; reset when the route changes. */
+  private readonly outChoice = linkedSignal<readonly [string, string], 'nonstop' | 'via' | null>({
+    source: () => [this.code(), this.state.hub()] as const,
+    computation: () => null,
+  });
+  readonly outMode = computed<'nonstop' | 'via'>(() =>
+    this.outChoice() === 'via' && this.outViaAlso().length ? 'via' : 'nonstop');
+  protected readonly outOptions = computed<SegOption[]>(() => {
+    const via = this.outViaAlso();
+    return via.length
+      ? [{ value: 'nonstop', label: 'Nonstop' }, { value: 'via', label: `Via ${bestHub(via) ?? 'hub'}` }]
+      : [];
+  });
+  /** What the outbound timeline lists: nonstops (or connections when picked), else connections when shown. */
+  private readonly outList = computed(() => {
+    if (this.outDirect().length) return this.outMode() === 'via' ? this.outViaAlso() : this.outDirect();
+    return this.state.showConnections() ? this.outVia() : [];
+  });
+
+  setOutMode(v: string | undefined): void {
+    this.outChoice.set(v === 'via' ? 'via' : 'nonstop');
+  }
+
+  setRetMode(v: string | undefined): void {
+    this.retChoice.set(v === 'via' ? 'via' : 'nonstop');
+  }
 
   private readonly firstLimit = computed(() => (this.mobile() ? PAGE_SIZE - 1 : PAGE_SIZE));
   readonly outLimit = linkedSignal({ source: () => [this.code(), this.startKey(), this.firstLimit()] as const, computation: ([, , n]) => n });
@@ -430,7 +473,22 @@ export class DestinationPage {
     upcoming(this.code(), this.state.hub(), this.startKey(), this.state.nowMs(), 'direct', this.state.connect()));
   private readonly retVia = computed(() =>
     upcoming(this.code(), this.state.hub(), this.startKey(), this.state.nowMs(), 'via', this.state.connect()));
-  readonly retMode = linkedSignal<'nonstop' | 'via'>(() => (this.retDirect().length || !this.retVia().length ? 'nonstop' : 'via'));
+  /**
+   * The user's Nonstop / Via choice for returns. Keyed on the route only, so
+   * the 30s clock tick (which rebuilds the lists) never resets it.
+   */
+  private readonly retChoice = linkedSignal<readonly [string, string], 'nonstop' | 'via' | null>({
+    source: () => [this.code(), this.state.hub()] as const,
+    computation: () => null,
+  });
+  readonly retMode = computed<'nonstop' | 'via'>(() => {
+    const c = this.retChoice();
+    const direct = this.retDirect().length > 0;
+    const via = this.retVia().length > 0;
+    if (c === 'via' && via) return 'via';
+    if (c === 'nonstop' && direct) return 'nonstop';
+    return direct || !via ? 'nonstop' : 'via';
+  });
   protected readonly retOptions = computed<SegOption[]>(() => {
     const via = this.retVia();
     const opts: SegOption[] = [{ value: 'nonstop', label: 'Nonstop', disabled: !this.retDirect().length }];
@@ -544,6 +602,7 @@ export class DestinationPage {
       queryParams: { tab: t && t !== 'departures' ? t : null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
+      scroll: 'manual',
     });
   }
 

@@ -72,4 +72,13 @@ describe('SegComponent', () => {
     await fixture.whenStable();
     expect(btns().map(b => b.tabIndex)).toEqual([0, -1, -1]);
   });
+
+  it('skips a disabled first option for the tab stop', async () => {
+    const { btns, host, fixture } = await setup();
+    host.opts = [{ value: 'x', label: 'X', disabled: true }, ...host.opts];
+    host.v.set(undefined);
+    fixture.changeDetectorRef.markForCheck();
+    await fixture.whenStable();
+    expect(btns().map(b => b.tabIndex)).toEqual([-1, 0, -1, -1]);
+  });
 });

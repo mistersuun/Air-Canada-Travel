@@ -2,18 +2,18 @@
  * Which shell chrome a path shows. Pure, so the top nav, the tab bar and the
  * shell's sky wash agree (and specs can check every route).
  */
-export type NavSection = 'explore' | 'map' | 'saved' | 'calendar';
+export type NavSection = 'explore' | 'map' | 'trips' | 'calendar';
 
 export function navSection(path: string): NavSection {
   if (path.startsWith('/map')) return 'map';
-  if (path.startsWith('/saved')) return 'saved';
+  if (/^\/(trips|today|saved)(\/|$)/.test(path)) return 'trips';
   if (path.startsWith('/calendar')) return 'calendar';
-  return 'explore'; // '/', /to/*, /flight/*
+  return 'explore'; // '/', /to/*, /flight/*, /reach/*
 }
 
 /** Detail pages show their own back button instead of the mobile tab bar. */
 export function isDetailPath(path: string): boolean {
-  return /^\/(to|flight|calendar)(\/|$)/.test(path);
+  return /^\/(to|flight|calendar|today|reach)(\/|$)/.test(path) || /^\/trips\/[^/]+/.test(path);
 }
 
 /** The desktop top nav is replaced by the destination hero's own buttons. */
@@ -23,5 +23,6 @@ export function hidesTopNav(path: string): boolean {
 
 /** The shell paints the sky wash behind these pages; the others draw their own background. */
 export function hasSkywash(path: string): boolean {
-  return path === '/' || path === '' || path.startsWith('/saved') || path.startsWith('/flight/');
+  return path === '/' || path === '' || path.startsWith('/saved') || path.startsWith('/flight/')
+    || /^\/(trips|reach)(\/|$)/.test(path);
 }

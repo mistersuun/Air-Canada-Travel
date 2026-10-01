@@ -24,6 +24,8 @@ import {
 } from './dest-model';
 import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
+import { DestHomeByComponent } from './dest-home-by.component';
+import { DestTripActionsComponent } from './dest-trip-actions.component';
 
 export type DestTab = 'departures' | 'returns' | 'map';
 const TABS: readonly SegOption[] = [
@@ -56,7 +58,7 @@ const AC_URL = 'https://www.aircanada.com/';
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent,
+    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -118,6 +120,7 @@ const AC_URL = 'https://www.aircanada.com/';
           <a class="ui-btn ui-btn--ghost" [routerLink]="calLink()" [queryParams]="state.globalParams()">Plan dates</a>
           <a class="ui-btn wide" [href]="acUrl" target="_blank" rel="noopener">Open in aircanada.com</a>
         </div>
+        <app-dest-trip-actions class="d-only" [code]="code()" />
       </section>
 
       <app-seg class="tabs m-only" stretch [options]="tabs" [value]="tab()" (valueChange)="setTab($event)"
@@ -172,6 +175,7 @@ const AC_URL = 'https://www.aircanada.com/';
       }
 
       <section class="card dep" [class.is-empty]="!outItems().length" [class.m-hide]="tab() !== 'departures'" aria-labelledby="dep-h">
+        <app-dest-trip-actions class="m-only" [code]="code()" />
         <div class="ui-sec-h d-only">
           <h2 id="dep-h" class="ui-h3">Next departures</h2>
           <span class="ui-tag ui-tag--blue">{{ state.hub() }} → {{ code() }}</span>
@@ -211,6 +215,7 @@ const AC_URL = 'https://www.aircanada.com/';
                            [label]="'Returns to ' + hubName()">
           <div class="empty"><p>No return flights to {{ hubName() }} in the next {{ horizonWeeks }} weeks.</p></div>
         </app-dest-timeline>
+        <app-dest-home-by [code]="code()" />
       </section>
 
       <div class="side" [class.m-hide]="tab() !== 'map'">

@@ -24,6 +24,7 @@ import {
 } from './home-model';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
+import { TodayBannerComponent } from '../today/today-banner.component';
 
 /** Phone layout (spec 1.4: mobile < 720px). */
 export const NARROW_QUERY = '(max-width: 719px)';
@@ -53,11 +54,12 @@ interface ListRow {
   standalone: true,
   imports: [
     RouterLink, IconComponent, HubPickerComponent, SegComponent, WeekStripComponent, PhotoCardComponent, DestRowComponent,
-    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent,
+    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page home">
+      <app-today-banner />
       <div class="hero">
         <div class="hero__main">
           @if (narrow()) {

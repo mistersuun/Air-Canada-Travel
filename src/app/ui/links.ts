@@ -40,3 +40,57 @@ export function matchSlug(slug: string | null | undefined, its: readonly Itinera
   const want = slug.replace(/\s+/g, '').toUpperCase();
   return its.find(it => flightSlug(it).toUpperCase() === want) ?? null;
 }
+
+// ── Trips v2 (spec §5.1) ──────────────────────────────────────────────────────
+
+/** A trip detail tab (?tab=; absent = plan). */
+export type TripTabKey = 'plan' | 'prep' | 'return';
+
+/** Command array for `/trips`. */
+export function tripsPath(): string[] {
+  return ['/trips'];
+}
+
+/** Command array for `/trips/:id`; pass the tab and leg with tripQuery(). */
+export function tripPath(id: string): string[] {
+  return ['/trips', id];
+}
+
+/** Query params for a trip detail link: `{ tab: 'prep' }`, `{ leg: '<legId>' }` (plan is the default tab). */
+export function tripQuery(tab?: TripTabKey | null, leg?: string | null): Record<string, string> {
+  const q: Record<string, string> = {};
+  if (tab && tab !== 'plan') q['tab'] = tab;
+  if (leg) q['leg'] = leg;
+  return q;
+}
+
+/** '/trips/:id?tab=…&leg=…' for router.navigateByUrl. */
+export function tripUrl(id: string, tab?: TripTabKey | null, leg?: string | null): string {
+  const q = new URLSearchParams(tripQuery(tab, leg)).toString();
+  return `/trips/${encodeURIComponent(id)}${q ? `?${q}` : ''}`;
+}
+
+/** Command array for `/trips/import` (the payload goes in the fragment `#t=`). */
+export function tripImportPath(): string[] {
+  return ['/trips', 'import'];
+}
+
+/** Command array for `/trips/:id/recover` (query: `?at=YUL&leg=<legId>`). */
+export function recoverPath(id: string): string[] {
+  return ['/trips', id, 'recover'];
+}
+
+/** Command array for `/today` (optional query `?trip=<id>`). */
+export function todayPath(): string[] {
+  return ['/today'];
+}
+
+/** Command array for `/reach/:place` ('gn-2510911'). */
+export function reachPath(placeId: string): string[] {
+  return ['/reach', placeId];
+}
+
+/** Command array for `/reach/:place/:code`. */
+export function gatewayPath(placeId: string, code: string): string[] {
+  return ['/reach', placeId, code.toUpperCase()];
+}

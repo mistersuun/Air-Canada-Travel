@@ -3,6 +3,7 @@ import { ActivatedRouteSnapshot, CanActivateFn, RedirectCommand, ResolveFn, Rout
 import { findDestination } from '../utils/airports';
 import { isDateKey, formatKey } from '../utils/time';
 import { currentDestinationCode, isDestinationCode } from '../state/prefs.service';
+import { TripsService } from '../trips/trips.service';
 
 /** Rebuild the current URL with `code` swapped for its canonical form. */
 function withCode(router: Router, route: ActivatedRouteSnapshot, code: string): RedirectCommand {
@@ -63,4 +64,17 @@ export const flightTitle: ResolveFn<string> = route => {
   const date = route.paramMap.get('date');
   const day = isDateKey(date) ? formatKey(date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
   return [d?.city ?? 'Flight', day, 'Routes'].filter(Boolean).join(' · ');
+};
+
+/** `:id` must be a trip on this device; otherwise go to the Trips list. */
+export const knownTrip: CanActivateFn = route => {
+  const id = route.paramMap.get('id') ?? '';
+  if (inject(TripsService).trip(id)) return true;
+  return new RedirectCommand(inject(Router).createUrlTree(['/trips']), { replaceUrl: true });
+};
+
+/** 'Seville trip · Routes'. */
+export const tripTitle: ResolveFn<string> = route => {
+  const t = inject(TripsService).trip(route.paramMap.get('id') ?? '');
+  return t ? `${t.name} · Routes` : 'Trips · Routes';
 };

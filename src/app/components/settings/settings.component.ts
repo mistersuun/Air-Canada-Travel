@@ -9,6 +9,9 @@ import { GlassSheetComponent } from '../../ui/glass-sheet.component';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { hubDisplayName } from '../../ui/format';
 import { IconComponent } from '../shared/icons.component';
+import { DataCreditsComponent } from '../../places/ui/data-credits.component';
+import { SettingsDataComponent } from '../../trips/ui/settings-data.component';
+import { SettingsHistoryComponent } from '../../trips/ui/settings-history.component';
 
 const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
 
@@ -21,7 +24,9 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [GlassSheetComponent, SegComponent, IconComponent],
+  imports: [
+    GlassSheetComponent, SegComponent, IconComponent, SettingsDataComponent, SettingsHistoryComponent, DataCreditsComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet #sheet title="Settings" [open]="true" (closed)="closed.emit()">
@@ -90,6 +95,9 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
           </div>
         </section>
 
+        <app-settings-data />
+        <app-settings-history />
+
         @if (photos.credits().length) {
           <details class="grp credits">
             <summary class="row"><span class="nm">Photo credits</span><span class="chev" aria-hidden="true">›</span></summary>
@@ -108,6 +116,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
             </ul>
           </details>
         }
+        <app-data-credits />
 
         <div class="foot">
           <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">Reset to defaults</button>

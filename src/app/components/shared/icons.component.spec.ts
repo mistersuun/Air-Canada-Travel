@@ -47,6 +47,13 @@ describe('IconComponent', () => {
     expect((fixture.nativeElement as HTMLElement).getAttribute('data-icon')).toBe('moon');
   });
 
+  it('has the Trips v2 icons', () => {
+    for (const n of ['suitcase', 'train', 'bus', 'car', 'home', 'check', 'retry', 'note', 'more', 'external', 'pin'] as IconName[]) {
+      expect(ICON_PATHS[n]?.length, n).toBeGreaterThan(0);
+      expect(render({ name: n }).getAttribute('data-icon')).toBe(n);
+    }
+  });
+
   it('every icon has at least one non-empty path', () => {
     for (const [name, paths] of Object.entries(ICON_PATHS)) {
       expect(paths.length, name).toBeGreaterThan(0);

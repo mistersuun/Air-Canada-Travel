@@ -13,6 +13,9 @@ import { AppStateService, NOW } from './state/app-state.service';
 import { PREFS_STORAGE } from './state/prefs.service';
 import { PwaUpdateService } from './state/pwa-update.service';
 import { MemoryStorage } from './state/testing';
+import { TRIPS_STORAGE } from './trips/storage';
+import { TRIPS_KEY } from './trips/model';
+import { SEVILLE_TRIPS_FILE } from './trips/testing/seville-fixture';
 
 const NOW_MS = new Date('2026-10-01T12:00:00').getTime();
 
@@ -33,14 +36,18 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     }
   }
 
+  let tripsStorage: MemoryStorage;
+
   async function render(url = '/'): Promise<void> {
     window.history.replaceState(null, '', url);
+    tripsStorage ??= new MemoryStorage();
     TestBed.configureTestingModule({
       imports: [AppComponent],
       providers: [
         provideRouter(routes, withComponentInputBinding()),
         { provide: PlatformLocation, useClass: BrowserPlatformLocation },
         { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+        { provide: TRIPS_STORAGE, useValue: tripsStorage },
         { provide: NOW, useValue: () => NOW_MS },
         { provide: SwUpdate, useValue: { isEnabled: true, versionUpdates, checkForUpdate } },
       ],
@@ -65,6 +72,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
   });
 
   afterEach(() => {
+    tripsStorage = undefined!;
     vi.useRealTimers();
     resetScheduleSource();
     window.history.replaceState(null, '', '/');
@@ -83,7 +91,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
   it('nav links change route and aria-current follows', async () => {
     await render();
     const links = () => [...el.querySelectorAll<HTMLAnchorElement>('app-top-nav .seg__a')];
-    expect(links().map(a => a.textContent?.trim())).toEqual(['Explore', 'Map', 'Saved', 'Calendar']);
+    expect(links().map(a => a.textContent?.trim())).toEqual(['Explore', 'Map', 'Trips', 'Calendar']);
     expect(links()[0].getAttribute('aria-current')).toBe('page');
     links()[1].click();
     await settle();
@@ -96,10 +104,57 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
 
     links()[2].click();
     await settle();
-    expect(path()).toBe('/saved');
+    expect(path()).toBe('/trips');
+    expect(el.querySelector('app-trips-page')).toBeTruthy();
     expect(new URLSearchParams(window.location.search).get('from')).toBe('YUL');
     const tab = el.querySelector<HTMLAnchorElement>('app-tab-bar a[aria-current="page"]')!;
-    expect(tab.textContent?.trim()).toBe('Saved');
+    expect(tab.textContent?.trim()).toBe('Trips');
+    expect(el.querySelector('app-tab-bar')!.classList).not.toContain('is-hidden');
+
+    // The full starred view stays, under the Trips section.
+    await router.navigateByUrl('/saved');
+    await settle();
+    expect(el.querySelector('app-saved-page')).toBeTruthy();
+    expect(links()[2].getAttribute('aria-current')).toBe('page');
+  });
+
+  it('routes the Trips v2 screens', async () => {
+    tripsStorage = new MemoryStorage();
+    tripsStorage.setItem(TRIPS_KEY, JSON.stringify(SEVILLE_TRIPS_FILE));
+    await render();
+
+    await router.navigateByUrl('/trips/sevtrip001?tab=return');
+    await settle();
+    expect(el.querySelector('app-trip-detail-page app-return-tab')).toBeTruthy();
+    expect(el.querySelector('app-tab-bar')!.classList).toContain('is-hidden');
+    expect(document.title).toBe('Seville trip · Routes');
+
+    await router.navigateByUrl('/trips/nope123456');
+    await settle();
+    expect(path()).toBe('/trips');
+
+    await router.navigateByUrl('/trips/import');
+    await settle();
+    expect(el.querySelector('app-trip-import-page')).toBeTruthy();
+
+    await router.navigateByUrl('/trips/sevtrip001/recover?at=YUL');
+    await settle();
+    expect(el.querySelector('app-recover-page')).toBeTruthy();
+
+    await router.navigateByUrl('/today');
+    await settle();
+    expect(el.querySelector('app-today-page')).toBeTruthy();
+    expect(el.classList).not.toContain('ui-skywash');
+
+    await router.navigateByUrl('/reach/gn-2510911');
+    await settle();
+    expect(el.querySelector('app-reach-page')).toBeTruthy();
+    expect(el.classList).toContain('ui-skywash');
+
+    await router.navigateByUrl('/reach/gn-2510911/MAD');
+    await settle();
+    expect(el.querySelector('app-gateway-page')).toBeTruthy();
+    expect(el.querySelector('app-top-nav a[aria-current="page"]')?.textContent?.trim()).toBe('Explore');
   });
 
   it('hides the tab bar on detail pages and the top nav on /to', async () => {

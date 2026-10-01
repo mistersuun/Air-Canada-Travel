@@ -32,7 +32,18 @@ export type IconName =
   | 'arrow-left'
   | 'filter'
   | 'locate'
-  | 'currency';
+  | 'currency'
+  | 'suitcase'
+  | 'train'
+  | 'bus'
+  | 'car'
+  | 'home'
+  | 'check'
+  | 'retry'
+  | 'note'
+  | 'more'
+  | 'external'
+  | 'pin';
 
 /** Path data per icon. Paths are stroked; FILLABLE icons also take fill when `filled`. */
 export const ICON_PATHS: Record<IconName, string[]> = {
@@ -78,9 +89,36 @@ export const ICON_PATHS: Record<IconName, string[]> = {
   swap: ['M7 4 3.5 7.5 7 11M3.5 7.5h13M17 13l3.5 3.5L17 20M20.5 16.5h-13'],
   download: ['M12 3.5V15M7.5 10.5 12 15l4.5-4.5', 'M4.5 19.5h15'],
   info: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 11v5.5M12 7.5h.01'],
+  // Trips v2
+  suitcase: [
+    'M4 8.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9Z',
+    'M9 6.5V5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5v1.5M4 12.5h16',
+  ],
+  train: [
+    'M6.5 4.5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-10Z',
+    'M6.5 10h11M9.5 13.5h.01M14.5 13.5h.01M9 16.5 7 20.5M15 16.5l2 4',
+  ],
+  bus: [
+    'M5 5.5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v11a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-11Z',
+    'M5 11h14M8.5 14.5h.01M15.5 14.5h.01M7.5 17.5v2M16.5 17.5v2',
+  ],
+  car: [
+    'M4.5 16.5v-4l2-5a1.5 1.5 0 0 1 1.4-1h8.2a1.5 1.5 0 0 1 1.4 1l2 5v4a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1Z',
+    'M4.5 12.5h15M8 15h.01M16 15h.01M6.5 17.5v1.5M17.5 17.5v1.5',
+  ],
+  home: ['M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1v-8.5Z'],
+  check: ['m5 12.5 4.5 4.5L19 7.5'],
+  retry: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
+  note: [
+    'M6 3.5h8.5L19 8v11.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z',
+    'M14 3.5V8.5h5M8.5 12.5h7M8.5 16h5',
+  ],
+  more: ['M6 12h.01M12 12h.01M18 12h.01'],
+  external: ['M13.5 4.5h6v6', 'M19.5 4.5 11 13', 'M18 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1H10'],
+  pin: ['M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z', 'M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
 };
 
-const FILLABLE: ReadonlySet<IconName> = new Set<IconName>(['star', 'plane', 'moon']);
+const FILLABLE: ReadonlySet<IconName> = new Set<IconName>(['star', 'plane', 'moon', 'pin', 'home']);
 
 @Component({
   selector: 'app-icon',

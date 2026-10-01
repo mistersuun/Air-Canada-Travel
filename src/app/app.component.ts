@@ -8,6 +8,7 @@ import { ShortcutsSheetComponent } from './shell/shortcuts-sheet.component';
 import { ShellShortcutsDirective } from './shell/shortcuts';
 import { TabBarComponent } from './shell/tab-bar.component';
 import { TopNavComponent } from './shell/top-nav.component';
+import { TripsService } from './trips/trips.service';
 import { hasSkywash } from './shell/nav-model';
 
 interface ToastView {
@@ -57,6 +58,7 @@ interface ToastView {
 export class AppComponent {
   protected readonly state = inject(AppStateService);
   protected readonly pwa = inject(PwaUpdateService);
+  private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
 
   protected skipToMain(e: Event, main: HTMLElement): void {
@@ -91,5 +93,6 @@ export class AppComponent {
     if (this.doc.visibilityState !== 'visible') return;
     this.state.refreshToday();
     this.pwa.check();
+    this.trips.checkChanges();
   }
 }

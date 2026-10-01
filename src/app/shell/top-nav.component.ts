@@ -13,7 +13,7 @@ interface NavLink {
 export const NAV_LINKS: readonly NavLink[] = [
   { section: 'explore', label: 'Explore', path: '/' },
   { section: 'map', label: 'Map', path: '/map' },
-  { section: 'saved', label: 'Saved', path: '/saved' },
+  { section: 'trips', label: 'Trips', path: '/trips' },
   { section: 'calendar', label: 'Calendar', path: '/calendar' },
 ];
 

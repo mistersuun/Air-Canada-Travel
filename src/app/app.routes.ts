@@ -1,10 +1,14 @@
 import { Routes, UrlMatchResult, UrlSegment } from '@angular/router';
-import { destTitle, flightTitle, knownDestination, legacyDestRedirect, validDate } from './shell/route-guards';
+import {
+  destTitle, flightTitle, knownDestination, knownTrip, legacyDestRedirect, tripTitle, validDate,
+} from './shell/route-guards';
 
 /**
  * URL scheme (spec §2.1). Pages receive params as signal inputs
  * (withComponentInputBinding): code = input.required<string>(), date, flight.
- * Build links with ui/links.ts (destPath, flightPath, calendarPath).
+ * Build links with ui/links.ts (destPath, flightPath, calendarPath, and the
+ * Trips v2 builders tripPath, tripImportPath, recoverPath, todayPath,
+ * reachPath, gatewayPath).
  */
 /** Matches flight/:code/:date with an optional trailing :flight slug. */
 export function flightMatcher(segments: UrlSegment[]): UrlMatchResult | null {
@@ -56,6 +60,44 @@ export const routes: Routes = [
     canActivate: [knownDestination],
     loadComponent: () => import('./pages/calendar/calendar.page').then(m => m.CalendarPage),
     title: 'Calendar · Routes',
+  },
+  {
+    path: 'trips',
+    loadComponent: () => import('./pages/trips/trips.page').then(m => m.TripsPage),
+    title: 'Trips · Routes',
+  },
+  {
+    // Before trips/:id so 'import' is never read as a trip id.
+    path: 'trips/import',
+    loadComponent: () => import('./pages/trips/import/trip-import.page').then(m => m.TripImportPage),
+    title: 'Shared trip · Routes',
+  },
+  {
+    path: 'trips/:id',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/trips/trip-detail.page').then(m => m.TripDetailPage),
+    title: tripTitle,
+  },
+  {
+    path: 'trips/:id/recover',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/today/recover.page').then(m => m.RecoverPage),
+    title: 'Still reachable · Routes',
+  },
+  {
+    path: 'today',
+    loadComponent: () => import('./pages/today/today.page').then(m => m.TodayPage),
+    title: 'Today · Routes',
+  },
+  {
+    path: 'reach/:place',
+    loadComponent: () => import('./pages/reach/reach.page').then(m => m.ReachPage),
+    title: 'Reach · Routes',
+  },
+  {
+    path: 'reach/:place/:code',
+    loadComponent: () => import('./pages/reach/gateway.page').then(m => m.GatewayPage),
+    title: 'Reach · Routes',
   },
   { path: '**', redirectTo: '' },
 ];

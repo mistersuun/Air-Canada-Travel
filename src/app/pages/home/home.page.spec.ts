@@ -211,7 +211,9 @@ describe('HomePage', () => {
     expect(el.querySelector<HTMLInputElement>('input[data-search-input]')!.placeholder).toBe('Search destinations');
     const nonstop = el.querySelector('section[aria-labelledby="h-nonstop"]')!;
     expect(nonstop.querySelector('app-dest-row .tm')!.textContent).toBe('22:10 → 10:00⁺¹ · 6h50');
-    expect(nonstop.querySelector('.ui-sec-h a')!.textContent!.trim()).toBe('2');
+    // Only 2 nonstop routes in the fixture: under the 4-row phone limit, so no "Show all" button.
+    expect(nonstop.querySelectorAll('app-dest-row').length).toBe(2);
+    expect(nonstop.querySelector('.showall')).toBeNull();
     expect(el.querySelector('app-photo-card .bdg')!.textContent).toBe('Tonight');
   });
 });
@@ -280,10 +282,12 @@ describe('FilterSheetComponent', () => {
     expect(el.querySelector<HTMLFieldSetElement>('fieldset')!.disabled).toBe(true);
   });
 
-  it('Reset clears filters and sort; the footer counts the results', async () => {
+  it('Reset clears filters, sort, region and connections; the footer counts the results', async () => {
     const { el, state, stable, button } = await sheet();
     state.setFilters({ widebodyOnly: true, types: ['City'] });
     state.setSort('days');
+    state.setRegion('Europe');
+    state.setShowConnections(false);
     await stable();
     expect(el.querySelector('.foot .ui-btn:last-child')!.textContent).toMatch(/Show \d+ destinations?/);
     button('.foot', 'Reset').click();
@@ -291,6 +295,8 @@ describe('FilterSheetComponent', () => {
     expect(state.filters().types).toEqual([]);
     expect(state.filters().widebodyOnly).toBe(false);
     expect(state.sort()).toBe('az');
+    expect(state.region()).toBe('All');
+    expect(state.showConnections()).toBe(true);
   });
 });
 

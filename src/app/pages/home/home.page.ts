@@ -137,10 +137,7 @@ interface ListRow {
         <div class="lists">
           <section class="lc ui-card" aria-labelledby="h-nonstop">
             <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-nonstop">{{ nonstopTitle() }}</h2>
-              @if (narrow()) {
-                <a [routerLink]="[]" [queryParams]="{ view: 'all' }" queryParamsHandling="merge" [replaceUrl]="true"
-                   [attr.aria-label]="'All ' + nonstopCount() + ' nonstop destinations'" class="tn">{{ nonstopCount() }}</a>
-              } @else {
+              @if (!narrow()) {
                 <span class="dow" aria-hidden="true">@for (l of dayLetters; track $index) {<i>{{ l }}</i>}</span>
               }
             </div>
@@ -149,35 +146,46 @@ interface ListRow {
             } @empty {
               <p class="none ui-sub">No nonstop flights {{ state.selectedDateKey() ? 'on this day' : 'this week' }}.</p>
             }
+            @if (nonstopCount() > listLimit()) {
+              <button type="button" class="ui-link showall" (click)="nonstopOpen.set(!nonstopOpen())" [attr.aria-expanded]="nonstopOpen()">
+                {{ nonstopOpen() ? 'Show less' : 'Show all ' + nonstopCount() + ' nonstop' }}</button>
+            }
           </section>
 
-          @if (seasonal().length) {
-            <section class="lc ui-card" aria-labelledby="h-season">
-              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-season">Seasonal &amp; ending soon</h2>
-                @if (seasonal().length > seasonLimit()) {
-                  <button type="button" class="ui-link more" (click)="seasonOpen.set(!seasonOpen())" [attr.aria-expanded]="seasonOpen()">
-                    {{ seasonOpen() ? 'Show less' : 'All ' + seasonal().length }}</button>
+          @if (connections().length) {
+            <section class="lc ui-card" aria-labelledby="h-conn">
+              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-conn">Connections only</h2>
+                @if (!narrow()) {
+                  <span class="dow" aria-hidden="true">@for (l of dayLetters; track $index) {<i>{{ l }}</i>}</span>
                 }
               </div>
+              @for (r of connections(); track r.code) {
+                <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()" />
+              }
+              @if (connectionCount() > listLimit()) {
+                <button type="button" class="ui-link showall" (click)="connOpen.set(!connOpen())" [attr.aria-expanded]="connOpen()">
+                  {{ connOpen() ? 'Show less' : 'Show all ' + connectionCount() + ' connecting' }}</button>
+              }
+            </section>
+          }
+
+          @if (seasonal().length) {
+            <section class="lc ui-card" [class.lc--wide]="connections().length > 0" aria-labelledby="h-season">
+              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-season">Seasonal &amp; ending soon</h2></div>
+              <div [class.cols]="connections().length > 0">
               @for (r of seasonRows(); track r.code) {
                 <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)">
                   <span trailing class="ui-tag tn" [class]="'ui-tag--' + r.tag!.tone">{{ r.tag!.text }}</span>
                 </app-dest-row>
               }
+              </div>
+              @if (seasonal().length > seasonLimit()) {
+                <button type="button" class="ui-link showall" (click)="seasonOpen.set(!seasonOpen())" [attr.aria-expanded]="seasonOpen()">
+                  {{ seasonOpen() ? 'Show less' : 'Show all ' + seasonal().length + ' seasonal' }}</button>
+              }
             </section>
           }
 
-          @if (connections().length) {
-            <section class="lc lc--wide ui-card" aria-labelledby="h-conn">
-              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-conn">Connections only</h2>
-                <a [routerLink]="[]" [queryParams]="{ view: 'all' }" queryParamsHandling="merge" [replaceUrl]="true">All {{ connectionCount() }}</a></div>
-              <div class="cols">
-                @for (r of connections(); track r.code) {
-                  <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()" />
-                }
-              </div>
-            </section>
-          }
         </div>
       }
     </div>
@@ -218,6 +226,7 @@ interface ListRow {
     .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 40px; }
     .cols app-dest-row:nth-last-child(2):nth-child(odd) { border-bottom: 0; }
     .more { font-size: 13px; }
+    .showall { display: block; width: 100%; padding: 14px 0 12px; font-size: 13.5px; font-weight: 600; text-align: center; }
     .none { padding: 14px 0 18px; }
 
     .rhead { align-items: center; }
@@ -269,6 +278,8 @@ export class HomePage {
   protected readonly regions = REGION_CHIPS;
   protected readonly filtersOpen = signal(false);
   protected readonly seasonOpen = signal(false);
+  protected readonly nonstopOpen = signal(false);
+  protected readonly connOpen = signal(false);
 
   // ── Viewport ──────────────────────────────────────────────────────────────
   private readonly mqNarrow = this.doc.defaultView?.matchMedia?.(NARROW_QUERY) ?? null;
@@ -360,9 +371,12 @@ export class HomePage {
     const short = this.narrow();
     const fmt = this.state.timeFormat();
     return this.nonstopAll()
-      .slice(0, short ? 4 : 6)
+      .slice(0, this.nonstopOpen() ? undefined : this.listLimit())
       .map(e => ({ code: e.destination.code, small: e.destination.code, meta: rowMeta(e, fmt, short), dots: entryDots(e) }));
   });
+
+  /** Rows shown in Nonstop / Connections before "All N" (fewer on phones). */
+  readonly listLimit = computed(() => (this.narrow() ? 4 : 6));
 
   protected readonly nonstopTitle = computed(() => {
     const day = this.state.selectedDateKey();
@@ -396,7 +410,7 @@ export class HomePage {
     const fmt = this.state.timeFormat();
     return [...this.connectAll()]
       .sort((a, b) => b.daysFlying - a.daysFlying || a.destination.city.localeCompare(b.destination.city))
-      .slice(0, short ? 4 : 6)
+      .slice(0, this.connOpen() ? undefined : this.listLimit())
       .map(e => ({ code: e.destination.code, small: e.destination.code, meta: rowMeta(e, fmt, short), dots: entryDots(e) }));
   });
 

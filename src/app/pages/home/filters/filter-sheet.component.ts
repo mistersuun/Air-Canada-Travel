@@ -220,9 +220,11 @@ export class FilterSheetComponent {
     this.state.setFilters({ ...this.f(), ...p });
   }
 
-  /** Clears every filter and the sort; search and region stay (the chip row clears those). */
+  /** Resets everything this sheet controls: filters, sort, region and connections. The search box is left alone. */
   reset(): void {
     this.state.setFilters({});
     if (this.state.sort() !== 'az') this.state.setSort('az');
+    if (this.state.region() !== 'All') this.state.setRegion('All');
+    if (!this.state.showConnections()) this.state.setShowConnections(true);
   }
 }

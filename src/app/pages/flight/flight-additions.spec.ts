@@ -14,7 +14,7 @@ import { TripsService } from '../../trips/trips.service';
 import { allItineraries } from '../../utils/connections';
 import { toUtcMs } from '../../utils/time';
 import { FlightPage } from './flight.page';
-import { agoLabel, factsView, noteFlights, noteRow, tripTarget, tripsCovering } from './flight-model';
+import { agoLabel, factsView, noteFlights, noteRow, tripConnects, tripTarget, tripsCovering, tripsFor } from './flight-model';
 
 const TZ = 'America/Toronto';
 const at = (key: string, hhmm: string) => toUtcMs(key, hhmm, TZ);
@@ -88,6 +88,31 @@ describe('flight page model (g6)', () => {
     expect(tripsCovering([trip], '2026-10-07').length).toBe(1);
     expect(tripsCovering([trip], '2026-10-14').length).toBe(0);
     expect(tripsCovering([{ ...trip, archived: true }], '2026-10-09').length).toBe(0);
+  });
+
+  it('connects a flight to a trip only when it goes to the trip side or comes home from it', () => {
+    const trip = sevilleTrip();
+    const f = (origin: string, dest: string, dateKey = '2026-10-08') => ({ origin, dest, dateKey });
+    // Leg endpoints and backups.
+    expect(tripConnects(trip, f('YUL', 'MAD'))).toBe(true);
+    expect(tripConnects(trip, f('YUL', 'BCN'))).toBe(true);
+    // Near the goal (Porto is ~400 km from Seville), from another hub too.
+    expect(tripConnects(trip, f('YUL', 'OPO'))).toBe(true);
+    expect(tripConnects(trip, f('YYZ', 'MAD'))).toBe(true);
+    // Coming home from the trip side.
+    expect(tripConnects(trip, f('LIS', 'YUL'))).toBe(true);
+    // Unrelated places, even from the home hub on the trip's dates.
+    expect(tripConnects(trip, f('YUL', 'LHR'))).toBe(false);
+    expect(tripConnects(trip, f('YUL', 'CUN'))).toBe(false);
+    expect(tripConnects(trip, f('YUL', 'YYZ'))).toBe(false);
+    expect(tripConnects(trip, f('LHR', 'YUL'))).toBe(false);
+    // A goal AC flies to itself counts.
+    const lis = { ...trip, legs: [], goal: { ...trip.goal, acCode: 'FAO', lat: 37.01, lng: -7.97 } };
+    expect(tripConnects(lis, f('YUL', 'FAO'))).toBe(true);
+    // tripsFor: dates and connection both.
+    expect(tripsFor([trip], f('YUL', 'MAD'))).toHaveLength(1);
+    expect(tripsFor([trip], f('YUL', 'LHR'))).toHaveLength(0);
+    expect(tripsFor([trip], f('YUL', 'MAD', '2026-10-20'))).toHaveLength(0);
   });
 });
 
@@ -192,16 +217,32 @@ describe('FlightPage additions (g6)', () => {
     expect(el.querySelector('app-outcome-prompt')).toBeNull();
   });
 
-  it('"Add to Seville trip" adds the flight as a backup when the dates match', async () => {
+  it('"Add to Seville trip" adds a flight to the trip side as a backup when the dates match', async () => {
     configure(at('2026-10-02', '09:00'));
-    const { el, stable } = await render('LHR', '2026-10-08');
+    // Make Oct 8 YUL → OPO a connection to the trip: OPO flies Fri, so move the outbound to Fri Oct 9.
+    const file = JSON.parse(JSON.stringify(SEVILLE_TRIPS_FILE));
+    const leg = file.trips[0].legs.find((l: { id: string }) => l.id === SEVILLE_IDS.outbound);
+    leg.refs[0] = { ...leg.refs[0], dateKey: '2026-10-09', arrDateKey: '2026-10-10' };
+    trips.setItem(TRIPS_KEY, JSON.stringify(file));
+    const { el, stable } = await render('OPO', '2026-10-09');
     const btn = el.querySelector('[data-add-trip]') as HTMLButtonElement;
     expect(clean(btn.textContent)).toBe('Add to Seville trip');
     btn.click();
     await stable();
     const out = storedTrip().legs.find(l => l.id === SEVILLE_IDS.outbound)!;
-    expect(out.kind === 'flight' && out.alternates.map(a => a.refs[0].flightNumber)).toEqual(['AC822', 'AC812', 'AC864']);
+    expect(out.kind === 'flight' && out.alternates.map(a => a.refs[0].flightNumber)).toEqual(['AC822', 'AC812', 'AC928']);
     expect(clean((el.querySelector('[data-add-trip]') as HTMLElement).textContent)).toBe('In Seville trip');
+  });
+
+  it('does not offer an unrelated flight on the trip dates to the trip, and starts a new one instead', async () => {
+    configure(at('2026-10-02', '09:00'));
+    const { el, svc } = await render('LHR', '2026-10-08');
+    const btn = el.querySelector('[data-add-trip]') as HTMLButtonElement;
+    expect(clean(btn.textContent)).toBe('Start a trip');
+    btn.click();
+    expect(svc.trips()).toHaveLength(2);
+    const seville = storedTrip().legs.find(l => l.id === SEVILLE_IDS.outbound)!;
+    expect(seville.kind === 'flight' && seville.alternates).toHaveLength(2);
   });
 
   it('offers "Start a trip" with no trip on those dates and opens the new trip', async () => {

@@ -1,0 +1,93 @@
+import { describe, expect, it } from 'vitest';
+import { FlightLog, LoadNote, emptyFlightLog } from './model';
+import { backupFilename, exportBackup, mergeBackup, parseBackup } from './export';
+import { decodeTripShare, encodeTripShare, payloadFromFragment, shareUrl } from './share-codec';
+import { SEVILLE_TRIP, SEVILLE_TRIPS_FILE, sevilleTrip } from './testing/seville-fixture';
+
+const NOW = Date.UTC(2026, 9, 1, 13, 41);
+const NOTE: LoadNote = {
+  id: 'n1', flightNumber: 'AC834', origin: 'YUL', dest: 'MAD', dateKey: '2026-10-08',
+  open: 9, listed: 9, text: 'Gate 52, 9 on the list', at: '2026-10-08T20:20:00.000Z',
+};
+
+describe('share links', () => {
+  it('encodes the Seville trip under 2,000 URL characters and decodes it back', async () => {
+    const payload = await encodeTripShare(SEVILLE_TRIP, [NOTE], NOW);
+    const url = shareUrl('https://routes.example.app', payload);
+    expect(url.startsWith('https://routes.example.app/trips/import#t=')).toBe(true);
+    expect(url.length).toBeLessThan(2000);
+    expect(payload).toMatch(/^[zj][A-Za-z0-9_-]+$/);
+
+    const back = (await decodeTripShare(payload))!;
+    expect(back.sharedAt).toBe(new Date(NOW).toISOString());
+    expect(back.notes).toEqual([NOTE]);
+    // Private state is not shared.
+    expect(back.trip.prep).toEqual({});
+    expect(back.trip.changes).toEqual([]);
+    expect(back.trip.offlineSavedAt).toBeNull();
+    expect(back.trip.calendarExportedAt).toBeNull();
+    expect(back.trip.archived).toBe(false);
+    const strip = (t: typeof SEVILLE_TRIP) => ({ ...t, prep: {}, changes: [], offlineSavedAt: null, calendarExportedAt: null });
+    expect(back.trip).toEqual(strip(SEVILLE_TRIP));
+  });
+
+  it('uses deflate when the browser has CompressionStream', async () => {
+    const payload = await encodeTripShare(SEVILLE_TRIP, [], NOW);
+    expect(payload[0]).toBe(typeof CompressionStream === 'function' ? 'z' : 'j');
+  });
+
+  it('returns null for garbage, never throws', async () => {
+    for (const bad of ['', 'x', 'zzzz', 'j!!!', 'jAAAA', 'qabc', 'j' + btoa('{"s":1,"trip":{}}'), 'z' + 'A'.repeat(70_000)]) {
+      expect(await decodeTripShare(bad)).toBeNull();
+    }
+    expect(await decodeTripShare(undefined as unknown as string)).toBeNull();
+  });
+
+  it('reads the payload from a fragment', () => {
+    expect(payloadFromFragment('t=zABC')).toBe('zABC');
+    expect(payloadFromFragment('#t=jXYZ')).toBe('jXYZ');
+    expect(payloadFromFragment('a=1&t=zQ')).toBe('zQ');
+    expect(payloadFromFragment('')).toBeNull();
+    expect(payloadFromFragment(null)).toBeNull();
+  });
+});
+
+describe('backup export / import', () => {
+  const log: FlightLog = { ...emptyFlightLog(), notes: [NOTE] };
+
+  it('exports and parses back', () => {
+    const text = exportBackup(SEVILLE_TRIPS_FILE, log, NOW);
+    const raw = JSON.parse(text);
+    expect(raw.kind).toBe('routes-backup');
+    expect(raw.schema).toBe(1);
+    expect(raw.exportedAt).toBe('2026-10-01T13:41:00.000Z');
+    const parsed = parseBackup(text);
+    expect('error' in parsed).toBe(false);
+    if ('error' in parsed) return;
+    expect(parsed.trips).toEqual([SEVILLE_TRIP]);
+    expect(parsed.log).toEqual(log);
+    expect(backupFilename(NOW)).toBe('routes-trips-2026-10-01.json');
+  });
+
+  it('rejects files that are not backups', () => {
+    expect(parseBackup('nope')).toEqual({ error: "This file isn't a Routes backup." });
+    expect(parseBackup('{"kind":"other","trips":[]}')).toEqual({ error: "This file isn't a Routes backup." });
+    expect('error' in parseBackup('{"kind":"routes-backup","schema":9,"trips":[]}')).toBe(true);
+  });
+
+  it('merges by id, the newer updatedAt wins', () => {
+    const older = { ...sevilleTrip(), name: 'Old name', updatedAt: '2026-09-01T00:00:00.000Z' };
+    const newer = { ...sevilleTrip(), name: 'New name', updatedAt: '2026-10-05T00:00:00.000Z' };
+    const other = { ...sevilleTrip(), id: 'other00001' };
+    const r1 = mergeBackup({ trips: [older], log: emptyFlightLog() }, { trips: [newer, other], log });
+    expect(r1.added).toBe(1);
+    expect(r1.updated).toBe(1);
+    expect(r1.trips.find(t => t.id === older.id)!.name).toBe('New name');
+    expect(r1.log.notes).toEqual([NOTE]);
+
+    const r2 = mergeBackup({ trips: [newer], log }, { trips: [older], log });
+    expect(r2.added + r2.updated).toBe(0);
+    expect(r2.trips[0].name).toBe('New name');
+    expect(r2.log.notes).toHaveLength(1);
+  });
+});

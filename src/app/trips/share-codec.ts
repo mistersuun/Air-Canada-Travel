@@ -36,12 +36,33 @@ function fromBase64Url(s: string): Uint8Array {
 }
 
 function hasCompression(): boolean {
-  return typeof CompressionStream === 'function' && typeof DecompressionStream === 'function' && typeof Response === 'function';
+  return typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
 }
 
+/** Runs bytes through a (de)compression stream and collects the output. */
 async function pipe(bytes: Uint8Array, stream: CompressionStream | DecompressionStream): Promise<Uint8Array> {
-  const body = new Blob([bytes as BlobPart]).stream().pipeThrough(stream as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
-  return new Uint8Array(await new Response(body).arrayBuffer());
+  const writer = stream.writable.getWriter();
+  // Not awaited before reading: the readable side must drain for the write to finish.
+  const written = writer.write(new Uint8Array(bytes)).then(() => writer.close());
+  written.catch(() => undefined);
+  const reader = stream.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.length;
+    if (total > MAX_JSON) throw new Error('too large');
+  }
+  await written;
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
 }
 
 /** The share payload for a trip (with its load notes). */

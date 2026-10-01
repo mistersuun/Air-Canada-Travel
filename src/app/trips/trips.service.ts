@@ -164,7 +164,7 @@ export class TripsService {
     if (!this.trip(id) || !it.legs.length) return '';
     const leg: FlightLeg = {
       kind: 'flight', id: newId(), role, status, statusAt: status === 'planned' ? null : this.iso(), note: '',
-      refs: refsFromItinerary(it), provenance: 'scheduled', alternates: [],
+      refs: refsFromItinerary(it), provenance: it.estimated ? 'unknown' : 'scheduled', alternates: [],
     };
     this.update(id, t => ({ ...t, legs: sortLegs([...t.legs, leg]) }));
     return leg.id;
@@ -226,7 +226,7 @@ export class TripsService {
     const newGateway = it.dest;
     const fresh: FlightLeg = {
       kind: 'flight', id: newId(), role: old.role, status: 'planned', statusAt: null, note: '',
-      refs, provenance: 'scheduled',
+      refs, provenance: it.estimated ? 'unknown' : 'scheduled',
       alternates: old.alternates.filter(a => !sameRefs(a.refs, refs)),
     };
     const arrDate = it.arrDateKey;

@@ -66,7 +66,7 @@ export class TripDetailPage {
     return t === 'prep' || t === 'return' ? t : 'plan';
   });
 
-  protected setTab(value: string | null): void {
+  protected setTab(value: string | null | undefined): void {
     void this.router.navigate([], {
       queryParams: { tab: value === 'plan' ? null : value },
       queryParamsHandling: 'merge',

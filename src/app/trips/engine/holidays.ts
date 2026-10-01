@@ -112,7 +112,11 @@ export function holidayDisplayName(h: Holiday): string {
   if (h.region === 'CA') return h.name === 'Thanksgiving' || h.name === "New Year's Day" || h.name === 'Christmas Day'
     ? `Canadian ${h.name}` : h.name;
   if (h.region === 'US') return `US ${h.name}`;
-  return `${h.name} (${h.region.slice(3).split(',').join(', ')})`;
+  return `${h.name} (${provinces(h)})`;
+}
+
+function provinces(h: Holiday): string {
+  return h.region.slice(3).split(',').join(', ');
 }
 
 /**
@@ -126,6 +130,7 @@ export function holidayNote(dateKey: string): string | null {
   const h = [...near].sort((a, b) =>
     rank(a) - rank(b) || Math.abs(diffDays(dateKey, a.dateKey)) - Math.abs(diffDays(dateKey, b.dateKey)))[0];
   const day = formatKey(h.dateKey, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
-  const weekend = weekdayIndex(h.dateKey) === MON || weekdayIndex(h.dateKey) === 4 ? ' weekend' : '';
-  return `${holidayDisplayName(h)}${weekend} (${day}). Often busy, check loads.`;
+  const weekend = weekdayIndex(h.dateKey) === MON || weekdayIndex(h.dateKey) === THU ? ' weekend' : '';
+  const name = h.region.startsWith('CA-') ? `${h.name}${weekend} in ${provinces(h)}` : `${holidayDisplayName(h)}${weekend}`;
+  return `${name} (${day}). Often busy, check loads.`;
 }

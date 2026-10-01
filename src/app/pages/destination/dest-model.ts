@@ -4,6 +4,7 @@
  */
 import type { Coverage } from '../../data/schedule-index';
 import { isCovered } from '../../data/schedule-index';
+import { isRouteOnly, routeFact, routeFactDetail } from '../../data/route-network';
 import { aircraftName } from '../../utils/aircraft';
 import {
   NO_OPTS, directItineraries, findItineraries, type ConnectOptions, type Itinerary,
@@ -241,6 +242,11 @@ export function placeLabel(country: string, region: string): string {
 
 export type DestState =
   | { kind: 'ok' }
+  /**
+   * The route network lists this route but the schedules have no flight for
+   * it: flown, times not in our data. `detail` is 'Air Canada Express · Seasonal'.
+   */
+  | { kind: 'route-only'; detail: string; connections: boolean }
   /** The whole week is beyond the published window. */
   | { kind: 'outside'; week: string }
   /** No nonstop this week; `next` is the next nonstop date (or null). */
@@ -260,6 +266,10 @@ export function destState(
   coverage: Coverage | null,
   hasConnections: boolean,
 ): DestState {
+  // Checked first: the schedules will never have times for it, whatever the week.
+  if (isRouteOnly(hub, dest)) {
+    return { kind: 'route-only', detail: routeFactDetail(routeFact(hub, dest)), connections: hasConnections };
+  }
   const days = weekKeys(weekStart);
   if (days.every(k => isOutside(k, coverage))) return { kind: 'outside', week: weekRangeLabel(weekStart) };
   if (days.some(k => flightsOn(hub, dest, k).length)) return { kind: 'ok' };

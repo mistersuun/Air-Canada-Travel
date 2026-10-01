@@ -26,6 +26,8 @@ import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
 import { DestHomeByComponent } from './dest-home-by.component';
 import { DestTripActionsComponent } from './dest-trip-actions.component';
+import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
+import { ROUTE_ONLY_TEXT } from '../../data/route-network';
 
 export type DestTab = 'departures' | 'returns' | 'map';
 const TABS: readonly SegOption[] = [
@@ -51,14 +53,15 @@ const AC_URL = 'https://www.aircanada.com/';
  *    departure, actions) and three columns: next departures, return flights
  *    (Nonstop / Via seg) and map + Essentials, then the month availability;
  *  - mobile: a glass sheet with a Departures / Returns / Map seg (?tab=).
- * States: outside coverage, no nonstop this week, connections only, not served.
+ * States: flown but no times in our data (route network only), outside
+ * coverage, no nonstop this week, connections only, not served.
  */
 @Component({
   selector: 'app-destination-page',
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent,
+    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -127,6 +130,20 @@ const AC_URL = 'https://www.aircanada.com/';
                ariaLabel="Destination sections" />
 
       @switch (status().kind) {
+        @case ('route-only') {
+          <div class="notice" role="status">
+            <app-provenance-tag value="unknown" />
+            <p>{{ routeOnlyText }}.
+              @if (routeOnlyDetail()) { <span class="ui-sub">{{ routeOnlyDetail() }}</span> }
+            </p>
+            <div class="notice__acts">
+              <a class="ui-btn ui-btn--dark ui-btn--sm" [href]="acUrl" target="_blank" rel="noopener">Open in aircanada.com</a>
+              @if (hasConnections() && !state.showConnections()) {
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setShowConnections(true)">Show connections</button>
+              }
+            </div>
+          </div>
+        }
         @case ('outside') {
           <div class="notice" role="status">
             <span class="ui-tag ui-tag--amber">Not published</span>
@@ -187,7 +204,10 @@ const AC_URL = 'https://www.aircanada.com/';
         <app-dest-timeline [items]="outItems()" [code]="code()" linked [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
                            [label]="'Departures from ' + hubName()">
           <div class="empty">
-            @if (nextAhead(); as na) {
+            @if (routeOnly()) {
+              <p>{{ routeOnlyText }}.</p>
+              <a class="ui-link" [href]="acUrl" target="_blank" rel="noopener">Check times on aircanada.com</a>
+            } @else if (nextAhead(); as na) {
               <p>No nonstop in the next {{ horizonWeeks }} weeks.</p>
               <button type="button" class="ui-link" (click)="state.jumpTo(na.key)">Next flight: {{ na.label }}</button>
             } @else if (hasConnections() && !state.showConnections()) {
@@ -520,6 +540,12 @@ export class DestinationPage {
   protected readonly hasConnections = computed(() => this.outVia().length > 0 || !!this.farConnection());
   protected readonly status = computed(() =>
     destState(this.state.hub(), this.code(), this.state.weekStartKey(), this.state.todayKey(), this.state.coverage(), this.hasConnections()));
+  protected readonly routeOnlyText = ROUTE_ONLY_TEXT;
+  protected readonly routeOnly = computed(() => this.status().kind === 'route-only');
+  protected readonly routeOnlyDetail = computed(() => {
+    const s = this.status();
+    return s.kind === 'route-only' ? s.detail : '';
+  });
   protected readonly weekLabel = computed(() => {
     const s = this.status();
     return s.kind === 'outside' ? s.week : '';

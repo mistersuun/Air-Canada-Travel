@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { resetScheduleSource, setScheduleSource, getCoverage } from '../../data/schedule-index';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
 import { findItineraries } from '../../utils/connections';
 import { toUtcMs } from '../../utils/time';
@@ -142,6 +144,20 @@ describe('destState', () => {
   it('points at the next nonstop when the week has none', () => {
     const s = destState('YUL', 'ATH', '2026-09-21', '2026-09-21', cov(), false);
     expect(s).toEqual({ kind: 'no-nonstop', next: '2026-10-02', nextLabel: 'Fri, Oct 2', connections: false });
+  });
+
+  it('is route-only when the network lists a route the schedules do not have, whatever the week', () => {
+    setRouteNetworkSource(ROUTE_NETWORK_FIXTURE);
+    try {
+      expect(destState('YHZ', 'BOS', '2026-09-28', '2026-10-01', getCoverage('YHZ'), false))
+        .toEqual({ kind: 'route-only', detail: 'Air Canada Express', connections: false });
+      expect(destState('YHZ', 'BGI', '2027-05-03', '2026-10-01', getCoverage('YHZ'), true))
+        .toEqual({ kind: 'route-only', detail: 'Air Canada Rouge · Seasonal · Starts Dec 17', connections: true });
+      // Published schedules win: YHZ-YYZ is scheduled (AC603).
+      expect(destState('YHZ', 'YYZ', '2026-09-28', '2026-10-01', getCoverage('YHZ'), false)).toEqual({ kind: 'ok' });
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 
   it('is not-served with no nonstop ahead and no connection', () => {

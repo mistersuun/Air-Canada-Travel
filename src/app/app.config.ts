@@ -16,6 +16,7 @@ import {
 } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { loadSchedules } from './data/schedule-index';
+import { loadRouteNetwork } from './data/route-network';
 import { routes } from './app.routes';
 import { PhotoService } from './state/photo.service';
 import { AppStateService } from './state/app-state.service';
@@ -49,13 +50,14 @@ export const appConfig: ApplicationConfig = {
       }),
     ),
     // Before the first navigation: stage an Explore entry under a deep link,
-    // and load the schedules (data, not code) and the photo credits in parallel.
+    // and load the schedules and route network (data, not code) and the photo
+    // credits in parallel.
     provideAppInitializer(() => {
       const staged = stageDeepLink(inject(DOCUMENT).defaultView);
       const state = inject(AppStateService);
       if (staged) state.markStagedBack();
       const photos = inject(PhotoService);
-      return Promise.all([loadSchedules(), photos.load()]).then(() => undefined);
+      return Promise.all([loadSchedules(), loadRouteNetwork(), photos.load()]).then(() => undefined);
     }),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),

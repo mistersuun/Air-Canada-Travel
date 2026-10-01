@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getCoverage, resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import {
   MAX_MONTHS, barWidth, chooserMeta, chooserRows, clampKey, dayAria, monthDays, monthLead, monthRange, monthTitle,
   monthWeeks, moveKey, nextSelection, nightsLabel, pickable, rangeLabel, selectLabel,
@@ -116,5 +118,15 @@ describe('cal-model', () => {
     expect(chooserRows('YUL', ['LHR'], TODAY, 'athens').all.map(r => r.code)).toEqual(['ATH']);
     expect(chooserRows('YUL', ['LHR'], TODAY, 'athens').saved).toEqual([]);
     expect(chooserMeta('YUL', findDestination('ATH')!, '2026-10-08')).toBe('Greece · next Fri, Oct 9');
+  });
+
+  it('says a route-only favourite is flown with times not in our data', () => {
+    setRouteNetworkSource(ROUTE_NETWORK_FIXTURE);
+    try {
+      expect(chooserMeta('YHZ', findDestination('BOS')!, TODAY)).toBe('USA · flies this route · times not in our data');
+      expect(chooserMeta('YUL', findDestination('NRT')!, TODAY)).toBe('Japan · no nonstop published');
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 });

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import type { LoadNote, Outcome, Trip } from '../../trips/model';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../../trips/testing/seville-fixture';
 import { toUtcMs } from '../../utils/time';
@@ -53,6 +55,21 @@ describe('today model (Seville fixture)', () => {
     expect(resolveToday(trips, AT_1640 - 3 * 86_400_000)).toBeNull();
     expect(resolveToday(trips, AT_1640, SEVILLE_IDS.trip, SEVILLE_IDS.ret)).toEqual({ tripId: SEVILLE_IDS.trip, legId: SEVILLE_IDS.ret });
     expect(resolveToday(trips, AT_1640, SEVILLE_IDS.trip, SEVILLE_IDS.train)).toBeNull();
+  });
+
+  it('an Unknown leg on a route the network lists says times are not in our data', () => {
+    const trip = sevilleTrip();
+    const out = trip.legs.find(l => l.id === SEVILLE_IDS.outbound)!;
+    if (out.kind === 'flight') out.provenance = 'unknown';
+    const view = () => todayView({ trip, legId: SEVILLE_IDS.outbound, nowMs: AT_1640, notes: [], outcomes: [], connect: CONNECT, fmt: '24h' })!;
+    expect(view().sub).toBe('AC834 · A330-300 · leaves in 1h15');
+    setRouteNetworkSource({ ...ROUTE_NETWORK_FIXTURE, routes: { 'YUL-MAD': ['A', 0, null, null, null] } });
+    try {
+      expect(view().sub).toBe('AC834 · A330-300 · leaves in 1h15 · flies this route · times not in our data');
+      expect(view().provenance).toBe('unknown');
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 
   it('g4: 17:55, Listed, leaves in 1h15, the latest note, left to do and the backup', () => {

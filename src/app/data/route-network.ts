@@ -203,6 +203,13 @@ export function routeNetworkLoaded(): boolean {
 
 /** The sentence the UI shows for a route-only pair. */
 export const ROUTE_ONLY_TEXT = 'Flies this route · times not in our data';
+/** The same, mid-sentence ('USA · flies this route · times not in our data'). */
+export const ROUTE_ONLY_NOTE = 'flies this route · times not in our data';
+
+/** True when the network lists every segment (origin → dest) of a flight. */
+export function networkListsAll(segments: readonly { origin: string; dest: string }[]): boolean {
+  return segments.length > 0 && segments.every(s => !!routeFact(s.origin, s.dest));
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 

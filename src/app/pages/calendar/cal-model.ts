@@ -4,6 +4,7 @@
  */
 import type { Coverage } from '../../data/schedule-index';
 import { getDestinationCodes } from '../../data/schedule-index';
+import { ROUTE_ONLY_NOTE, isRouteOnly } from '../../data/route-network';
 import type { Destination } from '../../data/destinations';
 import { isOutside, shortDay } from '../../ui/format';
 import { findDestination } from '../../utils/airports';
@@ -187,10 +188,15 @@ export interface ChooserRow {
   meta: string;
 }
 
-/** 'Portugal · next Thu, Oct 8', or 'Portugal · no nonstop published'. */
+/**
+ * 'Portugal · next Thu, Oct 8', 'USA · flies this route · times not in our data'
+ * (route network only), or 'Portugal · no nonstop published'.
+ */
 export function chooserMeta(hub: string, d: Destination, today: string): string {
   const next = nextFlightDate(hub, d.code, today);
-  return `${d.country} · ${next ? `next ${shortDay(next)}` : 'no nonstop published'}`;
+  if (next) return `${d.country} · next ${shortDay(next)}`;
+  if (isRouteOnly(hub, d.code)) return `${d.country} · ${ROUTE_ONLY_NOTE}`;
+  return `${d.country} · no nonstop published`;
 }
 
 /** Favourites first, then every destination with a published nonstop from the hub, filtered by `query`. */

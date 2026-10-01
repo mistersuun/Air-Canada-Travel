@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import { FlightLeg, GroundLeg } from '../../trips/model';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../../trips/testing/seville-fixture';
 import { toUtcMs } from '../../utils/time';
@@ -61,6 +63,21 @@ describe('trips-model', () => {
     expect(deadlineNote(t, { ...ref, arrLocal: '22:30' })).toBe('lands after your deadline');
     expect(deadlineNote(t, { ...ref, arrLocal: '21:20' })).toBe('home 40m before your deadline');
     expect(deadlineNote(t, (t.legs[0] as FlightLeg).refs[0])).toBeNull();
+  });
+
+  it('says a route the network lists is flown, with times not in our data (still Unknown)', () => {
+    const t = sevilleTrip();
+    const out = t.legs[0];
+    if (out.kind === 'flight') out.provenance = 'unknown';
+    setRouteNetworkSource({ ...ROUTE_NETWORK_FIXTURE, routes: { 'YUL-MAD': ['A', 0, null, null, null] } });
+    try {
+      const row = legRows(t)[0];
+      expect(row.meta).toBe('17:55 → 06:50⁺¹ · flies this route · times not in our data · 2 backups');
+      expect(row.provenance).toBe('unknown');
+      expect(row.meta).not.toMatch(/%|no flight/i);
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 
   it('describes ground legs: estimate label, unknown, or the mode and minutes', () => {

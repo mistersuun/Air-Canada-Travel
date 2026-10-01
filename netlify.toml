@@ -48,3 +48,15 @@
   for = "/img/dest/*"
   [headers.values]
     Cache-Control = "public, max-age=604800, stale-while-revalidate=2592000"
+
+# On-device barcode decoding and PDF reading (boarding passes). With nosniff,
+# a wrong type stops the wasm or the pdf.js worker from loading, so set them.
+[[headers]]
+  for = "/vendor/zxing/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"
+
+[[headers]]
+  for = "/vendor/pdfjs/*.mjs"
+  [headers.values]
+    Content-Type = "text/javascript"

@@ -33,9 +33,10 @@ export function dayLabel(key: string): string {
   return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
 }
 
-/** 'leaves in 1h15', 'leaves now', 'left 25m ago'. */
+/** 'leaves in 1h15', 'leaves in 7 days', 'leaves now', 'left 25m ago'. */
 export function leavesLabel(depUtc: number, nowMs: number): string {
   const min = Math.round((depUtc - nowMs) / 60_000);
+  if (min >= 48 * 60) return `leaves in ${Math.floor(min / (24 * 60))} days`;
   if (min > 0) return `leaves in ${hm(min)}`;
   if (min === 0) return 'leaves now';
   return `left ${hm(-min)} ago`;

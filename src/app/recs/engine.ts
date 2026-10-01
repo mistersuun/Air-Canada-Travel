@@ -196,7 +196,11 @@ export function scheduleLine(u: Upcoming, todayKey: string, fmt?: TimeFormat): s
     const when = min >= 17 * 60 ? 'most evenings' : min < 12 * 60 ? 'most mornings' : 'most days';
     return `${best.n} ${clock(best.t, fmt)} ${when} · ${dur}`;
   }
-  return `${u.count} flight${u.count === 1 ? '' : 's'} in the next 2 weeks · ${dur}`;
+  const stops = u.its.filter(it => it.legs.length > 1).length;
+  const what = stops === 0 ? `flight${u.count === 1 ? '' : 's'}`
+    : stops === u.count ? `one-stop option${u.count === 1 ? '' : 's'}`
+    : 'options, some with a stop,';
+  return `${u.count} ${what} in the next 2 weeks · ${dur}`;
 }
 
 // ── Kind: holiday ───────────────────────────────────────────────────────────

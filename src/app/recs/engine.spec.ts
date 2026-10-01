@@ -4,7 +4,7 @@ import type { Outcome, OutcomeKind } from '../trips/model';
 import { decodeClimate } from './climate';
 import {
   RecInput, dayItineraries, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
-  seasonWindow, shortDuration, styleRecs, whyText,
+  scheduleLine, seasonWindow, shortDuration, styleRecs, whyText,
 } from './engine';
 import { longWeekends } from './long-weekends';
 import type { RecGroup, Recommendation, TravelProfile } from './model';
@@ -257,5 +257,22 @@ describe('honesty', () => {
     expect(shortDuration(88)).toBe('1h30');
     expect(shortDuration(420)).toBe('7h');
     expect(shortDuration(42)).toBe('40min');
+  });
+});
+
+describe('scheduleLine wording', () => {
+  // Itineraries spread across the two weeks, so no "most evenings" line applies.
+  const it1 = (day: number, legs: number) => ({
+    dateKey: `2026-10-${String(day).padStart(2, '0')}`, totalMin: 475,
+    legs: Array.from({ length: legs }, (_, i) => ({ flightNumber: `AC${100 + day * 10 + i}`, depLocal: '08:00' })),
+  });
+  type U = Parameters<typeof scheduleLine>[0];
+  it('calls nonstops flights and connections one-stop options, never flights', () => {
+    const non = { count: 2, its: [it1(2, 1), it1(9, 1)] } as unknown as U;
+    const one = { count: 2, its: [it1(2, 2), it1(9, 2)] } as unknown as U;
+    const mix = { count: 2, its: [it1(2, 1), it1(9, 2)] } as unknown as U;
+    expect(scheduleLine(non, '2026-10-01')).toBe('2 flights in the next 2 weeks · about 7h55');
+    expect(scheduleLine(one, '2026-10-01')).toBe('2 one-stop options in the next 2 weeks · about 7h55');
+    expect(scheduleLine(mix, '2026-10-01')).toBe('2 options, some with a stop, in the next 2 weeks · about 7h55');
   });
 });

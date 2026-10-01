@@ -28,6 +28,8 @@ describe('today model (Seville fixture)', () => {
 
   it('formats departures relative to now', () => {
     expect(leavesLabel(AT_1640 + 75 * 60_000, AT_1640)).toBe('leaves in 1h15');
+    expect(leavesLabel(AT_1640 + (170 * 60 + 53) * 60_000, AT_1640)).toBe('leaves in 7 days');
+    expect(leavesLabel(AT_1640 + 47 * 60 * 60_000, AT_1640)).toBe('leaves in 47h');
     expect(leavesLabel(AT_1640, AT_1640)).toBe('leaves now');
     expect(leavesLabel(AT_1640 - 25 * 60_000, AT_1640)).toBe('left 25m ago');
   });

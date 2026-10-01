@@ -360,7 +360,7 @@ const AC_URL = 'https://www.aircanada.com/';
       .hero { height: 420px; }
       .credit { bottom: 120px; }
       .body { margin-top: -96px; padding: 0 32px 40px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 360px; }
-      .side { grid-column: auto; display: flex; flex-direction: column; gap: 20px; }
+      .side { grid-column: auto; display: flex; flex-direction: column; align-items: stretch; gap: 20px; }
       .head { flex-wrap: nowrap; }
     }
   `],

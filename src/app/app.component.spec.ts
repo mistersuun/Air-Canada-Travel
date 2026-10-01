@@ -212,18 +212,17 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
 
     it('/ focuses the page search field', async () => {
       await render();
-      const input = document.createElement('input');
-      input.setAttribute('data-search-input', '');
-      el.querySelector('main')!.appendChild(input);
+      const input = el.querySelector<HTMLInputElement>('main [data-search-input]')!;
+      expect(input).toBeTruthy();
       key('/');
       expect(document.activeElement).toBe(input);
-      input.remove();
     });
 
     it('/ on a page without search opens Explore', async () => {
       await render();
-      await router.navigateByUrl('/map');
+      await router.navigateByUrl('/saved');
       await settle();
+      expect(el.querySelector('main [data-search-input]')).toBeNull();
       key('/');
       await settle();
       expect(path()).toBe('/');

@@ -84,6 +84,36 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/today/recover.page').then(m => m.RecoverPage),
     title: 'Still reachable · Routes',
   },
+  // Trip extras (extras spec §2.1): links via extras/links.ts.
+  {
+    path: 'trips/:id/files',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/files/trip-files.page').then(m => m.TripFilesPage),
+    title: 'Files · Routes',
+  },
+  {
+    path: 'trips/:id/passes/add',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/passes/add-pass.page').then(m => m.AddPassPage),
+    title: 'Add boarding pass · Routes',
+  },
+  {
+    path: 'trips/:id/pass/:passId',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/passes/pass-view.page').then(m => m.PassViewPage),
+    title: 'Boarding pass · Routes',
+  },
+  {
+    path: 'trips/:id/share',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/share/trip-share.page').then(m => m.TripSharePage),
+    title: 'Share trip · Routes',
+  },
+  {
+    path: 'profile',
+    loadComponent: () => import('./pages/profile/profile.page').then(m => m.ProfilePage),
+    title: 'Travel profile · Routes',
+  },
   {
     path: 'today',
     loadComponent: () => import('./pages/today/today.page').then(m => m.TodayPage),

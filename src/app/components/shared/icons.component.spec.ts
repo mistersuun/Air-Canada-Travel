@@ -54,6 +54,13 @@ describe('IconComponent', () => {
     }
   });
 
+  it('has the trip extras icons', () => {
+    for (const n of ['barcode', 'camera', 'image', 'file', 'doc', 'paperclip', 'trash', 'copy', 'lock', 'sparkle', 'thermo', 'scan'] as IconName[]) {
+      expect(ICON_PATHS[n]?.length, n).toBeGreaterThan(0);
+      expect(render({ name: n }).getAttribute('data-icon')).toBe(n);
+    }
+  });
+
   it('every icon has at least one non-empty path', () => {
     for (const [name, paths] of Object.entries(ICON_PATHS)) {
       expect(paths.length, name).toBeGreaterThan(0);

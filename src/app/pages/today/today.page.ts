@@ -11,6 +11,7 @@ import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component'
 import { recoverPath, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
 import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
+import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
 /**
  * Day of travel (/today, optional ?trip=<id>&leg=<legId>): a plain,
@@ -22,7 +23,7 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
 @Component({
   selector: 'app-today-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent],
+  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -56,6 +57,8 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
             </button>
           }
         </section>
+
+        <app-today-pass [tripId]="v.tripId" [legId]="v.legId" />
 
         @if (!v.final) {
           <div class="td__acts">

@@ -10,6 +10,7 @@ import { PlanTabComponent } from './plan/plan-tab.component';
 import { PrepTabComponent } from './prep/prep-tab.component';
 import { ReturnTabComponent } from './return/return-tab.component';
 import { tripSubtitle } from './trips-model';
+import { TripExtrasComponent } from '../../files/ui/trip-extras.component';
 
 export type TripTab = 'plan' | 'prep' | 'return';
 export const TRIP_TABS: SegOption[] = [
@@ -27,7 +28,7 @@ export const TRIP_TABS: SegOption[] = [
 @Component({
   selector: 'app-trip-detail-page',
   standalone: true,
-  imports: [IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent],
+  imports: [IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripExtrasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -48,6 +49,7 @@ export const TRIP_TABS: SegOption[] = [
         @if (t.sharedFrom) {
           <p class="ui-sub td__ro">A copy of a shared plan. Changes stay on this device.</p>
         }
+        <app-trip-extras [trip]="t" />
         <app-seg stretch [options]="tabs" [value]="activeTab()" (valueChange)="setTab($event)" ariaLabel="Trip sections" />
         @switch (activeTab()) {
           @case ('prep') { <app-prep-tab [trip]="t" /> }

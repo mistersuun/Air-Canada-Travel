@@ -33,7 +33,19 @@
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/data/cities.json"
+          "/data/cities.json",
+          "/data/climate.json"
+        ]
+      }
+    },
+    {
+      "name": "vendor",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": [
+          "/vendor/zxing/*.wasm",
+          "/vendor/pdfjs/*.mjs"
         ]
       }
     },

@@ -26,6 +26,7 @@ import { CityIndexService } from '../../places/city-index.service';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
 import { TodayBannerComponent } from '../today/today-banner.component';
+import { ForYouComponent } from '../../recs/ui/for-you.component';
 
 /** Phone layout (spec 1.4: mobile < 720px). */
 export const NARROW_QUERY = '(max-width: 719px)';
@@ -55,7 +56,7 @@ interface ListRow {
   standalone: true,
   imports: [
     RouterLink, IconComponent, HubPickerComponent, SegComponent, WeekStripComponent, PhotoCardComponent, DestRowComponent,
-    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent,
+    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent, ForYouComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -125,6 +126,7 @@ interface ListRow {
                             (toggleFavourite)="state.toggleFavourite($event)" />
         </section>
       } @else {
+        <app-for-you />
         @if (picks().length) {
           <section class="sec" aria-labelledby="h-picks">
             <div class="ui-sec-h"><h2 class="ui-h2 st" id="h-picks">Editor's pick</h2>

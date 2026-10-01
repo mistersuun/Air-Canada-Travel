@@ -12,6 +12,9 @@ import { IconComponent } from '../shared/icons.component';
 import { DataCreditsComponent } from '../../places/ui/data-credits.component';
 import { SettingsDataComponent } from '../../trips/ui/settings-data.component';
 import { SettingsHistoryComponent } from '../../trips/ui/settings-history.component';
+import { SettingsFilesComponent } from '../../files/ui/settings-files.component';
+import { ClimateCreditComponent } from '../../recs/ui/climate-credit.component';
+import { SettingsProfileComponent } from '../../recs/ui/settings-profile.component';
 
 const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
 
@@ -26,6 +29,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
   standalone: true,
   imports: [
     GlassSheetComponent, SegComponent, IconComponent, SettingsDataComponent, SettingsHistoryComponent, DataCreditsComponent,
+    SettingsProfileComponent, SettingsFilesComponent, ClimateCreditComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -82,6 +86,8 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
           </label>
         </section>
 
+        <app-settings-profile />
+
         <section class="grp">
           <button type="button" class="row row--btn" (click)="openShortcuts()">
             <span class="nm">Keyboard shortcuts</span><span class="chev" aria-hidden="true">›</span>
@@ -96,6 +102,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
         </section>
 
         <app-settings-data />
+        <app-settings-files />
         <app-settings-history />
 
         @if (photos.credits().length) {
@@ -117,6 +124,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
           </details>
         }
         <app-data-credits />
+        <app-climate-credit />
 
         <div class="foot">
           <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">Reset to defaults</button>

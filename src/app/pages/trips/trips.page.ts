@@ -10,6 +10,7 @@ import { findDestination } from '../../utils/airports';
 import { rowMeta, upcoming } from '../saved/saved-model';
 import { TripCardComponent } from './plan/trip-card.component';
 import { returnNotListed } from './trips-model';
+import { TripIdeasComponent } from '../../recs/ui/trip-ideas.component';
 
 /** Starred places shown on the Trips tab before "All N". */
 export const STARRED_PREVIEW = 3;
@@ -23,7 +24,7 @@ export const STARRED_PREVIEW = 3;
 @Component({
   selector: 'app-trips-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, TripCardComponent, OutcomePromptComponent, DestRowComponent],
+  imports: [RouterLink, IconComponent, TripCardComponent, OutcomePromptComponent, DestRowComponent, TripIdeasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page tp">
@@ -54,6 +55,8 @@ export const STARRED_PREVIEW = 3;
       @for (p of trips.pendingOutcomes(); track p.key) {
         <app-outcome-prompt [prompt]="p" />
       }
+
+      <app-trip-ideas />
 
       @if (starredCount()) {
         <section class="sec" data-starred>

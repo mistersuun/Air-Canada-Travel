@@ -18,7 +18,9 @@
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "assets": [
-              { "glob": "**/*", "input": "public" }
+              { "glob": "**/*", "input": "public" },
+              { "glob": "zxing_reader.wasm", "input": "node_modules/zxing-wasm/dist/reader", "output": "vendor/zxing" },
+              { "glob": "pdf.worker.min.mjs", "input": "node_modules/pdfjs-dist/legacy/build", "output": "vendor/pdfjs" }
             ],
             "styles": [
               "src/styles.scss"

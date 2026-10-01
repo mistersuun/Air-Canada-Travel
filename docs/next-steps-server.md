@@ -108,3 +108,15 @@ The device stays the source of truth while offline; the server is a sync target.
 - Whether boarding passes sync at all, or stay on-device only (recommended: stay on-device unless you opt in per pass).
 - Model for Claude planning: `claude-opus-5-5` (best) or `claude-sonnet-5-5` (cheaper).
 - A domain for the app (helps with sign-in links and push).
+
+## 10. Extras when a server exists
+
+Boarding passes, trip files, the travel profile, recommendations and the share card all work today without a server (IndexedDB `routes-files`, `src/app/files/**`, `src/app/passes/**`, `src/app/recs/**`, `src/app/share/**`). A server would add:
+
+- **Opt-in, end-to-end-encrypted sync of trip files.**
+  - Encrypt each blob on the device (WebCrypto AES-GCM, key derived from a passphrase or a device-held key wrapped per device), upload only ciphertext to private Storage, and keep the `Attachment` metadata in Postgres under the owner's Row Level Security.
+  - Reuse the on-device store: `FilesStore` gains a sync outbox; `FilesService` stays the only writer.
+  - **Boarding passes stay device-only** unless the user explicitly opts in **per pass**. A synced pass is encrypted the same way, never visible to companions, and still never appears in share links, share text or images, or backups.
+- **Sharing files with a companion.** Per-file, per-trip-member grants (hotel confirmation, train tickets). Passes and booking codes are never shareable this way. Revoking a grant deletes the companion's copy on their next sync.
+- **Server-side climate refresh.** A scheduled job reruns `scripts/build-climate.py` against Open-Meteo (within its terms; a commercial plan if the app ever stops being a free personal tool), keeps the CC BY 4.0 attribution, and publishes `data/climate.json` with the weekly schedules. It stays labelled "Typical, not a forecast".
+- **Recommendations that use companions' outcome logs.** Only with each companion's consent, only as counts ("Your group boarded 5 of 6 tries"), never percentages or odds, and never implying a seat is free. The on-device engine (`src/app/recs/engine.ts`) takes the pooled counts as one more input; nothing else changes.

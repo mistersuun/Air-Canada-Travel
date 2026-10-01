@@ -9,6 +9,7 @@ import { TripsService } from '../../../trips/trips.service';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { downloadIcs } from '../../../utils/ics';
 import { monthDay, offlineAirportsLabel, offlineUntil, savedAtLabel } from '../trips-model';
+import { ShareEntryComponent } from '../../../share/ui/share-entry.component';
 
 /** The schedules file the service worker caches (ngsw-config "schedules" group). */
 export const SCHEDULES_URL = 'data/schedules.json';
@@ -22,7 +23,7 @@ export const SCHEDULES_URL = 'data/schedules.json';
 @Component({
   selector: 'app-trip-menu',
   standalone: true,
-  imports: [IconComponent, GlassSheetComponent],
+  imports: [IconComponent, GlassSheetComponent, ShareEntryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet [title]="trip().name" [open]="true" (closed)="closed.emit()">
@@ -72,6 +73,7 @@ export const SCHEDULES_URL = 'data/schedules.json';
               <app-icon name="calendar" [size]="16" /> Calendar
             </button>
           </div>
+          <app-share-entry [trip]="trip()" />
           @if (trip().calendarExportedAt) {
             <p class="ui-sub tm__fine">Calendar file has a reminder to list 48 hours before each flight.</p>
           }

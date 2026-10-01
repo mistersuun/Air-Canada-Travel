@@ -43,7 +43,19 @@ export type IconName =
   | 'note'
   | 'more'
   | 'external'
-  | 'pin';
+  | 'pin'
+  | 'barcode'
+  | 'camera'
+  | 'image'
+  | 'file'
+  | 'doc'
+  | 'paperclip'
+  | 'trash'
+  | 'copy'
+  | 'lock'
+  | 'sparkle'
+  | 'thermo'
+  | 'scan';
 
 /** Path data per icon. Paths are stroked; FILLABLE icons also take fill when `filled`. */
 export const ICON_PATHS: Record<IconName, string[]> = {
@@ -116,6 +128,28 @@ export const ICON_PATHS: Record<IconName, string[]> = {
   more: ['M6 12h.01M12 12h.01M18 12h.01'],
   external: ['M13.5 4.5h6v6', 'M19.5 4.5 11 13', 'M18 14v4.5a1 1 0 0 1-1 1H5.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1H10'],
   pin: ['M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z', 'M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'],
+  // Trip extras (passes, files, For you)
+  barcode: ['M4 5.5v13M7 5.5v13M10.5 5.5v13M13 5.5v13M16.5 5.5v13M20 5.5v13'],
+  camera: [
+    'M3.5 8.5a2 2 0 0 1 2-2h2.2L9.2 4h5.6l1.5 2.5h2.2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-9Z',
+    'M12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z',
+  ],
+  image: [
+    'M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6Z',
+    'm4 16 4.5-4.5 4 4 2.5-2.5L20 18M15.5 9.5h.01',
+  ],
+  file: ['M6 3.5h8.5L19 8v11.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z', 'M14 3.5V8.5h5'],
+  doc: [
+    'M6 3.5h8.5L19 8v11.5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z',
+    'M14 3.5V8.5h5M8 13h1.5a1.25 1.25 0 0 1 0 2.5H8V12.5M8 15.5V17',
+  ],
+  paperclip: ['M20 11.5 12.2 19.3a4.5 4.5 0 0 1-6.4-6.4l8-8a3 3 0 0 1 4.2 4.2l-8 8a1.5 1.5 0 0 1-2.1-2.1l7.3-7.3'],
+  trash: ['M4.5 7h15M10 11v6M14 11v6', 'M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5h6V7'],
+  copy: ['M9 9h10.5v11.5H9V9Z', 'M15 9V4.5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1V14a1 1 0 0 0 1 1h4'],
+  lock: ['M6 11a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 18 11v8a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19v-8Z', 'M8.5 9.5V7a3.5 3.5 0 0 1 7 0v2.5'],
+  sparkle: ['M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8L12 3.5Z', 'M19 3.5v3M17.5 5h3'],
+  thermo: ['M10 14.5V5a2 2 0 0 1 4 0v9.5a3.5 3.5 0 1 1-4 0Z', 'M12 17.5V10'],
+  scan: ['M4 8V5.5a1.5 1.5 0 0 1 1.5-1.5H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16', 'M4 12h16'],
 };
 
 const FILLABLE: ReadonlySet<IconName> = new Set<IconName>(['star', 'plane', 'moon', 'pin', 'home']);

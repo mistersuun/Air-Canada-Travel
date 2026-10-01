@@ -18,6 +18,8 @@ import { WEEKDAY_SHORT, toUtcMs, weekdayIndex } from '../../../utils/time';
 import {
   MODE_LABEL, dayLabel, flightNumbers, groundLabel, legById, refsRoute, refsTimes,
 } from '../trips-model';
+import { LegFilesComponent } from '../../../files/ui/leg-files.component';
+import { LegPassesComponent } from '../../../passes/ui/leg-passes.component';
 
 /** Statuses the traveller can set on a flight leg (Dropped is set by a swap). */
 export const SETTABLE_STATUSES: readonly LegStatus[] = ['planned', 'listed', 'checkedIn', 'boarded', 'notBoarded', 'didntTry'];
@@ -34,7 +36,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
 @Component({
   selector: 'app-leg-sheet',
   standalone: true,
-  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent],
+  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent, LegPassesComponent, LegFilesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet [title]="title()" [open]="true" (closed)="closed.emit()">
@@ -59,6 +61,9 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             @if (f.status === 'abandoned') { <p class="ui-sub ls__hint">Dropped: you swapped to another flight.</p> }
             <p class="ui-sub ls__hint">Listing stays your own step, in your airline's app.</p>
           </fieldset>
+
+          <app-leg-passes [trip]="trip()" [leg]="f" />
+          <app-leg-files [trip]="trip()" [leg]="f" />
 
           <section class="ls__sec">
             <h3 class="ui-h3" tabindex="-1" data-backups-h>Backups</h3>
@@ -106,6 +111,8 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             <span>{{ groundFact() }}</span>
             <app-provenance-tag [value]="g.provenance" />
           </p>
+
+          <app-leg-files [trip]="trip()" [leg]="g" />
 
           <form class="ed" novalidate (submit)="saveGround($event)" data-ground-editor>
             <h3 class="ui-h3">Your train or bus</h3>

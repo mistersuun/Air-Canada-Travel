@@ -14,6 +14,7 @@ import { SettingsDataComponent } from '../../trips/ui/settings-data.component';
 import { SettingsHistoryComponent } from '../../trips/ui/settings-history.component';
 import { SettingsFilesComponent } from '../../files/ui/settings-files.component';
 import { ClimateCreditComponent } from '../../recs/ui/climate-credit.component';
+import { GroundCreditComponent } from '../../places/ui/ground-credit.component';
 import { SettingsProfileComponent } from '../../recs/ui/settings-profile.component';
 
 const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
@@ -29,7 +30,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
   standalone: true,
   imports: [
     GlassSheetComponent, SegComponent, IconComponent, SettingsDataComponent, SettingsHistoryComponent, DataCreditsComponent,
-    SettingsProfileComponent, SettingsFilesComponent, ClimateCreditComponent,
+    SettingsProfileComponent, SettingsFilesComponent, ClimateCreditComponent, GroundCreditComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -124,6 +125,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
           </details>
         }
         <app-data-credits />
+        <app-ground-credit />
         <app-climate-credit />
 
         <div class="foot">

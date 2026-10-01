@@ -20,7 +20,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <b>Schedules</b>&ngsp;<a href="https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly" target="_blank" rel="noopener">Air Canada Vacations 'Where We Fly'</a> (published schedules, not seat availability).
         </li>
         <li>
-          <b>Onward travel</b>&ngsp;Train and bus times are our estimates from public timetables, not bookings. Check before you go.
+          <b>Onward travel</b>&ngsp;Train and bus times come from operators' open timetables where we have them (see Timetable credits), otherwise they are our estimates. Not bookings. Check before you go.
         </li>
       </ul>
     </details>

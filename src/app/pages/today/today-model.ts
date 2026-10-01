@@ -33,10 +33,17 @@ export function dayLabel(key: string): string {
   return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
 }
 
-/** 'leaves in 1h15', 'leaves in 7 days', 'leaves now', 'left 25m ago'. */
-export function leavesLabel(depUtc: number, nowMs: number): string {
+/**
+ * 'leaves in 1h15', 'leaves in 7 days', 'leaves now', 'left 25m ago'. With the
+ * departure airport's `tz`, "N days" counts calendar days there (never in the
+ * device's own time zone).
+ */
+export function leavesLabel(depUtc: number, nowMs: number, tz?: string): string {
   const min = Math.round((depUtc - nowMs) / 60_000);
-  if (min >= 48 * 60) return `leaves in ${Math.floor(min / (24 * 60))} days`;
+  if (min >= 48 * 60) {
+    const days = tz ? diffDays(utcToLocal(nowMs, tz).dateKey, utcToLocal(depUtc, tz).dateKey) : Math.floor(min / (24 * 60));
+    return `leaves in ${days} days`;
+  }
   if (min > 0) return `leaves in ${hm(min)}`;
   if (min === 0) return 'leaves now';
   return `left ${hm(-min)} ago`;
@@ -51,6 +58,20 @@ export function flightsLabel(it: Itinerary): string {
 export function clockAt(iso: string, tz: string, fmt: TimeFormat): string {
   const ms = Date.parse(iso);
   return Number.isFinite(ms) ? formatClock(utcToLocal(ms, tz).hhmm, fmt) : '';
+}
+
+/** 'YUL time': labels a clock time as local at that airport. */
+export function zoneLabel(code: string): string {
+  return `${code} time`;
+}
+
+/**
+ * 'Today', 'Tomorrow', 'Yesterday' or '' for a departure day, against the
+ * calendar at the departure airport (not the device's time zone).
+ */
+export function dayWord(depKey: string, nowMs: number, origin: string): string {
+  const d = diffDays(utcToLocal(nowMs, airportTz(origin)).dateKey, depKey);
+  return d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : d === -1 ? 'Yesterday' : '';
 }
 
 /** The text of a load note: '14 open, 9 listed, Gate 52' (only the parts written). */
@@ -110,7 +131,7 @@ export function bannerText(trips: Trip[], nowMs: number, fmt: TimeFormat): { tit
   const ref = leg.refs[0];
   return {
     title: `Today · ${day.title}`,
-    detail: `${ref.flightNumber} ${formatClock(ref.depLocal, fmt)} · ${LEG_STATUS_LABEL[leg.status]}`,
+    detail: `${ref.flightNumber} ${formatClock(ref.depLocal, fmt)} ${zoneLabel(ref.origin)} · ${LEG_STATUS_LABEL[leg.status]}`,
   };
 }
 
@@ -121,9 +142,10 @@ export interface TodayBackup { title: string; detail: string }
 export interface TodayView {
   tripId: string;
   legId: string;
-  eyebrow: string;          // 'Today · Thu Oct 8 · at YUL'
+  eyebrow: string;          // 'Today · Thu Oct 8 · at YUL' (Today / Tomorrow by the calendar at YUL)
   title: string;            // 'Montréal → Madrid'
-  time: string;             // '17:55'
+  time: string;             // '17:55', local at the departure airport
+  zone: string;             // 'YUL time'
   status: LegStatus;
   /** Where the times come from: Scheduled, or Unknown when the flight was not found in the latest data. */
   provenance: FlightLeg['provenance'];
@@ -202,19 +224,22 @@ export function todayView(input: {
 
   const subParts = [ref.flightNumber];
   if (ref.aircraft) subParts.push(shortAircraftName(ref.aircraft));
-  if (!final) subParts.push(leavesLabel(refDepUtc(ref), nowMs));
+  const tz = airportTz(ref.origin);
+  if (!final) subParts.push(leavesLabel(refDepUtc(ref), nowMs, tz));
 
   const notes = input.notes
     .filter(n => instanceKey(n) === instanceKey(ref) && noteText(n))
     .sort((a, b) => b.at.localeCompare(a.at));
-  const note = notes[0] ? { time: clockAt(notes[0].at, airportTz(ref.origin), fmt), text: noteText(notes[0]) } : null;
+  const note = notes[0] ? { time: `${clockAt(notes[0].at, tz, fmt)} ${zoneLabel(ref.origin)}`, text: noteText(notes[0]) } : null;
+  const word = dayWord(ref.dateKey, nowMs, ref.origin);
 
   return {
     tripId: trip.id,
     legId: leg.id,
-    eyebrow: `Today · ${dayLabel(ref.dateKey)} · at ${ref.origin}`,
+    eyebrow: [word, dayLabel(ref.dateKey), `at ${ref.origin}`].filter(Boolean).join(' · '),
     title: `${placeName(ref.origin)} → ${placeName(last.dest)}`,
     time: formatClock(ref.depLocal, fmt),
+    zone: zoneLabel(ref.origin),
     status: leg.status,
     provenance: leg.provenance,
     final,

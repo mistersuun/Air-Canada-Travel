@@ -36,7 +36,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
         <section class="ui-card td__flight" aria-label="Your flight">
           <div class="td__row">
-            <span class="td__time ui-cond tn">{{ v.time }}</span>
+            <span class="td__when"><span class="td__time ui-cond tn">{{ v.time }}</span><span class="td__zone" data-zone>{{ v.zone }}</span></span>
             <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
@@ -125,6 +125,8 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
     .td__row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
     .td__tags { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .td__time { font-size: 44px; font-weight: 700; line-height: 1; }
+    .td__when { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .td__zone { font-size: 13.5px; color: var(--ink-2); white-space: nowrap; }
     .td__sub { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); }
     .td__note { margin: 8px 0 0; font-size: 13.5px; color: var(--ink-2); }
     .td__note b { color: var(--ink); font-weight: 650; }

@@ -79,7 +79,7 @@ describe('Today', () => {
 
   it('banner on Explore shows the travel day and links to /today', async () => {
     const { el, text } = await render(TodayBannerComponent, AT_1640);
-    expect(text('[data-today-banner]')).toBe('Today · Montréal → MadridAC834 17:55 · Listed');
+    expect(text('[data-today-banner]')).toBe('Today · Montréal → MadridAC834 17:55 YUL time · Listed');
     expect(el.querySelector('a')?.getAttribute('href')).toBe('/today');
   });
 
@@ -96,7 +96,7 @@ describe('Today', () => {
     expect(text('.td__time')).toBe('17:55');
     expect(text('app-leg-status-tag')).toBe('Listed');
     expect(text('.td__sub')).toBe('AC834 · A330-300 · leaves in 1h15');
-    expect(text('[data-note]')).toBe('Your note, 16:20: Gate 52, 9 on the list');
+    expect(text('[data-note]')).toBe('Your note, 16:20 YUL time: Gate 52, 9 on the list');
     expect(text('[data-boarded]')).toBe('I boarded');
     expect(text('[data-not-boarded]')).toBe("I didn't board");
     expect(text('[data-plans-changed]')).toBe('Plans changed');
@@ -149,7 +149,7 @@ describe('Today', () => {
     el.querySelector<HTMLFormElement>('.td__nf')!.dispatchEvent(new Event('submit'));
     await stable();
     expect(trips.notes().map(n => [n.flightNumber, n.text])).toEqual([['AC834', 'Gate 52']]);
-    expect(text('[data-note]')).toBe('Your note, 16:40: Gate 52');
+    expect(text('[data-note]')).toBe('Your note, 16:40 YUL time: Gate 52');
   });
 
   it('Plans changed: pick another flight, change dates, drop the trip (with Undo)', async () => {

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
@@ -78,6 +79,11 @@ export class TripDetailPage {
   protected readonly trips = inject(TripsService);
   private readonly router = inject(Router);
   private readonly state = inject(AppStateService);
+
+  constructor() {
+    // Timetables for the onward train or bus (Estimated rows until it loads).
+    void inject(GroundTimetableService).ensureLoaded();
+  }
 
   readonly id = input<string>('');
   readonly tab = input<string | undefined>(undefined);

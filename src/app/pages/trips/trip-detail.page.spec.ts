@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { GROUND_FETCH } from '../../places/ground-timetable.service';
+import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
+import { setGroundTimetables } from '../../places/timetable';
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -26,6 +29,7 @@ function configure(store: MemoryStorage, extra: unknown[] = []) {
       { provide: NOW, useValue: () => NOW_MS },
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+      { provide: GROUND_FETCH, useValue: async () => null },
       ...(extra as never[]),
     ],
   });
@@ -40,8 +44,8 @@ function seeded(): MemoryStorage {
 const stored = (): Trip => JSON.parse(storage.getItem(TRIPS_KEY)!).trips.find((t: Trip) => t.id === SEVILLE_IDS.trip);
 const clean = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
 
-async function render(inputs: { leg?: string; tab?: string } = {}, store = seeded()) {
-  configure(store);
+async function render(inputs: { leg?: string; tab?: string } = {}, store = seeded(), extra: unknown[] = []) {
+  configure(store, extra);
   const fixture = TestBed.createComponent(TripDetailPage);
   fixture.componentRef.setInput('id', SEVILLE_IDS.trip);
   if (inputs.tab) fixture.componentRef.setInput('tab', inputs.tab);
@@ -167,6 +171,20 @@ describe('TripDetailPage', () => {
     expect(g.kind === 'ground' && g.userTimes).toEqual({ depDateKey: '2026-10-09', depLocal: '10:05', arrDateKey: '2026-10-09', arrLocal: '12:45' });
     expect(clean(el.querySelector('[data-leg="leg-madsvq"] app-provenance-tag')?.textContent)).toBe('Saved by you');
     expect(clean(el.querySelector('[data-leg="leg-madsvq"] .tl__m')?.textContent)).toBe('Train 10:05 → 12:45 · AVE 2102');
+  });
+
+  it('a ground leg on a timetable corridor shows the Scheduled timetable for its day; the stored leg stays Estimated', async () => {
+    const { el, stable } = await render({ leg: SEVILLE_IDS.train }, seeded(),
+      [{ provide: GROUND_FETCH, useValue: async () => structuredClone(FIXTURE_GROUND_FILE) }]);
+    await stable();
+    expect(clean(el.querySelector('app-leg-sheet .ls__fact span')?.textContent)).toBe('Fri Oct 9 · Train 2h39');
+    expect(clean(el.querySelector('app-leg-sheet .ls__fact app-provenance-tag')?.textContent)).toBe('Estimated');
+    expect(clean(el.querySelector('app-leg-sheet [data-timetable-fact] span')?.textContent)).toBe('Renfe timetable · 2h39 ride');
+    expect(clean(el.querySelector('app-leg-sheet [data-timetable-fact] app-provenance-tag')?.textContent)).toBe('Scheduled');
+    expect(clean(el.querySelector('app-leg-sheet [data-timetable]')?.textContent)).toBe(
+      '4 Renfe trains on weekdays, 07:00 to 21:05 Timetable · Renfe · valid to Dec 12 Renfe trains only. Iryo and Ouigo also run this route.');
+    expect(stored().legs.find(l => l.id === SEVILLE_IDS.train)).toMatchObject({ provenance: 'estimated', estMinutes: 250 });
+    setGroundTimetables(null);
   });
 
   it('the party chip edits travellers', async () => {

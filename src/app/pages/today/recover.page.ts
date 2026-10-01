@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { PrefsService } from '../../state/prefs.service';
@@ -154,6 +155,11 @@ export class RecoverPage {
   protected readonly state = inject(AppStateService);
   private readonly prefs = inject(PrefsService);
   private readonly router = inject(Router);
+
+  constructor() {
+    // Timetables for the onward train or bus (Estimated rows until it loads).
+    void inject(GroundTimetableService).ensureLoaded();
+  }
 
   readonly id = input<string>('');
   /** ?at=YUL: where the traveller is now. */

@@ -98,8 +98,9 @@ export function reachGateways(q: ReachQuery): { gateways: Gateway[]; unknownOnwa
     const covered = isCovered(q.dateKey, q.hub);
     const { its, direct } = itinerariesTo(q.hub, code, q.dateKey, q);
     const nextDateKey = its.length ? null : nextDateWithFlight(q.hub, code, q.dateKey, q);
-    const ground = groundEstimate(end, goal);
     const best = its[0] ?? null;
+    // The timetable day is the day the best flight lands (local at the gateway).
+    const ground = groundEstimate(end, goal, { dateKey: best?.arrDateKey ?? q.dateKey });
     const arrival = best ? arrivalAtGoal(best.arriveUtc, ground, airportTz(code)) : null;
     const g: Gateway = {
       code,

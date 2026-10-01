@@ -4,13 +4,14 @@
  * except startTripFromGateway, which writes through TripsService.
  */
 import { HUBS } from '../../data/destinations';
-import { GroundEstimate, airportEnd, placeEnd } from '../../places/ground';
+import { GroundDeparture, GroundEstimate, airportEnd, placeEnd } from '../../places/ground';
+import { shortDate } from '../../places/timetable';
 import { Gateway, ReachSort } from '../../places/reach';
 import type { GroundLeg, GroundMode, Place } from '../../trips/model';
 import type { TripsService } from '../../trips/trips.service';
 import { prettyFlight, supOffset } from '../../ui/format';
 import type { Itinerary } from '../../utils/connections';
-import { MINUTE_MS, addDays, formatKey, isDateKey, utcToLocal } from '../../utils/time';
+import { MINUTE_MS, WEEKDAY_SHORT, addDays, formatKey, isDateKey, utcToLocal, weekdayIndex } from '../../utils/time';
 
 /** Default departure: a week from today. Default return: 5 days after leaving, 22:00. */
 export const DEFAULT_LEAD_DAYS = 7;
@@ -91,8 +92,8 @@ export interface GatewayRow {
   city: string;
   flight: string | null;     // 'AC834 17:55 · 1 flight that day'
   standby: string | null;    // '2 standby legs' (only for itineraries via another hub)
-  ground: string;            // 'Train about 2h40'
-  provenance: 'estimated' | 'unknown';
+  ground: string;            // 'Train about 2h40', or 'Train 2h39' from a timetable
+  provenance: 'scheduled' | 'estimated' | 'unknown';
   night: boolean;            // a night on the way is likely
   idle: string | null;       // 'Not found in our schedule data Thu Oct 8 · next Fri Oct 9'
   /** The next date with a flight (idle rows link there). */
@@ -160,12 +161,48 @@ export function groundTitle(g: GroundEstimate, place: Place): string {
   return `${word} to ${place.name}`;
 }
 
-/** 'about 2h40 · trains roughly hourly' (the label's own duration, then the frequency). */
-export function groundDetail(g: GroundEstimate): string {
+/**
+ * 'about 2h40 · trains roughly hourly' (the label's own duration, then the
+ * frequency). From a timetable: '2h39 · next 16:00, last 21:05', where next
+ * is the departure the traveller would catch (`next`, from arrivalAtGoal).
+ */
+export function groundDetail(g: GroundEstimate, next?: GroundDeparture | null): string {
   if (g.mode === 'unknown' || g.rideMin === null) return 'Not found in our data: check the links below';
+  if (g.source === 'timetable' && g.timetable) {
+    const flight = g.shortFlightToo ? ', or a short flight' : '';
+    const last = g.lastDepLocal ? `last ${g.lastDepLocal}` : '';
+    const when = next
+      ? next.sameDay
+        ? [`next ${next.hhmm}`, last].filter(Boolean).join(', ')
+        : `next ${WEEKDAY_SHORT[weekdayIndex(next.dateKey)]} ${next.hhmm}`
+      : last;
+    return [g.timetable.rideText + flight, when].filter(Boolean).join(' · ');
+  }
   const about = /about [^,]+/.exec(g.label)?.[0] ?? '';
   const extra = g.shortFlightToo && !about ? '' : g.shortFlightToo ? ', or a short flight' : '';
   return [about + extra, g.frequency].filter(Boolean).join(' · ');
+}
+
+/**
+ * The lines under the ground leg about its timetable: trips that day,
+ * 'Timetable · Renfe · valid to Dec 20' and the corridor note; or why the
+ * times are estimated ('Timetable ends Dec 20, times estimated', 'Not found
+ * in our timetable data for Sat Oct 17'). [] without a timetable.
+ */
+export function groundTimetableLines(g: GroundEstimate): string[] {
+  const t = g.timetable;
+  if (!t) return [];
+  const note = t.note ? [t.note] : [];
+  switch (t.state) {
+    case 'ok':
+      return [g.frequency ?? '', `Timetable · ${t.operator} · valid to ${shortDate(t.validTo)}`, ...note].filter(Boolean);
+    case 'empty':
+      return [`Not found in our timetable data for ${dayLabel(t.dateKey)}`, ...note];
+    case 'ended':
+      return [`Timetable ends ${shortDate(t.validTo)}, times estimated`];
+    default:
+      return [];
+  }
 }
 
 /** 'I found a train' / 'I found a bus' / 'I found a ride' / 'I found a way there'. */
@@ -183,7 +220,9 @@ export function lastTrainWarning(g: Gateway): string | null {
   if (!g.itineraries.length) return null;
   const what = g.ground.mode === 'bus' ? 'bus' : g.ground.mode === 'train' ? 'train' : 'connection';
   if (g.lastDepMissed) {
-    const last = g.ground.lastDepLocal ? ` (usually about ${g.ground.lastDepLocal})` : '';
+    const last = !g.ground.lastDepLocal ? ''
+      : g.ground.source === 'timetable' ? ` (the last one leaves at ${g.ground.lastDepLocal})`
+      : ` (usually about ${g.ground.lastDepLocal})`;
     return `You'd be out of the airport after the last ${what}${last}. Plan a night in ${g.city}.`;
   }
   if (g.overnightLikely) return `You'd arrive late. A night in ${g.city} is likely.`;

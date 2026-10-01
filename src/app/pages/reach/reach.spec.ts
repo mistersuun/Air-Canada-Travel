@@ -4,8 +4,11 @@ import { Router, provideRouter, withComponentInputBinding } from '@angular/route
 import { RouterTestingHarness } from '@angular/router/testing';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { CITIES_FETCH } from '../../places/city-index.service';
+import { GROUND_FETCH } from '../../places/ground-timetable.service';
 import { reachGateways } from '../../places/reach';
 import { FIXTURE_CITIES_FILE } from '../../places/testing/cities-fixture';
+import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
+import { decodeGround, setGroundTimetables } from '../../places/timetable';
 import { NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -15,7 +18,8 @@ import { TripsService } from '../../trips/trips.service';
 import { toUtcMs } from '../../utils/time';
 import { GatewayPage } from './gateway.page';
 import {
-  arrivalLine, backupItineraries, dayLabel, gatewayRow, groundDetail, groundTitle, lastTrainWarning, partOfDay, readReachParams,
+  arrivalLine, backupItineraries, dayLabel, gatewayRow, groundDetail, groundTimetableLines, groundTitle, lastTrainWarning, partOfDay,
+  readReachParams,
   reachQueryParams, startTripFromGateway,
 } from './reach-model';
 import { ReachPage } from './reach.page';
@@ -28,7 +32,10 @@ const reach = (over = {}) => reachGateways({
 });
 
 beforeEach(() => setScheduleSource(SEVILLE_ROUTES, SEVILLE_META));
-afterEach(() => resetScheduleSource());
+afterEach(() => {
+  resetScheduleSource();
+  setGroundTimetables(null);
+});
 
 describe('reach model', () => {
   it('reads the URL with defaults: a week out, home 5 days later at 22:00, the global hub', () => {
@@ -86,6 +93,44 @@ describe('reach model', () => {
     expect(dayLabel('2026-10-08')).toBe('Thu Oct 8');
   });
 
+  it('with a timetable: Scheduled ride, the train you would catch, trips that day, validity and the note', () => {
+    setGroundTimetables(decodeGround(structuredClone(FIXTURE_GROUND_FILE)));
+    const mad = reach().gateways.find(g => g.code === 'MAD')!;
+    expect(mad.ground.provenance).toBe('scheduled');
+    expect(gatewayRow(mad, '2026-10-08')).toMatchObject({ ground: 'Train 2h39', provenance: 'scheduled' });
+    // AC834 lands Fri 06:50, out at 08:20: the 10:00 (2h40) gets in at 12:40.
+    expect(arrivalLine(SEVILLE_PLACE, mad.arriveGoalUtc, 'Europe/Madrid')).toBe('Seville around midday, Fri Oct 9');
+    const next = { dateKey: '2026-10-09', hhmm: '10:00', rideMin: 160, sameDay: true };
+    expect(groundDetail(mad.ground, next)).toBe('2h39 · next 10:00, last 21:05');
+    expect(groundDetail(mad.ground, { ...next, dateKey: '2026-10-10', hhmm: '08:00', sameDay: false })).toBe('2h39 · next Sat 08:00');
+    expect(groundDetail(mad.ground)).toBe('2h39 · last 21:05');
+    expect(groundTimetableLines(mad.ground)).toEqual([
+      '4 Renfe trains on weekdays, 07:00 to 21:05',
+      'Timetable · Renfe · valid to Dec 12',
+      'Renfe trains only. Iryo and Ouigo also run this route.',
+    ]);
+    expect(lastTrainWarning({ ...mad, lastDepMissed: true, overnightLikely: true })).toContain('(the last one leaves at 21:05)');
+  });
+
+  it('timetable fallbacks: ended is Estimated with the end date; an empty day says not found', () => {
+    const ended = structuredClone(FIXTURE_GROUND_FILE);
+    ended.corridors['MAD-2510911'].out.validTo = '2026-10-08';
+    ended.corridors['MAD-2510911'].back.validTo = '2026-10-08';
+    setGroundTimetables(decodeGround(ended));
+    let mad = reach().gateways.find(g => g.code === 'MAD')!;
+    expect(mad.ground.provenance).toBe('estimated');
+    expect(groundDetail(mad.ground)).toBe('about 2h40 · trains roughly hourly');
+    expect(groundTimetableLines(mad.ground)).toEqual(['Timetable ends Oct 8, times estimated']);
+
+    const empty = structuredClone(FIXTURE_GROUND_FILE);
+    empty.corridors['MAD-2510911'].out.x = ['2026-10-09'];
+    setGroundTimetables(decodeGround(empty));
+    mad = reach().gateways.find(g => g.code === 'MAD')!;
+    expect(mad.ground.provenance).toBe('estimated');
+    expect(groundTimetableLines(mad.ground)[0]).toBe('Not found in our timetable data for Fri Oct 9');
+    expect(groundTimetableLines(mad.ground).join(' ')).not.toMatch(/no train/i);
+  });
+
   it('backups are the same-day best itinerary to each other gateway', () => {
     const { gateways } = reach();
     const mad = gateways.find(g => g.code === 'MAD')!;
@@ -94,7 +139,7 @@ describe('reach model', () => {
   });
 });
 
-function configure(store = new MemoryStorage()) {
+function configure(store = new MemoryStorage(), ground: unknown = null) {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([
@@ -107,6 +152,7 @@ function configure(store = new MemoryStorage()) {
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
       { provide: CITIES_FETCH, useValue: async () => FIXTURE_CITIES_FILE },
+      { provide: GROUND_FETCH, useValue: async () => structuredClone(ground) },
     ],
   });
 }
@@ -200,6 +246,39 @@ describe('GatewayPage', () => {
     expect(ground).toMatchObject({ mode: 'train', provenance: 'estimated', dateKey: '2026-10-09', estMinutes: 250 });
     expect(TestBed.inject(Router).url.split('?')[0]).toBe(`/trips/${trip.id}`);
     expect(TestBed.inject(Router).url).not.toContain('leg=');
+  });
+
+  it('with a timetable the train is Scheduled, with the next train after landing, trips that day and validity', async () => {
+    configure(new MemoryStorage(), FIXTURE_GROUND_FILE);
+    const h = await RouterTestingHarness.create();
+    await h.navigateByUrl('/reach/gn-2510911/MAD?dep=2026-10-08&home=2026-10-13T22:00');
+    await settle(h);
+    const el = h.routeNativeElement!;
+    const t = text(el);
+    expect(t).toContain('allow about 1h30 · Estimated');
+    expect(t).toContain('2h39 · next 10:00, last 21:05 · Scheduled');
+    expect([...el.querySelectorAll('[data-timetable]')].map(e => e.textContent!.trim())).toEqual([
+      '4 Renfe trains on weekdays, 07:00 to 21:05',
+      'Timetable · Renfe · valid to Dec 12',
+      'Renfe trains only. Iryo and Ouigo also run this route.',
+    ]);
+    expect(t).toContain('Seville around midday, Fri Oct 9');
+    expect(t).not.toMatch(/%|odds|chance/i);
+
+    [...el.querySelectorAll('button')].find(b => b.textContent!.includes('Start this trip'))!.click();
+    await settle(h);
+    const ground = TestBed.inject(TripsService).trips()[0].legs.find(l => l.kind === 'ground')!;
+    // The stored leg keeps its schema: Estimated door to door (exit + the timetable's ride).
+    expect(ground).toMatchObject({ provenance: 'estimated', estMinutes: 249 });
+  });
+
+  it('a missing timetable file keeps the Estimated train', async () => {
+    configure(new MemoryStorage(), null);
+    const h = await RouterTestingHarness.create();
+    await h.navigateByUrl('/reach/gn-2510911/MAD?dep=2026-10-08');
+    await settle(h);
+    expect(text(h.routeNativeElement!)).toContain('about 2h40 · trains roughly hourly · Estimated');
+    expect(h.routeNativeElement!.querySelectorAll('[data-timetable]').length).toBe(0);
   });
 
   it('"I found a train" opens the trip on the ground leg', async () => {

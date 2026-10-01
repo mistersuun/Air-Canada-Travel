@@ -8,10 +8,13 @@ import type { FlightInstance } from '../../utils/week';
 import { flightsOn } from '../../utils/week';
 import { aircraftName } from '../../utils/aircraft';
 import { airportName, airportTz, isHub } from '../../utils/airports';
-import { addDays, formatClock, formatDuration, formatKey, weekStartKey, weekKeys } from '../../utils/time';
+import { addDays, formatClock, formatDuration, formatKey, utcToLocal, weekStartKey, weekKeys } from '../../utils/time';
 import type { TimeFormat } from '../../state/prefs.service';
 import { flightSlug, matchSlug } from '../../ui/links';
 import { hm, hubDisplayName, itinKey, prettyFlight, shortDay, supOffset, tzDiffLabel } from '../../ui/format';
+import type { ScheduleFacts } from '../../trips/engine/facts';
+import { refDepUtc, refFromInstance, refsFromItinerary, sameRefs } from '../../trips/engine/legs';
+import { type FlightLeg, type FlightRef, type LoadNote, type Trip, instanceKey, isFinalStatus } from '../../trips/model';
 
 export type Pick = 'earliest' | 'nonstop' | 'fastest';
 export const PICKS: readonly Pick[] = ['earliest', 'nonstop', 'fastest'];
@@ -227,4 +230,137 @@ export function parseNights(v: unknown): number {
 export function roundTrip(out: Itinerary, ret: Itinerary | null): Itinerary[] {
   if (!ret) return [out];
   return ret.departUtc < out.departUtc ? [ret, out] : [out, ret];
+}
+
+// ── Trips v2 additions (g6): schedule facts, load notes, Add to trip ─────────
+
+/** 'Fri Oct 9'. */
+export function dayShort(key: string): string {
+  return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
+}
+
+export interface FactTile { label: string; value: string }
+export interface FactsView {
+  covered: boolean;
+  tiles: FactTile[];
+  /** Neutral holiday note ('Canadian Thanksgiving weekend (Mon Oct 12). Often busy, check loads.'). */
+  holiday: string | null;
+}
+
+/**
+ * "This day on this route": departures, the last one, aircraft and the next
+ * day, as plain counts and times (never odds). Outside coverage: no tiles.
+ */
+export function factsView(f: ScheduleFacts, holiday: string | null, fmt: TimeFormat = '24h'): FactsView {
+  if (!f.covered) return { covered: false, tiles: [], holiday };
+  const n = f.departures.length;
+  const times = f.departures.slice(0, 3).map(d => formatClock(d.depLocal, fmt)).join(', ') + (n > 3 ? ', …' : '');
+  const aircraft = f.aircraft.slice(0, 2).map(a => (a.count > 1 ? `${a.name} ×${a.count}` : a.name)).join(', ');
+  const next = f.nextDay;
+  return {
+    covered: true,
+    holiday,
+    tiles: [
+      { label: 'Departures', value: n ? `${n} · ${times}` : 'None found' },
+      { label: 'Last one', value: f.last ? `${prettyFlight(f.last.flightNumber)} ${formatClock(f.last.depLocal, fmt)}` : '—' },
+      { label: 'Aircraft', value: aircraft || '—' },
+      {
+        label: 'Next day',
+        value: !next.covered ? 'Unknown' : next.count ? `${next.count} departure${next.count === 1 ? '' : 's'}` : 'None found',
+      },
+    ],
+  };
+}
+
+/** 'just now', '25 min ago', '3h ago', '2 days ago'. */
+export function agoLabel(ms: number): string {
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
+export interface NoteRow {
+  id: string;
+  /** 'AC864 · 14 open, 9 listed' (or just the flight when no numbers were written). */
+  title: string;
+  /** 'You checked at 14:05 · 3h ago'. */
+  when: string;
+  text: string;
+  /** Open seats against the party: 'ok' (open ≥ party), 'short', or null when no open count was written. */
+  mark: 'ok' | 'short' | null;
+  /** Words for the mark (the badge is never colour alone). */
+  markLabel: string;
+}
+
+/** One load note as a row. Times are local at the flight's origin. */
+export function noteRow(n: LoadNote, partySize: number, nowMs: number, fmt: TimeFormat = '24h'): NoteRow {
+  const nums: string[] = [];
+  if (n.open !== null) nums.push(`${n.open} open`);
+  if (n.listed !== null) nums.push(`${n.listed} listed`);
+  const ms = Date.parse(n.at);
+  const local = Number.isFinite(ms) ? utcToLocal(ms, airportTz(n.origin)) : null;
+  const today = utcToLocal(nowMs, airportTz(n.origin)).dateKey;
+  const at = local ? `${local.dateKey !== today ? `${dayShort(local.dateKey)}, ` : ''}${formatClock(local.hhmm, fmt)}` : '';
+  const party = Math.max(1, partySize);
+  const mark = n.open === null ? null : n.open >= party ? 'ok' : 'short';
+  const who = party === 1 ? 'you' : `your ${party}`;
+  return {
+    id: n.id,
+    title: [prettyFlight(n.flightNumber), nums.join(', ')].filter(Boolean).join(' · '),
+    when: `You checked at ${at}${Number.isFinite(ms) ? ` · ${agoLabel(nowMs - ms)}` : ''}`,
+    text: n.text,
+    mark,
+    markLabel: mark === 'ok' ? `Open seats cover ${who}` : mark === 'short' ? `Fewer open seats than ${who}` : '',
+  };
+}
+
+/** A flight that can carry a note: one segment of the day's itineraries. */
+export interface NoteFlight { key: string; ref: FlightRef; label: string }
+
+/** The day's distinct segments ('AC864 · YUL 22:10 → LHR'), first-departure order. */
+export function noteFlights(its: readonly Itinerary[], fmt: TimeFormat = '24h'): NoteFlight[] {
+  const out = new Map<string, NoteFlight>();
+  for (const it of its) {
+    for (const leg of it.legs) {
+      if (!leg.flightNumber || leg.estimated) continue;
+      const ref = refFromInstance(leg);
+      const key = instanceKey(ref);
+      if (out.has(key)) continue;
+      out.set(key, { key, ref, label: `${prettyFlight(leg.flightNumber)} · ${leg.origin} ${formatClock(leg.depLocal, fmt)} → ${leg.dest}` });
+    }
+  }
+  return [...out.values()].sort((a, b) => refDepUtc(a.ref) - refDepUtc(b.ref));
+}
+
+/** Active trips whose dates cover the day (from the day before the outbound to the home-by date). */
+export function tripsCovering(trips: readonly Trip[], dateKey: string): Trip[] {
+  return trips.filter(t => !t.archived && dateKey >= addDays(t.outboundDate, -1) && dateKey <= t.homeBy.dateKey);
+}
+
+export type TripTarget =
+  | { kind: 'already'; legId: string }
+  | { kind: 'alternate'; legId: string; flight: string }
+  | { kind: 'leg'; role: FlightLeg['role'] };
+
+/**
+ * What "Add to trip" does with this itinerary: nothing when the trip already
+ * has it (as a leg or a backup); a backup of the open flight leg leaving the
+ * same airport the same day; else a new leg (outbound when the trip has no
+ * open outbound yet, onward otherwise).
+ */
+export function tripTarget(trip: Trip, it: Itinerary): TripTarget {
+  const refs = refsFromItinerary(it);
+  for (const l of trip.legs) {
+    if (l.kind !== 'flight') continue;
+    if (sameRefs(l.refs, refs) || l.alternates.some(a => sameRefs(a.refs, refs))) return { kind: 'already', legId: l.id };
+  }
+  const match = trip.legs.find((l): l is FlightLeg => l.kind === 'flight' && !isFinalStatus(l.status)
+    && l.refs[0]?.origin === it.origin && l.refs[0]?.dateKey === it.dateKey);
+  if (match) return { kind: 'alternate', legId: match.id, flight: match.refs.map(r => prettyFlight(r.flightNumber)).join(' + ') };
+  const hasOutbound = trip.legs.some(l => l.kind === 'flight' && l.role === 'outbound' && l.status !== 'abandoned');
+  return { kind: 'leg', role: hasOutbound ? 'onward' : 'outbound' };
 }

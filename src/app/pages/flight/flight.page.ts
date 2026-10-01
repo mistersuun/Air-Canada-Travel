@@ -13,11 +13,20 @@ import { nextFlightDate } from '../../utils/week';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
 import { WeekStripComponent } from '../../ui/week-strip.component';
-import { calendarPath, destPath, flightPath, matchSlug } from '../../ui/links';
+import { calendarPath, destPath, flightPath, matchSlug, tripPath } from '../../ui/links';
+import { GlassSheetComponent } from '../../ui/glass-sheet.component';
+import { placeFromDestination } from '../../places/place';
+import { refFromInstance } from '../../trips/engine/legs';
+import { type Trip, instanceKey } from '../../trips/model';
+import { TripsService } from '../../trips/trips.service';
+import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component';
 import { countdown, isOutside, itinKey, relativeDay, shortDay } from '../../ui/format';
 import {
-  backupGroups, choose, optionRow, parseNights, pickOf, roundTrip, ticketModel, type Pick,
+  backupGroups, choose, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering,
+  type Pick,
 } from './flight-model';
+import { FactsCardComponent } from './facts-card.component';
+import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
 import { OptionRowComponent } from './option-row.component';
 import { ReturnPanelComponent } from './return-panel.component';
@@ -41,6 +50,7 @@ export const OPTIONS_SHOWN = 4;
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
+    FactsCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -87,6 +97,11 @@ export const OPTIONS_SHOWN = 4;
                 </button>
               }
               <a class="ui-btn ui-btn--ghost" [routerLink]="calendarLink()" [queryParams]="calendarParams()">Change dates</a>
+              @if (tripAction(); as a) {
+                <button type="button" class="ui-btn ui-btn--ghost" data-add-trip [disabled]="a.disabled" (click)="addToTrip()">
+                  <app-icon name="suitcase" [size]="17" /> {{ a.label }}
+                </button>
+              }
             </div>
           } @else {
             <div class="ui-card state">
@@ -102,6 +117,14 @@ export const OPTIONS_SHOWN = 4;
               }
             </div>
           }
+
+          <div class="adds">
+            <app-facts-card [origin]="hub()" [dest]="dest()" [dateKey]="dateKey()" [timeFormat]="state.timeFormat()" />
+            @if (noteFlights().length) {
+              <app-load-notes [flights]="noteFlights()" [selected]="noteKey()" [partySize]="partySize()" [timeFormat]="state.timeFormat()" />
+            }
+            @for (p of prompts(); track p.key) { <app-outcome-prompt [prompt]="p" /> }
+          </div>
         </div>
 
         <div class="right">
@@ -153,6 +176,15 @@ export const OPTIONS_SHOWN = 4;
               </div>
             </section>
           }
+          @if (pickerOpen()) {
+            <app-glass-sheet title="Add to which trip?" [open]="true" (closed)="pickerOpen.set(false)">
+              <div class="pick">
+                @for (t of coveringTrips(); track t.id) {
+                  <button type="button" class="ui-btn ui-btn--ghost ui-btn--block" data-pick-trip (click)="addTo(t)">{{ t.name }}</button>
+                }
+              </div>
+            </app-glass-sheet>
+          }
           <p class="foot ui-sub">Published schedules only, times local at each airport. Not seat availability: verify on aircanada.com.</p>
         </div>
       </div>
@@ -184,6 +216,8 @@ export const OPTIONS_SHOWN = 4;
     .none { margin: 0; padding: 14px 0; font-size: 13.5px; color: var(--ink-2); }
     .more { margin-top: 10px; font-size: 13px; }
     .ret { padding: 16px; }
+    .adds { display: grid; gap: 14px; margin-top: 18px; }
+    .pick { display: grid; gap: 8px; }
     .foot { margin: 22px 0 0; font-size: 12px; text-align: center; }
 
     @media (min-width: 720px) {
@@ -207,6 +241,7 @@ export class FlightPage {
   private readonly router = inject(Router);
   private readonly sharer = inject(ShareService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly trips = inject(TripsService);
 
   readonly code = input.required<string>();
   readonly date = input<string>();
@@ -218,6 +253,7 @@ export class FlightPage {
 
   protected readonly allOthers = signal(false);
   protected readonly allReturns = signal(false);
+  protected readonly pickerOpen = signal(false);
   protected readonly returnPick = signal<Itinerary | null>(null);
   /** The ticket column sticks only while it fits in the viewport (else its bottom could never be reached). */
   protected readonly leftFits = signal(true);
@@ -323,6 +359,44 @@ export class FlightPage {
     return p;
   });
 
+  // ── Trips v2 (g6): load notes, outcome prompts, Add to trip ────────────────
+
+  /** The day's flights that can carry a load note (every segment of the listed itineraries). */
+  protected readonly noteFlights = computed(() => noteFlights(this.itineraries(), this.state.timeFormat()));
+  /** The shown flight's first segment, pre-selected in the note sheet. */
+  protected readonly noteKey = computed(() => {
+    const it = this.current();
+    return it?.legs[0]?.flightNumber ? instanceKey(refFromInstance(it.legs[0])) : null;
+  });
+  protected readonly coveringTrips = computed(() => tripsCovering(this.trips.activeTrips(), this.dateKey()));
+  /** Party size for the notes' open-seat check: the trip holding one of these flights, else a trip covering the day, else 1. */
+  protected readonly partySize = computed(() => {
+    const keys = new Set(this.noteFlights().map(f => f.key));
+    const holding = this.trips.activeTrips().find(t => t.legs.some(l => l.kind === 'flight' && l.refs.some(r => keys.has(instanceKey(r)))));
+    return (holding ?? this.coveringTrips()[0])?.party.count ?? 1;
+  });
+  /** Pending "How did it go?" prompts for this page's flights. */
+  protected readonly prompts = computed(() => {
+    const keys = new Set(this.noteFlights().map(f => f.key));
+    const hub = this.hub();
+    const dest = this.dest();
+    const day = this.dateKey();
+    return this.trips.pendingOutcomes().filter(p =>
+      keys.has(p.key) || (p.ref.origin === hub && p.ref.dest === dest && p.ref.dateKey === day));
+  });
+  /** The "Add to trip" button: Start a trip, Add to <trip>, In <trip> (already there), or Add to trip (a picker). */
+  protected readonly tripAction = computed<{ label: string; disabled: boolean } | null>(() => {
+    const it = this.current();
+    if (!it || it.estimated) return null;
+    const list = this.coveringTrips();
+    if (!list.length) return { label: 'Start a trip', disabled: this.trips.readOnly() };
+    if (list.length > 1) return { label: 'Add to trip', disabled: this.trips.readOnly() };
+    const t = list[0];
+    return tripTarget(t, it).kind === 'already'
+      ? { label: `In ${t.name}`, disabled: true }
+      : { label: `Add to ${t.name}`, disabled: this.trips.readOnly() };
+  });
+
   protected readonly calendarLink = computed(() => calendarPath(this.dest()));
   protected readonly calendarParams = computed<Params>(() => ({ ...this.state.globalParams(), dep: this.dateKey() }));
 
@@ -418,6 +492,47 @@ export class FlightPage {
     this.state.jumpToCoverage(target);
     if (target) this.goDate(target);
     else void this.router.navigate(destPath(this.dest()), { queryParams: this.state.globalParams() });
+  }
+
+  addToTrip(): void {
+    const it = this.current();
+    if (!it) return;
+    const list = this.coveringTrips();
+    if (list.length > 1) {
+      this.pickerOpen.set(true);
+      return;
+    }
+    if (list.length === 1) {
+      this.addTo(list[0]);
+      return;
+    }
+    const trip = this.trips.create({
+      goal: placeFromDestination(this.dest()),
+      fromHub: this.hub(),
+      outboundDate: it.dateKey,
+      homeBy: { dateKey: addDays(it.dateKey, this.nightCount()), hhmm: '22:00' },
+    });
+    this.trips.addFlightLeg(trip.id, it, 'outbound');
+    void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() });
+  }
+
+  /** Adds the shown itinerary to a trip: as a backup of the leg leaving the same day, else as a new leg. */
+  addTo(trip: Trip): void {
+    this.pickerOpen.set(false);
+    const it = this.current();
+    if (!it) return;
+    const target = tripTarget(trip, it);
+    const flights = it.legs.map(l => l.flightNumber).join(' + ');
+    const open = { label: 'Open', run: () => void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() }) };
+    if (target.kind === 'already') {
+      this.state.flash(`${flights} is already in ${trip.name}`, open);
+    } else if (target.kind === 'alternate') {
+      this.trips.addAlternate(trip.id, target.legId, it);
+      this.state.flash(`Added ${flights} to ${trip.name} as a backup for ${target.flight}`, open);
+    } else {
+      this.trips.addFlightLeg(trip.id, it, target.role);
+      this.state.flash(`Added ${flights} to ${trip.name}`, open);
+    }
   }
 
   exportIcs(round: boolean): void {

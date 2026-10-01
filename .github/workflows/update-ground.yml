@@ -1,0 +1,97 @@
+name: Update Ground Timetables
+
+# Rebuilds public/data/ground.json (train and bus timetables for the ground
+# corridors) from the open GTFS feeds listed in scripts/build-ground.py.
+# Monthly is enough for most feeds, but gtfs.de (Frankfurt-Cologne) only
+# publishes 30 days ahead, and most feeds roll over at the mid-December
+# timetable change. Without a rebuild the app falls back to Estimated times.
+
+on:
+  # Schedule DISABLED while the feat/overhaul rework is in flight (same reason
+  # as update-schedules.yml). Re-enable once the overhaul has merged.
+  # schedule:
+  #   # 1st and 15th of the month at 05:00 UTC
+  #   - cron: '0 5 1,15 * *'
+  workflow_dispatch:
+    inputs:
+      include:
+        description: 'Opt-in feeds (comma-separated): cp, trenitalia, swiss'
+        type: string
+        default: ''
+
+concurrency:
+  group: update-ground
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Builder unit tests
+        run: |
+          pip install pytest==9.1.1
+          python -m pytest -q scripts/tests/test_build_ground.py
+
+      - name: Cache GTFS downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/routes-ground
+          key: routes-ground-${{ github.run_id }}
+          restore-keys: routes-ground-
+
+      - name: Build ground.json
+        # Fails (and commits nothing) when a pinned stop disappears from a feed.
+        # Leaves the file untouched when only dates would change.
+        env:
+          INCLUDE: ${{ inputs.include }}
+        run: python3 scripts/build-ground.py ${INCLUDE:+--include "$INCLUDE"}
+
+      - name: Diff summary
+        run: |
+          {
+            echo '### ground.json diff'
+            echo '```'
+            git diff --stat -- public/data/ground.json || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: App tests and build
+        run: |
+          npm ci
+          npx vitest run
+          npx ng build
+
+      - name: Commit and push if changed
+        run: |
+          git diff --quiet -- public/data/ground.json && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data/ground.json
+          git commit -m "chore: update ground timetables from open GTFS feeds"
+          git push
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Ground timetable update failed ($(date -u +%Y-%m-%d))" \
+            --body "The update-ground workflow failed and nothing was committed. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

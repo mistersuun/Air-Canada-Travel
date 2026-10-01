@@ -22,6 +22,10 @@ A location is written only when all 12 months have >= 3 years of data.
 
 Usage:
   python3 scripts/build-climate.py [--out PATH] [--cache DIR] [--limit N] [--sleep S]
+                                   [--first LIS,FLL] [--offline]
+
+--first fetches those codes before the rest; --offline makes no request and
+writes every location already complete in the cache (a partial file).
 
 Stdlib only. The pure functions (parse, aggregate, build) are unit-tested in
 scripts/tests/test_build_climate.py with canned responses.
@@ -218,6 +222,18 @@ def write_file(path: pathlib.Path, data: dict) -> int:
 
 # ── Driver ──────────────────────────────────────────────────────────────────
 
+def order_first(dests: list[dict], first: str) -> list[dict]:
+    """The listed codes first (in that order), then the rest in file order."""
+    want = [c.strip().upper() for c in first.split(",") if c.strip()]
+    rank = {c: i for i, c in enumerate(want)}
+    return sorted(dests, key=lambda d: rank.get(d["code"], len(want)))
+
+
+def offline_get(url: str) -> dict:
+    """--offline: a cache miss is just missing data (the location is skipped)."""
+    return {"error": True, "reason": "offline: not in cache"}
+
+
 def run(dests: list[dict], cache: pathlib.Path, get: Callable[[str], dict] = http_get,
         pause: Callable[[], None] = lambda: None, log: Callable[[str], None] = print) -> tuple[dict, bool]:
     """Builds normals for every destination it can. Returns (codes, stopped_on_quota)."""
@@ -244,12 +260,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cache", type=pathlib.Path, default=CACHE_DEFAULT)
     ap.add_argument("--limit", type=int, default=0, help="only the first N destinations (testing)")
     ap.add_argument("--sleep", type=float, default=0.8, help="seconds between API calls")
+    ap.add_argument("--first", default="", help="comma-separated codes to fetch first")
+    ap.add_argument("--offline", action="store_true", help="cache only: no requests, write what is complete")
     args = ap.parse_args(argv)
 
-    dests = parse_destinations(DESTINATIONS_TS.read_text(encoding="utf-8"))
+    dests = order_first(parse_destinations(DESTINATIONS_TS.read_text(encoding="utf-8")), args.first)
     if args.limit:
         dests = dests[: args.limit]
-    codes, stopped = run(dests, args.cache, pause=lambda: time.sleep(args.sleep))
+    get = offline_get if args.offline else http_get
+    codes, stopped = run(dests, args.cache, get=get, pause=lambda: None if args.offline else time.sleep(args.sleep))
     size = write_file(args.out, build_file(codes, len(dests)))
     print(f"wrote {args.out} ({size} bytes): {len(codes)}/{len(dests)} locations"
           + (" (partial: API limit reached)" if stopped else ""))

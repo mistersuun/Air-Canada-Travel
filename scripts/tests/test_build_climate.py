@@ -169,3 +169,12 @@ def test_committed_climate_json_budget_and_shape():
         for k in ("tmax", "tmin", "precip", "wet"):
             assert len(c[k]) == 12, (code, k)
         assert all(lo <= hi for lo, hi in zip(c["tmin"], c["tmax"])), code
+
+
+def test_order_first_and_offline(tmp_path):
+    dests = [{"code": c, "lat": 0, "lng": 0, "type": "Sun"} for c in ("AAA", "BBB", "CCC")]
+    assert [d["code"] for d in bc.order_first(dests, "ccc, BBB")] == ["CCC", "BBB", "AAA"]
+    bc.run([DEST], tmp_path, get=lambda url: canned(), log=lambda *_: None)
+    other = {"code": "OPO", "lat": 41.24, "lng": -8.68, "type": "City"}
+    codes, stopped = bc.run([DEST, other], tmp_path, get=bc.offline_get, log=lambda *_: None)
+    assert not stopped and list(codes) == ["LIS"]

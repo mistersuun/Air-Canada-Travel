@@ -39,3 +39,10 @@
   [headers.values]
     Cache-Control = "no-cache"
     Content-Type = "application/manifest+json"
+
+# Destination photos: file names are stable, so cache for a week and let the
+# service worker (dest-photos group) revalidate in the background.
+[[headers]]
+  for = "/img/dest/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=2592000"

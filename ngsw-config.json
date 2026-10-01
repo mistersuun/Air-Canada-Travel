@@ -27,6 +27,17 @@
       }
     },
     {
+      "name": "dest-photos",
+      "installMode": "lazy",
+      "updateMode": "lazy",
+      "resources": {
+        "files": [
+          "/img/dest/*.webp",
+          "/img/dest/credits.json"
+        ]
+      }
+    },
+    {
       "name": "assets",
       "installMode": "lazy",
       "updateMode": "prefetch",

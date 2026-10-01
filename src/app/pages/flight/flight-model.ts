@@ -15,6 +15,7 @@ import { hm, hubDisplayName, itinKey, prettyFlight, shortDay, supOffset, tzDiffL
 import type { ScheduleFacts } from '../../trips/engine/facts';
 import { refDepUtc, refFromInstance, refsFromItinerary, sameRefs } from '../../trips/engine/legs';
 import { type FlightLeg, type FlightRef, type LoadNote, type Trip, instanceKey, isFinalStatus } from '../../trips/model';
+import { gatewaysNear } from '../../places/reach';
 
 export type Pick = 'earliest' | 'nonstop' | 'fastest';
 export const PICKS: readonly Pick[] = ['earliest', 'nonstop', 'fastest'];
@@ -334,6 +335,46 @@ export function noteFlights(its: readonly Itinerary[], fmt: TimeFormat = '24h'):
 /** Active trips whose dates cover the day (from the day before the outbound to the home-by date). */
 export function tripsCovering(trips: readonly Trip[], dateKey: string): Trip[] {
   return trips.filter(t => !t.archived && dateKey >= addDays(t.outboundDate, -1) && dateKey <= t.homeBy.dateKey);
+}
+
+/**
+ * The airports on the trip's far side: every leg endpoint (flights, their
+ * backups, ground legs with an airport code), the goal's own AC airport and
+ * the AC airports near the goal. Home (fromHub, homeAirport) is left out.
+ */
+export function tripAwayAirports(trip: Trip): Set<string> {
+  const out = new Set<string>();
+  for (const l of trip.legs) {
+    if (l.kind === 'flight') {
+      for (const r of [...l.refs, ...l.alternates.flatMap(a => a.refs)]) out.add(r.origin).add(r.dest);
+    } else {
+      if (l.from.code) out.add(l.from.code);
+      if (l.to.code) out.add(l.to.code);
+    }
+  }
+  if (trip.goal.acCode) out.add(trip.goal.acCode);
+  for (const g of gatewaysNear(trip.goal)) out.add(g.code);
+  out.delete(trip.fromHub);
+  out.delete(trip.homeAirport);
+  return out;
+}
+
+/**
+ * True when the itinerary belongs to the trip's journey: it goes to the trip's
+ * side (a leg endpoint or an airport near the goal), or it comes home (to the
+ * home hub) from there. A flight to an unrelated place on the trip's dates
+ * does not connect.
+ */
+export function tripConnects(trip: Trip, it: { origin: string; dest: string }): boolean {
+  const away = tripAwayAirports(trip);
+  if (away.has(it.dest)) return true;
+  const home = it.dest === trip.fromHub || it.dest === trip.homeAirport;
+  return home && away.has(it.origin);
+}
+
+/** Active trips covering the itinerary's day that it connects to (see tripConnects). */
+export function tripsFor(trips: readonly Trip[], it: { origin: string; dest: string; dateKey: string }): Trip[] {
+  return tripsCovering(trips, it.dateKey).filter(t => tripConnects(t, it));
 }
 
 export type TripTarget =

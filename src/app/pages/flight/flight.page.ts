@@ -22,7 +22,7 @@ import { TripsService } from '../../trips/trips.service';
 import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component';
 import { countdown, isOutside, itinKey, relativeDay, shortDay } from '../../ui/format';
 import {
-  backupGroups, choose, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering,
+  backupGroups, choose, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering, tripsFor,
   type Pick,
 } from './flight-model';
 import { FactsCardComponent } from './facts-card.component';
@@ -179,7 +179,7 @@ export const OPTIONS_SHOWN = 4;
           @if (pickerOpen()) {
             <app-glass-sheet title="Add to which trip?" [open]="true" (closed)="pickerOpen.set(false)">
               <div class="pick">
-                @for (t of coveringTrips(); track t.id) {
+                @for (t of connectedTrips(); track t.id) {
                   <button type="button" class="ui-btn ui-btn--ghost ui-btn--block" data-pick-trip (click)="addTo(t)">{{ t.name }}</button>
                 }
               </div>
@@ -369,6 +369,11 @@ export class FlightPage {
     return it?.legs[0]?.flightNumber ? instanceKey(refFromInstance(it.legs[0])) : null;
   });
   protected readonly coveringTrips = computed(() => tripsCovering(this.trips.activeTrips(), this.dateKey()));
+  /** Trips on these dates that the shown flight connects to (goes to the trip's side, or comes home from it). */
+  protected readonly connectedTrips = computed(() => {
+    const it = this.current();
+    return it ? tripsFor(this.trips.activeTrips(), it) : [];
+  });
   /** Party size for the notes' open-seat check: the trip holding one of these flights, else a trip covering the day, else 1. */
   protected readonly partySize = computed(() => {
     const keys = new Set(this.noteFlights().map(f => f.key));
@@ -384,11 +389,14 @@ export class FlightPage {
     return this.trips.pendingOutcomes().filter(p =>
       keys.has(p.key) || (p.ref.origin === hub && p.ref.dest === dest && p.ref.dateKey === day));
   });
-  /** The "Add to trip" button: Start a trip, Add to <trip>, In <trip> (already there), or Add to trip (a picker). */
+  /**
+   * The "Add to trip" button: Start a trip, Add to <trip>, In <trip> (already there), or Add to trip (a picker).
+   * Only trips the flight connects to are offered; a flight to an unrelated place starts a new trip.
+   */
   protected readonly tripAction = computed<{ label: string; disabled: boolean } | null>(() => {
     const it = this.current();
     if (!it || it.estimated) return null;
-    const list = this.coveringTrips();
+    const list = this.connectedTrips();
     if (!list.length) return { label: 'Start a trip', disabled: this.trips.readOnly() };
     if (list.length > 1) return { label: 'Add to trip', disabled: this.trips.readOnly() };
     const t = list[0];
@@ -497,7 +505,7 @@ export class FlightPage {
   addToTrip(): void {
     const it = this.current();
     if (!it) return;
-    const list = this.coveringTrips();
+    const list = this.connectedTrips();
     if (list.length > 1) {
       this.pickerOpen.set(true);
       return;

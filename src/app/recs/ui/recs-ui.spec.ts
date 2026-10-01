@@ -16,7 +16,7 @@ import { PROFILE_STORAGE, ProfileService } from '../profile.service';
 import { RecsService, tripCodes } from '../recs.service';
 import { CLIMATE_FIXTURE } from '../testing/climate-fixture';
 import { RECS_META, RECS_NOW, RECS_PROFILE, RECS_ROUTES } from '../testing/recs-fixture';
-import { ForYouComponent, FOR_YOU_LINE } from './for-you.component';
+import { ForYouComponent, FOR_YOU_LINE, TELL_KEY, wideCards } from './for-you.component';
 import { cardsFor, splitGroupTitle, tagged, whyTexts } from './rec-card.component';
 import { SettingsProfileBodyComponent as SettingsProfileComponent } from './settings-profile-body.component';
 import { TripIdeasComponent } from './trip-ideas.component';
@@ -91,6 +91,35 @@ describe('rec card helpers', () => {
   });
 });
 
+describe('For you desktop layout (wideCards)', () => {
+  const rec = (id: string, code = 'LGA'): Recommendation => ({
+    id, kind: 'holiday', code, placeId: null, title: code, out: null, back: null, lines: [], weather: null,
+    reason: [], link: { path: ['/to', code], query: {} }, rank: 1,
+  });
+  const g = (id: string, n: number) => ({ id, title: id, aside: null, items: Array.from({ length: n }, (_, i) => rec(`${id}:${i}`, `C${i}`)) });
+
+  it('widens a lone long-weekend card so it does not sit next to an empty column', () => {
+    // One long weekend, then the full-width "More for you" heading.
+    expect([...wideCards([g('lw:a', 2), g('more', 2)], false)]).toEqual(['lw:a']);
+    // Long weekend alone in the list.
+    expect([...wideCards([g('lw:a', 2)], false)]).toEqual(['lw:a']);
+  });
+
+  it('widens nothing when every row is full', () => {
+    expect(wideCards([g('lw:a', 2), g('season', 1)], false).size).toBe(0);
+    expect(wideCards([g('lw:a', 2), g('lw:b', 1), g('more', 2)], false).size).toBe(0);
+  });
+
+  it('picks a card with an even number of cards before it: a long weekend, then one without a photo', () => {
+    // [lw:a, lw:b, season:0] → lw:a (index 0), the rest fill the next row.
+    expect([...wideCards([g('lw:a', 1), g('lw:b', 1), g('season', 1)], false)]).toEqual(['lw:a']);
+    // [season:0 (photo), season:1 (photo), more…] odd run in "more": its first card.
+    expect([...wideCards([g('season', 2), g('more', 3)], false)]).toEqual(['more:0']);
+    // Season cards carry a photo: the "Tell us" card takes the wide slot instead.
+    expect([...wideCards([g('season', 2)], true)]).toEqual([TELL_KEY]);
+  });
+});
+
 describe('ForYouComponent', () => {
   beforeEach(() => setScheduleSource(RECS_ROUTES, RECS_META));
   afterEach(() => {
@@ -130,6 +159,13 @@ describe('ForYouComponent', () => {
 
     expect(el.querySelector('[data-weather-credit]')).not.toBeNull();
     expect(el.querySelector('[data-tell]')).toBeNull();
+
+    // Desktop: no card left alone next to an empty column.
+    const cards = [...el.querySelectorAll('.grid > app-rec-card, .grid > .tell')];
+    const wide = cards.filter(c => c.classList.contains('wide'));
+    const before = cards.indexOf(wide[0]);
+    expect(wide.length).toBe(cards.length % 2);
+    if (wide.length) expect(before % 2).toBe(0);
     expect(el.textContent).not.toMatch(/%|odds|chance of|likely/i);
   });
 

@@ -40,7 +40,7 @@ describe('today model (Seville fixture)', () => {
   });
 
   it('banner: the travel day at 16:40, nothing the day before', () => {
-    expect(bannerText([sevilleTrip()], AT_1640, '24h')).toEqual({ title: 'Today · Montréal → Madrid', detail: 'AC834 17:55 · Listed' });
+    expect(bannerText([sevilleTrip()], AT_1640, '24h')).toEqual({ title: 'Today · Montréal → Madrid', detail: 'AC834 17:55 YUL time · Listed' });
     expect(bannerText([sevilleTrip()], AT_1640 - 86_400_000, '24h')).toBeNull();
     expect(bannerText([{ ...sevilleTrip(), archived: true }], AT_1640, '24h')).toBeNull();
   });
@@ -66,7 +66,7 @@ describe('today model (Seville fixture)', () => {
     expect(v.time).toBe('17:55');
     expect(v.status).toBe('listed');
     expect(v.sub).toBe('AC834 · A330-300 · leaves in 1h15');
-    expect(v.note).toEqual({ time: '16:20', text: 'Gate 52, 9 on the list' });
+    expect(v.note).toEqual({ time: '16:20 YUL time', text: 'Gate 52, 9 on the list' });
     expect(v.left.map(i => [i.title, i.done, i.detail])).toEqual([
       ['Listed for AC834', true, null],
       ['Check in for AC834', false, "Before your pass's cutoff"],

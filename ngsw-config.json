@@ -23,6 +23,7 @@
       "resources": {
         "files": [
           "/data/schedules.json",
+          "/data/route-network.json",
           "/data/land-110m.json"
         ]
       }

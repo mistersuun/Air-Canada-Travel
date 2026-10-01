@@ -3,6 +3,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { PhotoService } from '../../state/photo.service';
@@ -207,6 +209,26 @@ describe('DestinationPage', () => {
     expect(items('.dep')).toHaveLength(0);
     el.querySelector<HTMLButtonElement>('.dep .empty .ui-link')!.click();
     expect(state.showConnections()).toBe(true);
+  });
+
+  it('says a route-only pair is flown with times not in our data, Unknown tag and a link out', async () => {
+    setRouteNetworkSource(ROUTE_NETWORK_FIXTURE);
+    try {
+      await render('BOS', s => {
+        s.setHub('YHZ');
+        s.setShowConnections(false);
+      });
+      const notice = text('.notice');
+      expect(notice).toContain('Flies this route · times not in our data.');
+      expect(notice).toContain('Air Canada Express');
+      expect(el.querySelector('.notice app-provenance-tag')?.getAttribute('data-provenance')).toBe('unknown');
+      expect(text('.notice app-provenance-tag')).toBe('Unknown');
+      expect(el.querySelector<HTMLAnchorElement>('.notice a.ui-btn')!.href).toContain('aircanada.com');
+      expect(text('.dep .empty')).toContain('Flies this route · times not in our data.');
+      expect(notice).not.toMatch(/%|no flight|Not served|Connections only/i);
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 
   it('follows ?tab= for the mobile seg, and writes it back with replaceUrl', async () => {

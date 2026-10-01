@@ -9,7 +9,11 @@
  *     hub-to-hub legs at all (meta.hubToHub false, e.g. a scrape run with
  *     --skip-domestic), an ESTIMATED leg from HUB_FLIGHTS: flightNumber null,
  *     aircraft null, estimated true. With the domestic legs published, a
- *     missing pair (YHZ-YOW) has no nonstop and is never invented.
+ *     missing hub pair is never invented. That does NOT mean it has no
+ *     nonstop: the Vacations PDFs leave out some Air Canada Express hub legs
+ *     (YHZ-YOW flies daily). Such pairs are listed in the route network
+ *     (data/route-network.ts) with no times, and the UI says so; this
+ *     engine only connects through legs with published times.
  * Layovers are computed on UTC instants (each airport's zone), so YVR→YUL→LHR
  * is no longer off by three hours. Itineraries keep
  * one option per reachable onward flight (fed by the latest possible first
@@ -191,7 +195,9 @@ export function estimatedInstance(origin: string, dest: string, dateKey: string,
 
 /**
  * Estimated hub legs are allowed only when the data has no published
- * hub-to-hub legs (meta.hubToHub is not true).
+ * hub-to-hub legs (meta.hubToHub is not true). When it does, a missing hub
+ * pair is simply not in our data (it may still be flown, e.g. YHZ-YOW by
+ * Air Canada Express): no leg is invented for it.
  */
 export function estimatesAllowed(): boolean {
   return getSchedulesMeta()?.hubToHub !== true;

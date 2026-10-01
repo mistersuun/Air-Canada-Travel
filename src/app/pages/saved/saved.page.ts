@@ -12,6 +12,8 @@ import { directItinerary } from '../../utils/connections';
 import {
   cardMeta, directDots, footerDays, heroMeta, rowMeta, starredDots, upcoming, watchingMeta, type UpcomingItem,
 } from './saved-model';
+import { ROUTE_ONLY_NOTE } from '../../data/route-network';
+import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
 
 export type SavedTab = 'upcoming' | 'watching';
 
@@ -29,7 +31,7 @@ const TABS: readonly SegOption[] = [
 @Component({
   selector: 'app-saved-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, SegComponent, PhotoCardComponent, DestRowComponent],
+  imports: [RouterLink, IconComponent, SegComponent, PhotoCardComponent, DestRowComponent, ProvenanceTagComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page sv">
@@ -71,9 +73,12 @@ const TABS: readonly SegOption[] = [
               <app-dest-row [code]="r.u.code" [small]="r.u.code" [meta]="r.meta" [dots]="r.dots" [link]="destPath(r.u.code)" />
             }
             @for (n of up().rest; track n.code) {
-              <app-dest-row [code]="n.code" [small]="n.code" [meta]="n.country" [link]="destPath(n.code)">
+              <app-dest-row [code]="n.code" [small]="n.code" [meta]="n.routeOnly ? n.country + ' · ' + routeOnlyNote : n.country"
+                            [link]="destPath(n.code)">
                 @if (n.via) {
                   <span trailing class="ui-tag ui-tag--amber">Via {{ n.via }}</span>
+                } @else if (n.routeOnly) {
+                  <app-provenance-tag trailing value="unknown" />
                 } @else {
                   <span trailing class="ui-tag ui-tag--neutral">No flights published</span>
                 }
@@ -151,6 +156,7 @@ export class SavedPage {
 
   protected readonly tabs = TABS;
   protected readonly destPath = destPath;
+  protected readonly routeOnlyNote = ROUTE_ONLY_NOTE;
   protected readonly calendarPath = calendarPath;
   protected readonly heroMeta = heroMeta;
   protected readonly cardMeta = cardMeta;

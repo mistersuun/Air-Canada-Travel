@@ -1,8 +1,11 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { routeNetworkCredit } from '../../data/route-network';
+import { formatKey, isDateKey } from '../../utils/time';
 
 /**
- * Settings "Data credits": where city search and schedules come from, with
- * the GeoNames CC BY 4.0 attribution the city index requires. Styled like
+ * Settings "Data credits": where city search, schedules and the route list
+ * come from, with the GeoNames CC BY 4.0 and Wikipedia CC BY-SA 4.0
+ * attributions those files require. Styled like
  * the Settings "Photo credits" group next to it.
  */
 @Component({
@@ -18,6 +21,9 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
         </li>
         <li>
           <b>Schedules</b>&ngsp;<a href="https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly" target="_blank" rel="noopener">Air Canada Vacations 'Where We Fly'</a> (published schedules, not seat availability).
+        </li>
+        <li data-route-list>
+          <b>Route list</b>&ngsp;<a href="https://en.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a> airport articles ("Airlines and destinations", Wikipedia contributors), <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener license">CC BY-SA 4.0</a>, with airport details from <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a> (public domain). Says a route is flown, not when; check times on aircanada.com.@if (routeListChecked) {&ngsp;Checked {{ routeListChecked }}.}
         </li>
         <li>
           <b>Onward travel</b>&ngsp;Train and bus times are our estimates from public timetables, not bookings. Check before you go.
@@ -39,4 +45,12 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
     .cr a { color: var(--blue); overflow-wrap: anywhere; }
   `],
 })
-export class DataCreditsComponent {}
+export class DataCreditsComponent {
+  /** 'Oct 1, 2026': when the route list was last built (null when it is not loaded). */
+  protected readonly routeListChecked = checkedLabel(routeNetworkCredit().builtAt);
+}
+
+function checkedLabel(builtAt: string | null): string | null {
+  const key = builtAt?.slice(0, 10);
+  return key && isDateKey(key) ? formatKey(key, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
+}

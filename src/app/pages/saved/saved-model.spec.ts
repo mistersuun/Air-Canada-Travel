@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getCoverage, resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import {
   cardMeta, directDots, footerDays, heroMeta, nextDeparture, routeEndsOn, rowMeta, starredDots, upcoming, viaHub,
   watchingMeta,
@@ -44,6 +46,17 @@ describe('saved-model', () => {
     const yhz = upcoming('YHZ', ['LHR'], TODAY, NOW, getCoverage('YHZ'));
     expect(yhz.items).toEqual([]);
     expect(yhz.rest).toEqual([{ code: 'LHR', city: 'London', country: 'United Kingdom', via: 'YYZ' }]);
+  });
+
+  it('marks favourites the network lists but the schedules do not', () => {
+    setRouteNetworkSource(ROUTE_NETWORK_FIXTURE);
+    try {
+      const { rest } = upcoming('YHZ', ['BOS', 'NRT'], TODAY, NOW, getCoverage('YHZ'));
+      expect(rest.find(r => r.code === 'BOS')!.routeOnly).toBe(true);
+      expect(rest.find(r => r.code === 'NRT')!.routeOnly).toBeUndefined();
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 
   it('formats the card, footer and row lines', () => {

@@ -57,12 +57,20 @@ jobs:
           ALLOW_ROUTE_DROP: ${{ inputs.allow_route_drop && '--allow-route-drop' || '' }}
         run: python3 scripts/fetch-schedules.py $ALLOW_ROUTE_DROP
 
+      - name: Fetch route network (Wikipedia + OurAirports, no times)
+        # Which Air Canada / Express / Rouge routes are flown from the hubs, for
+        # routes the Vacations PDFs leave out. Same gates and no-op rule as the
+        # schedules step; --allow-route-drop applies to both.
+        env:
+          ALLOW_ROUTE_DROP: ${{ inputs.allow_route_drop && '--allow-route-drop' || '' }}
+        run: python3 scripts/fetch-route-network.py $ALLOW_ROUTE_DROP
+
       - name: Diff summary
         run: |
           {
-            echo '### schedules.json diff'
+            echo '### Data diff'
             echo '```'
-            git diff --stat -- public/data/schedules.json || true
+            git diff --stat -- public/data/schedules.json public/data/route-network.json || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -74,11 +82,11 @@ jobs:
 
       - name: Commit and push if changed
         run: |
-          git diff --quiet -- public/data/schedules.json && exit 0
+          git diff --quiet -- public/data/schedules.json public/data/route-network.json && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/data/schedules.json
-          git commit -m "chore: update flight schedules from AC Vacations PDFs"
+          git add public/data/schedules.json public/data/route-network.json
+          git commit -m "chore: update flight schedules and route network"
           git push
 
       - name: Open an issue on failure

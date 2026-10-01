@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -94,6 +96,24 @@ describe('TripDetailPage', () => {
     TestBed.resetTestingModule();
     const again = await render({}, storage);
     expect(clean(again.el.querySelector('[data-leg="leg-ret813"] app-leg-status-tag')?.textContent)).toBe('Listed');
+  });
+
+  it('an Unknown leg on a route the network lists says so in the sheet and links to aircanada.com', async () => {
+    setScheduleSource(SEVILLE_ROUTES.filter(r => !(r.originCode === 'LIS' && r.destinationCode === 'YUL')), SEVILLE_META);
+    setRouteNetworkSource({ ...ROUTE_NETWORK_FIXTURE, routes: { 'YUL-LIS': ['A', 0, null, null, null] } });
+    try {
+      const { el, stable, trips } = await render({ leg: SEVILLE_IDS.ret });
+      trips.checkChanges();
+      const c = trips.trip(SEVILLE_IDS.trip)!.changes.find(x => x.kind === 'notFound')!;
+      trips.keepChange(SEVILLE_IDS.trip, c.id);
+      await stable();
+      const warn = el.querySelector('app-leg-sheet [data-route-only]')!;
+      expect(clean(warn.textContent)).toContain('Flies this route · times not in our data. Check the Air Canada app before you go.');
+      expect(warn.querySelector('a')!.getAttribute('href')).toBe('https://www.aircanada.com/');
+      expect(clean(el.querySelector('app-leg-sheet .ls__fact app-provenance-tag')?.textContent)).toBe('Unknown');
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 
   it('"Use instead" swaps to a backup, and Undo restores the plan', async () => {

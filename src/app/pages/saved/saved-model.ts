@@ -10,6 +10,7 @@
  */
 import type { Coverage } from '../../data/schedule-index';
 import { getSchedulesForRoute } from '../../data/schedule-index';
+import { isRouteOnly } from '../../data/route-network';
 import type { StarredItem } from '../../state/app-state.service';
 import type { TimeFormat } from '../../state/prefs.service';
 import type { DotDay } from '../../ui/dot-row.component';
@@ -45,6 +46,8 @@ export interface NoNonstopItem {
   country: string;
   /** First connecting hub found this week ('YYZ'), or null when nothing flies. */
   via: string | null;
+  /** Set when the route network lists the route but the schedules have no times for it. */
+  routeOnly?: true;
 }
 
 /**
@@ -87,7 +90,10 @@ export function upcoming(
     if (!d) continue;
     const f = nextDeparture(hub, code, today, now);
     if (!f) {
-      rest.push({ code, city: d.city, country: d.country, via: viaHub(hub, code, today, connect) });
+      rest.push({
+        code, city: d.city, country: d.country, via: viaHub(hub, code, today, connect),
+        ...(isRouteOnly(hub, code) ? { routeOnly: true as const } : {}),
+      });
       continue;
     }
     const week = weekStartKey(f.dateKey);

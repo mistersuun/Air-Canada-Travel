@@ -10,6 +10,7 @@
  */
 import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
+import { ROUTE_ONLY_NOTE, networkListsAll } from '../../data/route-network';
 import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
 import { MISS_GAP_MIN, departuresHome } from '../../trips/engine/homeby';
 import { hm, supOffset } from '../../ui/format';
@@ -226,6 +227,8 @@ export function todayView(input: {
   if (ref.aircraft) subParts.push(shortAircraftName(ref.aircraft));
   const tz = airportTz(ref.origin);
   if (!final) subParts.push(leavesLabel(refDepUtc(ref), nowMs, tz));
+  // Unknown provenance on a route the network lists: flown, but not in our schedules.
+  if (leg.provenance === 'unknown' && networkListsAll([ref])) subParts.push(ROUTE_ONLY_NOTE);
 
   const notes = input.notes
     .filter(n => instanceKey(n) === instanceKey(ref) && noteText(n))

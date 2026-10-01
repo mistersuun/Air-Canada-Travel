@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
+import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import { NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -64,6 +66,19 @@ describe('TripsPage', () => {
     expect(all.textContent?.trim()).toBe('All 4');
     expect(all.getAttribute('href')).toMatch(/^\/saved/);
     expect(el.querySelectorAll('[data-starred] app-dest-row')).toHaveLength(3);
+  });
+
+  it('a starred place the network lists but the schedules do not says times are not in our data', async () => {
+    setRouteNetworkSource({ ...ROUTE_NETWORK_FIXTURE, routes: { 'YUL-BOS': ['X', 0, null, null, null] } });
+    try {
+      const { all } = await render(SEVILLE_TRIPS_FILE, ['BOS', 'EWR']);
+      expect(all('[data-starred] app-dest-row .tm')).toEqual([
+        'USA · flies this route · times not in our data',
+        'USA · not found in our schedule data',
+      ]);
+    } finally {
+      resetRouteNetworkSource();
+    }
   });
 
   it('shows the empty state and hides the starred section without favourites', async () => {

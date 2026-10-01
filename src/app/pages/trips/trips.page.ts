@@ -7,6 +7,7 @@ import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component'
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { destPath } from '../../ui/links';
 import { findDestination } from '../../utils/airports';
+import { ROUTE_ONLY_NOTE } from '../../data/route-network';
 import { rowMeta, upcoming } from '../saved/saved-model';
 import { TripCardComponent } from './plan/trip-card.component';
 import { returnNotListed } from './trips-model';
@@ -142,7 +143,12 @@ export class TripsPage {
     const fmt = this.state.timeFormat();
     const rows = [
       ...up.items.map(u => ({ code: u.code, meta: rowMeta(u, today, fmt) })),
-      ...up.rest.map(n => ({ code: n.code, meta: n.via ? `${n.country} · via ${n.via}` : `${n.country} · not found in our schedule data` })),
+      ...up.rest.map(n => ({
+        code: n.code,
+        meta: n.via ? `${n.country} · via ${n.via}`
+          : n.routeOnly ? `${n.country} · ${ROUTE_ONLY_NOTE}`
+          : `${n.country} · not found in our schedule data`,
+      })),
     ];
     return rows.slice(0, STARRED_PREVIEW);
   });

@@ -4,7 +4,7 @@ import { join, relative } from 'node:path';
 
 const ROOT = join(__dirname, '..');
 const HEAVY = /(['"])(zxing-wasm|pdfjs-dist|bwip-js)(\/[^'"]*)?\1/;
-const ALLOWED = new Set(['passes/barcode.service.ts', 'passes/pdf-pages.ts', 'passes/barcode-render.ts', 'passes/vendor-modules.d.ts']);
+const ALLOWED = new Set(['passes/barcode.service.ts', 'passes/decode-core.ts', 'passes/pdf-pages.ts', 'passes/barcode-render.ts', 'passes/vendor-modules.d.ts']);
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap(n => {

@@ -10,6 +10,11 @@ import { MemoryStorage } from '../../state/testing';
 import { FilterChipsComponent } from './filters/filter-chips.component';
 import { FilterSheetComponent } from './filters/filter-sheet.component';
 import { HomePage } from './home.page';
+import { CITIES_FETCH } from '../../places/city-index.service';
+import { FIXTURE_CITIES_FILE } from '../../places/testing/cities-fixture';
+import { SEVILLE_META, SEVILLE_ROUTES } from '../../trips/testing/seville-fixture';
+
+let citiesFetches = 0;
 
 /** Wed Oct 7 2026, 08:00 in Montréal (and Oct 7 in every device zone from UTC−11 to UTC+11). */
 const CLOCK = Date.parse('2026-10-07T12:00:00Z');
@@ -22,7 +27,10 @@ function configure(prefs?: object) {
   const storage = new MemoryStorage();
   if (prefs) storage.setItem('ac.prefs.v1', JSON.stringify(prefs));
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), { provide: PREFS_STORAGE, useValue: storage }, { provide: NOW, useValue: () => CLOCK }],
+    providers: [
+      provideRouter([]), { provide: PREFS_STORAGE, useValue: storage }, { provide: NOW, useValue: () => CLOCK },
+      { provide: CITIES_FETCH, useValue: async () => { citiesFetches++; return FIXTURE_CITIES_FILE; } },
+    ],
   });
   TestBed.inject(PhotoService).setManifest({ version: 1, photos: { LHR: photo(), ATH: photo() } });
 }
@@ -332,5 +340,55 @@ describe('FilterChipsComponent', () => {
     expect(state.filters().types).toEqual([]);
     expect(cleared).toBe(1);
     expect(el.querySelector('.chip')).toBeNull();
+  });
+});
+
+describe('HomePage · Places (cities AC does not fly to)', () => {
+  beforeEach(() => {
+    setScheduleSource(SEVILLE_ROUTES, SEVILLE_META);
+    citiesFetches = 0;
+  });
+  afterEach(() => resetScheduleSource());
+
+  const settle = async (stable: () => Promise<void>) => {
+    for (let i = 0; i < 3; i++) {
+      await new Promise(r => setTimeout(r, 0));
+      await stable();
+    }
+  };
+
+  it('"Seville" shows a Places row linking to /reach, in place of the empty state', async () => {
+    configure();
+    const { el, state, stable } = await render();
+    state.setQuery('Se');
+    await settle(stable);
+    expect(citiesFetches).toBe(0);
+    state.setQuery('Seville');
+    await settle(stable);
+    expect(citiesFetches).toBe(1);
+    const rows = [...el.querySelectorAll('.prow')];
+    expect(rows[0].querySelector('.pnm')!.textContent).toBe('Seville');
+    expect(rows[0].querySelector('.psub')!.textContent).toBe("Spain · Not on AC's network");
+    expect(rows[0].getAttribute('href')).toMatch(/^\/reach\/gn-2510911\?.*dep=2026-10-14/);
+    expect(el.querySelector('#rl-places')!.textContent).toBe('Places');
+    expect(el.textContent).not.toContain('No destinations match');
+  });
+
+  it('"Lisbon" shows the AC result and no Places row', async () => {
+    configure();
+    const { el, state, stable } = await render();
+    state.setQuery('Lisbon');
+    await settle(stable);
+    expect(el.querySelector('.prow')).toBeNull();
+    expect(names(el.querySelector('app-results-list')!)).toEqual(['Lisbon']);
+  });
+
+  it('a query with no city match leaves the results unchanged', async () => {
+    configure();
+    const { el, state, stable } = await render();
+    state.setQuery('zzzzqq');
+    await settle(stable);
+    expect(el.querySelector('#rl-places')).toBeNull();
+    expect(el.textContent).toContain('No destinations match');
   });
 });

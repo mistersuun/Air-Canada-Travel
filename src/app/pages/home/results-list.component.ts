@@ -1,13 +1,15 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import type { Coverage } from '../../data/schedule-index';
 import type { TimeFormat } from '../../state/prefs.service';
 import type { RouteEntry } from '../../utils/routes';
 import { addDays, formatKey } from '../../utils/time';
 import { IconComponent } from '../../components/shared/icons.component';
+import { Params, RouterLink } from '@angular/router';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { entryDots } from '../../ui/dot-row.component';
-import { destPath } from '../../ui/links';
-import { CoverageStatus, coverageStatus, focusDayIndex, rowMeta } from './home-model';
+import { destPath, reachPath } from '../../ui/links';
+import { CoverageStatus, PlaceRow, coverageStatus, focusDayIndex, rowMeta } from './home-model';
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
 
@@ -27,7 +29,7 @@ interface Row {
 @Component({
   selector: 'app-results-list',
   standalone: true,
-  imports: [DestRowComponent, IconComponent],
+  imports: [DestRowComponent, IconComponent, RouterLink, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (partialNote(); as note) {
@@ -43,6 +45,9 @@ interface Row {
           <button type="button" class="ui-btn" (click)="jumpBack()">{{ jumpLabel() }}</button>
         }
       </section>
+      @if (places().length) { <div class="groups after"><ng-container *ngTemplateOutlet="placesTpl" /></div> }
+    } @else if (!entries().length && places().length) {
+      <div class="groups"><ng-container *ngTemplateOutlet="placesTpl" /></div>
     } @else if (!entries().length) {
       <section class="empty ui-card" role="status">
         <span class="empty__ic"><app-icon name="search" [size]="22" /></span>
@@ -84,8 +89,24 @@ interface Row {
             </div>
           </section>
         }
+        @if (places().length) { <ng-container *ngTemplateOutlet="placesTpl" /> }
       </div>
     }
+
+    <ng-template #placesTpl>
+      <section class="grp ui-card" aria-labelledby="rl-places">
+        <div class="ui-sec-h"><h2 class="ui-h3" id="rl-places">Places</h2><span class="ui-tag ui-tag--blue tn">{{ places().length }}</span></div>
+        <div class="rows">
+          @for (p of places(); track p.id) {
+            <a class="prow" [routerLink]="reach(p.id)" [queryParams]="placeParams()">
+              <span class="pin" aria-hidden="true"><app-icon name="pin" [size]="20" /></span>
+              <span class="ptx"><span class="pnm">{{ p.name }}</span><span class="psub">{{ p.sub }}</span></span>
+              <span class="chev" aria-hidden="true">›</span>
+            </a>
+          }
+        </div>
+      </section>
+    </ng-template>
   `,
   styles: [`
     :host { display: block; }
@@ -97,6 +118,20 @@ interface Row {
       .rows { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 40px; }
       .rows app-dest-row:nth-last-child(2):nth-child(odd) { border-bottom: 0; }
     }
+    .after { margin-top: 24px; }
+    .prow { display: flex; align-items: center; gap: 14px; padding: 12px 0; color: var(--ink); min-width: 0; border-bottom: 1px solid var(--hair); }
+    .rows .prow:last-child { border-bottom: 0; }
+    @media (min-width: 1024px) { .rows .prow:nth-last-child(2):nth-child(odd) { border-bottom: 0; } }
+    .prow:hover .pnm { color: var(--blue); }
+    .prow:focus-visible { outline-offset: -2px; border-radius: 12px; }
+    .pin {
+      width: 44px; height: 44px; flex: none; border-radius: var(--radius-thumb); display: grid; place-items: center;
+      background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue);
+    }
+    .ptx { flex: 1; min-width: 0; display: grid; }
+    .pnm { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .psub { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chev { color: var(--ink-3); font-size: 18px; line-height: 1; margin-left: 8px; flex: none; }
     .star {
       flex: none; width: 36px; height: 36px; margin-left: 6px; border-radius: 50%;
       display: grid; place-items: center; color: var(--ink-3);
@@ -135,6 +170,10 @@ export class ResultsListComponent {
   readonly favourites = input<ReadonlySet<string>>(new Set());
   /** Phone layout: rows drop the week dots to keep the meta readable. */
   readonly compact = input(false);
+  /** Cities AC does not fly to ("Places"), linking to /reach/:place. */
+  readonly places = input<readonly PlaceRow[]>([]);
+  /** Query params for the Places links (global params plus ?dep=). */
+  readonly placeParams = input<Params | null>(null);
 
   readonly clearFilters = output<void>();
   /** Date key to jump to, or null for the last published week. */
@@ -159,6 +198,10 @@ export class ResultsListComponent {
 
   protected path(code: string): string[] {
     return destPath(code);
+  }
+
+  protected reach(id: string): string[] {
+    return reachPath(id);
   }
 
   protected star(e: Event, code: string): void {

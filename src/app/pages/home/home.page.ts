@@ -19,9 +19,10 @@ import { WeekStripComponent } from '../../ui/week-strip.component';
 import { FilterChipsComponent } from './filters/filter-chips.component';
 import { FilterSheetComponent, REGION_CHIPS } from './filters/filter-sheet.component';
 import {
-  coverageStatus, editorsPicks, flightNumberQuery, focusDayIndex, nonstopByFrequency, rowMeta, seasonEvents, seasonMeta,
-  withFlightMatches,
+  PLACES_MIN_QUERY, coverageStatus, editorsPicks, flightNumberQuery, focusDayIndex, nonstopByFrequency, placeRows, reachDep, rowMeta,
+  seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
+import { CityIndexService } from '../../places/city-index.service';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
 import { TodayBannerComponent } from '../today/today-banner.component';
@@ -104,7 +105,7 @@ interface ListRow {
         <section class="sec results" aria-label="Destinations">
           @if (!outside()) {
             <div class="ui-sec-h rhead">
-              <h2 class="ui-h2">{{ resultsTitle() }} <span class="count tn">{{ results().length }}</span></h2>
+              <h2 class="ui-h2">{{ resultsTitle() }} <span class="count tn">{{ results().length + places().length }}</span></h2>
               @if (viewAll()) { <a class="ui-link" [routerLink]="[]" [queryParams]="{ view: null }" queryParamsHandling="merge" [replaceUrl]="true">Back to Explore</a> }
             </div>
             <div class="regions ui-snap-row" role="group" aria-label="Region">
@@ -119,6 +120,7 @@ interface ListRow {
                             [selectedDateKey]="state.selectedDateKey()" [todayKey]="state.todayKey()" [hubName]="hubName()"
                             [hasActiveFilters]="state.hasActiveFilters() || !!state.query()" [showConnections]="state.showConnections()"
                             [timeFormat]="state.timeFormat()" [favourites]="state.favouriteSet()" [compact]="narrow()"
+                            [places]="places()" [placeParams]="placeParams()"
                             (clearFilters)="clearAll()" (jumpToCoverage)="state.jumpToCoverage($event)"
                             (toggleFavourite)="state.toggleFavourite($event)" />
         </section>
@@ -274,6 +276,7 @@ export class HomePage {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly doc = inject(DOCUMENT);
+  private readonly cities = inject(CityIndexService);
 
   protected readonly connectOptions = CONNECT_OPTIONS;
   protected readonly dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -304,6 +307,11 @@ export class HomePage {
       sub.unsubscribe();
       this.mqNarrow?.removeEventListener?.('change', onNarrow);
       this.mqWide?.removeEventListener?.('change', onWide);
+    });
+
+    // A search of 3+ characters loads the city index (once) for "Places".
+    effect(() => {
+      if (this.state.query().trim().length >= PLACES_MIN_QUERY) untracked(() => void this.cities.ensureLoaded());
     });
 
     // An outside change (Esc in the shell, a chip, Clear, Back) rewrites the field.
@@ -350,6 +358,17 @@ export class HomePage {
     const q = this.state.query();
     return withFlightMatches(this.state.routes(), flightNumberQuery(q) ? this.state.unsearchedRoutes() : [], q);
   });
+
+  /** Cities AC does not fly to, for the "Places" group (Trips v2 §5.3). */
+  readonly places = computed(() => {
+    const q = this.state.query();
+    if (q.trim().length < PLACES_MIN_QUERY || this.cities.status() !== 'ready' || flightNumberQuery(q)) return [];
+    return placeRows(this.cities.search(q, 6), q);
+  });
+
+  protected readonly placeParams = computed(() => ({
+    ...this.state.globalParams(), dep: reachDep(this.state.selectedDateKey(), this.hubToday()),
+  }));
 
   protected readonly resultsTitle = computed(() => {
     if (this.state.query()) return 'Results';

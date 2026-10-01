@@ -11,6 +11,7 @@ import type { RouteEntry } from '../../utils/routes';
 import { addDays, diffDays, formatClock, formatKey, hhmmToMin } from '../../utils/time';
 import { FlightInstance, coverageHubFor, flightsOn, nextFlightDate } from '../../utils/week';
 import { daysLabel, hm, prettyFlight, timeRange } from '../../ui/format';
+import type { CityHit } from '../../places/city-index';
 
 // ── Editor's pick ────────────────────────────────────────────────────────────
 
@@ -285,4 +286,36 @@ export function focusDayIndex(weekStart: string, day: string | null, today: stri
   const key = day ?? today;
   const i = diffDays(weekStart, key);
   return i >= 0 && i < 7 ? i : null;
+}
+
+// ── Places (cities AC does not fly to; Trips v2 §5.3) ──────────────────────────
+
+/** Explore loads the city index and shows Places from this many characters. */
+export const PLACES_MIN_QUERY = 3;
+
+/** One "Places" row: Seville · Spain · Not on AC's network → /reach/gn-2510911?dep=… */
+export interface PlaceRow {
+  id: string;
+  name: string;
+  /** 'Spain · Not on AC's network' (or 'Andalusia, Spain · …' when two hits share a name). */
+  sub: string;
+}
+
+/**
+ * City hits that AC does not serve itself, as rows. Hits with `servedBy`
+ * are dropped: the AC destination already shows in the results.
+ */
+export function placeRows(hits: readonly CityHit[], query: string): PlaceRow[] {
+  if (query.trim().length < PLACES_MIN_QUERY) return [];
+  const rows = hits.filter(h => !h.servedBy);
+  const dup = new Set(rows.map(h => h.place.name).filter((n, i, all) => all.indexOf(n) !== i));
+  return rows.map(h => {
+    const where = dup.has(h.place.name) && h.place.admin1 ? `${h.place.admin1}, ${h.place.country}` : h.place.country;
+    return { id: h.place.id, name: h.place.name, sub: `${where || 'Unknown country'} · Not on AC's network` };
+  });
+}
+
+/** The ?dep= for a Places link: the selected day, else a week from today. */
+export function reachDep(selectedDateKey: string | null, todayKey: string): string {
+  return selectedDateKey ?? addDays(todayKey, 7);
 }

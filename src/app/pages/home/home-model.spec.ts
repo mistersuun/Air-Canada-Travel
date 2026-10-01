@@ -6,8 +6,10 @@ import type { RouteEntry } from '../../utils/routes';
 import { toUtcMs } from '../../utils/time';
 import {
   coverageStatus, departsToday, editorsPicks, entryHasFlight, flightNumberQuery, focusDayIndex, nonstopByFrequency,
-  rowMeta, seasonEnd, seasonEvents, seasonMeta, withFlightMatches,
+  placeRows, reachDep, rowMeta, seasonEnd, seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
+import type { CityHit } from '../../places/city-index';
+import { SEVILLE_PLACE } from '../../trips/testing/seville-fixture';
 
 const WEEK = '2026-10-05';
 
@@ -180,5 +182,29 @@ describe('home-model', () => {
     expect(focusDayIndex(WEEK, '2026-10-07', '2026-10-05')).toBe(2);
     expect(focusDayIndex(WEEK, null, '2026-10-06')).toBe(1);
     expect(focusDayIndex(WEEK, null, '2026-10-20')).toBeNull();
+  });
+});
+
+describe('placeRows / reachDep', () => {
+  const hit = (over: Partial<CityHit['place']>, servedBy: string | null = null): CityHit =>
+    ({ place: { ...SEVILLE_PLACE, ...over }, population: 1000, servedBy });
+
+  it('drops cities AC serves and labels the rest "Not on AC\'s network"', () => {
+    const rows = placeRows([hit({}), hit({ id: 'gn-2267057', name: 'Lisbon', country: 'Portugal' }, 'LIS')], 'sev');
+    expect(rows).toEqual([{ id: 'gn-2510911', name: 'Seville', sub: "Spain · Not on AC's network" }]);
+  });
+
+  it('adds the region when two places share a name, and needs 3 characters', () => {
+    const rows = placeRows([
+      hit({ id: 'gn-1', name: 'Roseville', country: 'United States', admin1: 'California' }),
+      hit({ id: 'gn-2', name: 'Roseville', country: 'United States', admin1: 'Michigan' }),
+    ], 'rose');
+    expect(rows.map(r => r.sub)).toEqual(["California, United States · Not on AC's network", "Michigan, United States · Not on AC's network"]);
+    expect(placeRows([hit({})], 'se')).toEqual([]);
+  });
+
+  it('dep is the selected day, else a week from today', () => {
+    expect(reachDep('2026-10-09', '2026-10-01')).toBe('2026-10-09');
+    expect(reachDep(null, '2026-10-01')).toBe('2026-10-08');
   });
 });

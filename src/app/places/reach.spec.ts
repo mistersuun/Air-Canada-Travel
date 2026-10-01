@@ -55,7 +55,7 @@ describe('reachGateways (Seville from YUL, Thu Oct 8)', () => {
     expect(lis.itineraries[0].legs[0].depLocal).toBe('21:45');
     expect(lis.ground.label).toBe('Bus about 6h45');
     expect(flightNos(bcn.itineraries)).toEqual(['AC822']);
-    expect(bcn.ground.label).toBe('Train about 5h30, or a short flight');
+    expect(bcn.ground.label).toBe('Train about 6h20, or a short flight');
     expect(bcn.arriveGoalUtc!).toBeLessThan(lis.arriveGoalUtc!);
 
     expect(opo.itineraries).toEqual([]);

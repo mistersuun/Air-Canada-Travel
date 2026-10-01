@@ -35,7 +35,8 @@
       "resources": {
         "files": [
           "/data/cities.json",
-          "/data/climate.json"
+          "/data/climate.json",
+          "/data/ground.json"
         ]
       }
     },

@@ -157,14 +157,16 @@ function flightRow(trip: Trip, leg: FlightLeg, fmt: TimeFormat): LegRow {
 
 /**
  * What an estimated ground leg says: the corridor/heuristic label when it
- * still describes this leg ('Train about 2h40'), else the mode and the
- * door-to-door minutes.
+ * still describes this leg ('Train about 2h40', or 'Train 2h39' from a
+ * timetable for the leg's day), else the mode and the door-to-door minutes.
  */
 export function groundLabel(leg: GroundLeg): string {
   if (leg.provenance === 'unknown' || leg.estMinutes === null) return 'Onward travel unknown';
   const from = leg.from.code ? airportEnd(leg.from.code) ?? leg.from : leg.from;
-  const g = groundEstimate(from, leg.to);
+  const g = groundEstimate(from, leg.to, { dateKey: leg.dateKey });
   if (g.mode === leg.mode && g.totalMin === leg.estMinutes) return g.label;
+  // A timetable for that day describes the ride of the same corridor, whatever total was stored.
+  if (g.mode === leg.mode && g.source === 'timetable') return g.label;
   return `${MODE_LABEL[leg.mode]} about ${aboutDuration(leg.estMinutes)}`;
 }
 

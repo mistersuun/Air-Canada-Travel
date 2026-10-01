@@ -30,7 +30,7 @@ import { TRIPS_STORAGE, loadFlightLog, loadTrips, saveFlightLog, saveTrips, sani
 export interface GroundEstimateLike {
   mode: GroundMode | 'unknown';
   totalMin: number | null;
-  provenance: 'estimated' | 'unknown';
+  provenance: 'scheduled' | 'estimated' | 'unknown';
 }
 
 export const BAD_DATA_NOTICE = 'The latest schedules look incomplete. Your plans are unchanged.';
@@ -559,7 +559,7 @@ function regroundLeg(
     lat: d?.lat ?? h?.lat ?? leg.from.lat, lng: d?.lng ?? h?.lng ?? leg.from.lng,
     tz: d?.tz ?? h?.tz ?? null,
   };
-  const known = ground && ground.mode !== 'unknown' && ground.totalMin !== null && ground.provenance === 'estimated';
+  const known = ground && ground.mode !== 'unknown' && ground.totalMin !== null && ground.provenance !== 'unknown';
   return {
     ...leg,
     from,

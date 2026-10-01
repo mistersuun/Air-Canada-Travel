@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRend
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { airportEnd, groundEstimate, onwardLinks } from '../../../places/ground';
+import { GroundTimetableService } from '../../../places/ground-timetable.service';
 import { AppStateService } from '../../../state/app-state.service';
 import { shortAircraftName } from '../../../trips/engine/facts';
 import { endTz, itineraryFromRefs, itineraryFromSnapshot, refsFromItinerary, sameRefs } from '../../../trips/engine/legs';
@@ -19,6 +20,7 @@ import { WEEKDAY_SHORT, toUtcMs, weekdayIndex } from '../../../utils/time';
 import {
   MODE_LABEL, dayLabel, flightNumbers, groundLabel, legById, refsRoute, refsTimes,
 } from '../trips-model';
+import { groundTimetableLines } from '../../reach/reach-model';
 import { LegFilesComponent } from '../../../files/ui/leg-files.component';
 import { LegPassesComponent } from '../../../passes/ui/leg-passes.component';
 
@@ -31,8 +33,9 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
  * The leg sheet on the Plan tab (/trips/:id?leg=<legId>). Flight legs: the
  * status you set, the backups folded under the leg ("Use instead" swaps,
  * with Undo), "Open flight details" and "Add a backup". Ground legs: the
- * estimate or your saved times, the editor ("Saved by you" on Save) and the
- * onward links.
+ * estimate or your saved times, the corridor timetable for that day when
+ * there is one (looked up now; the stored leg stays Estimated), the editor
+ * ("Saved by you" on Save) and the onward links.
  */
 @Component({
   selector: 'app-leg-sheet',
@@ -117,6 +120,17 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             <span>{{ groundFact() }}</span>
             <app-provenance-tag [value]="g.provenance" />
           </p>
+          @if (timetable(); as t) {
+            @if (t.source === 'timetable') {
+              <p class="ls__fact tn" data-timetable-fact><span>{{ t.timetable?.operator }} timetable · {{ t.timetable?.rideText }} ride</span>
+                <app-provenance-tag value="scheduled" /></p>
+            }
+            @if (timetableLines().length) {
+              <p class="ui-sub ls__hint" data-timetable>
+                @for (line of timetableLines(); track $index) { {{ line }}@if (!$last) {<br>} }
+              </p>
+            }
+          }
 
           <app-leg-files [trip]="trip()" [leg]="g" />
 
@@ -311,12 +325,26 @@ export class LegSheetComponent {
     return `${day} · ${groundLabel(g)}`;
   });
 
+  /** The corridor timetable for an unsaved ground leg's day, looked up at render time. */
+  protected readonly timetable = computed(() => {
+    const g = this.ground();
+    if (!g || g.provenance === 'saved') return null;
+    const from = g.from.code ? airportEnd(g.from.code) ?? g.from : g.from;
+    const est = groundEstimate(from, g.to, { dateKey: g.dateKey });
+    return est.timetable ? est : null;
+  });
+  protected readonly timetableLines = computed(() => {
+    const t = this.timetable();
+    return t ? groundTimetableLines(t) : [];
+  });
+
   protected readonly links = computed(() => {
     const g = this.ground();
     return g ? onwardLinks(g.from, g.to) : { google: '', rome2rio: '', omio: '', skyscanner: '' };
   });
 
   constructor() {
+    void inject(GroundTimetableService).ensureLoaded();
     // Fill the editor from the leg whenever another leg opens.
     effect(() => {
       const g = this.ground();

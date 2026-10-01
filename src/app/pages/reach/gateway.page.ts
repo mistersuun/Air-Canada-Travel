@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSign
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent, IconName } from '../../components/shared/icons.component';
 import { airportEnd, arrivalAtGoal, onwardLinks, placeEnd } from '../../places/ground';
+import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { Gateway, reachGateways } from '../../places/reach';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
@@ -15,14 +16,16 @@ import { airportTz } from '../../utils/airports';
 import type { Itinerary } from '../../utils/connections';
 import { todayKey } from '../../utils/time';
 import {
-  ReachParams, arrivalLine, dayLabel, foundLabel, gatewayRow, groundDetail, groundTitle, itinFlights, lastTrainWarning,
+  ReachParams, arrivalLine, dayLabel, foundLabel, gatewayRow, groundDetail, groundTimetableLines, groundTitle, itinFlights,
+  lastTrainWarning,
   readReachParams, reachQueryParams, segmentLine, startTripFromGateway,
 } from './reach-model';
 import { reachPlace } from './reach-place';
 
 /**
  * One gateway door to door (/reach/:place/:code, mockup g1 bottom): the
- * flight (Scheduled), the airport exit and the ground trip (Estimated), when
+ * flight (Scheduled), the airport exit (Estimated) and the ground trip
+ * (Scheduled from a timetable that covers the day, else Estimated), when
  * you'd likely reach the place, links to find the real train or bus, and
  * "Start this trip" (flight + ground leg + same-day backups).
  */
@@ -105,6 +108,7 @@ import { reachPlace } from './reach-place';
                       <div class="leg__b">
                         <div class="leg__t">{{ gTitle() }}</div>
                         <div class="leg__m">{{ gDetail() }} · <app-provenance-tag [value]="g.ground.provenance" /></div>
+                        @for (line of gLines(); track $index) { <div class="leg__m" data-timetable>{{ line }}</div> }
                       </div>
                     </li>
                     <li class="end"><i><app-icon name="pin" [size]="12" [filled]="true" /></i><span class="tn">{{ arrival() }}</span>
@@ -131,7 +135,7 @@ import { reachPlace } from './reach-place';
                 <button type="button" class="ui-btn ui-btn--ghost" [disabled]="!itin()" (click)="start(true)">{{ found() }}</button>
                 <button type="button" class="ui-btn" [disabled]="!itin()" (click)="start(false)">Start this trip</button>
               </div>
-              <p class="ui-sub foot">Listing stays your own step. Trains and buses here are estimates until you save the one you found.</p>
+              <p class="ui-sub foot">Listing stays your own step. Trains and buses here are timetables or estimates until you save the one you found.</p>
             } @else {
               <section class="ui-card card" role="status">
                 <p class="ui-sub">{{ code() }} isn't one of the airports near {{ placeName() }}.</p>
@@ -216,6 +220,10 @@ export class GatewayPage {
   private readonly trips = inject(TripsService);
   private readonly router = inject(Router);
 
+  constructor() {
+    void inject(GroundTimetableService).ensureLoaded();
+  }
+
   readonly place = input<string>('');
   readonly code = input<string>('');
   readonly dep = input<string | undefined>(undefined);
@@ -295,9 +303,19 @@ export class GatewayPage {
     const place = this.placeObj();
     return g && place ? groundTitle(g.ground, place) : '';
   });
+  /** The train or bus the picked flight would catch (timetable corridors only). */
+  private readonly nextDep = computed(() => {
+    const g = this.gateway();
+    const it = this.itin();
+    return g && it && g.ground.source === 'timetable' ? arrivalAtGoal(it.arriveUtc, g.ground, airportTz(g.code)).departure : null;
+  });
   protected readonly gDetail = computed(() => {
     const g = this.gateway();
-    return g ? groundDetail(g.ground) : '';
+    return g ? groundDetail(g.ground, this.nextDep()) : '';
+  });
+  protected readonly gLines = computed(() => {
+    const g = this.gateway();
+    return g ? groundTimetableLines(g.ground) : [];
   });
   protected readonly groundIcon = computed<IconName>(() => {
     const m = this.gateway()?.ground.mode;

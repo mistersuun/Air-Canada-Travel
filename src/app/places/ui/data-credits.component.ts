@@ -26,7 +26,7 @@ import { formatKey, isDateKey } from '../../utils/time';
           <b>Route list</b>&ngsp;<a href="https://en.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a> airport articles ("Airlines and destinations", Wikipedia contributors), <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener license">CC BY-SA 4.0</a>, with airport details from <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a> (public domain). Says a route is flown, not when; check times on aircanada.com.@if (routeListChecked) {&ngsp;Checked {{ routeListChecked }}.}
         </li>
         <li>
-          <b>Onward travel</b>&ngsp;Train and bus times are our estimates from public timetables, not bookings. Check before you go.
+          <b>Onward travel</b>&ngsp;Train and bus times come from operators' open timetables where we have them (see Timetable credits), otherwise they are our estimates. Not bookings. Check before you go.
         </li>
       </ul>
     </details>

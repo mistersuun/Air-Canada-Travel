@@ -34,9 +34,9 @@ describe('corridors', () => {
   });
 
   it('LIS, BCN and OPO → Seville', () => {
-    expect(groundEstimate(at('LIS'), SEVILLE_PLACE)).toMatchObject({ mode: 'bus', label: 'Bus about 6h45', exitMin: 75, lastDepLocal: '15:00' });
+    expect(groundEstimate(at('LIS'), SEVILLE_PLACE)).toMatchObject({ mode: 'bus', label: 'Bus about 6h45', exitMin: 75, lastDepLocal: '22:25' });
     expect(groundEstimate(at('BCN'), SEVILLE_PLACE)).toMatchObject({
-      mode: 'train', label: 'Train about 5h30, or a short flight', shortFlightToo: true,
+      mode: 'train', label: 'Train about 6h20, or a short flight', shortFlightToo: true,
     });
     expect(groundEstimate(at('OPO'), SEVILLE_PLACE)).toMatchObject({ mode: 'bus', label: 'Bus about 9h' });
   });
@@ -142,12 +142,12 @@ describe('arrivalAtGoal', () => {
     const r = arrivalAtGoal(toUtcMs('2026-10-09', '17:00', tz), bcn, tz);
     expect(r.lastDepMissed).toBe(false);
     expect(r.overnightLikely).toBe(true);
-    expect(utcToLocal(r.utc!, tz)).toEqual({ dateKey: '2026-10-10', hhmm: '13:30' });
+    expect(utcToLocal(r.utc!, tz)).toEqual({ dateKey: '2026-10-10', hhmm: '14:20' });
   });
 
   it('unknown onward has no arrival', () => {
     const cmn = groundEstimate(at('CMN'), SEVILLE_PLACE);
-    expect(arrivalAtGoal(0, cmn, 'Africa/Casablanca')).toEqual({ utc: null, overnightLikely: false, lastDepMissed: false });
+    expect(arrivalAtGoal(0, cmn, 'Africa/Casablanca')).toEqual({ utc: null, overnightLikely: false, lastDepMissed: false, departure: null });
   });
 
   it('a ride that would end past midnight waits for the morning', () => {

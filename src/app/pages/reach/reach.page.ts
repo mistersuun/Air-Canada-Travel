@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, 
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { HUBS } from '../../data/destinations';
+import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { reachGateways } from '../../places/reach';
 import { AppStateService } from '../../state/app-state.service';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
@@ -268,6 +269,10 @@ export class ReachPage {
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly doc = inject(DOCUMENT);
+
+  constructor() {
+    void inject(GroundTimetableService).ensureLoaded();
+  }
 
   /** Route param ('gn-2510911') and query keys (withComponentInputBinding). */
   readonly place = input<string>('');

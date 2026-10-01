@@ -22,7 +22,18 @@
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/data/*.json"
+          "/data/schedules.json",
+          "/data/land-110m.json"
+        ]
+      }
+    },
+    {
+      "name": "places",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": [
+          "/data/cities.json"
         ]
       }
     },

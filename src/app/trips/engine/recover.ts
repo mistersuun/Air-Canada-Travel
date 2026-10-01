@@ -97,13 +97,22 @@ function groundFor(trip: Trip, gateway: string): GroundEstimate {
   return end ? groundEstimate(end, trip.goal) : unknownGround();
 }
 
-function leavesGoalArea(trip: Trip, leg: TripLeg): boolean {
+/**
+ * True for an open leg that takes the traveller away from the goal: a return
+ * flight, or a ground leg that starts in the goal area and ends farther from
+ * the goal than it starts (so the inbound airport → goal leg never counts,
+ * even when the airport itself is within GOAL_AREA_KM).
+ */
+export function leavesGoalArea(trip: Trip, leg: TripLeg): boolean {
   if (isFinalStatus(leg.status)) return false;
-  if (leg.kind === 'ground') return greatCircleKm(leg.from, trip.goal) <= GOAL_AREA_KM;
+  if (leg.kind === 'ground') {
+    const from = greatCircleKm(leg.from, trip.goal);
+    return from <= GOAL_AREA_KM && greatCircleKm(leg.to, trip.goal) > from + 1;
+  }
   return leg.role === 'return';
 }
 
-function legDepartureKey(leg: TripLeg): string {
+export function legDepartureKey(leg: TripLeg): string {
   if (leg.kind === 'ground') return leg.userTimes?.depDateKey ?? leg.dateKey;
   return leg.refs[0].dateKey;
 }
@@ -119,7 +128,7 @@ function decorate(
 
   let nightsAtGoal: number | null = null;
   if (arriveGoalUtc !== null) {
-    const leave = ctx.trip.legs.find(l => leavesGoalArea(ctx.trip, l) && legStartUtc(l) > arriveGoalUtc);
+    const leave = ctx.trip.legs.find(l => leavesGoalArea(ctx.trip, l) && legStartUtc(l, ctx.trip.legs) > arriveGoalUtc);
     if (leave) nightsAtGoal = Math.max(0, diffDays(utcToLocal(arriveGoalUtc, goalTz).dateKey, legDepartureKey(leave)));
   }
 
@@ -127,7 +136,10 @@ function decorate(
   let returnStillWorks: boolean | null = null;
   if (returns.length) {
     const reach = arriveGoalUtc ?? itinerary.arriveUtc;
-    returnStillWorks = returns.every(l => l.kind === 'flight' && l.refs.length > 0 && refDepUtc(l.refs[0]) > reach);
+    // A saved ground leg out of the goal area (the bus to the return airport) must still be catchable too.
+    const savedLeaves = ctx.trip.legs.filter(l => l.kind === 'ground' && !!l.userTimes && leavesGoalArea(ctx.trip, l));
+    returnStillWorks = returns.every(l => l.kind === 'flight' && l.refs.length > 0 && refDepUtc(l.refs[0]) > reach)
+      && savedLeaves.every(l => legStartUtc(l) > reach);
   }
   return { gateway, itinerary, status, reason, day, ground, arriveGoalUtc, nightsAtGoal, returnStillWorks };
 }
@@ -210,8 +222,9 @@ export function stillReachable(input: {
     for (const hub of ctx.hubs) {
       if (hub === gateway || (byShape.has(hub) && byShape.get(hub)!.departUtc > closedBefore)) continue;
       if (directUsableArr !== null) continue;
+      // Only a feeder that can still be boarded makes the reason meaningful.
       const feeder = [...published(at, hub, today), ...published(at, hub, tomorrowKey).filter(f => f.depLocal < TONIGHT_UNTIL)]
-        .find(f => f.depUtc > nowMs);
+        .find(f => f.depUtc > closedBefore);
       if (!feeder) continue;
       const onward = published(hub, gateway, feeder.arrDateKey);
       if (!onward.length) continue;

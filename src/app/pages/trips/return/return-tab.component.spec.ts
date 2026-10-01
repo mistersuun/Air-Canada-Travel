@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../../data/schedule-index';
 import { AppStateService, NOW } from '../../../state/app-state.service';
 import { PREFS_KEY, PREFS_STORAGE } from '../../../state/prefs.service';
@@ -62,6 +62,29 @@ describe('ReturnTabComponent (g3)', () => {
     vi.restoreAllMocks();
   });
 
+  it('counts from another airport (?retFrom=), and Other airports rows switch it instead of leaving the tab', async () => {
+    const { fixture, el, text } = await renderTab();
+    const router = TestBed.inject(Router);
+    const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    fixture.componentRef.setInput('from', 'MAD');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(text('[data-context]')).toBe('Seville trip · from Madrid · Back to Lisbon');
+    (el.querySelector('[data-reset]') as HTMLButtonElement).click();
+    expect(nav.mock.calls[0][1]?.queryParams).toEqual({ retFrom: null });
+    fixture.componentRef.setInput('from', null);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(text('[data-context]')).toBe('Seville trip · from Lisbon');
+    (el.querySelector('[data-other="MAD"]') as HTMLButtonElement).click();
+    expect(nav.mock.calls[1][1]?.queryParams).toEqual({ retFrom: 'MAD' });
+    // The home airport is never a "from".
+    fixture.componentRef.setInput('from', 'YUL');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(text('[data-context]')).toBe('Seville trip · from Lisbon');
+  });
+
   it('matches the g3 copy with minConnect 120', async () => {
     const { el, text, texts, stat } = await renderTab();
     expect(text('.rt__ctx h2')).toBe('Getting home');
@@ -82,7 +105,7 @@ describe('ReturnTabComponent (g3)', () => {
     ]);
     expect(text('[data-info]')).toBe(
       'Being in Lisbon by Monday morning adds AC813 and AC811 on Oct 12: 4 tries before the deadline instead of 2.');
-    expect(text('[data-other="MAD"] .rt__rt')).toBe('Madrid MAD · Mon: AC835 to YUL, AC825 to YYZ · Tue: AC825 only');
+    expect(text('[data-other="MAD"] .rt__rt')).toBe('Madrid MAD · Mon: AC835 to YUL, AC825 to YYZ · Tue: AC825 only · count tries from Madrid');
     expect(el.querySelector('[data-unknown]')).toBeNull();
     // A return leg exists: no "Use as return".
     expect(el.querySelector('.mc__act')).toBeNull();

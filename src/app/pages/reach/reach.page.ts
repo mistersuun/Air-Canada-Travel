@@ -85,10 +85,23 @@ type Editing = 'dep' | 'home' | 'hub';
 
               <div class="head">
                 <h1 class="ui-h3 h">Ways to reach {{ placeName() }}</h1>
-                <span class="ui-sub nn">Not on AC's network</span>
+                <span class="ui-sub nn">Not in our schedule data</span>
               </div>
+              <p class="ui-sub cov" data-coverage>Air Canada may still fly there on routes this app doesn't cover, such as some domestic or regional flights.</p>
 
-              @if (rows().length) {
+              @if (!rows().length) {
+                <section class="ui-card empty" role="status">
+                  @if (unknownRows().length) {
+                    <h2 class="ui-h3">No AC airport near {{ placeName() }} with a known onward trip</h2>
+                    <p class="ui-sub">Airports nearby have flights, but we can't estimate the trip from them.</p>
+                  } @else {
+                    <h2 class="ui-h3">No AC airport found near {{ placeName() }}</h2>
+                    <p class="ui-sub">Nothing within about 900 km in our schedule data.</p>
+                  }
+                </section>
+              }
+
+              @if (rows().length || (showUnknown() && unknownRows().length)) {
                 <div class="ui-card list">
                   @for (r of rows(); track r.code) {
                     @if (r.flight) {
@@ -100,6 +113,15 @@ type Editing = 'dep' | 'home' | 'hub';
                           @if (r.standby) { <span class="m tn">{{ r.standby }}</span> }
                           <span class="m g">{{ r.ground }} <app-provenance-tag [value]="r.provenance" />
                             @if (r.night) { <span class="ui-tag ui-tag--amber">Night on the way likely</span> }</span>
+                        </div>
+                        <app-icon class="chev" name="chevron-right" [size]="16" />
+                      </a>
+                    } @else if (r.nextDateKey) {
+                      <a class="row idle" [routerLink]="gw(r.code)" [queryParams]="paramsOn(r.nextDateKey)">
+                        <app-dest-photo class="th" [code]="r.code" size="thumb" />
+                        <div class="rt">
+                          <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                          <span class="m tn">{{ r.idle }}</span>
                         </div>
                         <app-icon class="chev" name="chevron-right" [size]="16" />
                       </a>
@@ -115,22 +137,29 @@ type Editing = 'dep' | 'home' | 'hub';
                   }
                   @if (showUnknown()) {
                     @for (r of unknownRows(); track r.code) {
-                      <div class="row idle">
-                        <app-dest-photo class="th" [code]="r.code" size="thumb" />
-                        <div class="rt">
-                          <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
-                          @if (r.flight) { <span class="m tn">{{ r.flight }}</span> } @else { <span class="m tn">{{ r.idle }}</span> }
-                          <span class="m g">Onward travel unknown <app-provenance-tag value="unknown" /></span>
+                      @if (r.flight || r.nextDateKey) {
+                        <a class="row idle" [routerLink]="gw(r.code)" [queryParams]="r.flight ? linkParams() : paramsOn(r.nextDateKey!)">
+                          <app-dest-photo class="th" [code]="r.code" size="thumb" />
+                          <div class="rt">
+                            <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                            @if (r.flight) { <span class="m tn">{{ r.flight }}</span> } @else { <span class="m tn">{{ r.idle }}</span> }
+                            <span class="m g">Onward travel unknown <app-provenance-tag value="unknown" /></span>
+                          </div>
+                          <app-icon class="chev" name="chevron-right" [size]="16" />
+                        </a>
+                      } @else {
+                        <div class="row idle">
+                          <app-dest-photo class="th" [code]="r.code" size="thumb" />
+                          <div class="rt">
+                            <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                            <span class="m tn">{{ r.idle }}</span>
+                            <span class="m g">Onward travel unknown <app-provenance-tag value="unknown" /></span>
+                          </div>
                         </div>
-                      </div>
+                      }
                     }
                   }
                 </div>
-              } @else {
-                <section class="ui-card empty" role="status">
-                  <h2 class="ui-h3">No AC airport found near {{ placeName() }}</h2>
-                  <p class="ui-sub">Nothing within about 900 km in our schedule data.</p>
-                </section>
               }
 
               @if (unknownRows().length) {
@@ -204,7 +233,10 @@ type Editing = 'dep' | 'home' | 'hub';
     .m.g { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; white-space: normal; }
     .m .ui-tag { font-size: 10.5px; padding: 2px 7px; }
     .chev { color: var(--ink-3); flex: none; }
-    .idle { opacity: .6; }
+    /* Idle rows still carry facts: only the photo is muted, the text keeps full contrast. */
+    .idle .th { opacity: .55; }
+    .idle .m { white-space: normal; }
+    .cov { margin: -4px 2px 10px; font-size: 12.5px; }
     .more { display: block; margin: 10px 4px 0; padding: 12px 0; font-size: 13.5px; text-align: left; }
     .inc { display: flex; align-items: center; gap: 12px; min-height: 44px; margin: 8px 4px 0; font-size: 14px; color: var(--ink-2); cursor: pointer; }
     .inc input { width: 22px; height: 22px; flex: none; margin: 0; accent-color: var(--teal); cursor: pointer; }
@@ -296,6 +328,13 @@ export class ReachPage {
 
   protected gw(code: string): string[] {
     return gatewayPath(this.place(), code);
+  }
+
+  /** Link params for the gateway page on another departure day. */
+  protected paramsOn(dep: string): Record<string, string | null> {
+    const p = this.p();
+    const home = p.home.dateKey < dep ? { ...p.home, dateKey: dep } : p.home;
+    return { ...this.state.globalParams(), ...reachQueryParams({ ...p, dep, home }) };
   }
 
   protected dest(code: string): string[] {

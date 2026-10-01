@@ -17,7 +17,7 @@ const MAX_JSON = 400_000;
 interface SharePayload {
   s: 1;
   at: string;
-  trip: Omit<Trip, 'prep' | 'changes' | 'offlineSavedAt' | 'calendarExportedAt' | 'archived'>;
+  trip: Omit<Trip, 'prep' | 'changes' | 'offlineSavedAt' | 'calendarExportedAt' | 'calendarRefs' | 'archived'>;
   notes: LoadNote[];
 }
 
@@ -65,10 +65,14 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
   return out;
 }
 
-/** The share payload for a trip (with its load notes). */
-export async function encodeTripShare(trip: Trip, notes: readonly LoadNote[] = [], nowMs: number = Date.now()): Promise<string> {
-  const { prep: _p, changes: _c, offlineSavedAt: _o, calendarExportedAt: _k, archived: _a, ...rest } = trip;
-  const payload: SharePayload = { s: 1, at: new Date(nowMs).toISOString(), trip: rest, notes: [...notes] };
+/** Thrown when even the trimmed trip does not fit in a share link. */
+export class ShareTooLargeError extends Error {
+  constructor() {
+    super('This trip is too large to share as a link.');
+  }
+}
+
+async function encodePayload(payload: SharePayload): Promise<string> {
   const json = new TextEncoder().encode(JSON.stringify(payload));
   if (hasCompression()) {
     try {
@@ -78,6 +82,28 @@ export async function encodeTripShare(trip: Trip, notes: readonly LoadNote[] = [
     }
   }
   return 'j' + toBase64Url(json);
+}
+
+/**
+ * The share payload for a trip (with its load notes). A link the recipient
+ * could not import (longer than MAX_SHARE_PAYLOAD) is never produced: the
+ * notes are dropped first, then the backups; if it still does not fit,
+ * ShareTooLargeError is thrown.
+ */
+export async function encodeTripShare(trip: Trip, notes: readonly LoadNote[] = [], nowMs: number = Date.now()): Promise<string> {
+  const { prep: _p, changes: _c, offlineSavedAt: _o, calendarExportedAt: _k, calendarRefs: _r, archived: _a, ...rest } = trip;
+  const at = new Date(nowMs).toISOString();
+  const noAlternates = { ...rest, legs: rest.legs.map(l => (l.kind === 'flight' ? { ...l, alternates: [] } : l)) };
+  const attempts: SharePayload[] = [
+    { s: 1, at, trip: rest, notes: [...notes] },
+    ...(notes.length ? [{ s: 1 as const, at, trip: rest, notes: [] }] : []),
+    { s: 1, at, trip: noAlternates, notes: [] },
+  ];
+  for (const p of attempts) {
+    const out = await encodePayload(p);
+    if (out.length <= MAX_SHARE_PAYLOAD) return out;
+  }
+  throw new ShareTooLargeError();
 }
 
 /** Decodes a share payload. Null for anything it cannot read; never throws. */
@@ -97,7 +123,7 @@ export async function decodeTripShare(payload: string): Promise<SharedTripPrevie
     if (bytes.length > MAX_JSON) return null;
     const raw = JSON.parse(new TextDecoder().decode(bytes)) as Partial<SharePayload> | null;
     if (!raw || typeof raw !== 'object' || raw.s !== 1) return null;
-    const trip = sanitizeTrip({ ...(raw.trip as object), prep: {}, changes: [], archived: false });
+    const trip = sanitizeTrip({ ...(raw.trip as object), prep: {}, changes: [], archived: false, calendarRefs: undefined });
     if (!trip) return null;
     const notes = (Array.isArray(raw.notes) ? raw.notes : []).map(sanitizeLoadNote).filter((n): n is LoadNote => !!n);
     const sharedAt = typeof raw.at === 'string' && !Number.isNaN(Date.parse(raw.at)) ? raw.at : trip.updatedAt;

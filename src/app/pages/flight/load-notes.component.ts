@@ -30,14 +30,7 @@ import { NoteSheetComponent } from './note-sheet.component';
       <div class="ui-card ln__list">
         @for (r of rows(); track r.id) {
           <div class="ln__row" data-note>
-            @if (r.mark) {
-              <span class="ln__res" [class.is-ok]="r.mark === 'ok'" [class.is-short]="r.mark === 'short'" [attr.title]="r.markLabel">
-                <app-icon [name]="r.mark === 'ok' ? 'check' : 'close'" [size]="14" [strokeWidth]="2.25" />
-                <span class="ui-visually-hidden">{{ r.markLabel }}.</span>
-              </span>
-            } @else {
-              <span class="ln__res"><app-icon name="note" [size]="14" /></span>
-            }
+            <span class="ln__res" aria-hidden="true"><app-icon name="note" [size]="14" /></span>
             <div class="ln__rt">
               <b class="tn">{{ r.title }}</b>
               @if (r.text) { <span class="ln__tx">{{ r.text }}</span> }
@@ -68,8 +61,6 @@ import { NoteSheetComponent } from './note-sheet.component';
       flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
       background: var(--fill); color: var(--ink-2);
     }
-    .ln__res.is-ok { background: color-mix(in srgb, var(--teal) 15%, transparent); color: var(--teal-ink); }
-    .ln__res.is-short { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red-ink); }
     .ln__rt { flex: 1; min-width: 0; display: grid; gap: 2px; }
     .ln__rt b { font-size: 15px; font-weight: 650; }
     .ln__tx { font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }

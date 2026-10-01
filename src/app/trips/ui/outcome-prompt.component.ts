@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DOCUMENT, EnvironmentInjector, afterNextRender, computed, inject, input } from '@angular/core';
 import { AppStateService } from '../../state/app-state.service';
 import { formatKey } from '../../utils/time';
 import type { OutcomePrompt } from '../engine/today';
@@ -27,7 +27,8 @@ export function outcomeHeading(p: OutcomePrompt): string {
 /**
  * "How did it go?" (mockup g6), asked once a flight left over 30 min ago.
  * Recording sets the trip leg's status (TripsService.recordOutcome) and the
- * card goes away; Undo puts both back. "Not now" dismisses it for good.
+ * card goes away; Undo puts both back (focus moves to the toast's Undo, since
+ * the focused card is removed). "Skip this flight" dismisses it for good.
  * History shows counts, never percentages.
  */
 @Component({
@@ -44,7 +45,7 @@ export function outcomeHeading(p: OutcomePrompt): string {
                   [attr.data-kind]="c.kind" (click)="record(c.kind)">{{ c.label }}</button>
         }
       </div>
-      <button type="button" class="ui-link op__skip" data-skip (click)="trips.dismissOutcome(prompt().key)">Not now</button>
+      <button type="button" class="ui-link op__skip" data-skip (click)="skip()">Skip this flight</button>
     </section>
   `,
   styles: [`
@@ -61,6 +62,9 @@ export function outcomeHeading(p: OutcomePrompt): string {
 export class OutcomePromptComponent {
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
+  private readonly doc = inject(DOCUMENT);
+  /** Outlives this card, which is removed as soon as an answer is saved. */
+  private readonly env = inject(EnvironmentInjector);
 
   readonly prompt = input.required<OutcomePrompt>();
 
@@ -86,5 +90,21 @@ export class OutcomePromptComponent {
         if (before) this.trips.setLegStatus(before.tripId, before.legId, before.status);
       },
     });
+    this.refocus('.toast__action');
+  }
+
+  protected skip(): void {
+    this.trips.dismissOutcome(this.prompt().key);
+    this.refocus('[data-outcome-prompt] button, main h1, h1');
+  }
+
+  /** The focused card is about to be removed: move focus somewhere stable once it is gone. */
+  private refocus(selector: string): void {
+    afterNextRender(() => {
+      const el = this.doc.querySelector<HTMLElement>(selector);
+      if (!el) return;
+      if (!el.matches('button, a, input, [tabindex]')) el.setAttribute('tabindex', '-1');
+      el.focus();
+    }, { injector: this.env });
   }
 }

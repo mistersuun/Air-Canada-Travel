@@ -43,26 +43,23 @@ describe('flight page model (g6)', () => {
     expect(v.holiday).toBe('Canadian Thanksgiving weekend (Mon Oct 12). Often busy, check loads.');
   });
 
-  it('says "None found" for a day without departures and has no tiles outside coverage', () => {
+  it('says "None in our schedule data" for a day without departures and has no tiles outside coverage', () => {
     // AC866 does not fly Thursdays, AC864 does: Oct 8 has 1; a route with no row has none.
     expect(factsView(scheduleFacts('YUL', 'LHR', '2026-10-08'), null).tiles[0].value).toBe('1 · 22:10');
-    expect(factsView(scheduleFacts('YUL', 'OPO', '2026-10-08'), null).tiles[0].value).toBe('None found');
+    expect(factsView(scheduleFacts('YUL', 'OPO', '2026-10-08'), null).tiles[0].value).toBe('None in our schedule data');
     const out = factsView(scheduleFacts('YUL', 'LHR', '2028-01-10'), null);
     expect(out.covered).toBe(false);
     expect(out.tiles).toEqual([]);
   });
 
-  it('writes a load note as "You checked at 14:05 · 3h ago" with a check or an x against the party', () => {
+  it('writes a load note as "You checked at 14:05 · 3h ago" with no pass/fail mark against the party', () => {
     const now = at('2026-10-09', '17:10');
     const ok = noteRow(note(), 2, now);
     expect(ok.title).toBe('AC864 · 14 open, 9 listed');
     expect(ok.when).toBe('You checked at 14:05 · 3h ago');
-    expect(ok.mark).toBe('ok');
-    expect(ok.markLabel).toBe('Open seats cover your 2');
-    const short = noteRow(note({ flightNumber: 'AC866', open: 1, listed: 11 }), 2, now);
-    expect(short.mark).toBe('short');
-    expect(short.markLabel).toBe('Fewer open seats than your 2');
-    expect(noteRow(note({ open: null, listed: null, text: 'Gate 52' }), 1, now).mark).toBeNull();
+    expect(ok).not.toHaveProperty('mark');
+    const many = noteRow(note({ flightNumber: 'AC866', open: 5, listed: 20 }), 2, now);
+    expect(many.title).toBe('AC866 · 5 open, 20 listed');
     expect(noteRow(note(), 1, at('2026-10-10', '09:00')).when).toBe('You checked at Fri Oct 9, 14:05 · 18h ago');
   });
 

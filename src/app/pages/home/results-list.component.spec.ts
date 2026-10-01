@@ -149,14 +149,14 @@ describe('ResultsListComponent (ported from route-list)', () => {
   });
 
   it('Places: a group after the AC results, and in place of the empty state', async () => {
-    const places = [{ id: 'gn-2510911', name: 'Seville', sub: "Spain · Not on AC's network" }];
+    const places = [{ id: 'gn-2510911', name: 'Seville', sub: "Spain · Not in our schedule data" }];
     const a = await render({ entries: routes('YUL', '2026-10-05', null), places, placeParams: { dep: '2026-10-08' } });
     const heads = [...a.el.querySelectorAll('.grp h2')].map(h => h.textContent);
     expect(heads).toEqual(['Nonstop', 'One connection', 'Places']);
     expect(a.el.querySelector('.prow')!.getAttribute('href')).toBe('/reach/gn-2510911?dep=2026-10-08');
     const b = await render({ entries: [], places, hasActiveFilters: true });
     expect(b.text()).not.toContain('No destinations match');
-    expect(b.el.querySelector('.psub')!.textContent).toBe("Spain · Not on AC's network");
+    expect(b.el.querySelector('.psub')!.textContent).toBe("Spain · Not in our schedule data");
     const c = await render({ entries: [], places: [], hasActiveFilters: true });
     expect(c.text()).toContain('No destinations match');
   });

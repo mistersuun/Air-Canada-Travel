@@ -182,7 +182,13 @@ export class TripMenuComponent {
   protected async copyLink(): Promise<void> {
     this.busy.set(true);
     try {
-      const url = await this.trips.shareLink(this.trip().id);
+      let url: string;
+      try {
+        url = await this.trips.shareLink(this.trip().id);
+      } catch {
+        this.state.flash('This trip is too large to share as a link · use Export trips in Settings');
+        return;
+      }
       if (!url) return;
       const nav = this.doc.defaultView?.navigator;
       if (nav?.share) {

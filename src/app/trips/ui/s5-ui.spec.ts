@@ -117,7 +117,7 @@ describe('outcome prompt and history', () => {
     expect(svc.trip(SEVILLE_IDS.trip)!.legs[0].status).toBe('listed');
   });
 
-  it('"Not now" dismisses the prompt; Delete removes a history record', async () => {
+  it('"Skip this flight" dismisses the prompt; Delete removes a history record', async () => {
     setScheduleSource(SEVILLE_ROUTES, SEVILLE_META);
     const storage = new MemoryStorage();
     storage.setItem(TRIPS_KEY, JSON.stringify(SEVILLE_TRIPS_FILE));

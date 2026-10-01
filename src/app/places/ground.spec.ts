@@ -45,7 +45,8 @@ describe('corridors', () => {
     const seville: LegEnd = { name: 'Seville', lat: 37.3886, lng: -5.9823 };
     expect(findCorridor(MAD, seville)?.reverse).toBe(false);
     const back = groundEstimate(seville, { name: 'Lisbon', code: 'LIS', lat: 38.77, lng: -9.13 });
-    expect(back).toMatchObject({ mode: 'bus', label: 'Bus about 6h45', exitMin: 0, exitLabel: '', totalMin: 405, lastDepLocal: null });
+    // Towards the airport: no passport or exit, but the transfer from Oriente to the airport still counts.
+    expect(back).toMatchObject({ mode: 'bus', label: 'Bus about 6h45', exitMin: 30, exitLabel: 'Get to LIS airport', totalMin: 435, lastDepLocal: null });
   });
 
   it('labels Eurostar and other rows', () => {

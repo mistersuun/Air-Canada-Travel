@@ -107,7 +107,8 @@ import { reachPlace } from './reach-place';
                         <div class="leg__m">{{ gDetail() }} · <app-provenance-tag [value]="g.ground.provenance" /></div>
                       </div>
                     </li>
-                    <li class="end"><i><app-icon name="pin" [size]="12" [filled]="true" /></i><span class="tn">{{ arrival() }}</span></li>
+                    <li class="end"><i><app-icon name="pin" [size]="12" [filled]="true" /></i><span class="tn">{{ arrival() }}</span>
+                      <app-provenance-tag [value]="g.ground.mode === 'unknown' ? 'unknown' : 'estimated'" /></li>
                   </ol>
                   @if (warning(); as w) {
                     <p class="warn" role="note"><app-icon name="warning" [size]="16" />{{ w }}</p>
@@ -185,7 +186,7 @@ import { reachPlace } from './reach-place';
     .leg__t { font-weight: 650; font-size: 14.5px; }
     .leg__m { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
     .leg__m app-provenance-tag { display: inline-flex; vertical-align: middle; }
-    .end { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 14.5px; }
+    .end { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 650; font-size: 14.5px; }
     .end i { width: 22px; height: 22px; flex: none; border-radius: 50%; background: var(--red); color: #FFFFFF; display: grid; place-items: center; }
     .warn {
       display: flex; gap: 8px; align-items: flex-start; margin: 12px 0 0; padding: 10px 12px; border-radius: 14px;

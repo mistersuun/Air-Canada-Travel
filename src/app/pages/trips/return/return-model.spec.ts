@@ -6,7 +6,7 @@ import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../../..
 import { directItineraries } from '../../../utils/connections';
 import { missRows, segmentText, spareText } from './miss-chain.component';
 import {
-  activeReturnLeg, buildReturnView, deadlineLabel, joinFlights, otherAirportsHome, returnGateway, triesLabel,
+  activeReturnLeg, buildReturnView, deadlineLabel, groundToGateway, joinFlights, otherAirportsHome, returnGateway, triesLabel,
 } from './return-model';
 
 const C120 = { minConnect: 120 };
@@ -31,7 +31,30 @@ describe('return model (g3)', () => {
     expect(joinFlights(['A', 'B', 'C'])).toBe('A, B and C');
   });
 
-  it('the return gateway is the return leg origin, else the nearest gateway to the goal', () => {
+  it('Use as return adds the Estimated trip from the goal to the return airport, unless one is planned', () => {
+    // Inbound through Madrid, no bus to Lisbon yet: flying home from Lisbon needs the trip there.
+    const t = withoutReturn();
+    t.legs = t.legs.filter(l => l.id !== SEVILLE_IDS.bus);
+    const lis = directItineraries('LIS', 'YUL', '2026-10-13')[0];
+    const g = groundToGateway(t, lis)!;
+    expect(g).toMatchObject({ kind: 'ground', mode: 'bus', provenance: 'estimated', userTimes: null });
+    expect(g.from.name).toBe('Seville');
+    expect(g.to.code).toBe('LIS');
+    expect(g.dateKey).toBe('2026-10-12');                 // a 6h45 bus can't make 11:25 leaving after 06:00
+    const mad = directItineraries('MAD', 'YUL', '2026-10-12')[0];
+    expect(groundToGateway(t, mad)!.dateKey).toBe('2026-10-12');
+    // The saved bus already ends at LIS.
+    expect(groundToGateway(withoutReturn(), lis)).toBeNull();
+  });
+
+  it('counts from another airport when asked (?retFrom=), and remembers the default', () => {
+    const v = buildReturnView(sevilleTrip(), C120, '24h', 'MAD');
+    expect(v.gateway).toBe('MAD');
+    expect(v.defaultGateway).toBe('LIS');
+    expect(v.context).toBe('Seville trip · from Madrid');
+  });
+
+  it('the return gateway is the return leg origin, else the inbound airport, else the shortest trip to the goal', () => {
     expect(returnGateway(sevilleTrip())).toBe('LIS');
     expect(activeReturnLeg(sevilleTrip())?.id).toBe(SEVILLE_IDS.ret);
     expect(returnGateway(withoutReturn())).toBe('LIS');            // the bus ends at LIS
@@ -40,7 +63,13 @@ describe('return model (g3)', () => {
     expect(returnGateway(toMad)).toBe('MAD');
     const bare = withoutReturn();
     bare.legs = bare.legs.filter(l => l.kind === 'flight');
-    expect(returnGateway(bare)).toBe('LIS');                       // nearest to Seville
+    expect(returnGateway(bare)).toBe('MAD');                       // the airport the trip came in through
+    const inbound = withoutReturn();
+    inbound.legs = inbound.legs.filter(l => l.id !== SEVILLE_IDS.bus);
+    expect(returnGateway(inbound)).toBe('MAD');                    // the train starts at MAD: not Lisbon, a 6h45 bus away
+    const empty = withoutReturn();
+    empty.legs = [];
+    expect(returnGateway(empty)).toBe('MAD');                      // shortest estimated trip to Seville (train), not nearest
     const dropped = sevilleTrip();
     dropped.legs = dropped.legs.map(l => (l.id === SEVILLE_IDS.ret ? { ...l, status: 'abandoned' } : l));
     expect(activeReturnLeg(dropped)).toBeNull();

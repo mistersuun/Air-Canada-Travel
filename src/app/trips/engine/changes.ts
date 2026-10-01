@@ -45,10 +45,14 @@ export function scanTrip(trip: Trip): { checked: number; findings: ChangeFinding
   return { checked, findings };
 }
 
-/** Dedupe key: leg + segment + kind + the new times. */
-export function changeKey(c: Pick<ChangeFinding, 'legId' | 'refIndex' | 'kind' | 'next'>): string {
-  const n = c.next;
-  return `${c.legId}|${c.refIndex}|${c.kind}|${n ? `${n.dateKey} ${n.depLocal}-${n.arrDateKey} ${n.arrLocal}` : ''}`;
+/**
+ * Dedupe key: leg + segment + kind + the planned (old) times + the new times.
+ * The old times matter: after accepting 10:00→11:00 and then 11:00→12:00, a
+ * move back to 11:00 (old 12:00) is a new change, not the first one again.
+ */
+export function changeKey(c: Pick<ChangeFinding, 'legId' | 'refIndex' | 'kind' | 'next' | 'old'>): string {
+  const t = (r: FlightRef | null) => (r ? `${r.dateKey} ${r.depLocal}-${r.arrDateKey} ${r.arrLocal}` : '');
+  return `${c.legId}|${c.refIndex}|${c.kind}|${t(c.old)}|${t(c.next)}`;
 }
 
 /** New open changes only (one already stored in any state is not raised again). */

@@ -10,8 +10,8 @@
  */
 import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
-import { greatCircleKm } from '../../utils/geo';
-import { WEEKDAY_LONG, WEEKDAY_SHORT, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
+import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
+import { MISS_GAP_MIN, departuresHome } from '../../trips/engine/homeby';
 import { hm, supOffset } from '../../ui/format';
 import type { TimeFormat } from '../../state/prefs.service';
 import { airportEnd, arrivalAtGoal, groundEstimate, type GroundEstimate } from '../../places/ground';
@@ -19,15 +19,12 @@ import { legPrepItems, type PrepItem } from '../../places/prep';
 import { partOfDay } from '../reach/reach-model';
 import { shortAircraftName } from '../../trips/engine/facts';
 import { legStartUtc, refArrUtc, refDepUtc } from '../../trips/engine/legs';
-import { type ReachableOption, missOneOutbound, stillReachable } from '../../trips/engine/recover';
+import { type ReachableOption, legDepartureKey, leavesGoalArea, missOneOutbound, stillReachable } from '../../trips/engine/recover';
 import { activeTravelDay, placeName } from '../../trips/engine/today';
 import {
   type FlightLeg, type FlightRef, type LegStatus, type LoadNote, type Outcome, type Trip, type TripLeg,
   LEG_STATUS_LABEL, instanceKey, isFinalStatus,
 } from '../../trips/model';
-
-/** A ground leg starting this close to the goal "leaves the goal area" (same rule as the engine). */
-const GOAL_AREA_KM = 50;
 
 // ── Shared formatting ─────────────────────────────────────────────────────────
 
@@ -87,10 +84,16 @@ export function resolveToday(trips: Trip[], nowMs: number, tripId?: string | nul
   return day ? { tripId: day.tripId, legId: day.legId } : null;
 }
 
-/** The segment of a flight leg the traveller is at: the first one without a recorded outcome. */
+/**
+ * The segment of a flight leg the traveller is at: the first one they have
+ * not boarded yet. A segment recorded as not boarded (or not tried) stops
+ * here, since the traveller is still at its origin.
+ */
 export function currentSegment(trip: Trip, leg: FlightLeg, outcomes: readonly Outcome[]): number {
-  const done = new Set(outcomes.filter(o => o.tripId === trip.id).map(o => instanceKey(o)));
-  const i = leg.refs.findIndex(r => !done.has(instanceKey(r)));
+  const boarded = new Set(outcomes
+    .filter(o => o.tripId === trip.id && (o.kind === 'allBoarded' || o.kind === 'someBoarded'))
+    .map(o => instanceKey(o)));
+  const i = leg.refs.findIndex(r => !boarded.has(instanceKey(r)));
   return i < 0 ? Math.max(0, leg.refs.length - 1) : i;
 }
 
@@ -121,7 +124,11 @@ export interface TodayView {
   title: string;            // 'Montréal → Madrid'
   time: string;             // '17:55'
   status: LegStatus;
+  /** Where the times come from: Scheduled, or Unknown when the flight was not found in the latest data. */
+  provenance: FlightLeg['provenance'];
   final: boolean;
+  /** A return leg: recovery means the next way home (the Return tab), not the goal. */
+  isReturn: boolean;
   sub: string;              // 'AC834 · A330-300 · leaves in 1h15'
   then: string | null;      // one-stop: 'then AC824 YYZ 19:15'
   ref: FlightRef;           // the segment shown
@@ -130,8 +137,34 @@ export interface TodayView {
   backup: TodayBackup | null;
 }
 
+/** How far ahead a return-leg backup is searched (the missed day and the next). */
+const RETURN_BACKUP_DAYS = 2;
+
+/**
+ * A return leg's backup: the next departure home from the same airport that
+ * leaves at least MISS_GAP_MIN after the missed flight (that day or the next).
+ */
+export function returnBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions, fmt: TimeFormat): TodayBackup | null {
+  const ref = leg.refs[0];
+  const home = trip.homeAirport || leg.refs[leg.refs.length - 1].dest;
+  const after = refDepUtc(ref) + MISS_GAP_MIN * MINUTE_MS;
+  for (let i = 0; i < RETURN_BACKUP_DAYS; i++) {
+    const day = addDays(ref.dateKey, i);
+    const it = departuresHome(ref.origin, home, day, connect).find(x => x.departUtc >= after);
+    if (!it) continue;
+    const when = day === ref.dateKey ? 'later today' : WEEKDAY_SHORT[weekdayIndex(day)];
+    return {
+      title: `Backup ${when}: ${flightsLabel(it)} to ${placeName(it.dest)} ${formatClock(it.legs[0].depLocal, fmt)}`,
+      detail: `Still possible if you don't clear ${ref.flightNumber}`,
+    };
+  }
+  return null;
+}
+
 /** The first usable option if the leg's flight leaves without you, tonight first. */
 export function todayBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions, fmt: TimeFormat): TodayBackup | null {
+  // Recovery searches toward the goal: for a return leg the backup is the next way home.
+  if (leg.role === 'return') return returnBackup(trip, leg, connect, fmt);
   const r = missOneOutbound(trip, leg.id, connect);
   const missed = leg.refs[0].flightNumber;
   const tonight = r.tonight.find(o => o.status === 'usable');
@@ -164,6 +197,7 @@ export function todayView(input: {
   const last = leg.refs[leg.refs.length - 1];
   const next = leg.refs[seg + 1] ?? null;
   const final = isFinalStatus(leg.status);
+  const departed = refDepUtc(ref) < nowMs;
 
   const subParts = [ref.flightNumber];
   if (ref.aircraft) subParts.push(shortAircraftName(ref.aircraft));
@@ -181,12 +215,15 @@ export function todayView(input: {
     title: `${placeName(ref.origin)} → ${placeName(last.dest)}`,
     time: formatClock(ref.depLocal, fmt),
     status: leg.status,
+    provenance: leg.provenance,
     final,
+    isReturn: leg.role === 'return',
     sub: subParts.join(' · '),
     then: next ? `then ${next.flightNumber} ${next.origin} ${formatClock(next.depLocal, fmt)}` : null,
     ref,
     note,
-    left: final ? [] : legPrepItems(trip, leg.id),
+    // Listing and check-in can't be done once the flight has left: the outcome question replaces them.
+    left: final ? [] : legPrepItems(trip, leg.id).filter(item => !(departed && /^(list|checkin):/.test(item.id))),
     backup: final || seg > 0 ? null : todayBackup(trip, leg, input.connect, fmt),
   };
 }
@@ -299,17 +336,6 @@ function row(o: ReachableOption, trip: Trip, currentGw: string | null, fmt: Time
   };
 }
 
-function leavesGoalArea(trip: Trip, leg: TripLeg): boolean {
-  if (isFinalStatus(leg.status)) return false;
-  if (leg.kind === 'ground') return greatCircleKm(leg.from, trip.goal) <= GOAL_AREA_KM;
-  return leg.role === 'return';
-}
-
-function legDepartureKey(leg: TripLeg): string {
-  if (leg.kind === 'ground') return leg.userTimes?.depDateKey ?? leg.dateKey;
-  return leg.refs[0].dateKey;
-}
-
 /** Nights at the goal the original leg would have given (its snapshot plus the estimated ground trip). */
 export function plannedNights(trip: Trip, leg: FlightLeg): number | null {
   const last = leg.refs[leg.refs.length - 1];
@@ -318,7 +344,7 @@ export function plannedNights(trip: Trip, leg: FlightLeg): number | null {
   const g: GroundEstimate = groundEstimate(end, trip.goal);
   const arr = arrivalAtGoal(refArrUtc(last), g, airportTz(last.dest)).utc;
   if (arr === null) return null;
-  const leave = trip.legs.find(l => leavesGoalArea(trip, l) && legStartUtc(l) > arr);
+  const leave = trip.legs.find(l => leavesGoalArea(trip, l) && legStartUtc(l, trip.legs) > arr);
   if (!leave) return null;
   return Math.max(0, diffDays(utcToLocal(arr, trip.goal.tz ?? airportTz(last.dest)).dateKey, legDepartureKey(leave)));
 }

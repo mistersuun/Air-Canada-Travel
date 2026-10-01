@@ -36,6 +36,8 @@ export interface HomeByPlan {
   deadlineUtc: number;
   days: DayTries[];               // from `fromKey` to the deadline date
   nextAfterDeadline: Itinerary | null;  // first option that lands after the deadline (searched up to 7 days past it)
+  /** Every option landing after the deadline, by departure: from the day before the deadline date to the first later day with one. */
+  lateOptions: Itinerary[];
   covered: boolean;               // false if any day is outside coverage → show "Unknown"
 }
 export interface MissStep { label: string; itinerary: Itinerary | null; kind: 'try' | 'fallback' | 'late'; slackMin: number | null }
@@ -126,14 +128,18 @@ export function homeByPlan(
     if (!isCovered(k, hub)) covered = false;
     days.push({ dateKey: k, tries: triesOnDay(from, home, k, deadline, opts) });
   }
-  let nextAfterDeadline: Itinerary | null = null;
-  for (let i = 0; i <= AFTER_DEADLINE_DAYS && !nextAfterDeadline; i++) {
+  // Late options start the day before the deadline date so an overnight flight
+  // that lands just after the deadline is considered too.
+  const lateOptions: Itinerary[] = [];
+  for (let i = -1; i <= AFTER_DEADLINE_DAYS; i++) {
     const k = addDays(homeBy.dateKey, i);
     if (k < fromKey) continue;
-    const late = departuresHome(from, home, k, opts).filter(it => it.arriveUtc > deadline);
-    if (late.length) nextAfterDeadline = [...late].sort(compareItineraries)[0];
+    lateOptions.push(...departuresHome(from, home, k, opts).filter(it => it.arriveUtc > deadline));
+    if (lateOptions.length && k >= homeBy.dateKey) break;
   }
-  return { deadlineUtc: deadline, days, nextAfterDeadline, covered };
+  lateOptions.sort((a, b) => a.departUtc - b.departUtc || a.arriveUtc - b.arriveUtc);
+  const nextAfterDeadline = lateOptions.length ? [...lateOptions].sort(compareItineraries)[0] : null;
+  return { deadlineUtc: deadline, days, nextAfterDeadline, lateOptions, covered };
 }
 
 /** Number of tries on startKey..the deadline date. */
@@ -152,15 +158,16 @@ export function spareLabel(min: number): string {
 
 /**
  * The miss-one chain for a date: Try 1, then each later try leaving at least
- * MISS_GAP_MIN after the previous one ("If you miss it"), then the first
- * option after the deadline ("If you miss both"). No tries → one late step.
+ * MISS_GAP_MIN after the previous one ("If you miss it"), then the first try
+ * on a later day that still makes the deadline, then the first option after
+ * the deadline that leaves after the last step ("If you miss both"). No tries
+ * → one late step.
  */
 export function missOneChain(plan: HomeByPlan, dateKey: string): MissStep[] {
   const tries = plan.days.find(d => d.dateKey === dateKey)?.tries ?? [];
   const steps: MissStep[] = [];
   let prevDep = -Infinity;
-  for (const t of tries) {
-    if (steps.length && t.itinerary.departUtc - prevDep < MISS_GAP_MIN * MINUTE_MS) continue;
+  const push = (t: Try) => {
     const first = !steps.length;
     steps.push({
       label: first ? 'Try 1' : 'If you miss it',
@@ -169,11 +176,24 @@ export function missOneChain(plan: HomeByPlan, dateKey: string): MissStep[] {
       slackMin: t.slackMin,
     });
     prevDep = t.itinerary.departUtc;
+  };
+  for (const t of tries) {
+    if (steps.length && t.itinerary.departUtc - prevDep < MISS_GAP_MIN * MINUTE_MS) continue;
+    push(t);
   }
+  // Missing every try that day still leaves the next day's tries before the deadline.
+  const later = plan.days
+    .filter(d => d.dateKey > dateKey)
+    .flatMap(d => d.tries)
+    .find(t => t.itinerary.departUtc - prevDep >= MISS_GAP_MIN * MINUTE_MS);
+  if (later) push(later);
+  const late = steps.length
+    ? plan.lateOptions.find(it => it.departUtc - prevDep >= MISS_GAP_MIN * MINUTE_MS) ?? null
+    : plan.nextAfterDeadline;
   const n = steps.length;
   steps.push({
     label: n === 0 ? 'No try found before your deadline' : n === 1 ? 'If you miss it' : n === 2 ? 'If you miss both' : 'If you miss them all',
-    itinerary: plan.nextAfterDeadline,
+    itinerary: late,
     kind: 'late',
     slackMin: null,
   });

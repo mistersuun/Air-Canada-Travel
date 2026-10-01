@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { AppStateService } from '../../../state/app-state.service';
 import { hubDisplayName } from '../../../ui/format';
@@ -8,11 +8,11 @@ import { TripsService } from '../../../trips/trips.service';
 import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.component';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { DestPhotoComponent } from '../../../ui/dest-photo.component';
-import { destPath } from '../../../ui/links';
 import type { Itinerary } from '../../../utils/connections';
 import { WEEKDAY_SHORT, isDateKey, weekdayIndex } from '../../../utils/time';
 import { MissChainComponent } from './miss-chain.component';
-import { buildReturnView, triesLabel } from './return-model';
+import { buildReturnView, groundToGateway, triesLabel } from './return-model';
+import { placeName } from '../../../trips/engine/today';
 
 /** Parses a datetime-local value ('2026-10-13T22:00') into a homeBy, or null. */
 export function parseDeadline(value: string): { dateKey: string; hhmm: string } | null {
@@ -32,14 +32,18 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
 @Component({
   selector: 'app-return-tab',
   standalone: true,
-  imports: [RouterLink, IconComponent, ProvenanceTagComponent, GlassSheetComponent, DestPhotoComponent, MissChainComponent],
+  imports: [IconComponent, ProvenanceTagComponent, GlassSheetComponent, DestPhotoComponent, MissChainComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let v = view();
     <div class="rt">
       <header class="rt__ctx">
         <h2 class="ui-h3">Getting home</h2>
-        <p class="ui-sub tn" data-context>{{ v.context }}</p>
+        <p class="ui-sub tn" data-context>{{ v.context }}
+          @if (v.defaultGateway && v.gateway !== v.defaultGateway) {
+            · <button type="button" class="ui-link rt__reset" data-reset (click)="useAirport(null)">Back to {{ city(v.defaultGateway) }}</button>
+          }
+        </p>
       </header>
 
       <section class="ui-card rt__card" aria-label="Deadline">
@@ -81,14 +85,15 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
           <div class="ui-sec-h rt__h"><h3 class="ui-h3">Other airports home</h3></div>
           <section class="ui-card rt__others">
             @for (o of v.others; track o.code) {
-              <a class="rt__row" [routerLink]="destLink(o.code)" [queryParams]="state.globalParams()" [attr.data-other]="o.code">
+              <button type="button" class="rt__row" [attr.data-other]="o.code" (click)="useAirport(o.code)">
                 <app-dest-photo class="rt__th" [code]="o.code" size="thumb" />
                 <span class="rt__rt">
                   <span class="rt__nm"><b>{{ o.city }}</b>&ngsp;<span class="rt__code">{{ o.code }}</span></span>
                   <span class="ui-visually-hidden"> · </span><span class="rt__m tn">{{ o.text }}</span>
+                  <span class="ui-visually-hidden"> · count tries from {{ o.city }}</span>
                 </span>
                 <app-icon class="rt__chev" name="chevron-right" [size]="16" />
-              </a>
+              </button>
             }
           </section>
         }
@@ -133,7 +138,8 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
     .note--blue { background: color-mix(in srgb, var(--blue) 11%, transparent); color: var(--blue-ink); }
     .note--blue app-icon { color: var(--blue); }
     .rt__others { padding: 4px 14px; }
-    .rt__row { display: flex; align-items: center; gap: 12px; padding: 10px 0; min-height: 44px; color: var(--ink); }
+    .rt__row { display: flex; align-items: center; gap: 12px; padding: 10px 0; min-height: 44px; color: var(--ink); width: 100%; text-align: left; }
+    .rt__reset { font-size: inherit; min-height: 32px; }
     .rt__row + .rt__row { border-top: 1px solid var(--hair); }
     .rt__row:hover b { color: var(--blue); }
     .rt__rt { flex: 1; min-width: 0; display: block; }
@@ -156,9 +162,18 @@ export class ReturnTabComponent {
   protected readonly state = inject(AppStateService);
   protected readonly trips = inject(TripsService);
 
-  readonly trip = input.required<Trip>();
+  private readonly router = inject(Router);
 
-  protected readonly view = computed(() => buildReturnView(this.trip(), this.state.connect(), this.state.timeFormat()));
+  readonly trip = input.required<Trip>();
+  /** ?retFrom=: count tries from this airport instead of the trip's return airport (Other airports home, a destination page). */
+  readonly from = input<string | null | undefined>(null);
+
+  private readonly fromCode = computed(() => {
+    const f = this.from();
+    return f && /^[A-Z]{3}$/.test(f) && f !== this.trip().homeAirport ? f : undefined;
+  });
+  protected readonly view = computed(() =>
+    buildReturnView(this.trip(), this.state.connect(), this.state.timeFormat(), this.fromCode()));
   protected readonly homeName = computed(() => hubDisplayName(this.trip().homeAirport));
 
   protected readonly sheetOpen = signal(false);
@@ -177,8 +192,13 @@ export class ReturnTabComponent {
     return WEEKDAY_SHORT[weekdayIndex(key)];
   }
 
-  protected destLink(code: string): string[] {
-    return destPath(code);
+  protected city(code: string): string {
+    return placeName(code);
+  }
+
+  /** Switches the airport this tab counts from (kept in the URL as ?retFrom=). */
+  protected useAirport(code: string | null): void {
+    void this.router.navigate([], { queryParams: { retFrom: code }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   protected openSheet(): void {
@@ -194,14 +214,18 @@ export class ReturnTabComponent {
     this.sheetOpen.set(false);
   }
 
+  /** Adds the flight as the return, plus an Estimated trip from the goal to that airport when one is needed. */
   protected useAsReturn(it: Itinerary): void {
     const t = this.trip();
+    const ground = groundToGateway(t, it);
     const legId = this.trips.addFlightLeg(t.id, it, 'return');
     if (!legId) return;
+    const groundId = ground ? this.trips.addGroundLeg(t.id, ground) : '';
     const num = it.legs.map(l => l.flightNumber).filter(Boolean).join(' + ');
-    this.state.flash(`Added ${num} as your return · Listing is still your step`, {
+    const via = ground ? ` and the trip to ${placeName(it.origin)}` : '';
+    this.state.flash(`Added ${num}${via} as your return · Listing is still your step`, {
       label: 'Undo',
-      run: () => this.trips.update(t.id, cur => ({ ...cur, legs: cur.legs.filter(l => l.id !== legId) })),
+      run: () => this.trips.update(t.id, cur => ({ ...cur, legs: cur.legs.filter(l => l.id !== legId && l.id !== groundId) })),
     });
   }
 }

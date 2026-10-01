@@ -46,7 +46,7 @@ describe('TripsPage', () => {
     expect(text('[data-countdown]')).toBe('In 7 days');
     expect(all('.tc__chip')).toEqual(['2 travellers · stay together', 'From YUL']);
     expect(all('.tl__top app-leg-status-tag, .tl__top app-provenance-tag')).toEqual(['Listed', 'Estimated', 'Saved by you', 'Planned']);
-    expect(all('.tl__m')[0]).toBe('17:55 → 06:50⁺¹ · 2 backups');
+    expect(all('.tl__m')[0]).toBe('17:55 → 06:50⁺¹ · 2 backups · Scheduled');
     expect(all('.tl__m')[3]).toContain('home 8h before your deadline');
     expect(text('.tl__end')).toBe('Home, Montréal');
     expect(text('[data-return-warning]')).toBe(

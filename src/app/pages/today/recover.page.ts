@@ -121,7 +121,8 @@ import { type RecoverRow, recoverView } from './today-model';
     .rc__none { margin: 0; padding: 14px; font-size: 13.5px; color: var(--ink-2); }
     .rc__row { display: flex; align-items: center; gap: 12px; padding: 12px 0; min-height: 68px; border-bottom: 1px solid var(--hair); }
     .rc__row:last-child, .rc__row:has(+ .rc__more) { border-bottom: 0; }
-    .rc__row.is-off { opacity: .5; }
+    /* Not usable, but still facts: only the thumbnail is muted; text keeps full contrast. */
+    .rc__row.is-off .rc__th { opacity: .5; }
     .rc__th { width: 46px; height: 46px; flex: none; border-radius: var(--radius-thumb); }
     .rc__mono { font-family: var(--cond); font-size: 13px; }
     .rc__mono.is-hub { --mono: var(--teal) !important; }

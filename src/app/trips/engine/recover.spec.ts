@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { toUtcMs } from '../../utils/time';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../testing/seville-fixture';
-import { CLOSED_REASON, currentGateway, missOneOutbound, stillReachable } from './recover';
+import type { FlightLeg, GroundLeg } from '../model';
+import { CLOSED_REASON, currentGateway, leavesGoalArea, missOneOutbound, stillReachable } from './recover';
 
 const AT_1805 = toUtcMs('2026-10-08', '18:05', 'America/Toronto');
 const flights = (o: { itinerary: { legs: { flightNumber: string | null }[] } }) => o.itinerary.legs.map(l => l.flightNumber).join('+');
@@ -33,8 +34,9 @@ describe('stillReachable (Seville fixture, YUL at 18:05 Thu Oct 8)', () => {
 
     const mad = tonight.find(o => o.gateway === 'MAD')!;
     expect(mad.status).toBe('missedConnection');
-    expect(flights(mad)).toBe('AC489+AC824');
-    expect(mad.reason).toBe('AC489 lands 19:53, after AC824 leaves at 19:15');
+    // AC489 (18:30) leaves inside the boarding window, so the reason names the next boardable feeder.
+    expect(flights(mad)).toBe('AC427+AC824');
+    expect(mad.reason).toBe('AC427 lands 21:53, after AC824 leaves at 19:15');
 
     // AC834 has left: it is not listed at all. A Lisbon one-stop landing after AC812 adds nothing.
     expect(tonight.some(o => o.itinerary.legs[0].flightNumber === 'AC834')).toBe(false);
@@ -75,6 +77,34 @@ describe('stillReachable (Seville fixture, YUL at 18:05 Thu Oct 8)', () => {
     if (ret.kind === 'flight') ret.refs[0] = { ...ret.refs[0], dateKey: '2026-10-09', arrDateKey: '2026-10-09' };
     const { tomorrow } = stillReachable({ trip, at: 'YUL', nowMs: AT_1805, connect: {} });
     expect(tomorrow.find(o => o.gateway === 'MAD')!.returnStillWorks).toBe(false);
+  });
+
+  it('counts nights when the gateway itself is in the goal area (Sintra via Lisbon)', () => {
+    const t = sevilleTrip();
+    t.goal = { id: 'gn-1', name: 'Sintra', country: 'Portugal', iso2: 'PT', lat: 38.80, lng: -9.38, tz: 'Europe/Lisbon' };
+    (t.legs[0] as FlightLeg).refs[0] = {
+      flightNumber: 'AC812', origin: 'YUL', dest: 'LIS', dateKey: '2026-10-08', depLocal: '21:45', arrLocal: '09:20', arrDateKey: '2026-10-09', aircraft: '333',
+    };
+    const inbound: GroundLeg = {
+      ...(t.legs[1] as GroundLeg), from: { name: 'Lisbon', code: 'LIS', lat: 38.77, lng: -9.13, tz: 'Europe/Lisbon' },
+      to: { name: 'Sintra', lat: 38.80, lng: -9.38, tz: 'Europe/Lisbon' }, estMinutes: 60,
+    };
+    t.legs = [t.legs[0], inbound, t.legs[3]];
+    // The airport → Sintra leg comes toward the goal: it never "leaves the goal area".
+    expect(leavesGoalArea(t, inbound)).toBe(false);
+    expect(leavesGoalArea(t, { ...inbound, from: inbound.to, to: inbound.from })).toBe(true);
+    const r = stillReachable({ trip: t, at: 'YUL', nowMs: AT_1805, connect: { minConnect: 60 }, gateways: ['LIS'] });
+    expect(r.tonight[0].nightsAtGoal).toBe(4);
+  });
+
+  it('the return no longer works once the saved bus to the return airport is missed', () => {
+    // Sun Oct 11 evening: Lisbon on Mon morning, Seville Mon evening, after the saved 09:00 bus back to Lisbon.
+    const { tonight } = stillReachable({
+      trip: sevilleTrip(), at: 'YUL', nowMs: toUtcMs('2026-10-11', '18:05', 'America/Toronto'), connect: { minConnect: 60 }, gateways: ['LIS'],
+    });
+    const lis = tonight.find(o => o.status === 'usable')!;
+    expect(lis.arriveGoalUtc!).toBeGreaterThan(toUtcMs('2026-10-12', '09:00', 'Europe/Madrid'));
+    expect(lis.returnStillWorks).toBe(false);
   });
 
   it('respects an explicit gateway list', () => {

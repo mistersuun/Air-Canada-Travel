@@ -45,6 +45,8 @@ function reload(): TripsService {
 
 const stored = (): { trips: Trip[] } => JSON.parse(storage!.getItem(TRIPS_KEY)!);
 const leg = (svc: TripsService, id: string) => svc.trip(SEVILLE_IDS.trip)!.legs.find(l => l.id === id)!;
+const lisYulAt = (dep: string, arr: string) => SEVILLE_ROUTES.map(r => r.originCode === 'LIS' && r.destinationCode === 'YUL'
+  ? route('LIS', 'YUL', rec('AC813', dep, arr, '2026-09-29', '2027-09-26', 'Mon,Tue,Wed,Thu,Fri,Sat', '333')) : r);
 const LIS_YUL_RETIMED = SEVILLE_ROUTES.map(r => r.originCode === 'LIS' && r.destinationCode === 'YUL'
   ? route('LIS', 'YUL', rec('AC813', '11:10', '13:35', '2026-09-29', '2027-09-26', 'Mon,Tue,Wed,Thu,Fri,Sat', '333')) : r);
 
@@ -135,7 +137,8 @@ describe('TripsService', () => {
       dateKey: '2026-10-13', estMinutes: 30, provenance: 'estimated', userTimes: null,
     });
     const order = svc.trip(SEVILLE_IDS.trip)!.legs.map(l => l.id);
-    expect(order.indexOf(gid)).toBe(order.indexOf(SEVILLE_IDS.ret) + 1); // 12:00 on Tue, after AC813 11:25
+    // An unsaved ground leg to LIS on the day AC813 leaves LIS is placed before it (arrive 2h ahead), not at noon.
+    expect(order.indexOf(gid)).toBe(order.indexOf(SEVILLE_IDS.ret) - 1);
 
     const bcn = directItinerary(flightsOn('YUL', 'BCN', '2026-10-08')[0]);
     svc.addAlternate(SEVILLE_IDS.trip, SEVILLE_IDS.outbound, bcn); // already a backup
@@ -203,6 +206,39 @@ describe('TripsService', () => {
     expect(svc.trip(SEVILLE_IDS.trip)!.changes[0].state).toBe('accepted');
     svc.checkChanges();
     expect(svc.trip(SEVILLE_IDS.trip)!.changes.filter(x => x.state === 'open')).toEqual([]);
+  });
+
+  it('an accepted change never hides a later move back to the same times', () => {
+    const svc = make();
+    const accept = () => {
+      svc.checkChanges();
+      const open = svc.trip(SEVILLE_IDS.trip)!.changes.filter(x => x.state === 'open');
+      expect(open).toHaveLength(1);
+      svc.acceptChange(SEVILLE_IDS.trip, open[0].id);
+    };
+    setScheduleSource(lisYulAt('11:10', '13:35'), SEVILLE_META);
+    accept();
+    setScheduleSource(lisYulAt('11:00', '13:25'), SEVILLE_META);
+    accept();
+    setScheduleSource(lisYulAt('11:10', '13:35'), SEVILLE_META);
+    svc.checkChanges();
+    const open = svc.trip(SEVILLE_IDS.trip)!.changes.filter(x => x.state === 'open');
+    expect(open.map(c => [c.old.depLocal, c.next?.depLocal])).toEqual([['11:00', '11:10']]);
+  });
+
+  it('reloads when another tab saves, so a stale tab never writes old trips back', () => {
+    const svc = make();
+    const other = JSON.parse(storage!.getItem(TRIPS_KEY)!);
+    other.trips[0].name = 'Renamed in another tab';
+    storage!.setItem(TRIPS_KEY, JSON.stringify(other));
+    svc.onStorage({ key: TRIPS_KEY, storageArea: storage });
+    expect(svc.trip(SEVILLE_IDS.trip)!.name).toBe('Renamed in another tab');
+    svc.setPrep(SEVILLE_IDS.trip, 'custom:x', true);
+    expect(stored().trips[0].name).toBe('Renamed in another tab');
+    // Events for other keys or other storage areas are ignored.
+    svc.onStorage({ key: 'something.else', storageArea: storage });
+    svc.onStorage({ key: TRIPS_KEY, storageArea: new MemoryStorage() });
+    expect(svc.trip(SEVILLE_IDS.trip)!.name).toBe('Renamed in another tab');
   });
 
   it('Keep my plan marks a leg not found as Unknown; data restored clears open changes', () => {

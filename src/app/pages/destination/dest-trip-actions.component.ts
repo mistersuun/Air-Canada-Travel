@@ -3,7 +3,7 @@ import { Router } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { placeFromDestination } from '../../places/place';
 import { AppStateService } from '../../state/app-state.service';
-import type { FlightLeg, Trip } from '../../trips/model';
+import { type FlightLeg, type Trip, isFinalStatus } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { prettyFlight } from '../../ui/format';
 import { tripUrl } from '../../ui/links';
@@ -41,7 +41,7 @@ export function tripAddition(trip: Trip, code: string, dayKey: string): TripAddi
   const role: FlightLeg['role'] = it && it.origin === code ? 'return' : dayKey === trip.outboundDate ? 'outbound' : 'onward';
   const backupOf = it
     ? (trip.legs.find(l => l.kind === 'flight' && l.refs[0]?.origin === it.origin && l.refs[0]?.dateKey === it.dateKey
-      && l.status !== 'abandoned') as FlightLeg | undefined) ?? null
+      && !isFinalStatus(l.status)) as FlightLeg | undefined) ?? null
     : null;
   return { trip, it, role, backupOf };
 }

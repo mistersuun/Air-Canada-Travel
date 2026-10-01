@@ -9,7 +9,7 @@ import { hubDisplayName } from '../ui/format';
 import { findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
 import { MINUTE_MS, toUtcMs, addDays, utcToLocal } from '../utils/time';
-import { CORRIDORS, Corridor } from './corridors';
+import { CORRIDORS, Corridor, corridorTransferMin } from './corridors';
 
 export interface GroundEstimate {
   mode: GroundMode | 'unknown';
@@ -146,14 +146,15 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd): GroundEstimate
   const hit = findCorridor(from, to);
   if (hit) {
     const { row, reverse } = hit;
-    const exitMin = reverse ? 0 : row.exitMin;
+    // Towards the airport there is no passport/exit, but the station → airport transfer still counts.
+    const exitMin = reverse ? corridorTransferMin(row) : row.exitMin;
     const word = row.modeLabel ?? cap(row.mode);
     return {
       mode: row.mode,
       label: `${word} about ${aboutDuration(row.rideMin)}${row.shortFlightToo ? ', or a short flight' : ''}`,
       rideMin: row.rideMin,
       exitMin,
-      exitLabel: reverse ? '' : row.exitLabel,
+      exitLabel: reverse ? (exitMin ? `Get to ${row.code} airport` : '') : row.exitLabel,
       totalMin: exitMin + row.rideMin,
       frequency: row.frequency,
       lastDepLocal: reverse ? null : row.lastDepLocal,

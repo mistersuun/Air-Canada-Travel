@@ -261,12 +261,12 @@ export function factsView(f: ScheduleFacts, holiday: string | null, fmt: TimeFor
     covered: true,
     holiday,
     tiles: [
-      { label: 'Departures', value: n ? `${n} · ${times}` : 'None found' },
+      { label: 'Departures', value: n ? `${n} · ${times}` : 'None in our schedule data' },
       { label: 'Last one', value: f.last ? `${prettyFlight(f.last.flightNumber)} ${formatClock(f.last.depLocal, fmt)}` : '—' },
       { label: 'Aircraft', value: aircraft || '—' },
       {
         label: 'Next day',
-        value: !next.covered ? 'Unknown' : next.count ? `${next.count} departure${next.count === 1 ? '' : 's'}` : 'None found',
+        value: !next.covered ? 'Unknown' : next.count ? `${next.count} departure${next.count === 1 ? '' : 's'}` : 'None in our schedule data',
       },
     ],
   };
@@ -290,14 +290,14 @@ export interface NoteRow {
   /** 'You checked at 14:05 · 3h ago'. */
   when: string;
   text: string;
-  /** Open seats against the party: 'ok' (open ≥ party), 'short', or null when no open count was written. */
-  mark: 'ok' | 'short' | null;
-  /** Words for the mark (the badge is never colour alone). */
-  markLabel: string;
 }
 
-/** One load note as a row. Times are local at the flight's origin. */
-export function noteRow(n: LoadNote, partySize: number, nowMs: number, fmt: TimeFormat = '24h'): NoteRow {
+/**
+ * One load note as a row. Times are local at the flight's origin. Purely
+ * descriptive ('5 open, 20 listed'): never compared with the party as a
+ * pass/fail mark, which would read as boarding odds.
+ */
+export function noteRow(n: LoadNote, _partySize: number, nowMs: number, fmt: TimeFormat = '24h'): NoteRow {
   const nums: string[] = [];
   if (n.open !== null) nums.push(`${n.open} open`);
   if (n.listed !== null) nums.push(`${n.listed} listed`);
@@ -305,16 +305,11 @@ export function noteRow(n: LoadNote, partySize: number, nowMs: number, fmt: Time
   const local = Number.isFinite(ms) ? utcToLocal(ms, airportTz(n.origin)) : null;
   const today = utcToLocal(nowMs, airportTz(n.origin)).dateKey;
   const at = local ? `${local.dateKey !== today ? `${dayShort(local.dateKey)}, ` : ''}${formatClock(local.hhmm, fmt)}` : '';
-  const party = Math.max(1, partySize);
-  const mark = n.open === null ? null : n.open >= party ? 'ok' : 'short';
-  const who = party === 1 ? 'you' : `your ${party}`;
   return {
     id: n.id,
     title: [prettyFlight(n.flightNumber), nums.join(', ')].filter(Boolean).join(' · '),
     when: `You checked at ${at}${Number.isFinite(ms) ? ` · ${agoLabel(nowMs - ms)}` : ''}`,
     text: n.text,
-    mark,
-    markLabel: mark === 'ok' ? `Open seats cover ${who}` : mark === 'short' ? `Fewer open seats than ${who}` : '',
   };
 }
 

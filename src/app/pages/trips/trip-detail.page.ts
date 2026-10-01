@@ -51,7 +51,7 @@ export const TRIP_TABS: SegOption[] = [
         <app-seg stretch [options]="tabs" [value]="activeTab()" (valueChange)="setTab($event)" ariaLabel="Trip sections" />
         @switch (activeTab()) {
           @case ('prep') { <app-prep-tab [trip]="t" /> }
-          @case ('return') { <app-return-tab [trip]="t" /> }
+          @case ('return') { <app-return-tab [trip]="t" [from]="retFrom() ?? null" /> }
           @default { <app-plan-tab [trip]="t" [leg]="leg()" /> }
         }
         @if (menuOpen()) {
@@ -81,6 +81,8 @@ export class TripDetailPage {
   readonly tab = input<string | undefined>(undefined);
   /** ?leg=: opens that leg's sheet on the Plan tab. */
   readonly leg = input<string | undefined>(undefined);
+  /** ?retFrom=: the airport the Return tab counts from (defaults to the trip's return airport). ?from= is the global hub. */
+  readonly retFrom = input<string | undefined>(undefined);
 
   protected readonly tabs = TRIP_TABS;
   protected readonly menuOpen = signal(false);
@@ -96,7 +98,7 @@ export class TripDetailPage {
 
   protected setTab(value: string | null | undefined): void {
     void this.router.navigate([], {
-      queryParams: { tab: value === 'plan' ? null : value, leg: null },
+      queryParams: { tab: value === 'plan' ? null : value, leg: null, retFrom: null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });

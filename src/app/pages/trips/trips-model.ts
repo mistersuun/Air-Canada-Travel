@@ -36,7 +36,7 @@ export interface LegRow {
   title: string;
   /** '17:55 → 06:50⁺¹ · 2 backups', 'Train about 2h40 · not booked'. */
   meta: string;
-  /** Flight legs show their status, ground legs their provenance. */
+  /** Flight legs show their status (and Scheduled/Unknown for their times), ground legs their provenance. */
   status: LegStatus | null;
   provenance: Provenance | null;
   /** Replaced or done with: shown dimmed. */
@@ -79,7 +79,7 @@ export function partyLabel(party: Party): string {
 /** First departure of the trip (or the outbound date at 00:00 home time when it has no legs yet). */
 function tripStartUtc(trip: Trip): number {
   const first = trip.legs.find(l => l.status !== 'abandoned');
-  const w = first ? legWindow(first) : null;
+  const w = first ? legWindow(first, trip.legs) : null;
   if (w) return w.depUtc;
   return deadlineUtc({ dateKey: trip.outboundDate, hhmm: '00:00' }, trip.fromHub);
 }
@@ -146,7 +146,7 @@ function flightRow(trip: Trip, leg: FlightLeg, fmt: TimeFormat): LegRow {
     title: first ? `${WEEKDAY_SHORT[weekdayIndex(first.dateKey)]} · ${refsRoute(refs)} · ${flightNumbers(refs)}` : 'Flight',
     meta: meta.filter(Boolean).join(' · '),
     status: leg.status,
-    provenance: null,
+    provenance: leg.provenance,
     done: leg.status === 'abandoned' || leg.status === 'notBoarded' || leg.status === 'didntTry',
   };
 }

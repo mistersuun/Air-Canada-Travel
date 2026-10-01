@@ -56,7 +56,7 @@ describe('reach model', () => {
     expect(rows.find(r => r.code === 'LIS')!.flight).toBe('AC812 21:45 · 1 flight that day');
     const opo = rows.find(r => r.code === 'OPO')!;
     expect(opo.flight).toBeNull();
-    expect(opo.idle).toBe('No flight found Thu Oct 8 · next Fri Oct 9');
+    expect(opo.idle).toBe('Not found in our schedule data Thu Oct 8 · next Fri Oct 9');
     // Never "no flights" or "cancelled".
     expect(rows.map(r => `${r.flight} ${r.idle}`).join(' ')).not.toMatch(/no flights|cancel/i);
   });
@@ -132,10 +132,13 @@ describe('ReachPage', () => {
     expect(text(el)).toContain('Home by Tue Oct 13');
     expect(text(el)).toContain('From YUL');
     expect(text(el)).toContain('Ways to reach Seville');
-    expect(text(el)).toContain("Not on AC's network");
+    expect(text(el)).toContain("Not in our schedule data");
     expect([...el.querySelectorAll('.row .c')].map(c => c.textContent)).toEqual(['MAD', 'BCN', 'LIS', 'OPO']);
     expect(el.querySelectorAll('a.row app-provenance-tag').length).toBe(3);
-    expect(text(el.querySelector('.row.idle')!)).toContain('No flight found Thu Oct 8 · next Fri Oct 9');
+    expect(text(el.querySelector('.row.idle')!)).toContain('Not found in our schedule data Thu Oct 8 · next Fri Oct 9');
+    // The idle row is not a dead end: it opens OPO on its next day with a flight.
+    expect(el.querySelector('a.row.idle')!.getAttribute('href')).toMatch(/^\/reach\/gn-2510911\/OPO\?.*dep=2026-10-09/);
+    expect(text(el)).toContain("Air Canada may still fly there on routes this app doesn't cover");
     expect(text(el)).toContain('Include trips via other Canadian hubs');
     expect(el.querySelector('a.row')!.getAttribute('href')).toMatch(/^\/reach\/gn-2510911\/MAD\?.*dep=2026-10-08/);
 
@@ -217,7 +220,7 @@ describe('GatewayPage', () => {
     await h.navigateByUrl('/reach/gn-2510911/OPO?dep=2026-10-08');
     await settle(h);
     const el = h.routeNativeElement!;
-    expect(text(el)).toContain('No flight found Thu Oct 8 · next Fri Oct 9');
+    expect(text(el)).toContain('Not found in our schedule data Thu Oct 8 · next Fri Oct 9');
     const start = [...el.querySelectorAll('button')].find(b => b.textContent!.includes('Start this trip')) as HTMLButtonElement;
     expect(start.disabled).toBe(true);
   });

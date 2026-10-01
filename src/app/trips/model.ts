@@ -131,6 +131,8 @@ export interface Trip {
   scheduleGeneratedAt: string | null; // meta.generatedAt last compared against
   offlineSavedAt: string | null;
   calendarExportedAt: string | null;
+  /** calendarKey() of every flight in the last calendar export (absent on trips exported before this was kept). */
+  calendarRefs?: string[];
   sharedFrom: { at: string } | null; // set on an imported shared copy
   archived: boolean;
 }
@@ -178,6 +180,11 @@ export interface NewTrip {
 export interface SharedTripPreview { trip: Trip; notes: LoadNote[]; sharedAt: string }
 
 /** Key of a flight instance, for notes/outcomes/prompts: 'AC834|YUL|2026-10-08'. */
+/** A flight as it was written to a calendar file: number, route, date and times. */
+export function calendarKey(r: FlightRef): string {
+  return `${r.flightNumber}|${r.origin}|${r.dest}|${r.dateKey} ${r.depLocal}|${r.arrDateKey} ${r.arrLocal}`;
+}
+
 export function instanceKey(r: { flightNumber: string; origin: string; dateKey: string }): string {
   return `${r.flightNumber}|${r.origin}|${r.dateKey}`;
 }

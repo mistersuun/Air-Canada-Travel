@@ -20,7 +20,8 @@ import { backupFilename, exportBackup, mergeBackup, parseBackup } from './export
 import { newId } from './ids';
 import {
   Alternate, FlightLeg, FlightLog, GroundLeg, GroundMode, GroundTimes, LegEnd, LegStatus, LoadNote, NewTrip,
-  Outcome, OutcomeKind, SharedTripPreview, Trip, TripLeg, TripsFile, defaultTripName, instanceKey, isFinalStatus,
+  FLIGHTLOG_KEY, Outcome, calendarKey, OutcomeKind, SharedTripPreview, TRIPS_KEY, Trip, TripLeg, TripsFile, defaultTripName, instanceKey,
+  isFinalStatus,
 } from './model';
 import { decodeTripShare, encodeTripShare, shareUrl } from './share-codec';
 import { TRIPS_STORAGE, loadFlightLog, loadTrips, saveFlightLog, saveTrips, sanitizeLeg } from './storage';
@@ -82,6 +83,23 @@ export class TripsService {
     this.readOnlyState.set(t.readOnly || l.readOnly);
     this.tick.set(this.now());
     this.checkChanges();
+    // Another tab or window of the app saved: reload, so this tab never writes back a stale copy.
+    this.doc.defaultView?.addEventListener('storage', e => this.onStorage(e));
+  }
+
+  /** Reloads the trips or the flight log after another tab wrote them. */
+  onStorage(e: Pick<StorageEvent, 'key' | 'storageArea'>): void {
+    if (!this.storage || (e.storageArea && e.storageArea !== this.storage)) return;
+    if (e.key === null || e.key === TRIPS_KEY) {
+      const t = loadTrips(this.storage);
+      this.file.set(t.file);
+      if (t.readOnly) this.readOnlyState.set(true);
+    }
+    if (e.key === null || e.key === FLIGHTLOG_KEY) {
+      const l = loadFlightLog(this.storage);
+      this.log.set(l.file);
+      if (l.readOnly) this.readOnlyState.set(true);
+    }
   }
 
   // ── Reads ─────────────────────────────────────────────────────────────────
@@ -284,7 +302,7 @@ export class TripsService {
         const refs = l.refs.map((r, i) => (i === c.refIndex ? { ...c.next!, flightNumber: r.flightNumber } : r));
         return { ...l, refs, provenance: 'scheduled' as const };
       });
-      return { ...t, legs, changes: t.changes.map(x => (x.id === changeId ? { ...x, state: 'accepted' as const } : x)) };
+      return { ...t, legs: sortLegs(legs), changes: t.changes.map(x => (x.id === changeId ? { ...x, state: 'accepted' as const } : x)) };
     });
   }
 
@@ -456,6 +474,7 @@ export class TripsService {
       changes: [],
       offlineSavedAt: null,
       calendarExportedAt: null,
+      calendarRefs: undefined,
       archived: false,
       sharedFrom: { at: preview.sharedAt },
     };
@@ -471,8 +490,9 @@ export class TripsService {
     this.update(id, t => ({ ...t, offlineSavedAt: this.iso() }));
   }
 
+  /** Records the export and exactly which flights (with their times) the calendar file holds. */
   markCalendarExported(id: string): void {
-    this.update(id, t => ({ ...t, calendarExportedAt: this.iso() }));
+    this.update(id, t => ({ ...t, calendarExportedAt: this.iso(), calendarRefs: calendarRefsOf(t) }));
   }
 
   archive(id: string, archived = true): void {
@@ -512,6 +532,12 @@ export class TripsService {
       // No shell (unit tests without a router): the change itself still happened.
     }
   }
+}
+
+/** calendarKey() of every flight buildTripIcs writes (legs not dropped or missed). */
+export function calendarRefsOf(t: Trip): string[] {
+  const skip = new Set<LegStatus>(['notBoarded', 'abandoned', 'didntTry']);
+  return t.legs.flatMap(l => (l.kind === 'flight' && !skip.has(l.status) ? l.refs.map(calendarKey) : []));
 }
 
 /** Not archived and the deadline is less than a day ago. */

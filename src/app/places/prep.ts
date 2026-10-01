@@ -5,8 +5,8 @@
  * ground leg. Pure.
  */
 import { currencyName } from '../pages/destination/currency';
-import type { FlightLeg, GroundLeg, LegEnd, LegStatus, Trip } from '../trips/model';
-import { isFinalStatus } from '../trips/model';
+import type { FlightLeg, FlightRef, GroundLeg, LegEnd, LegStatus, Trip } from '../trips/model';
+import { calendarKey, isFinalStatus } from '../trips/model';
 import { hubDisplayName, tzDiffLabel } from '../ui/format';
 import { airportTz, findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
@@ -146,6 +146,15 @@ export function entryInfo(trip: Trip): PrepItem[] {
 
 const isOpen = (leg: { status: LegStatus }) => !isFinalStatus(leg.status);
 
+/**
+ * 'Calendar reminder added' only for a flight that is in the exported file
+ * with these times; a flight added, swapped or retimed since says so.
+ */
+function calendarDetail(trip: Trip, r: FlightRef): string | null {
+  if (!trip.calendarExportedAt || !trip.calendarRefs) return null;
+  return trip.calendarRefs.includes(calendarKey(r)) ? 'Calendar reminder added' : 'Not in your calendar yet · export again';
+}
+
 function listingItems(trip: Trip, leg: FlightLeg): PrepItem[] {
   const done = leg.status !== 'planned';
   return leg.refs.map((r, i) => {
@@ -153,7 +162,7 @@ function listingItems(trip: Trip, leg: FlightLeg): PrepItem[] {
     return {
       id: `list:${leg.id}:${i}`,
       title: `${done ? 'Listed' : 'List'} for ${r.flightNumber}${home}`,
-      detail: !done && trip.calendarExportedAt ? 'Calendar reminder added' : null,
+      detail: done ? null : calendarDetail(trip, r),
       link: null,
       critical: true,
       source: 'legStatus' as const,

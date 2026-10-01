@@ -7,15 +7,17 @@
  * outside the published window make the counts "Unknown".
  */
 import { HUBS } from '../../../data/destinations';
-import { airportEnd, groundEstimate } from '../../../places/ground';
+import { airportEnd, groundEstimate, placeEnd } from '../../../places/ground';
 import { gatewaysNear, homeOptionsByAirport } from '../../../places/reach';
 import type { TimeFormat } from '../../../state/prefs.service';
 import { HomeByPlan, MissStep, homeByPlan, missOneChain, triesFrom } from '../../../trips/engine/homeby';
 import { placeName } from '../../../trips/engine/today';
-import type { FlightLeg, Trip } from '../../../trips/model';
+import { type FlightLeg, type GroundLeg, type GroundMode, type Trip, isFinalStatus } from '../../../trips/model';
+import { GROUND_BEFORE_DEPARTURE_MIN } from '../../../trips/engine/legs';
+import { airportTz } from '../../../utils/airports';
 import { prettyFlight } from '../../../ui/format';
-import type { ConnectOptions } from '../../../utils/connections';
-import { WEEKDAY_LONG, WEEKDAY_SHORT, addDays, formatClock, formatKey, weekdayIndex } from '../../../utils/time';
+import type { ConnectOptions, Itinerary } from '../../../utils/connections';
+import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../../utils/time';
 import type { FlightInstance } from '../../../utils/week';
 
 /** How many other airports "Other airports home" lists at most. */
@@ -53,17 +55,58 @@ export function activeReturnLeg(trip: Trip): FlightLeg | null {
 }
 
 /**
- * Where the trip flies home from: the return leg's first airport, else the
- * airport the last ground leg ends at, else the goal itself when AC flies
- * there, else the nearest gateway to the goal.
+ * Where the trip flies home from: the return leg's first airport; else the
+ * airport of the last ground leg (where it goes, for the trip back to an
+ * airport, else where it starts, i.e. the airport the trip came in through);
+ * else the last outbound flight's airport; else the goal itself when AC flies
+ * there; else the gateway with the shortest estimated trip to the goal.
  */
 export function returnGateway(trip: Trip): string | null {
   const leg = activeReturnLeg(trip);
   if (leg) return leg.refs[0].origin;
-  const ground = [...trip.legs].reverse().find(l => l.kind === 'ground' && l.status !== 'abandoned' && !!l.to.code);
-  if (ground?.kind === 'ground' && ground.to.code && ground.to.code !== trip.homeAirport) return ground.to.code;
-  if (trip.goal.acCode && trip.goal.acCode !== trip.homeAirport) return trip.goal.acCode;
-  return gatewaysNear(trip.goal).find(g => g.code !== trip.homeAirport)?.code ?? null;
+  const ok = (c: string | undefined): c is string => !!c && c !== trip.homeAirport;
+  const ground = [...trip.legs].reverse().find(l => l.kind === 'ground' && l.status !== 'abandoned' && (ok(l.to.code) || ok(l.from.code)));
+  if (ground?.kind === 'ground') {
+    if (ok(ground.to.code)) return ground.to.code;
+    if (ok(ground.from.code)) return ground.from.code;
+  }
+  const flight = [...trip.legs].reverse().find((l): l is FlightLeg =>
+    l.kind === 'flight' && l.role !== 'return' && l.status !== 'abandoned' && l.refs.length > 0);
+  if (flight && ok(flight.refs[flight.refs.length - 1].dest)) return flight.refs[flight.refs.length - 1].dest;
+  if (ok(trip.goal.acCode ?? undefined)) return trip.goal.acCode!;
+  const ranked = gatewaysNear(trip.goal)
+    .filter(g => g.code !== trip.homeAirport)
+    .map(g => {
+      const end = airportEnd(g.code);
+      return { code: g.code, min: end ? groundEstimate(end, trip.goal).totalMin : null };
+    })
+    .sort((a, b) => (a.min ?? Infinity) - (b.min ?? Infinity));
+  return ranked[0]?.code ?? null;
+}
+
+/**
+ * The Estimated ground leg from the goal to the return airport that "Use as
+ * return" adds with the flight, or null when none is needed (AC flies to the
+ * goal itself, or an open ground leg already ends at that airport). Dated the
+ * day before when it would have to leave before 06:00 on the flight day.
+ */
+export function groundToGateway(trip: Trip, it: Itinerary): Omit<GroundLeg, 'id' | 'status' | 'statusAt' | 'note'> | null {
+  const gw = it.origin;
+  if (trip.goal.acCode === gw) return null;
+  if (trip.legs.some(l => l.kind === 'ground' && !isFinalStatus(l.status) && l.to.code === gw)) return null;
+  const to = airportEnd(gw);
+  if (!to) return null;
+  const from = placeEnd(trip.goal);
+  const g = groundEstimate(from, to);
+  const known = g.mode !== 'unknown' && g.totalMin !== null;
+  const tz = from.tz ?? airportTz(gw);
+  const leaveBy = it.departUtc - (GROUND_BEFORE_DEPARTURE_MIN + (known ? g.totalMin! : 0)) * MINUTE_MS;
+  const local = utcToLocal(leaveBy, tz);
+  const dateKey = local.dateKey < it.dateKey || local.hhmm < '06:00' ? addDays(it.dateKey, -1) : it.dateKey;
+  return {
+    kind: 'ground', mode: known ? (g.mode as GroundMode) : 'other', from, to, dateKey,
+    estMinutes: known ? g.totalMin : null, provenance: known ? 'estimated' : 'unknown', userTimes: null,
+  };
 }
 
 /** "AC813 and AC811", "AC813, AC811 and AC1". */
@@ -130,6 +173,8 @@ export function otherAirportsHome(trip: Trip, gateway: string | null, dateKeys: 
 
 export interface ReturnView {
   gateway: string | null;
+  /** The airport the trip would fly home from without an override (returnGateway). */
+  defaultGateway: string | null;
   /** 'Lisbon'. */
   gatewayCity: string;
   /** 'Seville trip · from Lisbon'. */
@@ -177,6 +222,7 @@ export function buildReturnView(trip: Trip, connect: ConnectOptions, fmt: TimeFo
 
   return {
     gateway,
+    defaultGateway: returnGateway(trip),
     gatewayCity,
     context: gateway ? `${trip.name} · from ${gatewayCity}` : trip.name,
     deadline: deadlineLabel(trip, fmt),

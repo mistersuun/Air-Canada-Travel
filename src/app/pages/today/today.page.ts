@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
@@ -7,6 +7,7 @@ import type { PrepItem } from '../../places/prep';
 import { LEG_STATUS_LABEL, type LegStatus, instanceKey } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { LegStatusTagComponent } from '../../trips/ui/leg-status-tag.component';
+import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
 import { recoverPath, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
 import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
@@ -21,7 +22,7 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
 @Component({
   selector: 'app-today-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, LegStatusTagComponent, PlansChangedSheetComponent],
+  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -35,7 +36,7 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
         <section class="ui-card td__flight" aria-label="Your flight">
           <div class="td__row">
             <span class="td__time ui-cond tn">{{ v.time }}</span>
-            <app-leg-status-tag [status]="v.status" />
+            <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
           @if (v.then) { <p class="td__sub tn">{{ v.then }}</p> }
@@ -50,7 +51,7 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
               <button type="submit" class="ui-btn ui-btn--dark ui-btn--sm" [disabled]="!draft().trim()">Save</button>
             </form>
           } @else {
-            <button type="button" class="ui-link td__add" data-add-note (click)="noteOpen.set(true)">
+            <button type="button" class="ui-link td__add" data-add-note (click)="openNote()">
               {{ v.note ? 'Add a newer note' : 'Add a note (gate, delay, list)' }}
             </button>
           }
@@ -68,7 +69,7 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
           </div>
         } @else {
           <div class="ui-card td__done" data-final>
-            <p><b>{{ v.ref.flightNumber }} marked {{ statusLabel(v.status) }}.</b></p>
+            <p tabindex="-1" data-final-msg><b>{{ v.ref.flightNumber }} marked {{ statusLabel(v.status) }}.</b></p>
             <div class="td__done-acts">
               @if (v.status === 'notBoarded' || v.status === 'didntTry') {
                 <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="toRecover()">What can I still reach?</button>
@@ -119,6 +120,7 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
     .td__title { font-size: 30px; font-weight: 700; letter-spacing: -.03em; line-height: 1.1; margin: 4px 0 0; overflow-wrap: anywhere; }
     .td__flight { margin-top: 14px; padding: 16px 18px; }
     .td__row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .td__tags { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .td__time { font-size: 44px; font-weight: 700; line-height: 1; }
     .td__sub { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-2); }
     .td__note { margin: 8px 0 0; font-size: 13.5px; color: var(--ink-2); }
@@ -184,11 +186,20 @@ export class TodayPage {
   protected readonly sheetOpen = signal(false);
   protected readonly noteOpen = signal(false);
   protected readonly draft = signal('');
-  /** The leg this view settled on; kept after "I boarded" so the page doesn't jump to another flight. */
-  private readonly held = signal<TodayTarget | null>(null);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly injector = inject(Injector);
+  /**
+   * The leg this view settled on; kept after "I boarded" so the page doesn't
+   * jump to another flight. Remembers the ?trip/?leg it was set under and is
+   * ignored once they change (the component is reused across query params).
+   */
+  private readonly held = signal<{ target: TodayTarget; trip: string | undefined; leg: string | undefined } | null>(null);
 
-  private readonly target = computed<TodayTarget | null>(() =>
-    this.held() ?? resolveToday(this.trips.trips(), this.state.nowMs(), this.trip(), this.leg()));
+  private readonly target = computed<TodayTarget | null>(() => {
+    const h = this.held();
+    if (h && h.trip === this.trip() && h.leg === this.leg()) return h.target;
+    return resolveToday(this.trips.trips(), this.state.nowMs(), this.trip(), this.leg());
+  });
 
   protected readonly view = computed(() => {
     const t = this.target();
@@ -218,7 +229,7 @@ export class TodayPage {
     const v = this.view();
     const trip = v && this.trips.trip(v.tripId);
     if (!v || !trip) return;
-    this.held.set({ tripId: v.tripId, legId: v.legId });
+    this.hold(v.tripId, v.legId);
     const before = v.status;
     const ref = v.ref;
     this.trips.recordOutcome({
@@ -234,6 +245,7 @@ export class TodayPage {
         this.trips.setLegStatus(v.tripId, v.legId, before);
       },
     });
+    this.focusAfterRender('[data-final-msg], [data-boarded]');
   }
 
   /** Records "Didn't board" (leg Not boarded) and opens what is still reachable from here. */
@@ -241,19 +253,41 @@ export class TodayPage {
     const v = this.view();
     const trip = v && this.trips.trip(v.tripId);
     if (!v || !trip) return;
-    this.held.set({ tripId: v.tripId, legId: v.legId });
+    this.hold(v.tripId, v.legId);
+    // Read where the traveller is before recording: the view moves on once the outcome is saved.
     const ref = v.ref;
     this.trips.recordOutcome({
       flightNumber: ref.flightNumber, origin: ref.origin, dest: ref.dest, dateKey: ref.dateKey,
       kind: 'noneBoarded', partySize: trip.party.count, tripId: trip.id, note: '',
     });
-    this.toRecover();
+    this.toRecover(ref.origin, v.tripId, v.legId, v.isReturn);
   }
 
-  protected toRecover(): void {
+  protected toRecover(at?: string, tripId?: string, legId?: string, isReturn?: boolean): void {
     const v = this.view();
-    if (!v) return;
-    void this.router.navigate(recoverPath(v.tripId), { queryParams: { at: v.ref.origin, leg: v.legId } });
+    const t = tripId ?? v?.tripId;
+    if (!t) return;
+    if (isReturn ?? v?.isReturn) {
+      void this.router.navigateByUrl(tripUrl(t, 'return'));
+      return;
+    }
+    void this.router.navigate(recoverPath(t), { queryParams: { at: at ?? v?.ref.origin, leg: legId ?? v?.legId } });
+  }
+
+  protected openNote(): void {
+    this.noteOpen.set(true);
+    this.focusAfterRender('#td-note');
+  }
+
+  private hold(tripId: string, legId: string): void {
+    this.held.set({ target: { tripId, legId }, trip: this.trip(), leg: this.leg() });
+  }
+
+  /** Moves focus to the first match once the swapped-in content has rendered. */
+  private focusAfterRender(selector: string): void {
+    afterNextRender(() => {
+      (this.host.nativeElement.querySelector(selector) as HTMLElement | null)?.focus();
+    }, { injector: this.injector });
   }
 
   protected plansChanged(choice: PlansChangedChoice): void {
@@ -278,7 +312,7 @@ export class TodayPage {
     if (!v) return;
     const next = statusForTick(item, v.status);
     if (next && next !== v.status) {
-      this.held.set({ tripId: v.tripId, legId: v.legId });
+      this.hold(v.tripId, v.legId);
       this.trips.setLegStatus(v.tripId, v.legId, next);
     } else if (item.source === 'manual') {
       this.trips.setPrep(v.tripId, item.id, !item.done);
@@ -294,5 +328,6 @@ export class TodayPage {
     this.trips.addLoadNote({ flightNumber: r.flightNumber, origin: r.origin, dest: r.dest, dateKey: r.dateKey, open: null, listed: null, text });
     this.draft.set('');
     this.noteOpen.set(false);
+    this.focusAfterRender('[data-add-note]');
   }
 }

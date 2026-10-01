@@ -176,7 +176,7 @@ describe('TripDetailPage', () => {
     el.querySelector<HTMLButtonElement>('app-party-sheet [aria-label="One more traveller"]')!.click();
     await stable();
     expect(stored().party.count).toBe(3);
-    expect(clean(el.querySelector('[data-party]')?.textContent)).toBe('3 travellers · stay together');
+    expect(clean(el.querySelector('[data-party]')?.textContent)).toContain('3 travellers · stay together');
   });
 
   describe('trip menu (g8)', () => {

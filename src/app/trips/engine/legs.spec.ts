@@ -8,6 +8,7 @@ import {
   sameRefs, sortLegs,
 } from './legs';
 import { directItinerary } from '../../utils/connections';
+import type { TripLeg } from '../model';
 
 describe('trip legs ↔ schedules', () => {
   beforeEach(() => setScheduleSource(SEVILLE_ROUTES, SEVILLE_META));
@@ -74,5 +75,35 @@ describe('trip legs ↔ schedules', () => {
     expect(sameRefs(out.refs, out.refs.map(r => ({ ...r, depLocal: '00:00' })))).toBe(true);
     expect(sameRefs(out.refs, out.alternates[0].refs)).toBe(false);
     expect(sameRefs(out.refs, [])).toBe(false);
+  });
+
+  it('never sorts an unsaved ground leg before the flight that lands at its airport', () => {
+    const flight = (id: string, depKey: string, dep: string, arrKey: string, arr: string): TripLeg => ({
+      kind: 'flight', id, role: 'outbound', status: 'planned', statusAt: null, note: '', provenance: 'scheduled', alternates: [],
+      refs: [{ flightNumber: 'AC1', origin: 'YUL', dest: 'LHR', dateKey: depKey, depLocal: dep, arrLocal: arr, arrDateKey: arrKey, aircraft: null }],
+    });
+    const ground = (dateKey: string): TripLeg => ({
+      kind: 'ground', id: 'g', mode: 'bus', status: 'planned', statusAt: null, note: '', provenance: 'estimated', userTimes: null,
+      from: { name: 'London', code: 'LHR', lat: 51.47, lng: -0.45, tz: 'Europe/London' },
+      to: { name: 'Oxford', lat: 51.75, lng: -1.26, tz: 'Europe/London' }, dateKey, estMinutes: 90,
+    });
+    // Lands 19:45 the same day: the ground leg follows it (not noon).
+    const day = [ground('2026-10-08'), flight('f', '2026-10-08', '08:00', '2026-10-08', '19:45')];
+    expect(sortLegs(day).map(l => l.id)).toEqual(['f', 'g']);
+    expect(legWindow(day[0], day)!.depUtc).toBe(toUtcMs('2026-10-08', '20:30', 'Europe/London'));
+    // Dated on the departure day of an overnight flight.
+    const night = [ground('2026-10-08'), flight('f', '2026-10-08', '13:30', '2026-10-09', '01:15')];
+    expect(sortLegs(night).map(l => l.id)).toEqual(['f', 'g']);
+  });
+
+  it('places an unsaved ground leg to an airport ahead of the flight leaving it that day', () => {
+    const trip = sevilleTrip();
+    const bus = trip.legs.find(l => l.id === SEVILLE_IDS.bus)!;
+    if (bus.kind !== 'ground') throw new Error();
+    const unsaved = { ...bus, userTimes: null, provenance: 'estimated' as const, dateKey: '2026-10-13', estMinutes: 60 };
+    const legs = trip.legs.map(l => (l.id === bus.id ? unsaved : l));
+    // AC813 leaves LIS 11:25 on Oct 13: arrive 2 h ahead → leave 08:25 at the latest.
+    expect(legWindow(unsaved, legs)!.depUtc).toBe(toUtcMs('2026-10-13', '08:25', 'Europe/Lisbon'));
+    expect(sortLegs([...legs].reverse()).map(l => l.id)).toEqual(trip.legs.map(l => l.id));
   });
 });

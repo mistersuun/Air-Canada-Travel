@@ -98,4 +98,28 @@ describe('home-by and the miss-one chain (Seville fixture)', () => {
     expect(plan.covered).toBe(false);
     expect(triesFrom(plan, '2027-10-04')).toBe(0);
   });
+
+  it('a return day before the deadline day falls back to the next day before going late', () => {
+    const plan = homeByPlan('LIS', 'YUL', HOME_BY, '2026-10-12', { minConnect: 60 });
+    const steps = missOneChain(plan, '2026-10-12');
+    expect(steps.map(s => [s.kind, flights(s.itinerary!), s.itinerary!.dateKey])).toEqual([
+      ['try', 'AC813', '2026-10-12'],
+      ['fallback', 'AC811+AC894', '2026-10-12'],
+      ['fallback', 'AC813', '2026-10-13'],          // Tue still makes the 22:00 deadline
+      ['late', 'AC813', '2026-10-14'],
+    ]);
+    expect(steps[3].label).toBe('If you miss them all');
+  });
+
+  it('only offers a late option that leaves after the last try', () => {
+    const deadline = { dateKey: '2026-10-13', hhmm: '15:00' };
+    const plan = homeByPlan('LIS', 'YUL', deadline, '2026-10-13', { minConnect: 60 });
+    // Late options start the day before the deadline date (overnight arrivals) and are sorted by departure.
+    expect(plan.lateOptions.every((it, i, all) => !i || all[i - 1].departUtc <= it.departUtc)).toBe(true);
+    expect(plan.lateOptions.every(it => it.arriveUtc > plan.deadlineUtc)).toBe(true);
+    const steps = missOneChain(plan, '2026-10-13');
+    expect(steps.map(s => s.kind)).toEqual(['try', 'late']);
+    expect(steps[1].itinerary!.departUtc).toBeGreaterThan(steps[0].itinerary!.departUtc);
+    expect(flights(steps[1].itinerary!)).toBe('AC811+AC894');
+  });
 });

@@ -61,7 +61,7 @@ export const ENTRY_RULES: readonly EntryRule[] = [
   },
   {
     id: 'mx-entry', appliesTo: 'MX', critical: true, reviewed: R,
-    title: 'Check Mexico entry rules', detail: 'Digital entry form at arrival',
+    title: 'Check Mexico entry rules', detail: 'Visa / electronic authorization rules changed in 2024 · check before you go',
     url: 'https://travel.gc.ca/destinations/mexico', linkLabel: 'Government of Canada advice',
   },
   {

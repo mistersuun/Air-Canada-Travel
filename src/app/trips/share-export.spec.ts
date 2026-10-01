@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { FlightLog, LoadNote, emptyFlightLog } from './model';
 import { backupFilename, exportBackup, mergeBackup, parseBackup } from './export';
-import { decodeTripShare, encodeTripShare, payloadFromFragment, shareUrl } from './share-codec';
+import type { Outcome } from './model';
+import { MAX_SHARE_PAYLOAD, ShareTooLargeError, decodeTripShare, encodeTripShare, payloadFromFragment, shareUrl } from './share-codec';
 import { SEVILLE_TRIP, SEVILLE_TRIPS_FILE, sevilleTrip } from './testing/seville-fixture';
 
 const NOW = Date.UTC(2026, 9, 1, 13, 41);
@@ -27,13 +28,34 @@ describe('share links', () => {
     expect(back.trip.offlineSavedAt).toBeNull();
     expect(back.trip.calendarExportedAt).toBeNull();
     expect(back.trip.archived).toBe(false);
-    const strip = (t: typeof SEVILLE_TRIP) => ({ ...t, prep: {}, changes: [], offlineSavedAt: null, calendarExportedAt: null });
+    const strip = (t: typeof SEVILLE_TRIP) => {
+      const { calendarRefs: _r, ...rest } = t;
+      return { ...rest, prep: {}, changes: [], offlineSavedAt: null, calendarExportedAt: null };
+    };
     expect(back.trip).toEqual(strip(SEVILLE_TRIP));
   });
 
   it('uses deflate when the browser has CompressionStream', async () => {
     const payload = await encodeTripShare(SEVILLE_TRIP, [], NOW);
     expect(payload[0]).toBe(typeof CompressionStream === 'function' ? 'z' : 'j');
+  });
+
+  it('never makes a link the recipient cannot import: drops notes first, then refuses', async () => {
+    // Incompressible note text so the payload really grows.
+    let seed = 7;
+    const noise = (n: number) => Array.from({ length: n }, () => {
+      seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+      return ((seed >>> 0) % 36).toString(36);
+    }).join('');
+    const notes = Array.from({ length: 40 }, (_, i) => ({ ...NOTE, id: `n${i}`, text: noise(400) + i }));
+    const payload = await encodeTripShare(SEVILLE_TRIP, notes, NOW);
+    expect(payload.length).toBeLessThanOrEqual(MAX_SHARE_PAYLOAD);
+    const back = (await decodeTripShare(payload))!;
+    expect(back).not.toBeNull();
+
+    const huge = { ...sevilleTrip(), name: 'x', customPrep: [] };
+    huge.legs = Array.from({ length: 60 }, (_, i) => huge.legs.map(l => ({ ...l, id: `${l.id}${i}`, note: noise(500) }))).flat();
+    await expect(encodeTripShare(huge, [], NOW)).rejects.toBeInstanceOf(ShareTooLargeError);
   });
 
   it('returns null for garbage, never throws', async () => {
@@ -86,8 +108,21 @@ describe('backup export / import', () => {
     expect(r1.log.notes).toEqual([NOTE]);
 
     const r2 = mergeBackup({ trips: [newer], log }, { trips: [older], log });
+    expect(r2.log.outcomes).toEqual([]);
     expect(r2.added + r2.updated).toBe(0);
     expect(r2.trips[0].name).toBe('New name');
     expect(r2.log.notes).toHaveLength(1);
+  });
+
+  it('merges outcomes by flight and trip: a correction replaces the older record', () => {
+    const base: Outcome = {
+      id: 'o-old', flightNumber: 'AC834', origin: 'YUL', dest: 'MAD', dateKey: '2026-10-08', kind: 'noneBoarded',
+      partySize: 2, tripId: 'sevtrip001', note: '', recordedAt: '2026-10-09T01:00:00.000Z',
+    };
+    const fixed: Outcome = { ...base, id: 'o-new', kind: 'allBoarded', recordedAt: '2026-10-09T02:00:00.000Z' };
+    const r = mergeBackup({ trips: [], log: { ...emptyFlightLog(), outcomes: [fixed] } }, { trips: [], log: { ...emptyFlightLog(), outcomes: [base] } });
+    expect(r.log.outcomes).toEqual([fixed]);
+    const r2 = mergeBackup({ trips: [], log: { ...emptyFlightLog(), outcomes: [base] } }, { trips: [], log: { ...emptyFlightLog(), outcomes: [fixed] } });
+    expect(r2.log.outcomes).toEqual([fixed]);
   });
 });

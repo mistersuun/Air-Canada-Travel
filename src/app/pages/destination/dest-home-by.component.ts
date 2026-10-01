@@ -76,7 +76,8 @@ export class DestHomeByComponent {
       deadline: v.deadline,
       counts: v.covered ? parts.join(' · ') : `${parts.join(' · ')} · some days unknown`,
       link: tripPath(trip.id),
-      query: { ...this.state.globalParams(), ...tripQuery('return') },
+      // The Return tab counts from this airport too, so the numbers match.
+      query: { ...this.state.globalParams(), ...tripQuery('return'), ...(code !== v.defaultGateway ? { retFrom: code } : {}) },
     };
   });
 }

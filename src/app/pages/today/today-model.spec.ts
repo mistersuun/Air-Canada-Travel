@@ -111,6 +111,41 @@ describe('today model (Seville fixture)', () => {
     expect(second.backup).toBeNull();
   });
 
+  it('a segment recorded as not boarded keeps the traveller at its origin', () => {
+    const trip = sevilleTrip();
+    const out = trip.legs.find(l => l.id === SEVILLE_IDS.outbound)!;
+    if (out.kind !== 'flight') throw new Error('fixture');
+    out.refs = [
+      { flightNumber: 'AC489', origin: 'YUL', dest: 'YYZ', dateKey: '2026-10-08', depLocal: '18:30', arrLocal: '19:53', arrDateKey: '2026-10-08', aircraft: '320' },
+      { flightNumber: 'AC810', origin: 'YYZ', dest: 'LIS', dateKey: '2026-10-08', depLocal: '23:00', arrLocal: '11:05', arrDateKey: '2026-10-09', aircraft: '77W' },
+    ];
+    const missed: Outcome = {
+      id: 'o1', flightNumber: 'AC489', origin: 'YUL', dest: 'YYZ', dateKey: '2026-10-08', kind: 'noneBoarded',
+      partySize: 2, tripId: trip.id, note: '', recordedAt: '2026-10-08T22:40:00Z',
+    };
+    const v = todayView({ trip, legId: out.id, nowMs: AT_1805, notes: [], outcomes: [missed], connect: CONNECT, fmt: '24h' })!;
+    expect(v.ref.flightNumber).toBe('AC489');
+    expect(v.eyebrow).toBe('Today · Thu Oct 8 · at YUL');
+  });
+
+  it('once the flight has left, listing and check-in are no longer on the list', () => {
+    const v = todayView({
+      trip: sevilleTrip(), legId: SEVILLE_IDS.outbound, nowMs: toUtcMs('2026-10-08', '18:50', 'America/Toronto'),
+      notes: [], outcomes: [], connect: CONNECT, fmt: '24h',
+    })!;
+    expect(v.sub).toContain('left 55m ago');
+    expect(v.left.filter(i => /^(list|checkin):/.test(i.id))).toEqual([]);
+  });
+
+  it("a return leg's backup is the next way home, never back toward the goal", () => {
+    const v = todayView({
+      trip: sevilleTrip(), legId: SEVILLE_IDS.ret, nowMs: toUtcMs('2026-10-13', '08:00', 'Europe/Lisbon'),
+      notes: [], outcomes: [], connect: CONNECT, fmt: '24h',
+    })!;
+    expect(v.isReturn).toBe(true);
+    expect(v.backup).toEqual({ title: 'Backup later today: AC811 + AC894 to Montréal 13:00', detail: "Still possible if you don't clear AC813" });
+  });
+
   it('ticking Left to do maps to leg statuses', () => {
     const item = (id: string, done: boolean) => ({ id, title: '', detail: null, link: null, critical: true, source: 'legStatus' as const, done });
     expect(statusForTick(item('list:x:0', false), 'planned')).toBe('listed');
@@ -148,7 +183,7 @@ describe('recover model (YUL at 18:05 Thu Oct 8, AC834 not boarded)', () => {
     expect(v.tonight.map(r => [r.name, r.code, r.line, r.onward, r.usable])).toEqual([
       ['Lisbon', 'LIS', 'AC812 21:45 → 09:20⁺¹', 'then bus about 6h45 · Seville Fri evening', true],
       ['Barcelona', 'BCN', 'AC822 18:35 · boarding has likely closed', null, false],
-      ['via Toronto', 'to MAD', 'AC489 lands 19:53, after AC824 leaves at 19:15', null, false],
+      ['via Toronto', 'to MAD', 'AC427 lands 21:53, after AC824 leaves at 19:15', null, false],
     ]);
     expect(v.tonight[2].thumb).toEqual({ kind: 'code', code: 'YYZ' });
 

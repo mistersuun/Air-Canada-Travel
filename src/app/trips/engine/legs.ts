@@ -6,7 +6,7 @@ import { segmentFlights, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
 import { MINUTE_MS, diffDays, toUtcMs } from '../../utils/time';
 import { flightsOn, type FlightInstance } from '../../utils/week';
-import { FlightRef, Trip, TripLeg, isFinalStatus } from '../model';
+import { FlightLeg, FlightRef, Trip, TripLeg, isFinalStatus } from '../model';
 
 /** Flight number stored for an estimated (unnumbered) leg. */
 export const ESTIMATED_FLIGHT = 'EST';
@@ -118,11 +118,20 @@ export function endTz(end: { tz?: string | null; code?: string }): string | null
   return null;
 }
 
+/** Minutes after a flight lands before an unsaved ground leg from that airport is placed. */
+export const GROUND_AFTER_ARRIVAL_MIN = 45;
+/** Minutes before a flight leaves that an unsaved ground leg to that airport should arrive. */
+export const GROUND_BEFORE_DEPARTURE_MIN = 120;
+
 /**
  * The leg's span as instants. Flights: first departure to last arrival.
  * Ground: the saved times, else the planned day at 12:00 plus the estimate.
+ * With the trip's legs, an unsaved ground leg is anchored to the flights it
+ * connects: no earlier than 45 min after a flight lands at its start airport
+ * (dated on that flight's departure or arrival day), else arriving at least
+ * 2 h before a flight leaves its end airport that day.
  */
-export function legWindow(leg: TripLeg): { depUtc: number; arrUtc: number } | null {
+export function legWindow(leg: TripLeg, legs?: readonly TripLeg[]): { depUtc: number; arrUtc: number } | null {
   if (leg.kind === 'flight') {
     if (!leg.refs.length) return null;
     return { depUtc: refDepUtc(leg.refs[0]), arrUtc: refArrUtc(leg.refs[leg.refs.length - 1]) };
@@ -133,22 +142,40 @@ export function legWindow(leg: TripLeg): { depUtc: number; arrUtc: number } | nu
     const t = leg.userTimes;
     return { depUtc: toUtcMs(t.depDateKey, t.depLocal, fromTz), arrUtc: toUtcMs(t.arrDateKey, t.arrLocal, toTz) };
   }
-  const depUtc = toUtcMs(leg.dateKey, '12:00', fromTz);
-  return { depUtc, arrUtc: depUtc + (leg.estMinutes ?? 0) * MINUTE_MS };
+  const est = (leg.estMinutes ?? 0) * MINUTE_MS;
+  let depUtc = toUtcMs(leg.dateKey, '12:00', fromTz);
+  const flights = (legs ?? []).filter((l): l is FlightLeg => l.kind === 'flight' && l.refs.length > 0 && l.status !== 'abandoned');
+  const feeding = leg.from.code
+    ? flights
+      .map(l => ({ first: l.refs[0], last: l.refs[l.refs.length - 1] }))
+      .filter(({ first, last }) => last.dest === leg.from.code && (last.arrDateKey === leg.dateKey || first.dateKey === leg.dateKey))
+      .map(({ last }) => refArrUtc(last))
+    : [];
+  if (feeding.length) {
+    depUtc = Math.max(depUtc, Math.max(...feeding) + GROUND_AFTER_ARRIVAL_MIN * MINUTE_MS);
+  } else if (leg.to.code) {
+    const leaving = flights
+      .map(l => l.refs[0])
+      .filter(r => r.origin === leg.to.code && r.dateKey === leg.dateKey)
+      .map(refDepUtc);
+    if (leaving.length) depUtc = Math.min(depUtc, Math.min(...leaving) - GROUND_BEFORE_DEPARTURE_MIN * MINUTE_MS - est);
+  }
+  return { depUtc, arrUtc: depUtc + est };
 }
 
-/** Departure instant used to keep legs chronological. */
-export function legStartUtc(leg: TripLeg): number {
-  return legWindow(leg)?.depUtc ?? Number.MAX_SAFE_INTEGER;
+/** Departure instant used to keep legs chronological (pass the trip's legs to anchor unsaved ground legs). */
+export function legStartUtc(leg: TripLeg, legs?: readonly TripLeg[]): number {
+  return legWindow(leg, legs)?.depUtc ?? Number.MAX_SAFE_INTEGER;
 }
 
 /**
  * Legs in chronological order by departure (stable for ties). A ground leg
- * planned without times sorts at midday on its day (see legWindow).
+ * planned without times sorts after the flight that lands at its start
+ * airport (see legWindow).
  */
 export function sortLegs(legs: readonly TripLeg[]): TripLeg[] {
   return legs
-    .map((leg, i) => ({ leg, i, t: legStartUtc(leg) }))
+    .map((leg, i) => ({ leg, i, t: legStartUtc(leg, legs) }))
     .sort((a, b) => a.t - b.t || a.i - b.i)
     .map(x => x.leg);
 }

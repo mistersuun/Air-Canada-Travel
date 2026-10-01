@@ -79,6 +79,16 @@ describe('buildPrepChecklist (Seville trip)', () => {
     expect(items.map(i => i.title)).not.toContain('Listed for AC834');
     expect(items.find(i => i.title === 'List for AC813 home')!.detail).toBeNull();
   });
+
+  it('only claims a calendar reminder for flights that were in the export, with the same times', () => {
+    const t = sevilleTrip();
+    const ret = t.legs.find(l => l.kind === 'flight' && l.role === 'return')!;
+    if (ret.kind !== 'flight') throw new Error();
+    ret.refs = [{ ...ret.refs[0], depLocal: '11:10', arrLocal: '13:35' }];     // retimed after the export
+    expect(buildPrepChecklist(t).find(i => i.title === 'List for AC813 home')!.detail).toBe('Not in your calendar yet · export again');
+    t.calendarRefs = undefined;                                               // exported before flights were tracked
+    expect(buildPrepChecklist(t).find(i => i.title === 'List for AC813 home')!.detail).toBeNull();
+  });
 });
 
 describe('route countries and entry rules', () => {

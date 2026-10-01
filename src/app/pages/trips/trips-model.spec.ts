@@ -48,6 +48,7 @@ describe('trips-model', () => {
       '11:25 → 13:50 · home 8h before your deadline',
     ]);
     expect(rows.map(r => r.status ?? r.provenance)).toEqual(['listed', 'estimated', 'saved', 'planned']);
+    expect(rows.map(r => r.provenance)).toEqual(['scheduled', 'estimated', 'saved', 'scheduled']);
     expect(rows.map(r => r.icon)).toEqual(['plane', 'train', 'bus', 'plane']);
   });
 

@@ -177,6 +177,10 @@ export const SEVILLE_TRIP: Trip = {
   scheduleGeneratedAt: '2026-09-30T18:10:52Z',
   offlineSavedAt: '2026-10-01T13:38:00.000Z',
   calendarExportedAt: '2026-10-01T13:38:00.000Z',
+  calendarRefs: [
+    'AC834|YUL|MAD|2026-10-08 17:55|2026-10-09 06:50',
+    'AC813|LIS|YUL|2026-10-13 11:25|2026-10-13 13:50',
+  ],
   sharedFrom: null,
   archived: false,
 };

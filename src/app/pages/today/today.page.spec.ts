@@ -217,7 +217,7 @@ describe('Recover', () => {
     ]);
     expect(clean(tonight[0].querySelector('.rc__rt')!.textContent)).toBe('LisbonLISAC812 21:45 → 09:20⁺¹then bus about 6h45 · Seville Fri evening');
     expect(clean(tonight[1].textContent)).toContain('boarding has likely closed');
-    expect(clean(tonight[2].textContent)).toContain('AC489 lands 19:53, after AC824 leaves at 19:15');
+    expect(clean(tonight[2].textContent)).toContain('AC427 lands 21:53, after AC824 leaves at 19:15');
     expect(clean(el.querySelector('[data-group="tomorrow"] .rc__row .rc__rt')!.textContent)).toBe('Madrid againMADFri AC834 17:55 · Seville Sat midday');
     expect(text('[data-note]')).toBe('Your Tuesday return still works either way. Lisbon tonight keeps all 3 nights in Seville; waiting for Madrid tomorrow leaves 2.');
   });

@@ -23,6 +23,11 @@ export interface Corridor {
   rideMin: number;
   exitMin: number;
   exitLabel: string;
+  /**
+   * Station ↔ airport transfer alone (no passport or exit), used in the
+   * reverse direction (goal → airport). Default: exitMin − CORRIDOR_EXIT_MIN.
+   */
+  transferMin?: number;
   frequency: string | null;
   /** Usual last departure, local at the gateway ('21:00'); null when not tracked. */
   lastDepLocal: string | null;
@@ -31,6 +36,14 @@ export interface Corridor {
 }
 
 const R = '2026-10';
+
+/** The passport-and-exit part of a corridor's exitMin (the rest is the transfer). */
+export const CORRIDOR_EXIT_MIN = 45;
+
+/** Minutes from the corridor's station to its airport (reverse direction). */
+export function corridorTransferMin(row: Corridor): number {
+  return row.transferMin ?? Math.max(0, row.exitMin - CORRIDOR_EXIT_MIN);
+}
 
 export const CORRIDORS: readonly Corridor[] = [
   { code: 'MAD', geonameId: 2510911, city: 'Seville', lat: 37.38, lng: -5.97, mode: 'train', rideMin: 160, exitMin: 90,
@@ -58,7 +71,7 @@ export const CORRIDORS: readonly Corridor[] = [
     exitLabel: 'Passport, exit, Schiphol station', frequency: 'trains roughly hourly', lastDepLocal: null, reviewed: R },
   { code: 'FCO', geonameId: 3172394, city: 'Naples', lat: 40.85, lng: 14.27, mode: 'train', rideMin: 70, exitMin: 90,
     exitLabel: 'Passport, exit, train to Roma Termini', frequency: 'trains several times an hour', lastDepLocal: null, reviewed: R },
-  { code: 'MXP', geonameId: 3165524, city: 'Turin', lat: 45.07, lng: 7.69, mode: 'train', rideMin: 60, exitMin: 105,
+  { code: 'MXP', geonameId: 3165524, city: 'Turin', lat: 45.07, lng: 7.69, mode: 'train', rideMin: 60, exitMin: 105, transferMin: 60,
     exitLabel: 'Passport, exit, Malpensa Express to Milano Centrale', frequency: 'trains roughly hourly', lastDepLocal: null, reviewed: R },
   { code: 'NCE', geonameId: 2993458, city: 'Monaco', lat: 43.74, lng: 7.42, mode: 'train', rideMin: 25, exitMin: 45,
     exitLabel: 'Passport, exit, get to Nice-Ville', frequency: 'trains several times an hour', lastDepLocal: null, reviewed: R },

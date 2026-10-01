@@ -8,7 +8,10 @@
  * - A file written by a newer app version (schema > TRIPS_SCHEMA) is shown
  *   read-only and never overwritten.
  * - Corrupt JSON loads as an empty file; the raw text is copied to
- *   ac.trips.corrupt (ac.flightlog.corrupt) first, so nothing is lost.
+ *   ac.trips.corrupt (ac.flightlog.corrupt) first, so nothing is lost. The
+ *   same copy is made when valid JSON loses trips, legs, notes or outcomes to
+ *   sanitising, or carries a schema that is not a number, before the next
+ *   save can overwrite it.
  */
 import { InjectionToken } from '@angular/core';
 import { isDateKey } from '../utils/time';
@@ -281,6 +284,9 @@ export function sanitizeTrip(raw: unknown): Trip | null {
       scheduleGeneratedAt: nonEmpty(r['scheduleGeneratedAt'], 40),
       offlineSavedAt: iso(r['offlineSavedAt']),
       calendarExportedAt: iso(r['calendarExportedAt']),
+      ...(Array.isArray(r['calendarRefs'])
+        ? { calendarRefs: arr(r['calendarRefs']).filter((k): k is string => typeof k === 'string').map(k => k.slice(0, 80)).slice(0, 200) }
+        : {}),
       sharedFrom: shared && iso(shared['at']) ? { at: shared['at'] as string } : null,
       archived: r['archived'] === true,
     };
@@ -366,6 +372,7 @@ function load<T>(
   corruptKey: string,
   migrate: (raw: unknown) => { file: T; readOnly: boolean },
   empty: () => T,
+  lossy: (raw: unknown, file: T) => boolean = () => false,
 ): { file: T; readOnly: boolean } {
   let text: string | null = null;
   try {
@@ -385,7 +392,35 @@ function load<T>(
     }
     return { file: empty(), readOnly: false };
   }
-  return migrate(parsed);
+  const out = migrate(parsed);
+  const schema = schemaOf(obj(parsed));
+  if ((schema !== null && Number.isNaN(schema)) || lossy(parsed, out.file)) {
+    try {
+      storage?.setItem(corruptKey, text);
+    } catch {
+      // Blocked or full: nothing more we can do.
+    }
+  }
+  return out;
+}
+
+function count(v: unknown): number {
+  return Array.isArray(v) ? v.length : 0;
+}
+
+/** True when sanitising dropped a trip or a leg that the raw file had. */
+export function tripsLossy(raw: unknown, file: TripsFile): boolean {
+  const trips = arr(obj(raw)?.['trips']);
+  if (trips.length > file.trips.length) return true;
+  const rawLegs = trips.reduce<number>((n, t) => n + count(obj(t)?.['legs']), 0);
+  const legs = file.trips.reduce((n, t) => n + t.legs.length, 0);
+  return rawLegs > legs;
+}
+
+/** True when sanitising dropped a load note or an outcome. */
+export function flightLogLossy(raw: unknown, file: FlightLog): boolean {
+  const r = obj(raw);
+  return count(r?.['notes']) > file.notes.length || count(r?.['outcomes']) > file.outcomes.length;
 }
 
 function save(storage: Storage | null, key: string, value: unknown): boolean {
@@ -399,7 +434,7 @@ function save(storage: Storage | null, key: string, value: unknown): boolean {
 }
 
 export function loadTrips(storage: Storage | null): { file: TripsFile; readOnly: boolean } {
-  return load(storage, TRIPS_KEY, TRIPS_CORRUPT_KEY, migrateTrips, emptyTripsFile);
+  return load(storage, TRIPS_KEY, TRIPS_CORRUPT_KEY, migrateTrips, emptyTripsFile, tripsLossy);
 }
 
 /** Writes the trips file. False when storage is blocked or full (the app keeps it in memory). */
@@ -408,7 +443,7 @@ export function saveTrips(storage: Storage | null, file: TripsFile): boolean {
 }
 
 export function loadFlightLog(storage: Storage | null): { file: FlightLog; readOnly: boolean } {
-  return load(storage, FLIGHTLOG_KEY, FLIGHTLOG_CORRUPT_KEY, migrateFlightLog, emptyFlightLog);
+  return load(storage, FLIGHTLOG_KEY, FLIGHTLOG_CORRUPT_KEY, migrateFlightLog, emptyFlightLog, flightLogLossy);
 }
 
 export function saveFlightLog(storage: Storage | null, log: FlightLog): boolean {

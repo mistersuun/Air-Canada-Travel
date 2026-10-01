@@ -32,6 +32,27 @@ describe('trips storage', () => {
     expect(s.getItem(TRIPS_CORRUPT_KEY)).toBe('{"schema":1,"trips":[');
   });
 
+  it('keeps a copy in ac.trips.corrupt when sanitising drops a leg or a trip, or the schema is not a number', () => {
+    const s = new MemoryStorage();
+    const bad = JSON.parse(JSON.stringify(SEVILLE_TRIPS_FILE));
+    bad.trips[0].legs[0].refs[0].depLocal = '25:99';
+    const text = JSON.stringify(bad);
+    s.setItem(TRIPS_KEY, text);
+    const r = loadTrips(s);
+    expect(r.file.trips[0].legs.length).toBe(SEVILLE_TRIP.legs.length - 1);
+    expect(s.getItem(TRIPS_CORRUPT_KEY)).toBe(text);
+
+    const s2 = new MemoryStorage();
+    s2.setItem(TRIPS_KEY, JSON.stringify({ schema: 'one', trips: [SEVILLE_TRIP] }));
+    loadTrips(s2);
+    expect(s2.getItem(TRIPS_CORRUPT_KEY)).not.toBeNull();
+
+    const s3 = new MemoryStorage();
+    saveTrips(s3, SEVILLE_TRIPS_FILE);
+    loadTrips(s3);
+    expect(s3.getItem(TRIPS_CORRUPT_KEY)).toBeNull();
+  });
+
   it('shows data from a newer app read-only', () => {
     const s = new MemoryStorage();
     s.setItem(TRIPS_KEY, JSON.stringify({ schema: 2, trips: [SEVILLE_TRIP] }));

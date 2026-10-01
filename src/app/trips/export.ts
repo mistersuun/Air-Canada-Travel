@@ -2,7 +2,7 @@
  * Backup export / import (spec §1.2): one JSON file with the trips and the
  * flight log. Import merges by id; the newer updatedAt wins.
  */
-import { FlightLog, Trip, TripsFile, TRIPS_SCHEMA } from './model';
+import { FlightLog, Outcome, Trip, TripsFile, TRIPS_SCHEMA, instanceKey } from './model';
 import { migrateFlightLog, sanitizeTrip } from './storage';
 
 export const BACKUP_KIND = 'routes-backup';
@@ -47,6 +47,20 @@ function mergeById<T extends { id: string }>(current: readonly T[], incoming: re
 }
 
 /** Merges a backup into the current data: trips by id (newer updatedAt wins), notes and outcomes by id. */
+/**
+ * One outcome per flight and trip (the same rule recordOutcome follows): a
+ * correction is stored under a new id, so the newer recordedAt wins.
+ */
+export function mergeOutcomes(current: readonly Outcome[], incoming: readonly Outcome[]): Outcome[] {
+  const byKey = new Map<string, Outcome>();
+  for (const o of [...current, ...incoming]) {
+    const k = `${instanceKey(o)}|${o.tripId ?? ''}`;
+    const cur = byKey.get(k);
+    if (!cur || Date.parse(o.recordedAt) > Date.parse(cur.recordedAt)) byKey.set(k, o);
+  }
+  return [...byKey.values()];
+}
+
 export function mergeBackup(
   current: { trips: readonly Trip[]; log: FlightLog },
   incoming: { trips: readonly Trip[]; log: FlightLog },
@@ -68,7 +82,7 @@ export function mergeBackup(
     log: {
       schema: 1,
       notes: mergeById(current.log.notes, incoming.log.notes),
-      outcomes: mergeById(current.log.outcomes, incoming.log.outcomes),
+      outcomes: mergeOutcomes(current.log.outcomes, incoming.log.outcomes),
       dismissed: [...new Set([...current.log.dismissed, ...incoming.log.dismissed])],
     },
     added,

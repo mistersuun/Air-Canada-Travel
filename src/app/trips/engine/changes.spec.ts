@@ -90,10 +90,13 @@ describe('detectChanges', () => {
     expect(refreshAircraft(trip)).toBe(trip);
   });
 
-  it('keys changes by leg, segment, kind and new times', () => {
+  it('keys changes by leg, segment, kind, old and new times', () => {
     const base = { legId: 'a', refIndex: 0, kind: 'retimed' as const };
     const n = { flightNumber: 'AC1', origin: 'LIS', dest: 'YUL', dateKey: '2026-10-13', depLocal: '11:10', arrLocal: '13:35', arrDateKey: '2026-10-13', aircraft: null };
-    expect(changeKey({ ...base, next: n })).not.toBe(changeKey({ ...base, next: { ...n, depLocal: '11:00' } }));
-    expect(changeKey({ ...base, kind: 'notFound', next: null })).toBe('a|0|notFound|');
+    const old = { ...n, depLocal: '10:00' };
+    expect(changeKey({ ...base, old, next: n })).not.toBe(changeKey({ ...base, old, next: { ...n, depLocal: '11:00' } }));
+    expect(changeKey({ ...base, kind: 'notFound', old, next: null })).toBe('a|0|notFound|2026-10-13 10:00-2026-10-13 13:35|');
+    // An accepted 10:00→11:10 never hides a later move back to 11:10 from another planned time.
+    expect(changeKey({ ...base, old, next: n })).not.toBe(changeKey({ ...base, old: { ...n, depLocal: '12:00' }, next: n }));
   });
 });

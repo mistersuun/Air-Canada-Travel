@@ -43,7 +43,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
       } @else {
         <div class="tc__chips">
           @if (mode() === 'button') {
-            <button type="button" class="tc__chip" data-party (click)="partyPick.emit()" aria-label="Edit travellers">{{ partyText() }}</button>
+            <button type="button" class="tc__chip" data-party (click)="partyPick.emit()">{{ partyText() }}<span class="ui-visually-hidden">, edit travellers</span></button>
           } @else {
             <span class="tc__chip" data-party>{{ partyText() }}</span>
           }
@@ -61,7 +61,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
                   </a>
                 }
                 @case ('button') {
-                  <button type="button" class="tl__b" (click)="legPick.emit(r.id)" [attr.aria-label]="r.title + ', ' + r.meta">
+                  <button type="button" class="tl__b" (click)="legPick.emit(r.id)">
                     <ng-container [ngTemplateOutlet]="body" [ngTemplateOutletContext]="{ $implicit: r }" />
                   </button>
                 }
@@ -88,7 +88,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
         @if (r.status) { <app-leg-status-tag [status]="r.status" /> }
         @else if (r.provenance) { <app-provenance-tag [value]="r.provenance" /> }
       </span>
-      <span class="tl__m tn">{{ r.meta }}</span>
+      <span class="tl__m tn">{{ r.meta }}@if (r.status && r.provenance) {<span class="ui-visually-hidden"> · </span><app-provenance-tag class="tl__pv" [value]="r.provenance" />}</span>
     </ng-template>
   `,
   styles: [`
@@ -130,6 +130,8 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     .tl__t { font-weight: 650; font-size: 14px; line-height: 1.35; min-width: 0; }
     .tl__top > :last-child { flex: none; }
     .tl__m { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
+    .tl__pv { margin-left: 6px; vertical-align: 1px; }
+    .tl__pv ::ng-deep .ui-tag { font-size: 10.5px; padding: 1px 7px; }
     .is-done .tl__t { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--ink-3); }
     .is-done .tl__ic b { background: var(--fill); color: var(--ink-3); }
     .tl__none { padding: 0 0 12px 32px; }

@@ -94,7 +94,9 @@ export interface GatewayRow {
   ground: string;            // 'Train about 2h40'
   provenance: 'estimated' | 'unknown';
   night: boolean;            // a night on the way is likely
-  idle: string | null;       // 'No flight found Thu Oct 8 · next Fri Oct 9'
+  idle: string | null;       // 'Not found in our schedule data Thu Oct 8 · next Fri Oct 9'
+  /** The next date with a flight (idle rows link there). */
+  nextDateKey: string | null;
 }
 
 export function gatewayRow(g: Gateway, dateKey: string): GatewayRow {
@@ -117,10 +119,12 @@ export function gatewayRow(g: Gateway, dateKey: string): GatewayRow {
   } else if (!g.covered) {
     idle = `Schedules for ${dayLabel(dateKey)} aren't published yet`;
   } else {
-    idle = `No flight found ${dayLabel(dateKey)} · ${g.nextDateKey ? `next ${dayLabel(g.nextDateKey)}` : 'none in the next 2 weeks'}`;
+    idle = g.nextDateKey
+      ? `Not found in our schedule data ${dayLabel(dateKey)} · next ${dayLabel(g.nextDateKey)}`
+      : `Not found in our schedule data ${dayLabel(dateKey)} · none in our schedule data for the next 2 weeks`;
   }
   return {
-    code: g.code, city: g.city, flight, standby, idle,
+    code: g.code, city: g.city, flight, standby, idle, nextDateKey: !best && g.covered ? g.nextDateKey ?? null : null,
     ground: g.ground.label, provenance: g.ground.provenance, night: !!best && g.overnightLikely,
   };
 }

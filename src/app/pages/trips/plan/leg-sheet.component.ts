@@ -1,10 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { airportEnd, groundEstimate, onwardLinks } from '../../../places/ground';
 import { AppStateService } from '../../../state/app-state.service';
 import { shortAircraftName } from '../../../trips/engine/facts';
-import { itineraryFromRefs, itineraryFromSnapshot, refsFromItinerary, sameRefs } from '../../../trips/engine/legs';
+import { endTz, itineraryFromRefs, itineraryFromSnapshot, refsFromItinerary, sameRefs } from '../../../trips/engine/legs';
 import {
   Alternate, FlightLeg, GROUND_MODES, GroundMode, LEG_STATUS_LABEL, LegStatus, Trip, isFinalStatus,
 } from '../../../trips/model';
@@ -14,7 +14,7 @@ import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { flightPath } from '../../../ui/links';
 import { findDestination, findHub } from '../../../utils/airports';
 import { findAlternatives, type Itinerary } from '../../../utils/connections';
-import { WEEKDAY_SHORT, weekdayIndex } from '../../../utils/time';
+import { WEEKDAY_SHORT, toUtcMs, weekdayIndex } from '../../../utils/time';
 import {
   MODE_LABEL, dayLabel, flightNumbers, groundLabel, legById, refsRoute, refsTimes,
 } from '../trips-model';
@@ -61,7 +61,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
           </fieldset>
 
           <section class="ls__sec">
-            <h3 class="ui-h3">Backups</h3>
+            <h3 class="ui-h3" tabindex="-1" data-backups-h>Backups</h3>
             @for (b of backups(); track b.alt.id) {
               <div class="opt" [attr.data-alt]="b.alt.id">
                 <div class="opt__tx">
@@ -83,14 +83,14 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
                 @for (r of candidates(); track r.key) {
                   <div class="opt">
                     <div class="opt__tx"><b class="tn">{{ r.title }}</b><span class="tn">{{ r.meta }}</span></div>
-                    <button type="button" class="ui-btn ui-btn--sm ui-btn--dark" (click)="addAlt(r.it)">Add</button>
+                    <button type="button" class="ui-btn ui-btn--sm ui-btn--dark" data-add-one (click)="addAlt(r.it)">Add</button>
                   </div>
                 } @empty {
-                  <p class="ui-sub">No later option found in our schedule data for this route.</p>
+                  <p class="ui-sub" tabindex="-1" data-add-empty>No later option found in our schedule data for this route.</p>
                 }
               </div>
             } @else if (!isFinal()) {
-              <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost ls__add" data-add (click)="adding.set(true)">Add a backup</button>
+              <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost ls__add" data-add (click)="openAdd()">Add a backup</button>
             }
           </section>
 
@@ -185,6 +185,8 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
 export class LegSheetComponent {
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly injector = inject(Injector);
 
   readonly trip = input.required<Trip>();
   readonly legId = input.required<string>();
@@ -332,11 +334,26 @@ export class LegSheetComponent {
     if (!f) return;
     const id = this.trip().id;
     const before = f.alternates;
+    const idx = before.findIndex(a => a.id === alt.id);
     this.trips.removeAlternate(id, f.id, alt.id);
+    // The focused close button is gone: move to the next backup's, else the Backups heading.
+    const next = before.filter(a => a.id !== alt.id)[Math.max(0, idx - (idx >= before.length - 1 ? 1 : 0))];
+    this.focusAfterRender(next ? `[data-alt="${next.id}"] .opt__x` : '[data-backups-h]');
     this.state.flash(`Removed backup ${flightNumbers(alt.refs)}`, {
       label: 'Undo',
       run: () => this.trips.updateLeg(id, f.id, { alternates: before } as Partial<FlightLeg>),
     });
+  }
+
+  protected openAdd(): void {
+    this.adding.set(true);
+    this.focusAfterRender('[data-add-one], [data-add-empty]');
+  }
+
+  private focusAfterRender(selector: string): void {
+    afterNextRender(() => {
+      (this.host.nativeElement.querySelector(selector) as HTMLElement | null)?.focus();
+    }, { injector: this.injector });
   }
 
   protected addAlt(it: Itinerary): void {
@@ -355,7 +372,10 @@ export class LegSheetComponent {
       this.error.set('Add the departure and arrival dates and times.');
       return;
     }
-    if (`${ad}T${at}` < `${dd}T${dt}`) {
+    // Compare instants: a trip into an earlier zone (Spain → Portugal) can arrive at an earlier clock time.
+    const fromTz = endTz(g.from) ?? 'UTC';
+    const toTz = endTz(g.to) ?? fromTz;
+    if (toUtcMs(ad, at, toTz) < toUtcMs(dd, dt, fromTz)) {
       this.error.set('The arrival is before the departure.');
       return;
     }

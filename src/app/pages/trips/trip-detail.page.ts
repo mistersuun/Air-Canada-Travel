@@ -1,13 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { tripsPath } from '../../ui/links';
+import { TripMenuComponent } from './menu/trip-menu.component';
 import { PlanTabComponent } from './plan/plan-tab.component';
 import { PrepTabComponent } from './prep/prep-tab.component';
 import { ReturnTabComponent } from './return/return-tab.component';
+import { tripSubtitle } from './trips-model';
 
 export type TripTab = 'plan' | 'prep' | 'return';
 export const TRIP_TABS: SegOption[] = [
@@ -17,50 +19,76 @@ export const TRIP_TABS: SegOption[] = [
 ];
 
 /**
- * Trip detail (/trips/:id?tab=plan|prep|return). Phase 0 shell (Trips v2
- * spec §6.1): header, the Plan | Prep | Return seg and the three tab hosts.
- * S1 owns this page and fills in the header actions and the menu.
+ * Trip detail (/trips/:id?tab=plan|prep|return&leg=<legId>): a header with
+ * back, the trip name and "Spain and Portugal · 2 travellers", and a share
+ * circle that opens the trip menu (offline, share, calendar); then the
+ * Plan | Prep | Return seg (?tab=, replaceUrl) and the three tab hosts.
  */
 @Component({
   selector: 'app-trip-detail-page',
   standalone: true,
-  imports: [IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent],
+  imports: [IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="ui-page td">
+    <div class="ui-page ui-page--bare td">
       @if (trip(); as t) {
         <header class="td__head">
-          <button type="button" class="ui-circ" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
           <div class="td__title">
-            <h1 class="ui-h2">{{ t.name }}</h1>
-            <p class="ui-sub">{{ t.goal.country }} · {{ t.party.count }} {{ t.party.count === 1 ? 'traveller' : 'travellers' }}</p>
+            <h1 class="ui-h3">{{ t.name }}</h1>
+            <p class="td__sub tn">{{ subtitle() }}</p>
           </div>
+          <button type="button" class="ui-circ ui-circ--glass" aria-label="Share and offline" data-menu (click)="menuOpen.set(true)">
+            <app-icon name="external" [size]="18" />
+          </button>
         </header>
+        @if (trips.readOnly()) {
+          <p class="ui-sub td__ro">These trips were saved by a newer version of the app. You can look, but changes won't be kept.</p>
+        }
+        @if (t.sharedFrom) {
+          <p class="ui-sub td__ro">A copy of a shared plan. Changes stay on this device.</p>
+        }
         <app-seg stretch [options]="tabs" [value]="activeTab()" (valueChange)="setTab($event)" ariaLabel="Trip sections" />
         @switch (activeTab()) {
           @case ('prep') { <app-prep-tab [trip]="t" /> }
           @case ('return') { <app-return-tab [trip]="t" /> }
-          @default { <app-plan-tab [trip]="t" /> }
+          @default { <app-plan-tab [trip]="t" [leg]="leg()" /> }
+        }
+        @if (menuOpen()) {
+          <app-trip-menu [trip]="t" (closed)="menuOpen.set(false)" (deleted)="afterDelete()" />
         }
       }
     </div>
   `,
   styles: [`
-    .td { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; gap: 16px; }
-    .td__head { display: flex; align-items: center; gap: 12px; }
-    .td__title { min-width: 0; }
+    .td { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
+    .td__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .td__title { min-width: 0; text-align: center; }
+    .td__title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .td__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
+    .td__ro { text-align: center; font-size: 12.5px; }
+    @media (min-width: 720px) {
+      .td { padding-top: 24px; }
+    }
   `],
 })
 export class TripDetailPage {
-  private readonly trips = inject(TripsService);
+  protected readonly trips = inject(TripsService);
   private readonly router = inject(Router);
   private readonly state = inject(AppStateService);
 
   readonly id = input<string>('');
   readonly tab = input<string | undefined>(undefined);
+  /** ?leg=: opens that leg's sheet on the Plan tab. */
+  readonly leg = input<string | undefined>(undefined);
 
   protected readonly tabs = TRIP_TABS;
+  protected readonly menuOpen = signal(false);
   protected readonly trip = computed(() => this.trips.trips().find(t => t.id === this.id()) ?? null);
+  protected readonly subtitle = computed(() => {
+    const t = this.trip();
+    return t ? tripSubtitle(t) : '';
+  });
   protected readonly activeTab = computed<TripTab>(() => {
     const t = this.tab();
     return t === 'prep' || t === 'return' ? t : 'plan';
@@ -68,14 +96,18 @@ export class TripDetailPage {
 
   protected setTab(value: string | null | undefined): void {
     void this.router.navigate([], {
-      queryParams: { tab: value === 'plan' ? null : value },
+      queryParams: { tab: value === 'plan' ? null : value, leg: null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
   }
 
   protected back(): void {
-    if (this.state.canGoBack()) history.back();
-    else void this.router.navigate(tripsPath(), { queryParams: this.state.globalParams() });
+    this.state.goBack(tripsPath());
+  }
+
+  protected afterDelete(): void {
+    this.menuOpen.set(false);
+    void this.router.navigate(tripsPath(), { queryParams: this.state.globalParams(), replaceUrl: true });
   }
 }

@@ -1,15 +1,40 @@
 /**
  * Ground estimates from a gateway airport to the place the traveller wants
- * to reach. Never a timetable: corridor rows (corridors.ts) or a distance
- * heuristic, always labelled Estimated, or Unknown when we cannot tell
- * (across the sea, between countries without a land link). Pure.
+ * to reach. A corridor with a real timetable (ground.json, see timetable.ts)
+ * that covers the date gives the ride as Scheduled; otherwise corridor rows
+ * (corridors.ts) or a distance heuristic, labelled Estimated, or Unknown when
+ * we cannot tell (across the sea, between countries without a land link).
+ * The airport exit and transfer are always Estimated. Pure, apart from
+ * reading the loaded timetables signal.
  */
 import type { GroundMode, LegEnd, Place } from '../trips/model';
 import { hubDisplayName } from '../ui/format';
 import { findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
-import { MINUTE_MS, toUtcMs, addDays, utcToLocal } from '../utils/time';
+import { MINUTE_MS, toUtcMs, addDays, hhmmToMin, minToHhmm, todayKey, utcToLocal } from '../utils/time';
 import { CORRIDORS, Corridor, corridorTransferMin } from './corridors';
+import {
+  DAY_KIND_LABEL, Departure, TimetableDir, dayKind, departuresOn, groundTimetables, nextDeparture, timetableFor,
+  typicalRide,
+} from './timetable';
+
+/**
+ * The timetable behind a corridor estimate, for the date asked about:
+ * 'ok' (departures that day, the ride is Scheduled), 'empty' (the timetable
+ * covers the date but nothing runs), 'ended' (the date is after validTo) or
+ * 'notYet' (before validFrom). The last three keep the Estimated row.
+ */
+export interface GroundTimetableInfo {
+  dir: TimetableDir;
+  operator: string;
+  dateKey: string;
+  state: 'ok' | 'empty' | 'ended' | 'notYet';
+  departures: readonly Departure[];
+  /** '2h39', or '1h01 to 1h55' when that day's rides differ by more than 20 min. */
+  rideText: string;
+  validTo: string;
+  note: string | null;
+}
 
 export interface GroundEstimate {
   mode: GroundMode | 'unknown';
@@ -21,8 +46,11 @@ export interface GroundEstimate {
   frequency: string | null; // 'trains roughly hourly'
   lastDepLocal: string | null; // usual last departure (corridor only)
   shortFlightToo: boolean;
-  source: 'corridor' | 'heuristic' | 'none';
-  provenance: 'estimated' | 'unknown';
+  source: 'timetable' | 'corridor' | 'heuristic' | 'none';
+  /** Of the ride: 'scheduled' only from a timetable that covers the date. */
+  provenance: 'scheduled' | 'estimated' | 'unknown';
+  /** Present when the corridor has a timetable in ground.json (whatever the date). */
+  timetable?: GroundTimetableInfo;
 }
 
 /** Road distance ≈ 1.3 × great-circle. */
@@ -38,8 +66,10 @@ export const CORRIDOR_MATCH_KM = 25;
 export const LATE_ARRIVAL = '23:30';
 /** Before this hour, local times count as "late last night", not early today. */
 const NIGHT_END_MIN = 5 * 60;
-/** Next-morning departure assumed when the last train is missed. */
+/** Next-morning departure assumed when the last train is missed (no timetable). */
 const NEXT_MORNING = '08:00';
+/** A day's rides further apart than this are shown as a range. */
+const RIDE_RANGE_MIN = 20;
 
 const SCHENGEN_MAINLAND = [
   'AT', 'BE', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IT', 'LI', 'LT', 'LU', 'LV',
@@ -136,20 +166,22 @@ export function unknownGround(): GroundEstimate {
 }
 
 /**
- * How to get from `from` (usually the gateway airport) to `to` (the goal).
- * Corridor first, then the sea/country check, then the distance heuristic:
+ * How to get from `from` (usually the gateway airport) to `to` (the goal) on
+ * `opts.dateKey` (local at the origin station; today when omitted).
+ * A corridor with a timetable covering that date first (Scheduled ride), then
+ * the corridor row, then the sea/country check, then the distance heuristic:
  * under 60 km by road a taxi or transit at 50 km/h, up to 700 km a bus or
  * train at 70 km/h, beyond that the same plus "or a short flight". Leaving
  * an airport adds 60 min (passport, exit).
  */
-export function groundEstimate(from: LegEnd, to: Place | LegEnd): GroundEstimate {
+export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKey?: string }): GroundEstimate {
   const hit = findCorridor(from, to);
   if (hit) {
     const { row, reverse } = hit;
     // Towards the airport there is no passport/exit, but the station → airport transfer still counts.
     const exitMin = reverse ? corridorTransferMin(row) : row.exitMin;
     const word = row.modeLabel ?? cap(row.mode);
-    return {
+    const base: GroundEstimate = {
       mode: row.mode,
       label: `${word} about ${aboutDuration(row.rideMin)}${row.shortFlightToo ? ', or a short flight' : ''}`,
       rideMin: row.rideMin,
@@ -162,6 +194,8 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd): GroundEstimate
       source: 'corridor',
       provenance: 'estimated',
     };
+    const dir = timetableFor(groundTimetables(), row.code, row.geonameId, reverse);
+    return dir ? withTimetable(base, dir, word, reverse, opts?.dateKey ?? todayKey(dir.tz)) : base;
   }
 
   const a = countryOf(from);
@@ -191,6 +225,36 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd): GroundEstimate
   };
 }
 
+/** The corridor estimate with its timetable for `dateKey`: Scheduled when trains or buses run that day. */
+function withTimetable(base: GroundEstimate, dir: TimetableDir, word: string, reverse: boolean, dateKey: string): GroundEstimate {
+  const deps = departuresOn(dir, dateKey);
+  const info: GroundTimetableInfo = {
+    dir, operator: dir.op, dateKey, state: 'ok', departures: deps ?? [], rideText: '', validTo: dir.validTo, note: dir.note,
+  };
+  if (deps === null) return { ...base, timetable: { ...info, state: dateKey > dir.validTo ? 'ended' : 'notYet' } };
+  if (!deps.length) return { ...base, timetable: { ...info, state: 'empty' } };
+  const rides = deps.map(d => d.rideMin);
+  const lo = Math.min(...rides);
+  const hi = Math.max(...rides);
+  const ride = typicalRide(deps);
+  const rideText = hi - lo > RIDE_RANGE_MIN ? `${aboutDuration(lo)} to ${aboutDuration(hi)}` : aboutDuration(ride);
+  const first = minToHhmm(deps[0].depMin);
+  const last = minToHhmm(deps[deps.length - 1].depMin);
+  const noun = base.mode === 'bus' ? (deps.length === 1 ? 'bus' : 'buses') : (deps.length === 1 ? 'train' : 'trains');
+  const when = deps.length === 1 ? `at ${first}` : `${first} to ${last}`;
+  return {
+    ...base,
+    label: `${word} ${rideText}${base.shortFlightToo ? ', or a short flight' : ''}`,
+    rideMin: ride,
+    totalMin: base.exitMin + ride,
+    frequency: `${deps.length} ${dir.op} ${noun} on ${DAY_KIND_LABEL[dayKind(dateKey)]}, ${when}`,
+    lastDepLocal: reverse ? null : last,
+    source: 'timetable',
+    provenance: 'scheduled',
+    timetable: { ...info, rideText },
+  };
+}
+
 /** Minutes after local midnight, with 00:00–04:59 counted as the previous night (24:00–28:59). */
 function nightMin(hhmm: string): number {
   const [h, m] = hhmm.split(':').map(Number);
@@ -198,20 +262,38 @@ function nightMin(hhmm: string): number {
   return v < NIGHT_END_MIN ? v + 1440 : v;
 }
 
+/** The train or bus taken, from a timetable: its local date and time at the origin station. */
+export interface GroundDeparture {
+  dateKey: string;
+  hhmm: string;
+  rideMin: number;
+  /** Leaves the same day the traveller is ready. */
+  sameDay: boolean;
+}
+
+export interface GoalArrival {
+  utc: number | null;
+  overnightLikely: boolean;
+  lastDepMissed: boolean;
+  /** Set when a timetable gave the departure. */
+  departure: GroundDeparture | null;
+}
+
 /**
- * When the traveller reaches the goal after landing at `landUtc`:
- * landing + exit + ride. If they are out of the airport after the usual last
+ * When the traveller reaches the goal after landing at `landUtc`.
+ * With a timetable covering the day they are out of the airport: the first
+ * departure at or after then, with that train's own ride time; none left
+ * that day means the first one the next morning (lastDepMissed).
+ * Otherwise landing + exit + ride: if they are out after the usual last
  * departure (`lastDepMissed`), or the ride would end after 23:30 or start in
  * the small hours (`overnightLikely`), the ride is assumed to leave at 08:00
  * the next morning. utc is null when the estimate is unknown.
  */
-export function arrivalAtGoal(
-  landUtc: number,
-  g: GroundEstimate,
-  gatewayTz: string,
-): { utc: number | null; overnightLikely: boolean; lastDepMissed: boolean } {
-  if (g.rideMin === null || g.totalMin === null) return { utc: null, overnightLikely: false, lastDepMissed: false };
+export function arrivalAtGoal(landUtc: number, g: GroundEstimate, gatewayTz: string): GoalArrival {
+  if (g.rideMin === null || g.totalMin === null) return { utc: null, overnightLikely: false, lastDepMissed: false, departure: null };
   const readyUtc = landUtc + g.exitMin * MINUTE_MS;
+  const timed = g.timetable ? byTimetable(readyUtc, g.timetable.dir, gatewayTz) : null;
+  if (timed) return timed;
   const ready = utcToLocal(readyUtc, gatewayTz);
   const readyMin = nightMin(ready.hhmm);
   const lastDepMissed = !!g.lastDepLocal && readyMin > nightMin(g.lastDepLocal);
@@ -220,11 +302,33 @@ export function arrivalAtGoal(
   const smallHours = readyMin >= 1440;
   const endsLate = end.dateKey !== ready.dateKey || nightMin(end.hhmm) > nightMin(LATE_ARRIVAL);
   const overnightLikely = lastDepMissed || smallHours || endsLate;
-  if (!overnightLikely) return { utc: endUtc, overnightLikely, lastDepMissed };
+  if (!overnightLikely) return { utc: endUtc, overnightLikely, lastDepMissed, departure: null };
   // The night before 05:00 belongs to the previous evening: leave that same calendar morning.
   const morningKey = smallHours ? ready.dateKey : addDays(ready.dateKey, 1);
   const leaveUtc = toUtcMs(morningKey, NEXT_MORNING, gatewayTz);
-  return { utc: leaveUtc + g.rideMin * MINUTE_MS, overnightLikely, lastDepMissed };
+  return { utc: leaveUtc + g.rideMin * MINUTE_MS, overnightLikely, lastDepMissed, departure: null };
+}
+
+/** arrivalAtGoal from the real departures; null when the timetable does not cover those days. */
+function byTimetable(readyUtc: number, dir: TimetableDir, gatewayTz: string): GoalArrival | null {
+  const ready = utcToLocal(readyUtc, dir.tz);
+  const readyMin = hhmmToMin(ready.hhmm);
+  const next = nextDeparture(dir, ready.dateKey, readyMin);
+  if (!next) return null;
+  const leaveUtc = toUtcMs(next.dateKey, next.hhmm, dir.tz);
+  const utc = leaveUtc + next.dep.rideMin * MINUTE_MS;
+  const today = departuresOn(dir, ready.dateKey) ?? [];
+  const lastDepMissed = !next.sameDay && today.length > 0;
+  const waitsOutTheNight = readyMin < NIGHT_END_MIN && next.dep.depMin >= NIGHT_END_MIN;
+  const leave = utcToLocal(leaveUtc, gatewayTz);
+  const end = utcToLocal(utc, gatewayTz);
+  const endsLate = end.dateKey !== leave.dateKey || nightMin(end.hhmm) > nightMin(LATE_ARRIVAL);
+  return {
+    utc,
+    overnightLikely: !next.sameDay || waitsOutTheNight || endsLate,
+    lastDepMissed,
+    departure: { dateKey: next.dateKey, hhmm: next.hhmm, rideMin: next.dep.rideMin, sameDay: next.sameDay },
+  };
 }
 
 function rome2rioName(end: LegEnd): string {

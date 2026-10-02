@@ -6,7 +6,7 @@
  * Estimated / Saved by you / Unknown), counts not odds, and "not found in our
  * schedule data" rather than "no flights".
  */
-import { ROUTE_ONLY_NOTE, networkListsAll } from '../../data/route-network';
+import { networkNoteFor } from '../../data/route-network';
 import { countryName } from '../../places/place';
 import { aboutDuration, airportEnd, groundEstimate } from '../../places/ground';
 import { joinNames, routeCountries } from '../../places/prep';
@@ -136,7 +136,7 @@ function flightRow(trip: Trip, leg: FlightLeg, fmt: TimeFormat): LegRow {
   const meta = [refsTimes(refs, fmt)];
   if (leg.provenance === 'unknown') {
     // Flown per the route network, but the schedules have no times for it.
-    meta.push(networkListsAll(refs) ? ROUTE_ONLY_NOTE : 'not found in our schedule data');
+    meta.push(networkNoteFor(refs) ?? 'not found in our schedule data');
   }
   if (leg.alternates.length) meta.push(backupsLabel(leg.alternates.length));
   if (!isFinalStatus(leg.status) || leg.status === 'boarded') {

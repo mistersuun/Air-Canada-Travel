@@ -277,6 +277,8 @@ export interface GoalArrival {
   lastDepMissed: boolean;
   /** Set when a timetable gave the departure. */
   departure: GroundDeparture | null;
+  /** The timetable covers the next days but lists nothing running (utc is then null). */
+  noService?: true;
 }
 
 /**
@@ -287,7 +289,8 @@ export interface GoalArrival {
  * Otherwise landing + exit + ride: if they are out after the usual last
  * departure (`lastDepMissed`), or the ride would end after 23:30 or start in
  * the small hours (`overnightLikely`), the ride is assumed to leave at 08:00
- * the next morning. utc is null when the estimate is unknown.
+ * the next morning. utc is null when the estimate is unknown, or when the
+ * timetable covers the next days but lists nothing running (noService).
  */
 export function arrivalAtGoal(landUtc: number, g: GroundEstimate, gatewayTz: string): GoalArrival {
   if (g.rideMin === null || g.totalMin === null) return { utc: null, overnightLikely: false, lastDepMissed: false, departure: null };
@@ -309,17 +312,32 @@ export function arrivalAtGoal(landUtc: number, g: GroundEstimate, gatewayTz: str
   return { utc: leaveUtc + g.rideMin * MINUTE_MS, overnightLikely, lastDepMissed, departure: null };
 }
 
-/** arrivalAtGoal from the real departures; null when the timetable does not cover those days. */
+/**
+ * arrivalAtGoal from the real departures; null when the timetable does not
+ * cover those days. Ready between 00:00 and 04:59 counts as the previous
+ * evening (as nightMin does for the estimate): the last departure missed is
+ * that evening's, unless a departure still leaves before 05:00. When the
+ * timetable covers the next days but lists nothing running, the arrival is
+ * unknown (utc null) rather than an estimated next morning.
+ */
 function byTimetable(readyUtc: number, dir: TimetableDir, gatewayTz: string): GoalArrival | null {
   const ready = utcToLocal(readyUtc, dir.tz);
   const readyMin = hhmmToMin(ready.hhmm);
   const next = nextDeparture(dir, ready.dateKey, readyMin);
-  if (!next) return null;
+  if (next === null) return null;
+  const smallHours = readyMin < NIGHT_END_MIN;
+  const today = departuresOn(dir, ready.dateKey) ?? [];
+  const evening = smallHours
+    ? [...(departuresOn(dir, addDays(ready.dateKey, -1)) ?? []), ...today.filter(d => d.depMin < NIGHT_END_MIN)]
+    : today;
+  if (next === 'none') {
+    return { utc: null, overnightLikely: true, lastDepMissed: evening.length > 0, departure: null, noService: true };
+  }
   const leaveUtc = toUtcMs(next.dateKey, next.hhmm, dir.tz);
   const utc = leaveUtc + next.dep.rideMin * MINUTE_MS;
-  const today = departuresOn(dir, ready.dateKey) ?? [];
-  const lastDepMissed = !next.sameDay && today.length > 0;
-  const waitsOutTheNight = readyMin < NIGHT_END_MIN && next.dep.depMin >= NIGHT_END_MIN;
+  const caughtTonight = next.sameDay && (!smallHours || next.dep.depMin < NIGHT_END_MIN);
+  const lastDepMissed = !caughtTonight && evening.length > 0;
+  const waitsOutTheNight = smallHours && next.dep.depMin >= NIGHT_END_MIN;
   const leave = utcToLocal(leaveUtc, gatewayTz);
   const end = utcToLocal(utc, gatewayTz);
   const endsLate = end.dateKey !== leave.dateKey || nightMin(end.hhmm) > nightMin(LATE_ARRIVAL);

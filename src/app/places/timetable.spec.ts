@@ -45,6 +45,7 @@ describe('decodeGround', () => {
     raw['corridors']['BCN-2'] = { mode: 'train', out: { ...raw['corridors']['MAD-2510911'].out, wk: [[2000, 10, 0]] } };
     raw['corridors']['BCN-3'] = { mode: 'train', out: { ...raw['corridors']['MAD-2510911'].out, validTo: '2026-09-01' } };
     raw['corridors']['BCN-4'] = { mode: 'train', out: { ...raw['corridors']['MAD-2510911'].out, wk: [[600, 10, 5]] } };
+    raw['corridors']['BCN-5'] = { mode: 'train', out: { ...raw['corridors']['MAD-2510911'].out, tz: 'Europe/Nowhere' } };
     expect([...decodeGround(raw)!.corridors.keys()]).toEqual(['MAD-2510911']);
   });
 });
@@ -181,8 +182,28 @@ describe('arrivalAtGoal with a timetable', () => {
     setGroundTimetables(fixture());
     const g = groundEstimate(MAD, SEVILLE_PLACE, { dateKey: '2026-10-09' });
     const r = arrivalAtGoal(land('2026-10-09', '01:00'), g, TZ);
-    expect(r).toMatchObject({ lastDepMissed: false, overnightLikely: true });
+    // Out at 02:30: the previous evening's last train (Thu 21:05) is gone, as the estimate path says.
+    expect(r).toMatchObject({ lastDepMissed: true, overnightLikely: true });
     expect(r.departure?.hhmm).toBe('07:00');
+  });
+
+  it('landing late and out after midnight missed the previous evening\'s last train', () => {
+    setGroundTimetables(fixture());
+    const g = groundEstimate(MAD, SEVILLE_PLACE, { dateKey: '2026-10-08' });
+    const r = arrivalAtGoal(land('2026-10-08', '23:00'), g, TZ); // out 00:30 Fri
+    expect(r).toMatchObject({ lastDepMissed: true, overnightLikely: true });
+    expect(r.departure).toMatchObject({ dateKey: '2026-10-09', hhmm: '07:00', sameDay: true });
+  });
+
+  it('days covered but with nothing running: arrival unknown, not an 08:00 guess', () => {
+    const raw = structuredClone(FIXTURE_GROUND_FILE) as Record<string, any>;
+    const out = raw['corridors']['MAD-2510911'].out;
+    out.x = [...(out.x ?? []), '2026-10-13'];
+    setGroundTimetables(decodeGround(raw));
+    const g = groundEstimate(MAD, SEVILLE_PLACE, { dateKey: '2026-10-10' });
+    const r = arrivalAtGoal(land('2026-10-10', '20:00'), g, TZ); // Sat after 08:00; Sun, Mon, Tue no trains
+    expect(r).toMatchObject({ utc: null, departure: null, noService: true, overnightLikely: true, lastDepMissed: true });
+    expect(nextDeparture(timetableFor(groundTimetables(), 'MAD', 2510911, false)!, '2026-10-10', 20 * 60)).toBe('none');
   });
 
   it('past the timetable it falls back to the estimate', () => {
@@ -230,6 +251,28 @@ describe('GroundTimetableService', () => {
     expect(s.status()).toBe('idle');
     await s.ensureLoaded();
     expect(s.status()).toBe('ready');
+  });
+
+  it('the real fetcher treats a service worker 504 as offline (retry), a 404 as missing', async () => {
+    TestBed.configureTestingModule({});
+    const fetchFn = vi.fn(async () => new Response('', { status: 504 }));
+    vi.stubGlobal('fetch', fetchFn);
+    try {
+      const s = TestBed.inject(GroundTimetableService);
+      await s.ensureLoaded();
+      expect(s.status()).toBe('idle');
+      fetchFn.mockImplementation(async () => new Response(JSON.stringify(FIXTURE_GROUND_FILE), { status: 200 }));
+      await s.ensureLoaded();
+      expect(s.status()).toBe('ready');
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({});
+      fetchFn.mockImplementation(async () => new Response('', { status: 404 }));
+      const s2 = TestBed.inject(GroundTimetableService);
+      await s2.ensureLoaded();
+      expect(s2.status()).toBe('missing');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

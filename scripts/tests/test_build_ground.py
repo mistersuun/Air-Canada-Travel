@@ -199,6 +199,24 @@ def test_frequencies_expand():
     assert build(z)["out"]["wk"] == [[480, 30, 0], [540, 30, 0]]
 
 
+def test_frequencies_count_from_the_trips_first_stop_not_the_pinned_one():
+    # The trip starts at C (07:30); the headways are for C, so A is reached 30 min after each start.
+    z = feed("T1,07:30:00,07:30:00,C,1,0,0\nT1,08:00:00,08:00:00,A,2,0,0\nT1,08:30:00,08:30:00,B,3,0,0",
+             extra={"frequencies.txt": "trip_id,start_time,end_time,headway_secs\nT1,07:30:00,09:30:00,3600"})
+    assert build(z)["out"]["wk"] == [[480, 30, 0], [540, 30, 0]]
+
+
+def test_service_day_arithmetic_is_elapsed_time_on_dst_days():
+    # 2026-10-25: Europe/Madrid falls back at 03:00. 01:30 elapsed from noon-minus-12h (23:00 UTC
+    # the day before) is 00:30 UTC = 02:30 CEST, not a wall-clock 01:30.
+    c = corridor()
+    z = feed("T1,01:30:00,01:30:00,A,1,0,0\nT1,02:30:00,02:30:00,B,2,0,0",
+             calendar="service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"
+                      "S,0,0,0,0,0,0,1,20261025,20261025")
+    runs = bg.load_feed(z, [c], LO, HI)[c["key"]]["out"]
+    assert [(r[0].hour, r[0].minute) for r in runs] == [(2, 30)]
+
+
 def test_missing_pinned_stop_fails_loudly():
     z = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0")
     c = corridor(b={"stops": ["GONE"], "name": "Gone", "tz": "Europe/Madrid"})
@@ -255,6 +273,37 @@ def test_validity_ignores_a_thin_tail_and_lists_empty_dates():
     assert out.get("x") is None
     runs2 = [r for r in runs if r[0].date() != date(2026, 11, 11)]
     assert bg.build_direction(runs2, TODAY, {"src": "t"})["x"] == ["2026-11-11"]
+
+
+def test_validity_ends_where_the_times_change_and_lists_holiday_services():
+    from datetime import datetime, timedelta
+    runs = []
+    d = TODAY
+    while d <= date(2027, 3, 1):
+        # Same number of trains all along, but retimed by 30 min from Dec 13 (a new timetable).
+        shift = 30 if d >= date(2026, 12, 13) else 0
+        hours = [6, 9] if d == date(2026, 11, 11) else range(6, 16)  # a holiday with a reduced service
+        for k in hours:
+            runs.append((datetime(d.year, d.month, d.day, k) + timedelta(minutes=shift), 60, "X"))
+        d += timedelta(days=1)
+    out = bg.build_direction(runs, TODAY, {"src": "t"})
+    assert out["validTo"] == "2026-12-12"
+    assert out["x"] == ["2026-11-11"]
+
+
+def test_more_no_service_dates_than_listed_cut_validity():
+    from datetime import datetime, timedelta
+    runs = []
+    d = TODAY
+    while d <= date(2027, 6, 1):
+        closed = date(2027, 1, 10) <= d <= date(2027, 3, 10)  # a seasonal closure, 60 days
+        if not closed:
+            runs.append((datetime(d.year, d.month, d.day, 8), 60, "X"))
+        d += timedelta(days=1)
+    out = bg.build_direction(runs, TODAY, {"src": "t"})
+    assert len(out["x"]) == bg.MAX_NO_SERVICE
+    assert out["validTo"] == "2027-02-08"  # the day before the first date that could not be listed
+    assert out["x"][-1] == "2027-02-08"
 
 
 def test_nothing_in_the_scan_window_gives_none():

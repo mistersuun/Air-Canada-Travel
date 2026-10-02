@@ -218,6 +218,58 @@ function shortDate(iso: string): string {
   return `${MONTHS[m - 1]} ${d}`;
 }
 
+/** 'Jun 16', or 'Jun 16, 2027' when the year differs from `on`'s. */
+function dateFrom(iso: string, on: string): string {
+  return iso.slice(0, 4) === on.slice(0, 4) ? shortDate(iso) : `${shortDate(iso)}, ${iso.slice(0, 4)}`;
+}
+
+/**
+ * What the network says about a listed route on date `on` (YYYY-MM-DD):
+ * 'flies this route · times not in our data' while it flies,
+ * 'route starts Jun 16, 2027' before it begins, 'paused until May 1, 2027'
+ * while paused, and null once it has ended (the caller then says "not found
+ * in our schedule data"). Mid-sentence (lower case).
+ */
+export function routeFactNoteOn(fact: RouteFact, on: string): string | null {
+  if (fact.ends && on > fact.ends) return null;
+  if (fact.begins && on < fact.begins) return `route starts ${dateFrom(fact.begins, on)}`;
+  if (fact.resumes && on < fact.resumes) return `paused until ${dateFrom(fact.resumes, on)}`;
+  return ROUTE_ONLY_NOTE;
+}
+
+/**
+ * The note for a route-only pair on date `on`, or null when the pair is not
+ * route-only (no fact, or the schedules have it) or the route has ended.
+ */
+export function routeOnlyNoteOn(a: string | null | undefined, b: string | null | undefined, on: string): string | null {
+  if (!isRouteOnly(a, b)) return null;
+  return routeFactNoteOn(routeFact(a, b)!, on);
+}
+
+/**
+ * The note for a flight's segments, each on its own departure date: null
+ * unless the network lists every segment and none has ended; otherwise the
+ * first segment that is not flying yet (or is paused) speaks, else
+ * ROUTE_ONLY_NOTE.
+ */
+export function networkNoteFor(segments: readonly { origin: string; dest: string; dateKey: string }[]): string | null {
+  if (!segments.length) return null;
+  let note: string = ROUTE_ONLY_NOTE;
+  for (const s of segments) {
+    const fact = routeFact(s.origin, s.dest);
+    if (!fact) return null;
+    const n = routeFactNoteOn(fact, s.dateKey);
+    if (n === null) return null;
+    if (note === ROUTE_ONLY_NOTE && n !== ROUTE_ONLY_NOTE) note = n;
+  }
+  return note;
+}
+
+/** 'route starts Jun 16' → 'Route starts Jun 16' (for a sentence start). */
+export function capitalizeNote(note: string): string {
+  return note.charAt(0).toUpperCase() + note.slice(1);
+}
+
 /**
  * Optional detail under the sentence: 'Air Canada Express · Seasonal · Starts Dec 17'.
  * Empty when there is nothing worth saying.

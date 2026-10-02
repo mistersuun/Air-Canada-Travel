@@ -5,14 +5,21 @@ import { GroundTimetables, decodeGround, groundTimetables, setGroundTimetables }
 export const GROUND_URL = 'data/ground.json';
 
 /**
- * Fetches ground.json. Resolves null on an HTTP error or bad JSON (final);
- * rejects on a network error (offline: tried again later). Specs replace it.
+ * Fetches ground.json. Resolves null on a 4xx or bad JSON (final); rejects on
+ * a network error or a 5xx (offline: tried again later). Under the Angular
+ * service worker an offline fetch of an uncached asset resolves a 504 rather
+ * than rejecting, so a 5xx (or any failure while offline) counts as a network
+ * error. Specs replace it.
  */
 export const GROUND_FETCH = new InjectionToken<() => Promise<unknown>>('GROUND_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
     const res = await fetch(GROUND_URL);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      if (res.status >= 500 || offline) throw new Error(`ground.json: HTTP ${res.status}`);
+      return null;
+    }
     try {
       return await res.json();
     } catch {

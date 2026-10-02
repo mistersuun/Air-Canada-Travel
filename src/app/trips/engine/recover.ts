@@ -92,9 +92,10 @@ function optionsOn(ctx: Ctx, gateway: string, dateKey: string): Itinerary[] {
   return out;
 }
 
-function groundFor(trip: Trip, gateway: string): GroundEstimate {
+/** The ground estimate from `gateway`, with the timetable for `dateKey` (the day the flight lands there). */
+function groundFor(trip: Trip, gateway: string, dateKey?: string): GroundEstimate {
   const end = airportEnd(gateway);
-  return end ? groundEstimate(end, trip.goal) : unknownGround();
+  return end ? groundEstimate(end, trip.goal, dateKey ? { dateKey } : undefined) : unknownGround();
 }
 
 /**
@@ -120,8 +121,10 @@ export function legDepartureKey(leg: TripLeg): string {
 /** Fills ground, arrival at the goal, nights and whether the return still works. */
 function decorate(
   ctx: Ctx, gateway: string, itinerary: Itinerary, status: ReachStatus, reason: string | null, day: ReachableOption['day'],
-  ground: GroundEstimate,
+  gatewayGround: GroundEstimate,
 ): ReachableOption {
+  // The timetable day is the day this itinerary lands at the gateway.
+  const ground = gatewayGround.source === 'timetable' ? groundFor(ctx.trip, gateway, itinerary.arrDateKey) : gatewayGround;
   const arr = arrivalAtGoal(itinerary.arriveUtc, ground, airportTz(gateway));
   const arriveGoalUtc = arr.utc;
   const goalTz = ctx.trip.goal.tz ?? airportTz(gateway);

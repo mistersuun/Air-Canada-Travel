@@ -10,7 +10,7 @@ import {
   Alternate, FlightLeg, GROUND_MODES, GroundMode, LEG_STATUS_LABEL, LegStatus, Trip, isFinalStatus,
 } from '../../../trips/model';
 import { TripsService } from '../../../trips/trips.service';
-import { ROUTE_ONLY_TEXT, networkListsAll } from '../../../data/route-network';
+import { capitalizeNote, networkNoteFor } from '../../../data/route-network';
 import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.component';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { flightPath } from '../../../ui/links';
@@ -51,8 +51,8 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             <app-provenance-tag [value]="f.provenance" />
           </p>
           @if (f.provenance === 'unknown') {
-            @if (routeListed()) {
-              <p class="ls__warn ui-sub" data-route-only>{{ routeOnlyText }}. Check the Air Canada app before you go.
+            @if (routeNote(); as rn) {
+              <p class="ls__warn ui-sub" data-route-only>{{ rn }}. Check the Air Canada app before you go.
                 <a class="ui-link" [href]="acUrl" target="_blank" rel="noopener">Open in aircanada.com</a></p>
             } @else {
               <p class="ls__warn ui-sub">Not found in the latest schedules. Check the Air Canada app before you go.</p>
@@ -225,12 +225,12 @@ export class LegSheetComponent {
   protected readonly modeLabel = MODE_LABEL;
 
   protected readonly leg = computed(() => legById(this.trip(), this.legId()));
-  protected readonly routeOnlyText = ROUTE_ONLY_TEXT;
   protected readonly acUrl = 'https://www.aircanada.com/';
-  /** The route network lists every segment: flown, times not in our data. */
-  protected readonly routeListed = computed(() => {
+  /** The route network lists every segment on its date: flown (or starting / paused), times not in our data. */
+  protected readonly routeNote = computed(() => {
     const f = this.flight();
-    return !!f && networkListsAll(f.refs);
+    const note = f ? networkNoteFor(f.refs) : null;
+    return note ? capitalizeNote(note) : null;
   });
   protected readonly flight = computed(() => {
     const l = this.leg();
@@ -372,7 +372,8 @@ export class LegSheetComponent {
     const it = itineraryFromRefs(alt.refs) ?? itineraryFromSnapshot(alt.refs);
     if (!it) return;
     const end = airportEnd(it.dest);
-    const ground = end ? groundEstimate(end, this.trip().goal) : null;
+    // The timetable day is the day the new flight lands.
+    const ground = end ? groundEstimate(end, this.trip().goal, { dateKey: it.arrDateKey }) : null;
     this.trips.swapLeg(this.trip().id, f.id, it, ground);
     this.closed.emit();
   }

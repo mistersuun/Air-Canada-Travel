@@ -10,7 +10,7 @@
  */
 import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
-import { ROUTE_ONLY_NOTE, networkListsAll } from '../../data/route-network';
+import { networkNoteFor } from '../../data/route-network';
 import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
 import { MISS_GAP_MIN, departuresHome } from '../../trips/engine/homeby';
 import { hm, supOffset } from '../../ui/format';
@@ -228,7 +228,8 @@ export function todayView(input: {
   const tz = airportTz(ref.origin);
   if (!final) subParts.push(leavesLabel(refDepUtc(ref), nowMs, tz));
   // Unknown provenance on a route the network lists: flown, but not in our schedules.
-  if (leg.provenance === 'unknown' && networkListsAll([ref])) subParts.push(ROUTE_ONLY_NOTE);
+  const routeNote = leg.provenance === 'unknown' ? networkNoteFor([ref]) : null;
+  if (routeNote) subParts.push(routeNote);
 
   const notes = input.notes
     .filter(n => instanceKey(n) === instanceKey(ref) && noteText(n))
@@ -370,7 +371,7 @@ export function plannedNights(trip: Trip, leg: FlightLeg): number | null {
   const last = leg.refs[leg.refs.length - 1];
   const end = airportEnd(last.dest);
   if (!end) return null;
-  const g: GroundEstimate = groundEstimate(end, trip.goal);
+  const g: GroundEstimate = groundEstimate(end, trip.goal, { dateKey: last.arrDateKey });
   const arr = arrivalAtGoal(refArrUtc(last), g, airportTz(last.dest)).utc;
   if (arr === null) return null;
   const leave = trip.legs.find(l => leavesGoalArea(trip, l) && legStartUtc(l, trip.legs) > arr);

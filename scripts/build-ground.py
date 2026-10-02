@@ -34,10 +34,13 @@ ids pinned below, child stops included through parent_station):
     one ride per departure time (the shortest), departures up to 2 min apart
     merged (a train retimed part-way through the window), and rides longer than
     max(1.5 x fastest, fastest + 60 min) are dropped (slow stopping trains)
-  * validFrom / validTo: first and last date that has at least half of its
-    day type's typical departures (so a calendar that runs on far ahead with a
-    few trains does not count); dates inside with no departure at all are
-    listed in "x" (the app says "Not found in our timetable data")
+  * validFrom / validTo: the dates whose departure minutes match the template
+    (at least MATCH_SHARE of its departures, within NEAR_MIN), so a calendar
+    that runs on far ahead with a few trains, or a later timetable with other
+    times, does not count; MISMATCH_RUN non-matching dates of one day type in
+    a row end the validity. Dates inside with no departure at all, or with
+    times the template does not describe (a holiday service), are listed in
+    "x" (the app says "Not found in our timetable data")
 
 Usage:
   python3 scripts/build-ground.py [--out PATH] [--cache DIR] [--offline]
@@ -82,6 +85,8 @@ CAL_HORIZON_DAYS = 400  # calendar expansion cap
 MAX_BYTES = 150_000
 MAX_NO_SERVICE = 30     # cap on listed no-service dates per direction
 NEAR_MIN = 2            # departures this close in a template are one train
+MATCH_SHARE = 0.75      # share of a template's departure minutes a date must run to use the template
+MISMATCH_RUN = 3        # this many non-matching dates of one day type in a row end the validity
 
 CC_BY = "https://creativecommons.org/licenses/by/4.0/"
 ODBL = "https://opendatacommons.org/licenses/odbl/1-0/"
@@ -331,11 +336,24 @@ def load_feed(z: zipfile.ZipFile, corridors: list[dict], lo: date, hi: date) -> 
               for rid, aid, short, long_, rtype in rows(
                   z, "routes.txt", ("route_id", "agency_id", "route_short_name", "route_long_name", "route_type"))}
 
-    # stop_times: one pass, only calls at the pinned stops.
+    # Frequency-based trips: GTFS start_time/end_time refer to the trip's FIRST stop, which may
+    # not be a pinned one, so their first call is recorded from every stop_times row.
+    freq_ids: set[str] = set()
+    if has(z, "frequencies.txt"):
+        freq_ids = {tid for (tid,) in rows(z, "frequencies.txt", ("trip_id",))}
+    first_call: dict[str, tuple[int, int | None]] = {}
+
+    # stop_times: one pass, only calls at the pinned stops (plus the first call of frequency trips).
     calls: dict[str, list[tuple[int, str, int | None, int | None, str, str]]] = {}
     for tid, arr, dep, sid, seq, pu, do in rows(
             z, "stop_times.txt",
             ("trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence", "pickup_type", "drop_off_type")):
+        if tid in freq_ids:
+            n = int(seq)
+            cur = first_call.get(tid)
+            if cur is None or n < cur[0]:
+                t0 = parse_secs(dep)
+                first_call[tid] = (n, t0 if t0 is not None else parse_secs(arr))
         if sid not in every:
             continue
         a, d = parse_secs(arr), parse_secs(dep)
@@ -396,11 +414,15 @@ def load_feed(z: zipfile.ZipFile, corridors: list[dict], lo: date, hi: date) -> 
                     dates_cache[svc] = service_dates(cal, extra, svc, lo, hi)
                 offsets = [x[3]]
                 if tid in freqs:
-                    first = min(v[3] for v in cl)
+                    first = first_call.get(tid, (0, None))[1]
+                    if first is None:
+                        continue  # no time at the trip's first stop: cannot place the headways
                     offsets = [x[3] - first + t for s, e, h in freqs[tid] for t in range(s, e, h)]
                 tz = ZoneInfo(agency_tz or "UTC")
                 for d in dates_cache[svc]:
-                    base = datetime(d.year, d.month, d.day, 12, tzinfo=tz) - timedelta(hours=12)
+                    # GTFS times count elapsed seconds from noon minus 12h: do the arithmetic in UTC,
+                    # not on the wall clock (they differ by an hour on DST-change days).
+                    base = datetime(d.year, d.month, d.day, 12, tzinfo=tz).astimezone(timezone.utc) - timedelta(hours=12)
                     for off in offsets:
                         dep = (base + timedelta(seconds=off)).astimezone(local_tz)
                         res[direction].append((dep, ride, product))
@@ -491,21 +513,54 @@ def typical(days: dict[date, dict[int, tuple[int, str]]], today: date) -> dict[s
     return out
 
 
+def day_matches(deps: dict[int, tuple[int, str]], tmpl_g: list[tuple[int, int, str]]) -> bool:
+    """True when at least MATCH_SHARE of the template's departure minutes run that day (within
+    NEAR_MIN): the template's times, not just as many trains, describe the day."""
+    if not tmpl_g or not deps:
+        return False
+    hit = sum(1 for m, _, _ in tmpl_g if any(abs(m - k) <= NEAR_MIN for k in deps))
+    return hit >= math.ceil(MATCH_SHARE * len(tmpl_g))
+
+
 def validity(days: dict[date, dict], tmpl: dict[str, list], today: date) -> tuple[date, date, list[date]] | None:
-    """First / last date (from today) with at least half its day type's typical departures, and the
-    dates in between with none at all. None when no date qualifies."""
+    """validFrom / validTo and the "x" dates, so the app never shows the template's times as
+    Scheduled on a day they do not describe:
+      * validFrom: the first date (from today) whose departures match its day type's template
+      * walking on, a date with no departure at all, or one whose times do not match (a holiday
+        with a reduced service), is listed in "x"
+      * MISMATCH_RUN non-matching dates in a row of the same day type (a new timetable) end the
+        validity before the first of them; so does running out of MAX_NO_SERVICE "x" slots
+      * validTo is then the last matching date, or the day before the first date "x" had no room for
+    None when no date qualifies."""
     good = sorted(d for d, deps in days.items()
-                  if d >= today and deps and tmpl[day_type(d)] and len(deps) >= len(tmpl[day_type(d)]) / 2)
+                  if d >= today and tmpl[day_type(d)] and day_matches(deps, tmpl[day_type(d)]))
     if not good:
         return None
     lo, hi = good[0], good[-1]
-    gaps = []
+    odd: list[date] = []
+    runs: dict[str, list[date]] = {"wk": [], "sat": [], "sun": []}
     d = lo
     while d <= hi:
-        if tmpl[day_type(d)] and not days.get(d):
-            gaps.append(d)
+        g = day_type(d)
+        deps = days.get(d)
+        if tmpl[g]:
+            if not deps:
+                odd.append(d)
+            elif day_matches(deps, tmpl[g]):
+                runs[g] = []
+            else:
+                runs[g].append(d)
+                odd.append(d)
+                if len(runs[g]) >= MISMATCH_RUN:
+                    hi = max(x for x in good if x < runs[g][0])
+                    break
         d += timedelta(days=1)
-    return lo, hi, gaps[:MAX_NO_SERVICE]
+    odd = [x for x in odd if x <= hi]
+    if len(odd) > MAX_NO_SERVICE:
+        # The dates past the last listed one could not be marked: the validity stops before them.
+        hi = odd[MAX_NO_SERVICE] - timedelta(days=1)
+        odd = odd[:MAX_NO_SERVICE]
+    return lo, hi, odd
 
 
 def build_direction(runs: list[tuple[datetime, int, str]], today: date, meta: dict) -> dict | None:

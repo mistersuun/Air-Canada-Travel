@@ -12,7 +12,6 @@ import { directItinerary } from '../../utils/connections';
 import {
   cardMeta, directDots, footerDays, heroMeta, rowMeta, starredDots, upcoming, watchingMeta, type UpcomingItem,
 } from './saved-model';
-import { ROUTE_ONLY_NOTE } from '../../data/route-network';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
 
 export type SavedTab = 'upcoming' | 'watching';
@@ -73,7 +72,7 @@ const TABS: readonly SegOption[] = [
               <app-dest-row [code]="r.u.code" [small]="r.u.code" [meta]="r.meta" [dots]="r.dots" [link]="destPath(r.u.code)" />
             }
             @for (n of up().rest; track n.code) {
-              <app-dest-row [code]="n.code" [small]="n.code" [meta]="n.routeOnly ? n.country + ' · ' + routeOnlyNote : n.country"
+              <app-dest-row [code]="n.code" [small]="n.code" [meta]="n.routeNote ? n.country + ' · ' + n.routeNote : n.country"
                             [link]="destPath(n.code)">
                 @if (n.via) {
                   <span trailing class="ui-tag ui-tag--amber">Via {{ n.via }}</span>
@@ -156,7 +155,6 @@ export class SavedPage {
 
   protected readonly tabs = TABS;
   protected readonly destPath = destPath;
-  protected readonly routeOnlyNote = ROUTE_ONLY_NOTE;
   protected readonly calendarPath = calendarPath;
   protected readonly heroMeta = heroMeta;
   protected readonly cardMeta = cardMeta;

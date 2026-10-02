@@ -4,7 +4,7 @@
  */
 import type { Coverage } from '../../data/schedule-index';
 import { getDestinationCodes } from '../../data/schedule-index';
-import { ROUTE_ONLY_NOTE, isRouteOnly } from '../../data/route-network';
+import { routeOnlyNoteOn } from '../../data/route-network';
 import type { Destination } from '../../data/destinations';
 import { isOutside, shortDay } from '../../ui/format';
 import { findDestination } from '../../utils/airports';
@@ -195,7 +195,8 @@ export interface ChooserRow {
 export function chooserMeta(hub: string, d: Destination, today: string): string {
   const next = nextFlightDate(hub, d.code, today);
   if (next) return `${d.country} · next ${shortDay(next)}`;
-  if (isRouteOnly(hub, d.code)) return `${d.country} · ${ROUTE_ONLY_NOTE}`;
+  const routeNote = routeOnlyNoteOn(hub, d.code, today);
+  if (routeNote) return `${d.country} · ${routeNote}`;
   return `${d.country} · no nonstop published`;
 }
 

@@ -366,15 +366,24 @@ export function tripAwayAirports(trip: Trip): Set<string> {
  * does not connect.
  */
 export function tripConnects(trip: Trip, it: { origin: string; dest: string }): boolean {
+  // Positioning between the home hub and the home airport (YOW → YUL, YUL → YOW) is part of the journey.
+  if (trip.fromHub !== trip.homeAirport && it.origin !== it.dest
+    && [trip.fromHub, trip.homeAirport].includes(it.origin) && [trip.fromHub, trip.homeAirport].includes(it.dest)) return true;
   const away = tripAwayAirports(trip);
   if (away.has(it.dest)) return true;
   const home = it.dest === trip.fromHub || it.dest === trip.homeAirport;
   return home && away.has(it.origin);
 }
 
-/** Active trips covering the itinerary's day that it connects to (see tripConnects). */
-export function tripsFor(trips: readonly Trip[], it: { origin: string; dest: string; dateKey: string }): Trip[] {
-  return tripsCovering(trips, it.dateKey).filter(t => tripConnects(t, it));
+/**
+ * Active trips covering the itinerary's day that it connects to (see
+ * tripConnects), plus any active trip that already holds it (as a leg or a
+ * backup), whatever its geography.
+ */
+export function tripsFor(trips: readonly Trip[], it: { origin: string; dest: string; dateKey: string } | Itinerary): Trip[] {
+  const covering = new Set(tripsCovering(trips, it.dateKey));
+  return trips.filter(t => !t.archived && (
+    (covering.has(t) && tripConnects(t, it)) || ('legs' in it && tripTarget(t, it).kind === 'already')));
 }
 
 export type TripTarget =

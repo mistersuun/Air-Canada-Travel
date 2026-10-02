@@ -7,8 +7,12 @@ import {
   loadRouteNetwork,
   networkDestinations,
   resetRouteNetworkSource,
+  ROUTE_ONLY_NOTE,
+  capitalizeNote,
+  networkNoteFor,
   routeFact,
   routeFactDetail,
+  routeFactNoteOn,
   routeNetworkCredit,
   routeNetworkLoaded,
   setRouteNetworkSource,
@@ -166,5 +170,36 @@ describe('committed public/data/route-network.json', () => {
     for (const [a, b] of [['YHZ', 'BOS'], ['YHZ', 'EWR'], ['YHZ', 'YOW'], ['YHZ', 'YDF']]) {
       expect(n.routes.has(a < b ? `${a}-${b}` : `${b}-${a}`), `${a}-${b}`).toBe(true);
     }
+  });
+});
+
+describe('routeFactNoteOn / networkNoteFor (dates)', () => {
+  const fact = (p: Partial<{ begins: string; ends: string; resumes: string }>) =>
+    ({ brands: [], seasonal: false, begins: null, ends: null, resumes: null, ...p });
+
+  it('says when a route starts, is paused, or has ended', () => {
+    expect(routeFactNoteOn(fact({}), '2026-10-02')).toBe(ROUTE_ONLY_NOTE);
+    expect(routeFactNoteOn(fact({ begins: '2027-06-16' }), '2026-10-02')).toBe('route starts Jun 16, 2027');
+    expect(routeFactNoteOn(fact({ begins: '2027-06-16' }), '2027-01-02')).toBe('route starts Jun 16');
+    expect(routeFactNoteOn(fact({ begins: '2027-06-16' }), '2027-06-16')).toBe(ROUTE_ONLY_NOTE);
+    expect(routeFactNoteOn(fact({ resumes: '2027-05-01' }), '2026-10-02')).toBe('paused until May 1, 2027');
+    expect(routeFactNoteOn(fact({ resumes: '2027-05-01' }), '2027-05-02')).toBe(ROUTE_ONLY_NOTE);
+    expect(routeFactNoteOn(fact({ ends: '2027-01-26' }), '2027-01-26')).toBe(ROUTE_ONLY_NOTE);
+    expect(routeFactNoteOn(fact({ ends: '2027-01-26' }), '2027-01-27')).toBeNull();
+    expect(capitalizeNote('route starts Jun 16')).toBe('Route starts Jun 16');
+  });
+
+  it('networkNoteFor needs every segment listed and still flying on its date', () => {
+    setScheduleSource(FIXTURE_ROUTES, FIXTURE_META);
+    setRouteNetworkSource(ROUTE_NETWORK_FIXTURE);
+    const seg = { origin: 'YHZ', dest: 'BOS', dateKey: '2026-10-02' };
+    expect(networkNoteFor([seg])).toBe(ROUTE_ONLY_NOTE);
+    expect(networkNoteFor([seg, { origin: 'YHZ', dest: 'LAX', dateKey: '2026-10-02' }])).toBeNull();
+    expect(networkNoteFor([])).toBeNull();
+    // YHZ-BGI begins 2026-12-17: a leg before then is not "flies this route".
+    const bgi = { origin: 'YHZ', dest: 'BGI', dateKey: '2026-10-02' };
+    expect(networkNoteFor([bgi])).toBe('route starts Dec 17');
+    expect(networkNoteFor([seg, bgi])).toBe('route starts Dec 17');
+    expect(networkNoteFor([{ ...bgi, dateKey: '2026-12-20' }])).toBe(ROUTE_ONLY_NOTE);
   });
 });

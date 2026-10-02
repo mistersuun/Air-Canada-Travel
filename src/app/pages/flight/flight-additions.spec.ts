@@ -114,6 +114,18 @@ describe('flight page model (g6)', () => {
     expect(tripsFor([trip], f('YUL', 'LHR'))).toHaveLength(0);
     expect(tripsFor([trip], f('YUL', 'MAD', '2026-10-20'))).toHaveLength(0);
   });
+
+  it('connects a hop between the home hub and the home airport, and a flight the trip already holds', () => {
+    const trip = { ...sevilleTrip(), fromHub: 'YUL', homeAirport: 'YOW' };
+    const f = (origin: string, dest: string, dateKey = '2026-10-08') => ({ origin, dest, dateKey });
+    expect(tripConnects(trip, f('YUL', 'YOW'))).toBe(true);
+    expect(tripConnects(trip, f('YOW', 'YUL'))).toBe(true);
+    // Home hub = home airport: a flight to another Canadian hub still does not connect.
+    expect(tripConnects(sevilleTrip(), f('YUL', 'YOW'))).toBe(false);
+    // A flight the trip already holds connects (tripTarget 'already').
+    const mad = allItineraries('YUL', 'MAD', '2026-10-08', { minConnect: 60 }).find(i => !i.hubs.length)!;
+    expect(tripsFor([trip], mad)).toHaveLength(1);
+  });
 });
 
 describe('FlightPage additions (g6)', () => {

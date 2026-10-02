@@ -10,7 +10,7 @@
  */
 import type { Coverage } from '../../data/schedule-index';
 import { getSchedulesForRoute } from '../../data/schedule-index';
-import { isRouteOnly } from '../../data/route-network';
+import { routeOnlyNoteOn } from '../../data/route-network';
 import type { StarredItem } from '../../state/app-state.service';
 import type { TimeFormat } from '../../state/prefs.service';
 import type { DotDay } from '../../ui/dot-row.component';
@@ -46,8 +46,16 @@ export interface NoNonstopItem {
   country: string;
   /** First connecting hub found this week ('YYZ'), or null when nothing flies. */
   via: string | null;
-  /** Set when the route network lists the route but the schedules have no times for it. */
+  /** Set when the route network lists the route (not ended) but the schedules have no times for it. */
   routeOnly?: true;
+  /** With routeOnly: the route-network note for today ('flies this route · times not in our data', 'route starts Jun 16, 2027'). */
+  routeNote?: string;
+}
+
+/** routeOnly + routeNote for a favourite the route network lists (as of today), else nothing. */
+function routeNoteField(hub: string, code: string, today: string): { routeOnly?: true; routeNote?: string } {
+  const note = routeOnlyNoteOn(hub, code, today);
+  return note ? { routeOnly: true, routeNote: note } : {};
 }
 
 /**
@@ -92,7 +100,7 @@ export function upcoming(
     if (!f) {
       rest.push({
         code, city: d.city, country: d.country, via: viaHub(hub, code, today, connect),
-        ...(isRouteOnly(hub, code) ? { routeOnly: true as const } : {}),
+        ...routeNoteField(hub, code, today),
       });
       continue;
     }

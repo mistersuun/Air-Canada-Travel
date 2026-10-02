@@ -7,7 +7,7 @@
  * every synchronous caller of groundEstimate() recomputes once the file loads.
  */
 import { signal } from '@angular/core';
-import { addDays, isDateKey, minToHhmm, weekdayIndex } from '../utils/time';
+import { addDays, isDateKey, isValidTimeZone, minToHhmm, weekdayIndex } from '../utils/time';
 
 /** One departure: minutes after local midnight, ride minutes, index into `products`. */
 export interface Departure { depMin: number; rideMin: number; product: string }
@@ -72,7 +72,9 @@ function decodeDir(raw: unknown): TimetableDir | null {
   if (!products) return null;
   const validFrom = str(r['validFrom']);
   const validTo = str(r['validTo']);
-  if (!isDateKey(validFrom) || !isDateKey(validTo) || validFrom > validTo || !str(r['tz'])) return null;
+  if (!isDateKey(validFrom) || !isDateKey(validTo) || validFrom > validTo) return null;
+  // Callers convert times in this zone inside computeds: a bad zone would throw there.
+  if (!str(r['tz']) || !isValidTimeZone(str(r['tz']))) return null;
   const wk = decodeDeps(r['wk'], products);
   const sat = decodeDeps(r['sat'], products);
   const sun = decodeDeps(r['sun'], products);
@@ -162,11 +164,12 @@ export const NEXT_DEPARTURE_DAYS = 3;
 /**
  * The first departure at or after `fromMin` on `dateKey`, else the first one
  * on a following day (up to NEXT_DEPARTURE_DAYS). Null when the timetable
- * stops covering the dates before one is found.
+ * stops covering the dates before one is found; 'none' when it covers every
+ * day looked at and none of them has a departure left.
  */
 export function nextDeparture(
   dir: TimetableDir, dateKey: string, fromMin: number,
-): { dateKey: string; hhmm: string; dep: Departure; sameDay: boolean } | null {
+): { dateKey: string; hhmm: string; dep: Departure; sameDay: boolean } | 'none' | null {
   for (let i = 0; i <= NEXT_DEPARTURE_DAYS; i++) {
     const key = addDays(dateKey, i);
     const deps = departuresOn(dir, key);
@@ -174,7 +177,7 @@ export function nextDeparture(
     const dep = deps.find(d => i > 0 || d.depMin >= fromMin);
     if (dep) return { dateKey: key, hhmm: minToHhmm(dep.depMin), dep, sameDay: i === 0 };
   }
-  return null;
+  return 'none';
 }
 
 /** The middle ride time of a day (the lower middle for an even count). */

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
-import { airportEnd, groundEstimate, onwardLinks } from '../../../places/ground';
+import { aboutDuration, airportEnd, groundEstimate, onwardLinks } from '../../../places/ground';
 import { GroundTimetableService } from '../../../places/ground-timetable.service';
 import { AppStateService } from '../../../state/app-state.service';
 import { shortAircraftName } from '../../../trips/engine/facts';
@@ -19,7 +19,7 @@ import { findDestination, findHub } from '../../../utils/airports';
 import { findAlternatives, type Itinerary } from '../../../utils/connections';
 import { WEEKDAY_SHORT, toUtcMs, weekdayIndex } from '../../../utils/time';
 import {
-  MODE_LABEL, dayLabel, flightNumbers, groundLabel, legById, refsRoute, refsTimes,
+  MODE_LABEL, dayLabel, flightNumbers, groundLabel, groundRide, legById, refsRoute, refsTimes,
 } from '../trips-model';
 import { groundTimetableLines } from '../../reach/reach-model';
 import { LegFilesComponent } from '../../../files/ui/leg-files.component';
@@ -117,10 +117,14 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
         </div>
       } @else if (ground(); as g) {
         <div class="ls" data-kind="ground">
-          <p class="ls__fact tn">
+          <p class="ls__fact tn" data-ride-fact>
             <span>{{ groundFact() }}</span>
-            <app-provenance-tag [value]="g.provenance" />
+            <app-provenance-tag [value]="rideProvenance()" />
           </p>
+          @if (ride()?.exit; as x) {
+            <p class="ls__fact tn" data-exit-fact><span>{{ x.label }} · allow about {{ hm(x.min) }}</span>
+              <app-provenance-tag value="estimated" /></p>
+          }
           @if (timetable(); as t) {
             @if (t.source === 'timetable') {
               <p class="ls__fact tn" data-timetable-fact><span>{{ t.timetable?.operator }} timetable · {{ t.timetable?.rideText }} ride</span>
@@ -325,6 +329,17 @@ export class LegSheetComponent {
     }
     return `${day} · ${groundLabel(g)}`;
   });
+
+  /** The ride as shown now: Scheduled when an Estimated leg's ride comes from a timetable for its day. */
+  protected readonly ride = computed(() => {
+    const g = this.ground();
+    return g && !(g.provenance === 'saved' && g.userTimes) ? groundRide(g) : null;
+  });
+  protected readonly rideProvenance = computed(() => this.ride()?.provenance ?? this.ground()?.provenance ?? 'unknown');
+
+  protected hm(min: number): string {
+    return aboutDuration(min);
+  }
 
   /** The corridor timetable for an unsaved ground leg's day, looked up at render time. */
   protected readonly timetable = computed(() => {

@@ -197,8 +197,13 @@ describe('TripDetailPage', () => {
     const { el, stable } = await render({ leg: SEVILLE_IDS.train }, seeded(),
       [{ provide: GROUND_FETCH, useValue: async () => structuredClone(FIXTURE_GROUND_FILE) }]);
     await stable();
-    expect(clean(el.querySelector('app-leg-sheet .ls__fact span')?.textContent)).toBe('Fri Oct 9 · Train 2h39');
-    expect(clean(el.querySelector('app-leg-sheet .ls__fact app-provenance-tag')?.textContent)).toBe('Estimated');
+    // The ride is timetable-backed: Scheduled. The airport exit and transfer stay Estimated.
+    expect(clean(el.querySelector('app-leg-sheet [data-ride-fact] span')?.textContent)).toBe('Fri Oct 9 · Train 2h39');
+    expect(clean(el.querySelector('app-leg-sheet [data-ride-fact] app-provenance-tag')?.textContent)).toBe('Scheduled');
+    expect(clean(el.querySelector('app-leg-sheet [data-exit-fact] span')?.textContent)).toBe('Passport, exit, get to Atocha · allow about 1h30');
+    expect(clean(el.querySelector('app-leg-sheet [data-exit-fact] app-provenance-tag')?.textContent)).toBe('Estimated');
+    expect(clean(el.querySelector(`[data-leg="${SEVILLE_IDS.train}"] .tl__m`)?.textContent)).toContain('Train 2h39 · not booked');
+    expect(clean(el.querySelector(`[data-leg="${SEVILLE_IDS.train}"] app-provenance-tag`)?.textContent)).toBe('Scheduled');
     expect(clean(el.querySelector('app-leg-sheet [data-timetable-fact] span')?.textContent)).toBe('Renfe timetable · 2h39 ride');
     expect(clean(el.querySelector('app-leg-sheet [data-timetable-fact] app-provenance-tag')?.textContent)).toBe('Scheduled');
     expect(clean(el.querySelector('app-leg-sheet [data-timetable]')?.textContent)).toBe(

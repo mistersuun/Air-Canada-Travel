@@ -5,7 +5,10 @@ import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures
 import { FlightLeg, GroundLeg } from '../../trips/model';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../../trips/testing/seville-fixture';
 import { toUtcMs } from '../../utils/time';
+import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
+import { decodeGround, setGroundTimetables } from '../../places/timetable';
 import {
+  groundRide,
   compactSummary, countdown, deadlineNote, groundLabel, homeLabel, legRows, needsReturn, offlineAirports, offlineAirportsLabel,
   offlineUntil, partyLabel, returnNotListed, savedAtLabel, sharedLabel, tripDatesLabel, tripSubtitle,
 } from './trips-model';
@@ -88,6 +91,32 @@ describe('trips-model', () => {
     expect(groundLabel({ ...train, provenance: 'unknown', estMinutes: null })).toBe('Onward travel unknown');
     t.legs[1] = { ...train, provenance: 'unknown', estMinutes: null };
     expect(legRows(t)[1].meta).toBe('Onward travel unknown · find it yourself');
+  });
+
+  it('an Estimated ground leg whose ride now comes from a timetable shows the ride as Scheduled, the exit as Estimated', () => {
+    const t = sevilleTrip();
+    const train = t.legs[1] as GroundLeg;
+    // No timetable loaded: the stored leg reads exactly as before.
+    expect(groundRide(train)).toEqual({ label: 'Train about 2h40', provenance: 'estimated', exit: null });
+    expect(legRows(t)[1].provenance).toBe('estimated');
+    setGroundTimetables(decodeGround(structuredClone(FIXTURE_GROUND_FILE)));
+    try {
+      expect(groundRide(train)).toEqual({
+        label: 'Train 2h39', provenance: 'scheduled', exit: { label: 'Passport, exit, get to Atocha', min: 90 },
+      });
+      expect(legRows(t)[1]).toMatchObject({ meta: 'Train 2h39 · not booked', provenance: 'scheduled' });
+      // The stored schema is untouched: still 'estimated' with its minutes.
+      expect(train).toMatchObject({ provenance: 'estimated', estMinutes: 250 });
+      // Saved and unknown legs keep their own tags.
+      const saved: GroundLeg = { ...train, provenance: 'saved', userTimes: { depDateKey: '2026-10-09', depLocal: '10:05', arrDateKey: '2026-10-09', arrLocal: '12:45' } };
+      t.legs[1] = saved;
+      expect(legRows(t)[1].provenance).toBe('saved');
+      expect(groundRide({ ...train, provenance: 'unknown', estMinutes: null }).provenance).toBe('unknown');
+      // Another mode than the timetable's: still Estimated.
+      expect(groundRide({ ...train, mode: 'bus' }).provenance).toBe('estimated');
+    } finally {
+      setGroundTimetables(null);
+    }
   });
 
   it('shows the return reminder within 14 days while a return is only Planned', () => {

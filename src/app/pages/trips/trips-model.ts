@@ -155,24 +155,54 @@ function flightRow(trip: Trip, leg: FlightLeg, fmt: TimeFormat): LegRow {
   };
 }
 
+/** What a ground leg's ride line says, and the provenance of that ride. */
+export interface GroundRide {
+  /** 'Train 2h39' (timetable), 'Train about 2h40', 'Onward travel unknown'. */
+  label: string;
+  /**
+   * 'scheduled' when an Estimated leg's ride now comes from a timetable for
+   * its day (only the ride: exit and transfer stay Estimated); otherwise the
+   * stored provenance. The stored leg itself never changes.
+   */
+  provenance: Provenance;
+  /** The airport exit / station transfer part, when the ride is Scheduled and there is one (always Estimated). */
+  exit: { label: string; min: number } | null;
+}
+
 /**
- * What an estimated ground leg says: the corridor/heuristic label when it
+ * The ride of a ground leg as shown now: the corridor/heuristic label when it
  * still describes this leg ('Train about 2h40', or 'Train 2h39' from a
- * timetable for the leg's day), else the mode and the door-to-door minutes.
+ * timetable for the leg's day, which makes the ride Scheduled), else the
+ * mode and the door-to-door minutes.
  */
-export function groundLabel(leg: GroundLeg): string {
-  if (leg.provenance === 'unknown' || leg.estMinutes === null) return 'Onward travel unknown';
+export function groundRide(leg: GroundLeg): GroundRide {
+  if (leg.provenance === 'unknown' || leg.estMinutes === null) {
+    return { label: 'Onward travel unknown', provenance: leg.provenance, exit: null };
+  }
   const from = leg.from.code ? airportEnd(leg.from.code) ?? leg.from : leg.from;
   const g = groundEstimate(from, leg.to, { dateKey: leg.dateKey });
-  if (g.mode === leg.mode && g.totalMin === leg.estMinutes) return g.label;
   // A timetable for that day describes the ride of the same corridor, whatever total was stored.
-  if (g.mode === leg.mode && g.source === 'timetable') return g.label;
-  return `${MODE_LABEL[leg.mode]} about ${aboutDuration(leg.estMinutes)}`;
+  if (g.mode === leg.mode && g.source === 'timetable') {
+    const scheduled = leg.provenance === 'estimated';
+    return {
+      label: g.label,
+      provenance: scheduled ? 'scheduled' : leg.provenance,
+      exit: scheduled && g.exitMin > 0 ? { label: g.exitLabel || 'Airport exit and transfer', min: g.exitMin } : null,
+    };
+  }
+  if (g.mode === leg.mode && g.totalMin === leg.estMinutes) return { label: g.label, provenance: leg.provenance, exit: null };
+  return { label: `${MODE_LABEL[leg.mode]} about ${aboutDuration(leg.estMinutes)}`, provenance: leg.provenance, exit: null };
+}
+
+/** What an estimated ground leg says (see groundRide). */
+export function groundLabel(leg: GroundLeg): string {
+  return groundRide(leg).label;
 }
 
 function groundRow(leg: GroundLeg, fmt: TimeFormat): LegRow {
   const day = leg.userTimes?.depDateKey ?? leg.dateKey;
   let meta: string;
+  let provenance: Provenance = leg.provenance;
   if (leg.provenance === 'saved' && leg.userTimes) {
     const t = leg.userTimes;
     const off = supOffset(diffDays(t.depDateKey, t.arrDateKey));
@@ -181,7 +211,9 @@ function groundRow(leg: GroundLeg, fmt: TimeFormat): LegRow {
   } else if (leg.provenance === 'unknown' || leg.estMinutes === null) {
     meta = 'Onward travel unknown · find it yourself';
   } else {
-    meta = `${groundLabel(leg)} · not booked`;
+    const ride = groundRide(leg);
+    meta = `${ride.label} · not booked`;
+    provenance = ride.provenance;
   }
   return {
     id: leg.id,
@@ -190,7 +222,7 @@ function groundRow(leg: GroundLeg, fmt: TimeFormat): LegRow {
     title: `${WEEKDAY_SHORT[weekdayIndex(day)]} · ${leg.from.name} → ${leg.to.name}`,
     meta,
     status: null,
-    provenance: leg.provenance,
+    provenance,
     done: leg.status === 'abandoned',
   };
 }

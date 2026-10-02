@@ -185,6 +185,65 @@ describe('file previews', () => {
     expect((await store.blobSizes()).size).toBe(0);
   });
 
+  it('a rename saved while the preview is made keeps the preview, in the list and the store', async () => {
+    const store = new MemoryFilesStore();
+    let releaseThumb!: () => void;
+    const thumbGate = new Promise<void>(r => (releaseThumb = r));
+    const slow = vi.fn<ThumbMaker>(async () => {
+      await thumbGate;
+      return { thumb: new Blob(['j'], { type: 'image/jpeg' }), pages: 4 };
+    });
+    const svc = make(store, slow);
+    const a = await added(svc, textFile('Hotel.pdf', 10));
+    await vi.waitFor(() => expect(slow).toHaveBeenCalled());
+    let releasePut!: () => void;
+    const putGate = new Promise<void>(r => (releasePut = r));
+    const put = store.putAttachment.bind(store);
+    let renameWriting!: () => void;
+    const writing = new Promise<void>(r => (renameWriting = r));
+    vi.spyOn(store, 'putAttachment').mockImplementation(async (rec, blob) => {
+      if (rec.title === 'Renamed' && rec.thumbBlobId === null) {
+        renameWriting();
+        await putGate; // the rename's stale write lands last
+      }
+      return put(rec, blob);
+    });
+    const renamed = svc.update(a.id, { title: 'Renamed' });
+    await writing;
+    releaseThumb();
+    await vi.waitFor(() => expect(current(svc, a.id).thumbBlobId).not.toBeNull());
+    releasePut();
+    expect(await renamed).toBeNull();
+    const rec = current(svc, a.id);
+    expect(rec).toMatchObject({ title: 'Renamed', pages: 4 });
+    expect(rec.thumbBlobId).not.toBeNull();
+    expect((await store.listAttachments())[0]).toMatchObject({ title: 'Renamed', pages: 4, thumbBlobId: rec.thumbBlobId });
+  });
+
+  it('a file deleted while its stored preview loads gets no blob: URL', async () => {
+    const store = new MemoryFilesStore();
+    const has = attachment({ id: 'has', blobId: 'b1', thumbBlobId: 't1', tripId: SEVILLE_IDS.trip });
+    await store.putAttachment(has, { id: 'b1', blob: new Blob(['%PDF'], { type: 'application/pdf' }), bytes: 4, mime: 'application/pdf', createdAt: '' });
+    await store.putAttachment(has, { id: 't1', blob: new Blob(['j'], { type: 'image/jpeg' }), bytes: 1, mime: 'image/jpeg', createdAt: '' });
+    const svc = make(store);
+    await svc.ensureReady();
+    let release!: () => void;
+    const gate = new Promise<void>(r => (release = r));
+    const get = store.getBlob.bind(store);
+    vi.spyOn(store, 'getBlob').mockImplementation(async id => {
+      const b = await get(id);
+      if (id === 't1') await gate;
+      return b;
+    });
+    const before = urlN;
+    svc.ensureThumbs(svc.attachments());
+    await svc.remove('has');
+    release();
+    await new Promise(r => setTimeout(r, 10));
+    expect(urlN).toBe(before);
+    expect(svc.thumbUrl(has)).toBeNull();
+  });
+
   it('a backup never carries the preview', async () => {
     const a = attachment({ thumbBlobId: 'thumb1' });
     const out = await buildBackupWithFiles({ format: 'routes-backup' }, [a], async () => new Blob(['pdf']));

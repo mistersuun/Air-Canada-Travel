@@ -502,7 +502,7 @@ export class DestinationPage {
 
   private readonly firstLimit = computed(() => (this.mobile() ? PAGE_SIZE - 1 : PAGE_SIZE));
   readonly outLimit = linkedSignal({ source: () => [this.code(), this.startKey(), this.firstLimit()] as const, computation: ([, , n]) => n });
-  readonly retLimit = linkedSignal({ source: () => [this.code(), this.startKey(), this.firstLimit()] as const, computation: ([, , n]) => n });
+  readonly retLimit = linkedSignal({ source: () => [this.code(), this.retStartKey(), this.firstLimit()] as const, computation: ([, , n]) => n });
 
   protected readonly outItems = computed(() =>
     timelineItems(this.outList().slice(0, this.outLimit()), this.outToday(), this.state.nowMs(), this.state.timeFormat()));

@@ -57,11 +57,18 @@ export class PassSwapService {
     const same = this.passes.forTrip(pass.tripId).filter(p => p.id === pass.id || swapOfferFor(p, trip)?.match.altId === offer.match.altId
       && swapOfferFor(p, trip)?.match.refIndex === offer.match.refIndex);
     const prev = same.map(p => ({ id: p.id, legId: p.legId, refIndex: p.refIndex, matched: p.matched }));
+    // Undo waits for the forward relinks, so none of them lands after the passes are put back.
+    let forward: Promise<void> = Promise.resolve();
     const done = this.swapToBackup(pass.tripId, offer.match, () => {
-      for (const b of prev) void this.passes.relink(b.id, b.legId, b.refIndex, b.matched);
+      void forward.catch(() => undefined).then(async () => {
+        for (const b of prev) await this.passes.relink(b.id, b.legId, b.refIndex, b.matched);
+      });
     });
     if (!done) return null;
-    for (const p of same) await this.passes.relink(p.id, done.legId, done.refIndex, 'confirmed');
+    forward = (async () => {
+      for (const p of same) await this.passes.relink(p.id, done.legId, done.refIndex, 'confirmed');
+    })();
+    await forward;
     return done.legId;
   }
 }

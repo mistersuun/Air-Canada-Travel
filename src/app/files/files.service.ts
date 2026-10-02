@@ -191,7 +191,15 @@ export class FilesService {
     } catch (e) {
       return errorOf(e);
     }
-    this.list.update(l => l.map(a => (a.id === id ? next : a)));
+    // Merged into the current entry: a preview saved while this wrote (thumbBlobId, pages) is kept,
+    // and saved again so the store doesn't keep this write's stale copy without it.
+    const now = this.list().find(a => a.id === id);
+    if (!now) return null;
+    const merged: Attachment = { ...now, ...patch, title: next.title, updatedAt: next.updatedAt };
+    this.list.update(l => l.map(a => (a.id === id ? merged : a)));
+    if (merged.thumbBlobId !== next.thumbBlobId || merged.pages !== next.pages) {
+      await store.putAttachment(merged).catch(() => undefined);
+    }
     return null;
   }
 
@@ -411,6 +419,8 @@ export class FilesService {
       }
       return;
     }
+    // Deleted or given a new preview meanwhile: a URL now would never be revoked.
+    if (this.list().find(x => x.id === a.id)?.thumbBlobId !== thumbBlobId) return;
     this.setThumbUrl(a.id, blob);
   }
 

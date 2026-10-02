@@ -44,6 +44,7 @@ export interface AlternateMatch { legId: string; altId: string; refIndex: number
 
 function findAlternate(
   flight: string, from: string, to: string, julian: number, issueDate: string | null, trip: Trip,
+  savedDateKey: string | null = null,
 ): AlternateMatch | null {
   for (const l of trip.legs) {
     if (l.kind !== 'flight' || isFinalStatus(l.status)) continue;
@@ -51,7 +52,7 @@ function findAlternate(
       const refIndex = alt.refs.findIndex(r => r.flightNumber.toUpperCase() === flight && r.origin === from && r.dest === to);
       if (refIndex < 0) continue;
       const ref = alt.refs[refIndex];
-      const d = julianToDateKey(julian, ref.dateKey, issueDate);
+      const d = savedDateKey ?? julianToDateKey(julian, ref.dateKey, issueDate);
       if (!d || Math.abs(diffDays(ref.dateKey, d)) > 1) continue;
       return { legId: l.id, altId: alt.id, refIndex, ref };
     }
@@ -73,15 +74,19 @@ export function matchingAlternate(leg: BcbpLeg, trip: Trip, issueDate: string | 
  * leg) doesn't fly that flight and no planned leg does. Null otherwise.
  */
 export function passAlternate(
-  pass: Pick<PassRecord, 'tripId' | 'legId' | 'flightNumber' | 'from' | 'to' | 'julian'>, trip: Trip,
+  pass: Pick<PassRecord, 'tripId' | 'legId' | 'flightNumber' | 'from' | 'to' | 'julian'> & Partial<Pick<PassRecord, 'dateKey'>>,
+  trip: Trip,
 ): AlternateMatch | null {
   if (pass.tripId !== trip.id) return null;
   const flight = pass.flightNumber.toUpperCase();
-  const flies = (refs: readonly FlightRef[]) => refs.some(r => r.flightNumber.toUpperCase() === flight && r.origin === pass.from && r.dest === pass.to);
+  // The date the user confirmed for the pass, when there is one: a flight on another date is not this pass's flight.
+  const saved = pass.dateKey ?? null;
+  const flies = (refs: readonly FlightRef[]) => refs.some(r => r.flightNumber.toUpperCase() === flight
+    && r.origin === pass.from && r.dest === pass.to && (saved === null || Math.abs(diffDays(r.dateKey, saved)) <= 1));
   if (trip.legs.some(l => l.kind === 'flight' && !isFinalStatus(l.status) && flies(l.refs))) return null;
   const own = pass.legId ? trip.legs.find(l => l.id === pass.legId) : undefined;
   if (own?.kind === 'flight' && flies(own.refs)) return null;
-  return findAlternate(flight, pass.from, pass.to, pass.julian, null, trip);
+  return findAlternate(flight, pass.from, pass.to, pass.julian, null, trip, saved);
 }
 
 /** "This pass is for AC812 (your backup). Swap this leg to AC812?" */

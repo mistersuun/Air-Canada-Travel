@@ -82,4 +82,17 @@ describe('passAlternate (saved passes)', () => {
     const swapped = { ...t, legs: [...t.legs, { ...out, id: 'leg-812', refs: out.alternates[1].refs, alternates: [] }] };
     expect(passAlternate(base, swapped)).toBeNull();
   });
+
+  it('uses the date saved with the pass: another year is not the backup, a leg on another date does not hide it', () => {
+    const ref = passAlternate(base, sevilleTrip())!.ref;
+    expect(passAlternate({ ...base, dateKey: ref.dateKey }, sevilleTrip())).not.toBeNull();
+    const lastYear = `${Number(ref.dateKey.slice(0, 4)) - 1}${ref.dateKey.slice(4)}`;
+    expect(passAlternate({ ...base, dateKey: lastYear }, sevilleTrip())).toBeNull();
+    const t = sevilleTrip();
+    const out = t.legs.find(l => l.id === SEVILLE_IDS.outbound)!;
+    if (out.kind !== 'flight') throw new Error('flight');
+    const otherDay = out.alternates[1].refs.map(r => ({ ...r, dateKey: lastYear }));
+    const withOld = { ...t, legs: [...t.legs, { ...out, id: 'leg-812-old', refs: otherDay, alternates: [] }] };
+    expect(passAlternate({ ...base, dateKey: ref.dateKey }, withOld)).not.toBeNull();
+  });
 });

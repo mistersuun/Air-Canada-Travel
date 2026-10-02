@@ -106,6 +106,33 @@ describe('pass swap offer', () => {
     expect((trips.trip(SEVILLE_IDS.trip)!.legs.find(l => l.id === SEVILLE_IDS.outbound) as FlightLeg).status).toBe('listed');
   });
 
+  it('Undo tapped while the passes are still relinking waits for them, so none stays on the dropped leg', async () => {
+    const { passes, trips, swapper, flash } = await setup();
+    const a = (await passes.save(pass812(), null)) as PassRecord;
+    const b = (await passes.save(pass812({ pnr: 'ABC124' }), null)) as PassRecord;
+    const relink = passes.relink.bind(passes);
+    let undone = false;
+    vi.spyOn(passes, 'relink').mockImplementation(async (...args) => {
+      // Undo lands during the first forward relink
+      if (!undone && args[3] === 'confirmed') {
+        undone = true;
+        flash.mock.calls.find(c => String(c[0]).startsWith('Swapped'))![1].run();
+      }
+      await new Promise(r => setTimeout(r, 5));
+      return relink(...args);
+    });
+    await swapper.swapForPass(a);
+    const by = (id: string) => passes.passes().find(p => p.id === id)!;
+    await vi.waitFor(() => {
+      expect(by(a.id).legId).toBeNull();
+      expect(by(b.id).legId).toBeNull();
+    });
+    await new Promise(r => setTimeout(r, 30));
+    expect(by(a.id).legId).toBeNull();
+    expect(by(b.id).legId).toBeNull();
+    expect(newLeg(trips)).toBeUndefined();
+  });
+
   it('the pass view offers the swap, and after it the pass shows on the new leg', async () => {
     const { passes, trips } = await setup();
     const a = (await passes.save(pass812(), null)) as PassRecord;

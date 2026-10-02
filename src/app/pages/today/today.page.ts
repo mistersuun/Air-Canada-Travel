@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject, input, signal } from '@angular/core';
+import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
@@ -182,6 +183,12 @@ export class TodayPage {
   private readonly state = inject(AppStateService);
   private readonly prefs = inject(PrefsService);
   private readonly router = inject(Router);
+
+  constructor() {
+    // Train and bus timetables, so ground legs show their real times even when
+    // no other screen loaded them (ground.json is cached by the service worker).
+    void inject(GroundTimetableService).ensureLoaded();
+  }
 
   /** ?trip=<id>: show that trip's travel day. ?leg=<legId>: that leg. */
   readonly trip = input<string | undefined>(undefined);

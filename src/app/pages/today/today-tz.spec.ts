@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { GROUND_FETCH } from '../../places/ground-timetable.service';
 import { NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -123,6 +124,7 @@ describe('Today uses the departure airport time zone (device in Tokyo)', () => {
         { provide: NOW, useValue: () => toUtcMs('2026-10-08', '16:40', 'America/Toronto') },
         { provide: TRIPS_STORAGE, useValue: store },
         { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+        { provide: GROUND_FETCH, useValue: async () => null },
       ],
     });
     const fixture = TestBed.createComponent(TodayPage);

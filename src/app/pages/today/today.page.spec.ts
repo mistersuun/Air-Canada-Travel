@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { GROUND_FETCH, GroundTimetableService } from '../../places/ground-timetable.service';
+import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
+import { groundTimetables, setGroundTimetables } from '../../places/timetable';
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -19,6 +22,8 @@ const AT_1805 = toUtcMs('2026-10-08', '18:05', 'America/Toronto');
 const clean = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
 
 let storage: MemoryStorage;
+/** The ground.json fetch (the service worker's cached copy in the app); specs count its calls. */
+let groundFetch: ReturnType<typeof vi.fn>;
 
 function seeded(withNote = true): MemoryStorage {
   const s = new MemoryStorage();
@@ -43,6 +48,7 @@ function configure(nowMs: number, store = seeded()) {
       { provide: NOW, useValue: () => nowMs },
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+      { provide: GROUND_FETCH, useValue: (groundFetch = vi.fn(async () => null)) },
     ],
   });
 }
@@ -184,10 +190,23 @@ describe('Today', () => {
     expect(el.querySelector('[data-empty] a')?.getAttribute('href')).toBe('/trips');
   });
 
-  it('makes no network calls', async () => {
+  it('makes no network calls besides loading the ground timetable (cached data)', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await render(TodayPage, AT_1640);
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(groundFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads the ground timetable itself, so ground legs get real times without another screen', async () => {
+    setGroundTimetables(null);
+    configure(AT_1640);
+    groundFetch.mockImplementation(async () => structuredClone(FIXTURE_GROUND_FILE));
+    const fixture = TestBed.createComponent(TodayPage);
+    await fixture.whenStable();
+    await vi.waitFor(() => expect(TestBed.inject(GroundTimetableService).status()).toBe('ready'));
+    expect(groundFetch).toHaveBeenCalledTimes(1);
+    expect(groundTimetables()?.corridors.size).toBeGreaterThan(0);
+    setGroundTimetables(null);
   });
 });
 

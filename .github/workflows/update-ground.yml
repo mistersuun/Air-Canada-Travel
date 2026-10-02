@@ -7,11 +7,9 @@ name: Update Ground Timetables
 # timetable change. Without a rebuild the app falls back to Estimated times.
 
 on:
-  # Schedule DISABLED while the feat/overhaul rework is in flight (same reason
-  # as update-schedules.yml). Re-enable once the overhaul has merged.
-  # schedule:
-  #   # 1st and 15th of the month at 05:00 UTC
-  #   - cron: '0 5 1,15 * *'
+  schedule:
+    # 1st and 15th of the month at 05:00 UTC
+    - cron: '0 5 1,15 * *'
   workflow_dispatch:
     inputs:
       include:

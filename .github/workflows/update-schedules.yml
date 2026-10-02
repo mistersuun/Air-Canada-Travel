@@ -1,12 +1,9 @@
 name: Update Flight Schedules
 
 on:
-  # Weekly cron DISABLED while the feat/overhaul rework is in flight: the bot
-  # pushes schedules.json straight to master and conflicts with the rework.
-  # Re-enable once the overhaul has merged.
-  # schedule:
-  #   # Every Monday at 6am UTC (AC typically updates schedules on weekends)
-  #   - cron: '0 6 * * 1'
+  schedule:
+    # Every Monday at 6am UTC (AC typically updates schedules on weekends)
+    - cron: '0 6 * * 1'
   workflow_dispatch:  # Manual trigger from the GitHub Actions UI
     inputs:
       allow_route_drop:

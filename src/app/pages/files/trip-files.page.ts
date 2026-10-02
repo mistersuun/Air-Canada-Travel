@@ -118,7 +118,11 @@ import { PhotoViewerComponent } from './photo-viewer.component';
                     <div class="row" [attr.data-item]="a.id">
                       <button type="button" class="row__main" appLongPress #lp="appLongPress" (longPress)="menuFor.set(a)"
                               (click)="lp.took() || open(a)" [attr.aria-label]="openLabel(a)">
-                        <span [class]="'fic fic--' + ic.tone"><app-icon [name]="ic.name" [size]="19" /></span>
+                        @if (files.thumbUrl(a); as src) {
+                          <span class="fic fic--thumb" data-thumb><img [src]="src" alt="" decoding="async"></span>
+                        } @else {
+                          <span [class]="'fic fic--' + ic.tone"><app-icon [name]="ic.name" [size]="19" /></span>
+                        }
                         <span class="rt"><b>{{ a.title }}</b><span class="m tn" [class.m--wrap]="a.kind === 'note'">{{ meta(a) }}</span></span>
                       </button>
                       <button type="button" class="row__more" [attr.aria-label]="'More for ' + a.title" data-item-more (click)="menuFor.set(a)">
@@ -211,6 +215,8 @@ import { PhotoViewerComponent } from './photo-viewer.component';
     .fic--photo { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); }
     .fic--note { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
     .fic--ground { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); }
+    .fic--thumb { overflow: hidden; }
+    .fic--thumb img { width: 100%; height: 100%; object-fit: cover; }
     .lock { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; color: var(--teal-ink); white-space: nowrap; }
     .thumbs { display: flex; gap: 6px; padding: 10px 0 8px; border-bottom: 1px solid var(--hair); }
     .thumbs:last-child { border-bottom: 0; }
@@ -275,6 +281,9 @@ export class TripFilesPage {
       afterNextRender(() => this.scrollToDay(), { injector: this.injector });
     });
     void this.files.storageInfo().then(i => this.info.set(i), () => undefined);
+
+    // Previews for the listed PDFs and photos (made in the background when missing).
+    effect(() => this.files.ensureThumbs(this.mine()));
 
     // Object URLs for this trip's photos (loaded once each, revoked on leave).
     const asked = new Set<string>();

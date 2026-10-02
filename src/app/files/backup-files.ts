@@ -83,7 +83,8 @@ export async function buildBackupWithFiles(
   let first = true;
   for (const a of attachments) {
     const blob = a.blobId ? await blobFor(a) : null;
-    parts.push(`${first ? '' : ','}{"meta":${JSON.stringify(a)},"data":`);
+    // previews are made again on import: only the file itself goes in
+    parts.push(`${first ? '' : ','}{"meta":${JSON.stringify({ ...a, thumbBlobId: null })},"data":`);
     if (blob) {
       parts.push('"');
       parts.push(...(await base64Parts(blob)));

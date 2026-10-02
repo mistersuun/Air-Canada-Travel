@@ -19,6 +19,7 @@ import {
 } from './model';
 import { compressPhoto } from './photo';
 import { StorageInfo, checkRoom, estimate, storageInfo } from './quota';
+import { THUMB_MAKER, wantsThumb } from './thumbs';
 
 /** localStorage for FilesPrefs; null when site data is blocked (prefs then live in memory). */
 export const FILES_PREFS_STORAGE = new InjectionToken<Storage | null>('FILES_PREFS_STORAGE', {
@@ -78,9 +79,18 @@ export class FilesService {
   private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
   private readonly prefsStorage = inject(FILES_PREFS_STORAGE);
+  private readonly makeThumb = inject(THUMB_MAKER);
   private readonly list = signal<Attachment[]>([]);
   private readonly prefsState = signal<FilesPrefs>(this.loadPrefs());
   private ready: Promise<FilesStore | null> | null = null;
+  /** blob: URLs of previews, by attachment id (tiny JPEGs, kept for the session). */
+  private readonly thumbUrls = signal<Record<string, string>>({});
+  /** Attachment ids whose preview was made (or tried) this session. */
+  private readonly thumbTried = new Set<string>();
+  /** `${id}:${thumbBlobId}` whose stored preview is loading or loaded. */
+  private readonly thumbLoading = new Set<string>();
+  /** Previews are made one at a time (pdf.js is heavy). */
+  private thumbChain: Promise<void> = Promise.resolve();
 
   readonly status: Signal<FilesStatus> = this.db.status;
   readonly attachments: Signal<Attachment[]> = this.list.asReadonly();
@@ -129,7 +139,34 @@ export class FilesService {
       text: null, blobId: blob.id, thumbBlobId: null, mime: blob.mime, bytes: blob.bytes, pages: null,
       createdAt: at, updatedAt: at,
     };
-    return this.put(store, a, blob);
+    const saved = await this.put(store, a, blob);
+    if (!('error' in saved)) this.ensureThumbs([saved]);
+    return saved;
+  }
+
+  /** The preview's blob: URL for a PDF or photo, once made; null shows the icon. */
+  thumbUrl(a: Attachment): string | null {
+    return this.thumbUrls()[a.id] ?? null;
+  }
+
+  /**
+   * Loads the stored previews of these files, and makes the missing ones in
+   * the background (files added before previews existed, or whose preview
+   * was lost). Each file is tried once per session; failures keep the icon.
+   */
+  ensureThumbs(items: readonly Attachment[]): void {
+    for (const a of items) {
+      if (!wantsThumb(a.kind) || !a.blobId) continue;
+      if (a.thumbBlobId) {
+        const key = `${a.id}:${a.thumbBlobId}`;
+        if (this.thumbLoading.has(key) || this.thumbUrls()[a.id]) continue;
+        this.thumbLoading.add(key);
+        void this.loadThumb(a, a.thumbBlobId);
+      } else if (!this.thumbTried.has(a.id)) {
+        this.thumbTried.add(a.id);
+        this.queueThumb(a.id);
+      }
+    }
   }
 
   addNote(tripId: string, scope: AttachmentScope, title: string, text: string): Promise<Attachment | { error: FilesError }> {
@@ -164,9 +201,11 @@ export class FilesService {
     const rec = this.list().find(a => a.id === id);
     if (!store || store.readOnly || !rec) return;
     const content = rec.blobId ? await store.getBlob(rec.blobId) : null;
-    await store.deleteAttachment(id);
+    await store.deleteAttachment(id); // its preview blob goes with it
     this.list.update(l => l.filter(a => a.id !== id));
-    this.db.flash('File deleted', { label: 'Undo', run: () => void this.restore(rec, content) });
+    this.dropThumbUrl(id);
+    // Undo brings the file back; its preview is made again.
+    this.db.flash('File deleted', { label: 'Undo', run: () => void this.restore({ ...rec, thumbBlobId: null }, content) });
   }
 
   /**
@@ -245,6 +284,7 @@ export class FilesService {
     for (const a of atts) await store.deleteAttachment(a.id);
     const gone = new Set(atts.map(a => a.id));
     this.list.update(l => l.filter(a => !gone.has(a.id)));
+    for (const id of gone) this.dropThumbUrl(id);
     const passes = await this.passesSvc.removeMany(this.passesSvc.passes().filter(p => !keep.has(p.tripId)).map(p => p.id));
     return atts.length + passes;
   }
@@ -353,6 +393,80 @@ export class FilesService {
       return;
     }
     this.list.update(l => [...l.filter(a => a.id !== rec.id), rec].sort(byCreated));
+    this.thumbTried.delete(rec.id);
+  }
+
+  private queueThumb(id: string): void {
+    this.thumbChain = this.thumbChain.then(() => this.buildThumb(id)).catch(() => undefined);
+  }
+
+  /** A stored preview to a blob: URL; a lost one is made again. */
+  private async loadThumb(a: Attachment, thumbBlobId: string): Promise<void> {
+    const store = await this.storeOrNull();
+    const blob = store ? await store.getBlob(thumbBlobId).catch(() => null) : null;
+    if (!blob) {
+      if (!this.thumbTried.has(a.id)) {
+        this.thumbTried.add(a.id);
+        this.queueThumb(a.id);
+      }
+      return;
+    }
+    this.setThumbUrl(a.id, blob);
+  }
+
+  /**
+   * Makes a file's preview (and a PDF's page count) and saves it with the
+   * file, unless the file was deleted or replaced meanwhile. On a read-only
+   * store the preview shows for this session only.
+   */
+  private async buildThumb(id: string): Promise<void> {
+    const store = await this.storeOrNull();
+    const before = this.list().find(a => a.id === id);
+    if (!store || !before?.blobId) return;
+    const content = await store.getBlob(before.blobId).catch(() => null);
+    if (!content) return;
+    const r = await this.makeThumb(content, before.kind).catch(() => ({ thumb: null, pages: null }));
+    const cur = this.list().find(a => a.id === id);
+    if (!cur || cur.blobId !== before.blobId) return;
+    if (r.thumb) this.setThumbUrl(id, r.thumb);
+    if (store.readOnly || (!r.thumb && r.pages === null)) return;
+    const thumb: StoredBlob | undefined = r.thumb
+      ? { id: newId(), blob: r.thumb, bytes: r.thumb.size, mime: r.thumb.type || 'image/jpeg', createdAt: new Date(this.now()).toISOString() }
+      : undefined;
+    const patch = { thumbBlobId: thumb?.id ?? cur.thumbBlobId, pages: r.pages ?? cur.pages };
+    const prev = { thumbBlobId: cur.thumbBlobId, pages: cur.pages };
+    // The list first, so a rename saved while this writes keeps the preview.
+    this.list.update(l => l.map(a => (a.id === id ? { ...a, ...patch } : a)));
+    try {
+      await store.putAttachment({ ...cur, ...patch }, thumb);
+    } catch {
+      this.list.update(l => l.map(a => (a.id === id ? { ...a, ...prev } : a)));
+      return;
+    }
+    // Deleted while the preview was saving: don't bring it back.
+    if (!this.list().some(a => a.id === id)) await store.deleteAttachment(id).catch(() => undefined);
+  }
+
+  private setThumbUrl(id: string, blob: Blob): void {
+    let url: string;
+    try {
+      url = URL.createObjectURL(new Blob([blob], { type: 'image/jpeg' }));
+    } catch {
+      return; // no object URLs here: the icon stays
+    }
+    const old = this.thumbUrls()[id];
+    this.thumbUrls.update(m => ({ ...m, [id]: url }));
+    if (old) URL.revokeObjectURL(old);
+  }
+
+  private dropThumbUrl(id: string): void {
+    const old = this.thumbUrls()[id];
+    if (!old) return;
+    this.thumbUrls.update(m => {
+      const { [id]: _gone, ...rest } = m;
+      return rest;
+    });
+    URL.revokeObjectURL(old);
   }
 
   private async storeOrNull(): Promise<FilesStore | null> {

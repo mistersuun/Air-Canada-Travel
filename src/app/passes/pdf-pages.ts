@@ -54,15 +54,29 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export interface PdfPageVisit { page: number; image: ImageDataLike; png: () => Promise<Blob> }
+export interface PdfPageVisit {
+  page: number;
+  image: ImageDataLike;
+  png: () => Promise<Blob>;
+  /** The page as JPEG (thumbnails). */
+  jpeg: (quality: number) => Promise<Blob>;
+}
+
+/** JPEG of a canvas. */
+export async function canvasJpeg(c: AnyCanvas, quality: number): Promise<Blob> {
+  if ('convertToBlob' in c) return c.convertToBlob({ type: 'image/jpeg', quality });
+  return new Promise((resolve, reject) =>
+    (c as HTMLCanvasElement).toBlob(b => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', quality));
+}
 
 /**
- * Calls `visit` for pages 1..min(n, maxPages), rendered at `scale` on white.
+ * Calls `visit` for pages 1..min(n, maxPages), rendered at `scale` on white
+ * (or the scale `scale(width, height)` picks from the page's size at 1x).
  * Pages are rendered one at a time; the document is destroyed at the end
  * (also on error or a 20 s open timeout). Resolves to the document's page count.
  */
 export async function forEachPdfPage(
-  file: Blob, maxPages: number, scale: number, visit: (p: PdfPageVisit) => Promise<void>,
+  file: Blob, maxPages: number, scale: number | ((w: number, h: number) => number), visit: (p: PdfPageVisit) => Promise<void>,
 ): Promise<number> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = selfHosted(PDF_WORKER_PATH);
@@ -72,7 +86,8 @@ export async function forEachPdfPage(
     const n = Math.min(doc.numPages, maxPages);
     for (let i = 1; i <= n; i++) {
       const page = await doc.getPage(i);
-      const vp = page.getViewport({ scale });
+      const base = typeof scale === 'number' ? null : page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: typeof scale === 'number' ? scale : scale(base!.width, base!.height) });
       const canvas = makeCanvas(Math.ceil(vp.width), Math.ceil(vp.height));
       const ctx = context2d(canvas);
       ctx.fillStyle = '#fff';
@@ -80,7 +95,7 @@ export async function forEachPdfPage(
       await page.render({ canvasContext: ctx, canvas, viewport: vp }).promise;
       const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
       page.cleanup();
-      await visit({ page: i, image, png: () => canvasPng(canvas) });
+      await visit({ page: i, image, png: () => canvasPng(canvas), jpeg: q => canvasJpeg(canvas, q) });
     }
     return doc.numPages;
   } finally {

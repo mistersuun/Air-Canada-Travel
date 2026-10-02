@@ -48,7 +48,7 @@ export interface Attachment {
   title: string;                 // 'Train tickets', defaults to the file name without extension
   text: string | null;           // note body, or the address for kind 'address'
   blobId: string | null;         // content, for pdf/image/file
-  thumbBlobId: string | null;    // ≤ 320px JPEG thumb for images (P2; null is fine)
+  thumbBlobId: string | null;    // ≤ 160px JPEG preview (photo, or PDF page 1); null until made. Never in backups.
   mime: string | null;
   bytes: number;                 // content bytes (0 for note/address)
   pages: number | null;          // PDFs, when cheaply known; else null

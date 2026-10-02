@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { filesPath } from '../../extras/links';
@@ -37,7 +37,11 @@ export const LEG_FILES_MAX = 3;
             @let ic = iconOf(a);
             <li>
               <button type="button" class="lf__row" (click)="open(a)" [attr.data-file]="a.id">
-                <span [class]="'fic fic--' + ic.tone"><app-icon [name]="ic.name" [size]="18" /></span>
+                @if (thumb(a); as src) {
+                  <span class="fic fic--thumb" data-thumb><img [src]="src" alt="" decoding="async"></span>
+                } @else {
+                  <span [class]="'fic fic--' + ic.tone"><app-icon [name]="ic.name" [size]="18" /></span>
+                }
                 <span class="lf__tx"><b>{{ a.title }}</b><span class="tn">{{ meta(a) }}</span></span>
               </button>
             </li>
@@ -70,6 +74,8 @@ export const LEG_FILES_MAX = 3;
     .fic--pdf { background: color-mix(in srgb, var(--red) 11%, transparent); color: var(--red); }
     .fic--photo, .fic--ground { background: color-mix(in srgb, var(--teal) 14%, transparent); color: var(--teal); }
     .fic--note { background: color-mix(in srgb, var(--amber) 14%, transparent); color: var(--amber); }
+    .fic--thumb { overflow: hidden; }
+    .fic--thumb img { width: 100%; height: 100%; object-fit: cover; }
     .lf__add {
       display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; border-radius: 14px;
       background: var(--fill); color: var(--ink); font-size: 14px; font-weight: 600; cursor: pointer;
@@ -101,6 +107,12 @@ export class LegFilesComponent {
 
   constructor() {
     void this.files.ensureReady().catch(() => undefined);
+    effect(() => this.files.ensureThumbs(this.shown()));
+  }
+
+  /** The file's preview (PDF page 1 or the photo), once made. */
+  protected thumb(a: Attachment): string | null {
+    return this.files.thumbUrl(a);
   }
 
   protected iconOf(a: Attachment) {

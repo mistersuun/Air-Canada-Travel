@@ -49,7 +49,19 @@ export function referencedBlobs(attachments: readonly Attachment[], passes: read
   return ids;
 }
 
-/** A blob record as stored: the Blob itself, or (old WebKit, DataCloneError) its bytes. */
+/**
+ * True for the errors a browser gives when it can't put a Blob in IndexedDB:
+ * DataCloneError (old WebKit) and WebKit's UnknownError "Error preparing
+ * Blob/File data to be stored in object store" (Safari Private Browsing,
+ * whose in-memory IndexedDB keeps no Blobs). The bytes still fit as an
+ * ArrayBuffer. A quota error is not one of these.
+ */
+export function cannotStoreBlob(e: unknown): boolean {
+  const name = (e as { name?: unknown } | null)?.name;
+  return name === 'DataCloneError' || name === 'UnknownError';
+}
+
+/** A blob record as stored: the Blob itself, or (WebKit that can't store Blobs) its bytes. */
 interface BlobRow { id: string; blob?: Blob; data?: ArrayBuffer; bytes: number; mime: string; createdAt: string }
 
 function rowToBlob(row: BlobRow | undefined): Blob | null {
@@ -169,8 +181,8 @@ export class IdbFilesStore implements FilesStore {
       try {
         return await write({ id: blob.id, blob: blob.blob, bytes: blob.bytes, mime: blob.mime, createdAt: blob.createdAt });
       } catch (e) {
-        if ((e as { name?: string })?.name !== 'DataCloneError') throw e;
-        this.blobsAsBuffers = true; // old WebKit can't store Blobs: keep the bytes instead
+        if (!cannotStoreBlob(e)) throw e;
+        this.blobsAsBuffers = true; // this WebKit can't store Blobs: keep the bytes instead
       }
     }
     const data = await blob.blob.arrayBuffer(); // outside the transaction

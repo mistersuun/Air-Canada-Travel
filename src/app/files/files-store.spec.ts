@@ -104,6 +104,42 @@ describe('IdbFilesStore (fake-indexeddb)', () => {
     expect(await (await store.getBlob('blob2'))!.text()).toBe('again');
   });
 
+  it("stores bytes when WebKit refuses the Blob with UnknownError (Safari Private Browsing)", async () => {
+    const store = await IdbFilesStore.open({ factory: new IDBFactory() });
+    const { IDBObjectStore: FakeStore } = await import('fake-indexeddb');
+    const put = FakeStore.prototype.put;
+    const fakePut = function (this: IDBObjectStore, value: unknown, key?: IDBValidKey) {
+      if (value && typeof value === 'object' && 'blob' in value) {
+        throw new DOMException('Error preparing Blob/File data to be stored in object store', 'UnknownError');
+      }
+      return put.call(this, value, key);
+    };
+    FakeStore.prototype.put = fakePut as typeof put;
+    try {
+      await store.putPass(pass(), { ...blob('img1', 'pass image'), mime: 'image/png' });
+      const back = await store.getBlob('img1');
+      expect(back!.type).toBe('image/png');
+      expect(await back!.text()).toBe('pass image');
+      expect((await store.listPasses()).map(p => p.id)).toEqual(['p1']);
+    } finally {
+      FakeStore.prototype.put = put;
+    }
+  });
+
+  it('does not hide a quota error behind the byte form', async () => {
+    const store = await IdbFilesStore.open({ factory: new IDBFactory() });
+    const { IDBObjectStore: FakeStore } = await import('fake-indexeddb');
+    const put = FakeStore.prototype.put;
+    FakeStore.prototype.put = function () {
+      throw new DOMException('full', 'QuotaExceededError');
+    } as typeof put;
+    try {
+      await expect(store.putAttachment(attachment(), blob('blob1'))).rejects.toMatchObject({ name: 'QuotaExceededError' });
+    } finally {
+      FakeStore.prototype.put = put;
+    }
+  });
+
   it('can be forced to the byte form', async () => {
     const store = await IdbFilesStore.open({ factory: new IDBFactory(), blobMode: 'buffer' });
     await store.putAttachment(attachment(), blob('blob1', 'buffered'));

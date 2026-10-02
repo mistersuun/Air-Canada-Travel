@@ -5,6 +5,7 @@ import { airportEnd, groundEstimate, onwardLinks } from '../../../places/ground'
 import { GroundTimetableService } from '../../../places/ground-timetable.service';
 import { AppStateService } from '../../../state/app-state.service';
 import { shortAircraftName } from '../../../trips/engine/facts';
+import { alternateSwapPlan } from '../../../trips/engine/alternate-swap';
 import { endTz, itineraryFromRefs, itineraryFromSnapshot, refsFromItinerary, sameRefs } from '../../../trips/engine/legs';
 import {
   Alternate, FlightLeg, GROUND_MODES, GroundMode, LEG_STATUS_LABEL, LegStatus, Trip, isFinalStatus,
@@ -71,7 +72,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             <p class="ui-sub ls__hint">Listing stays your own step, in your airline's app.</p>
           </fieldset>
 
-          <app-leg-passes [trip]="trip()" [leg]="f" />
+          <app-leg-passes [trip]="trip()" [leg]="f" (swapped)="closed.emit()" />
           <app-leg-files [trip]="trip()" [leg]="f" />
 
           <section class="ls__sec">
@@ -369,12 +370,9 @@ export class LegSheetComponent {
   protected useInstead(alt: Alternate): void {
     const f = this.flight();
     if (!f) return;
-    const it = itineraryFromRefs(alt.refs) ?? itineraryFromSnapshot(alt.refs);
-    if (!it) return;
-    const end = airportEnd(it.dest);
-    // The timetable day is the day the new flight lands.
-    const ground = end ? groundEstimate(end, this.trip().goal, { dateKey: it.arrDateKey }) : null;
-    this.trips.swapLeg(this.trip().id, f.id, it, ground);
+    const plan = alternateSwapPlan(this.trip(), alt);
+    if (!plan) return;
+    this.trips.swapLeg(this.trip().id, f.id, plan.it, plan.ground);
     this.closed.emit();
   }
 

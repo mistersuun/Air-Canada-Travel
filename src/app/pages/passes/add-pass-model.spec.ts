@@ -33,12 +33,15 @@ describe('add-pass model', () => {
     expect(initialChoice(none, SEVILLE_IDS.outbound)).toBeNull(); // the ?leg hint never matches silently
   });
 
-  it('a pass for a backup flight names it and is not matched', () => {
+  it('a pass for a backup flight offers the swap and is not matched', () => {
     const [d] = buildDrafts([read(minimalPass({ from: 'YUL', to: 'LIS', flight: '0812', julian: 281 }))], SEVILLE_TRIP);
     expect(d.candidates).toHaveLength(0);
     expect(d.alternate?.ref.flightNumber).toBe('AC812');
-    expect(alternateText(d.flightNumber)).toBe(
-      'This pass is for AC812, one of your backups. Swap the leg in the trip first, or save the pass to a leg yourself.');
+    expect(d.alternate).toMatchObject({ legId: SEVILLE_IDS.outbound, altId: SEVILLE_IDS.altLis, refIndex: 0 });
+    expect(alternateText(d.flightNumber)).toBe('This pass is for AC812 (your backup). Swap this leg to AC812?');
+    // a backup on another day is not offered
+    const [late] = buildDrafts([read(minimalPass({ from: 'YUL', to: 'LIS', flight: '0812', julian: 285 }))], SEVILLE_TRIP);
+    expect(late.alternate).toBeNull();
   });
 
   it('picking a leg by hand is "manual" unless the leg is a candidate', () => {

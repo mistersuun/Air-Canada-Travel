@@ -6,7 +6,7 @@
  */
 import type { TimeFormat } from '../../state/prefs.service';
 import { julianToDateKey, normalizeFlightNumber, parseBcbp } from '../../passes/bcbp';
-import { matchPassLeg, matchingAlternate, unmatchedDateKey } from '../../passes/match';
+import { type AlternateMatch, matchPassLeg, matchingAlternate, swapOfferText, unmatchedDateKey } from '../../passes/match';
 import type {
   BarcodeFormat, BcbpLeg, BcbpPassenger, DecodedRead, MatchCandidate, NewPass, PassRecord,
 } from '../../passes/model';
@@ -29,14 +29,26 @@ export interface PassDraft {
   leg: BcbpLeg;
   flightNumber: string;             // 'AC834'
   candidates: MatchCandidate[];
-  /** A backup (alternate) flight with this number and route, when nothing matched. */
-  alternate: { legId: string; ref: FlightRef } | null;
+  /** A backup (alternate) flight with this number, route and date, when no planned leg matched. */
+  alternate: AlternateMatch | null;
   /** The pass date resolved against the best candidate, else the trip's first day; null = ask the user. */
   dateKey: string | null;
 }
 
 /** The leg the user chose for a draft: a trip leg (with the segment) or "no leg". */
 export type DraftChoice = { legId: string; refIndex: number; matched: 'confirmed' | 'manual' } | { legId: null };
+
+/** The drafts matched again against the trip as it is now (after a swap, or its Undo). */
+export function rematchDrafts(drafts: readonly PassDraft[], trip: Trip): PassDraft[] {
+  return drafts.map(d => {
+    const candidates = matchPassLeg(d.leg, d.passenger.issueDate, trip);
+    return {
+      ...d, candidates,
+      alternate: candidates.length ? null : matchingAlternate(d.leg, trip, d.passenger.issueDate),
+      dateKey: candidates[0]?.dateKey ?? unmatchedDateKey(d.leg, d.passenger.issueDate, trip),
+    };
+  });
+}
 
 /** Reads → drafts (non-BCBP reads are dropped; duplicate barcode texts are kept once). */
 export function buildDrafts(reads: readonly DecodedRead[], trip: Trip): PassDraft[] {
@@ -55,7 +67,7 @@ export function buildDrafts(reads: readonly DecodedRead[], trip: Trip): PassDraf
         passenger: p.passenger, leg,
         flightNumber: normalizeFlightNumber(leg.carrier, leg.flightNumber),
         candidates,
-        alternate: candidates.length ? null : matchingAlternate(leg, trip),
+        alternate: candidates.length ? null : matchingAlternate(leg, trip, p.passenger.issueDate),
         dateKey: candidates[0]?.dateKey ?? unmatchedDateKey(leg, p.passenger.issueDate, trip),
       });
     });
@@ -114,9 +126,9 @@ export function barcodeLabel(format: BarcodeFormat, legCount: number): string {
   return `${f} · ${legCount} ${legCount === 1 ? 'leg' : 'legs'}`;
 }
 
-/** "This pass is for AC812, one of your backups. …" (backups are not matched in v1). */
+/** "This pass is for AC812 (your backup). Swap this leg to AC812?" */
 export function alternateText(flightNumber: string): string {
-  return `This pass is for ${flightNumber}, one of your backups. Swap the leg in the trip first, or save the pass to a leg yourself.`;
+  return swapOfferText(flightNumber);
 }
 
 /** The date a draft is saved with for a given choice (null when no year fits and the user gave none). */

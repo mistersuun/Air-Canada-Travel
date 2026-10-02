@@ -9,6 +9,7 @@ import { IconComponent } from '../../components/shared/icons.component';
 import { passPath } from '../../extras/links';
 import { renderBarcodeSvg } from '../../passes/barcode-render';
 import type { PassRecord } from '../../passes/model';
+import { PassSwapService, swapOfferFor } from '../../passes/pass-swap.service';
 import { PassesService } from '../../passes/passes.service';
 import { AppStateService } from '../../state/app-state.service';
 import type { FlightRef, Trip } from '../../trips/model';
@@ -129,6 +130,12 @@ function cityOf(code: string): string {
           <p class="pv__bright">Turn your screen brightness up at the gate.</p>
 
           <div class="pv__foot">
+            @if (offer(); as o) {
+              <div class="pv__swap" data-swap-offer>
+                <p>{{ o.text }}</p>
+                <button type="button" class="pv__btn" data-swap [disabled]="swapping()" (click)="swap()">Swap to {{ o.flightNumber }}</button>
+              </div>
+            }
             @if (slides().length > 1) {
               <div class="pv__nav">
                 <button type="button" class="pv__btn pv__btn--ghost" data-prev [disabled]="index() === 0" (click)="go(index() - 1)">Previous pass</button>
@@ -246,6 +253,8 @@ function cityOf(code: string): string {
     .pv__foot { margin-top: auto; padding-top: 14px; font-size: 12px; color: #5B6475; text-align: center; }
     .pv__foot p { margin: 8px 0 0; }
     .pv__nav { display: flex; gap: 8px; }
+    .pv__swap { display: grid; gap: 8px; margin-bottom: 10px; font-size: 13.5px; color: #0B1220; }
+    .pv__swap p { margin: 0; }
     .pv__btn {
       flex: 1; min-height: 44px; padding: 10px 14px; border-radius: 14px; font-size: 14px; font-weight: 600; cursor: pointer;
       background: #0B1220; color: #FFFFFF;
@@ -327,6 +336,13 @@ export class PassViewPage {
     return group.map(pass => this.slide(pass, t));
   });
   protected readonly current = computed<PassRecord | null>(() => this.slides()[this.index()]?.pass ?? null);
+  /** "This pass is for AC812 (your backup). Swap this leg to AC812?" for a pass on a backup flight. */
+  protected readonly offer = computed(() => {
+    const p = this.current();
+    return p ? swapOfferFor(p, this.trip()) : null;
+  });
+  protected readonly swapping = signal(false);
+  private readonly swapper = inject(PassSwapService);
 
   protected readonly moveOptions = computed(() => {
     const t = this.trip();
@@ -502,6 +518,18 @@ export class PassViewPage {
     this.closeMenu();
     if (err) return this.state.flash(FILES_ERROR_TEXT[err]);
     this.state.flash(leg && leg.kind === 'flight' ? `Pass moved to ${leg.refs.map(r => r.flightNumber).join(' + ')}` : 'Pass kept with the trip');
+  }
+
+  /** Swaps the leg to the pass's backup (with Undo) and links the pass to the new leg. */
+  protected async swap(): Promise<void> {
+    const p = this.current();
+    if (!p || this.swapping()) return;
+    this.swapping.set(true);
+    try {
+      await this.swapper.swapForPass(p);
+    } finally {
+      this.swapping.set(false);
+    }
   }
 
   protected async remove(p: PassRecord): Promise<void> {

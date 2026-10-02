@@ -1,12 +1,13 @@
 /**
  * Matches a decoded pass leg to the trip's flight legs (extras spec §4.6).
  * Pure. A match is only ever a suggestion: the user confirms it or picks
- * another leg. Backups (alternates) are not matched in v1.
+ * another leg. A pass for a backup (alternate) is never matched to a leg:
+ * the UI offers to swap the leg to that backup first.
  */
 import { isFinalStatus, type FlightRef, type Trip } from '../trips/model';
 import { diffDays } from '../utils/time';
 import { julianToDateKey, normalizeFlightNumber } from './bcbp';
-import type { BcbpLeg, MatchCandidate } from './model';
+import type { BcbpLeg, MatchCandidate, PassRecord } from './model';
 
 interface Ranked { c: MatchCandidate; final: boolean; order: number }
 
@@ -38,20 +39,54 @@ export function matchPassLeg(leg: BcbpLeg, issueDate: string | null, trip: Trip)
   return out.map(r => r.c);
 }
 
-/**
- * The trip's backup flight with this pass's number and route, if any: the UI
- * then says "This pass is for AC812, one of your backups…" instead of matching.
- */
-export function matchingAlternate(leg: BcbpLeg, trip: Trip): { legId: string; ref: FlightRef } | null {
-  const flight = normalizeFlightNumber(leg.carrier, leg.flightNumber);
+/** A backup (alternate) flight a pass is for: the leg it is folded under, which backup, and its segment. */
+export interface AlternateMatch { legId: string; altId: string; refIndex: number; ref: FlightRef }
+
+function findAlternate(
+  flight: string, from: string, to: string, julian: number, issueDate: string | null, trip: Trip,
+): AlternateMatch | null {
   for (const l of trip.legs) {
-    if (l.kind !== 'flight') continue;
+    if (l.kind !== 'flight' || isFinalStatus(l.status)) continue;
     for (const alt of l.alternates) {
-      const ref = alt.refs.find(r => r.flightNumber.toUpperCase() === flight && r.origin === leg.from && r.dest === leg.to);
-      if (ref) return { legId: l.id, ref };
+      const refIndex = alt.refs.findIndex(r => r.flightNumber.toUpperCase() === flight && r.origin === from && r.dest === to);
+      if (refIndex < 0) continue;
+      const ref = alt.refs[refIndex];
+      const d = julianToDateKey(julian, ref.dateKey, issueDate);
+      if (!d || Math.abs(diffDays(ref.dateKey, d)) > 1) continue;
+      return { legId: l.id, altId: alt.id, refIndex, ref };
     }
   }
   return null;
+}
+
+/**
+ * The trip's backup flight with this pass's number, route and date (±1 day),
+ * folded under an open leg, if any: the UI then offers "Swap this leg to
+ * AC812?" instead of matching.
+ */
+export function matchingAlternate(leg: BcbpLeg, trip: Trip, issueDate: string | null = null): AlternateMatch | null {
+  return findAlternate(normalizeFlightNumber(leg.carrier, leg.flightNumber), leg.from, leg.to, leg.julian, issueDate, trip);
+}
+
+/**
+ * For a saved pass: the backup it is for, when the leg it is saved to (or no
+ * leg) doesn't fly that flight and no planned leg does. Null otherwise.
+ */
+export function passAlternate(
+  pass: Pick<PassRecord, 'tripId' | 'legId' | 'flightNumber' | 'from' | 'to' | 'julian'>, trip: Trip,
+): AlternateMatch | null {
+  if (pass.tripId !== trip.id) return null;
+  const flight = pass.flightNumber.toUpperCase();
+  const flies = (refs: readonly FlightRef[]) => refs.some(r => r.flightNumber.toUpperCase() === flight && r.origin === pass.from && r.dest === pass.to);
+  if (trip.legs.some(l => l.kind === 'flight' && !isFinalStatus(l.status) && flies(l.refs))) return null;
+  const own = pass.legId ? trip.legs.find(l => l.id === pass.legId) : undefined;
+  if (own?.kind === 'flight' && flies(own.refs)) return null;
+  return findAlternate(flight, pass.from, pass.to, pass.julian, null, trip);
+}
+
+/** "This pass is for AC812 (your backup). Swap this leg to AC812?" */
+export function swapOfferText(flightNumber: string): string {
+  return `This pass is for ${flightNumber} (your backup). Swap this leg to ${flightNumber}?`;
 }
 
 /** The pass date to show when nothing matched: anchored on the trip's first day (null → ask the user). */

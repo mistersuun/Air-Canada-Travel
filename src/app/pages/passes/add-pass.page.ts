@@ -9,6 +9,7 @@ import { FILES_ERROR_TEXT, MAX_FILE_BYTES, type FilesError } from '../../files/m
 import { BarcodeService } from '../../passes/barcode.service';
 import { displayText, parseBcbp } from '../../passes/bcbp';
 import { NOT_BCBP_TEXT, NO_BARCODE_TEXT, type DecodedRead, type PassRecord } from '../../passes/model';
+import { PassSwapService } from '../../passes/pass-swap.service';
 import { PassesService } from '../../passes/passes.service';
 import { AppStateService } from '../../state/app-state.service';
 import { LEG_STATUS_LABEL, type FlightLeg, type FlightRef, type Trip } from '../../trips/model';
@@ -18,7 +19,7 @@ import { tripPath } from '../../ui/links';
 import { dayLabel, legById } from '../trips/trips-model';
 import {
   type DraftChoice, type PassDraft, type PassSource, alternateText, barcodeLabel, buildDrafts, flightLegs, initialChoice,
-  julianLabel, legOptionLabel, matchLine, offersCheckIn, passName, pickLeg, savedText, toNewPass,
+  julianLabel, legOptionLabel, matchLine, offersCheckIn, passName, pickLeg, rematchDrafts, savedText, toNewPass,
 } from './add-pass-model';
 import { PassScannerComponent, type ScanResult } from './pass-scanner.component';
 
@@ -168,10 +169,14 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
             } @else if (d.candidates.length > 1) {
               <p class="ap__note" data-several>This pass fits more than one of your legs. Pick the one it's for.</p>
             } @else if (!choiceOf(d.key)) {
-              <p class="ap__note" data-no-match>
-                @if (d.alternate) { {{ altText(d) }} }
-                @else { No leg in this trip has {{ d.flightNumber }} {{ d.leg.from }} → {{ d.leg.to }} on that day. Pick a leg, or keep the pass with the trip. }
-              </p>
+              @if (d.alternate) {
+                <p class="ap__note" data-swap-offer>{{ altText(d) }}</p>
+                <p class="ap__other">
+                  <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-swap (click)="swapToBackup(d)">Swap to {{ d.flightNumber }}</button>
+                </p>
+              } @else {
+                <p class="ap__note" data-no-match>No leg in this trip has {{ d.flightNumber }} {{ d.leg.from }} → {{ d.leg.to }} on that day. Pick a leg, or keep the pass with the trip.</p>
+              }
             }
 
             @if (showPicker(d)) {
@@ -324,6 +329,7 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
 })
 export class AddPassPage {
   private readonly tripsSvc = inject(TripsService);
+  private readonly swapper = inject(PassSwapService);
   private readonly passes = inject(PassesService);
   private readonly files = inject(FilesService);
   private readonly barcode = inject(BarcodeService);
@@ -642,6 +648,39 @@ export class AddPassPage {
 
   protected altText(d: PassDraft): string {
     return alternateText(d.flightNumber);
+  }
+
+  /**
+   * "Swap to AC812": the leg becomes the backup (same swap and Undo as
+   * Recover), then this pass is matched to the new leg; Save links it.
+   * Undo puts the trip back and the pass back to unmatched.
+   */
+  protected swapToBackup(d: PassDraft): void {
+    const t = this.trip();
+    if (!t || !d.alternate) return;
+    const done = this.swapper.swapToBackup(t.id, d.alternate, () => this.rematch(null));
+    if (!done) return;
+    this.rematch({ key: d.key, choice: { legId: done.legId, refIndex: done.refIndex, matched: 'confirmed' } });
+  }
+
+  private rematch(set: { key: string; choice: DraftChoice } | null): void {
+    const t = this.trip();
+    const dec = this.decoded();
+    if (!t || !dec) return;
+    const drafts = rematchDrafts(dec.drafts, t);
+    this.decoded.set({ ...dec, drafts });
+    this.choices.update(m => {
+      const next: Record<string, DraftChoice | null> = {};
+      for (const d of drafts) {
+        if (set && d.key === set.key) next[d.key] = set.choice;
+        else {
+          const c = m[d.key] ?? null;
+          // A choice of a leg that no longer exists (after Undo) is dropped.
+          next[d.key] = c && c.legId && !legById(t, c.legId) ? initialChoice(d, null) : c ?? initialChoice(d, null);
+        }
+      }
+      return next;
+    });
   }
 
   protected async save(): Promise<void> {

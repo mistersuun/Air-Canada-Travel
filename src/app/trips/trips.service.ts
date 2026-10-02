@@ -232,12 +232,14 @@ export class TripsService {
    * Recovery: the old leg becomes Not boarded (or Dropped when it was still
    * open), `it` is inserted as a new Planned leg with the remaining backups,
    * and the ground leg that left the old gateway is re-estimated from the
-   * new one. Flashes "Swapped to AC812 · Listing is still your step" with Undo.
+   * new one. Flashes "Swapped to AC812 · Listing is still your step" with Undo
+   * (`onUndo` runs after the trip is put back). Resolves to the new leg's id,
+   * or null when nothing was swapped.
    */
-  swapLeg(id: string, legId: string, it: Itinerary, ground: GroundEstimateLike | null): void {
+  swapLeg(id: string, legId: string, it: Itinerary, ground: GroundEstimateLike | null, opts: { onUndo?: () => void } = {}): string | null {
     const before = this.trip(id);
     const old = before?.legs.find(l => l.id === legId);
-    if (!before || !old || old.kind !== 'flight' || !it.legs.length) return;
+    if (!before || !old || old.kind !== 'flight' || !it.legs.length) return null;
     const refs = refsFromItinerary(it);
     const at = this.iso();
     const oldGateway = old.refs[old.refs.length - 1].dest;
@@ -267,8 +269,12 @@ export class TripsService {
     const label = it.legs.map(l => l.flightNumber ?? 'an estimated leg').join(' + ');
     this.flash(`Swapped to ${label} · Listing is still your step`, {
       label: 'Undo',
-      run: () => this.setTrips(this.file().trips.map(t => (t.id === id ? before : t))),
+      run: () => {
+        this.setTrips(this.file().trips.map(t => (t.id === id ? before : t)));
+        opts.onUndo?.();
+      },
     });
+    return fresh.id;
   }
 
   // ── Prep ──────────────────────────────────────────────────────────────────

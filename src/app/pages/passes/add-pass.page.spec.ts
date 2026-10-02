@@ -8,7 +8,7 @@ import { provideFilesStore, useNodeBlobs } from '../../files/testing/files-testi
 import { BarcodeService } from '../../passes/barcode.service';
 import type { DecodedRead } from '../../passes/model';
 import { PassesService } from '../../passes/passes.service';
-import { BCBP_MINIMAL, BCBP_MULTILEG, minimalOnDay } from '../../passes/testing/bcbp-fixtures';
+import { BCBP_MINIMAL, BCBP_MULTILEG, minimalOnDay, minimalPass } from '../../passes/testing/bcbp-fixtures';
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -173,6 +173,37 @@ describe('AddPassPage', () => {
     leg.dispatchEvent(new Event('change'));
     await stable();
     expect(el.querySelector<HTMLButtonElement>('[data-save]')!.disabled).toBe(false);
+  });
+
+  it('a pass for a backup offers the swap; swapping matches it to the new leg, and Undo puts it back', async () => {
+    const { el, stable, pick, trips, passes, flash, text } = await render({ read: pdf417(minimalPass({ from: 'YUL', to: 'LIS', flight: '0812', julian: 281 })) });
+    await pick();
+    expect(text('[data-swap-offer]')).toBe('This pass is for AC812 (your backup). Swap this leg to AC812?');
+    expect(el.querySelector('[data-match]')).toBeNull();
+    el.querySelector<HTMLButtonElement>('[data-swap]')!.click();
+    await stable();
+    const t = trips.trip(SEVILLE_IDS.trip)!;
+    const fresh = t.legs.find(l => l.kind === 'flight' && l.refs[0].flightNumber === 'AC812')!;
+    expect(fresh).toMatchObject({ status: 'planned', provenance: 'scheduled' });
+    expect(t.legs.find(l => l.id === SEVILLE_IDS.outbound)!.status).toBe('abandoned');
+    expect(flash).toHaveBeenCalledWith('Swapped to AC812 · Listing is still your step', expect.objectContaining({ label: 'Undo' }));
+    expect(el.querySelector('[data-swap-offer]')).toBeNull();
+    expect(text('[data-match] b')).toBe('Matches your AC812 leg');
+
+    // Undo: the trip is back and the offer returns
+    flash.mock.calls.find(c => c[0].startsWith('Swapped'))![1]!.run();
+    await stable();
+    expect(trips.trip(SEVILLE_IDS.trip)!.legs.find(l => l.id === SEVILLE_IDS.outbound)!.status).toBe('listed');
+    expect(text('[data-swap-offer]')).toContain('Swap this leg to AC812?');
+    expect(el.querySelector<HTMLButtonElement>('[data-save]')!.disabled).toBe(true);
+
+    // Swap again and save: the pass is linked to the new leg
+    el.querySelector<HTMLButtonElement>('[data-swap]')!.click();
+    await stable();
+    el.querySelector<HTMLButtonElement>('[data-save]')!.click();
+    await vi.waitFor(() => expect(passes.passes()).toHaveLength(1));
+    const newLeg = trips.trip(SEVILLE_IDS.trip)!.legs.find(l => l.kind === 'flight' && l.status === 'planned' && l.refs[0].flightNumber === 'AC812')!;
+    expect(passes.passes()[0]).toMatchObject({ legId: newLeg.id, refIndex: 0, matched: 'confirmed', flightNumber: 'AC812' });
   });
 
   it('a two-leg barcode shows one card per leg with its own checkbox', async () => {

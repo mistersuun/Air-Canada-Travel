@@ -1,9 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { addPassPath, addPassQuery, passPath } from '../../extras/links';
 import { AppStateService } from '../../state/app-state.service';
 import type { Trip, TripLeg } from '../../trips/model';
+import type { PassRecord } from '../model';
+import { PassSwapService, swapOfferFor } from '../pass-swap.service';
 import { PassesService } from '../passes.service';
 
 /** '2 passes · seat 34K, 34J', '1 pass · seat 34K', '1 pass'. */
@@ -25,6 +27,14 @@ export function legPassesMeta(seats: readonly (string | null)[]): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (isFlight()) {
+      @if (offer(); as o) {
+        <div class="lp__swap" data-swap-offer>
+          <p>{{ o.offer.text }}</p>
+          <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-swap [disabled]="swapping()" (click)="swap(o.pass)">
+            Swap to {{ o.offer.flightNumber }}
+          </button>
+        </div>
+      }
       @if (list().length) {
         <a class="lp lp--show" [routerLink]="showLink()" [queryParams]="state.globalParams()" data-show-pass>
           <span class="lp__ic" aria-hidden="true"><app-icon name="barcode" [size]="18" [strokeWidth]="2" /></span>
@@ -65,6 +75,8 @@ export function legPassesMeta(seats: readonly (string | null)[]): string {
     .lp__chev { color: var(--ink-3); flex: none; }
     .lp__more { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; font-size: 13.5px; }
     .lp__add { min-height: 44px; }
+    .lp__swap { display: grid; gap: 8px; justify-items: start; font-size: 13.5px; color: var(--ink); }
+    .lp__swap p { margin: 0; }
   `],
 })
 export class LegPassesComponent {
@@ -73,8 +85,22 @@ export class LegPassesComponent {
 
   readonly trip = input.required<Trip>();
   readonly leg = input.required<TripLeg>();
+  /** The leg was swapped to a backup (this leg is now Dropped): the sheet closes. */
+  readonly swapped = output<string>();
+
+  private readonly swapper = inject(PassSwapService);
+  protected readonly swapping = signal(false);
 
   protected readonly isFlight = computed(() => this.leg().kind === 'flight');
+  /** A saved pass for one of this leg's backups: offer to swap the leg to it. */
+  protected readonly offer = computed(() => {
+    const t = this.trip();
+    for (const pass of this.passes.forTrip(t.id)) {
+      const offer = swapOfferFor(pass, t);
+      if (offer?.match.legId === this.leg().id) return { pass, offer };
+    }
+    return null;
+  });
   protected readonly list = computed(() => this.passes.forLeg(this.trip().id, this.leg().id));
   protected readonly meta = computed(() => legPassesMeta(this.list().map(p => p.seat)));
   protected readonly showLink = computed(() => {
@@ -86,5 +112,16 @@ export class LegPassesComponent {
 
   constructor() {
     void this.passes.ensureReady();
+  }
+
+  protected async swap(pass: PassRecord): Promise<void> {
+    if (this.swapping()) return;
+    this.swapping.set(true);
+    try {
+      const legId = await this.swapper.swapForPass(pass);
+      if (legId) this.swapped.emit(legId);
+    } finally {
+      this.swapping.set(false);
+    }
   }
 }

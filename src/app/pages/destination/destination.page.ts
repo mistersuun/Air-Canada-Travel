@@ -6,10 +6,10 @@ import { Router, RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
 import { ShareService } from '../../state/share.service';
-import { findDestination, getOrigins } from '../../utils/airports';
+import { airportTz, findDestination, getOrigins } from '../../utils/airports';
 import { formatKm, greatCircleKm } from '../../utils/geo';
 import type { Itinerary } from '../../utils/connections';
-import { addDays, formatKey } from '../../utils/time';
+import { addDays, formatKey, todayKey } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
@@ -260,7 +260,7 @@ const AC_URL = 'https://www.aircanada.com/';
       </div>
 
       <section class="card avail" [class.m-hide]="tab() !== 'departures'">
-        <app-month-availability [hub]="state.hub()" [dest]="code()" [todayKey]="state.todayKey()"
+        <app-month-availability [hub]="state.hub()" [dest]="code()" [todayKey]="outToday()"
                                 [coverage]="state.coverage()" [selectedDateKey]="state.selectedDateKey()"
                                 [showConnections]="state.showConnections()" [connect]="state.connect()"
                                 [months]="monthCount()" (pick)="pickDay($event)" />
@@ -440,11 +440,25 @@ export class DestinationPage {
 
   // ── Timelines ─────────────────────────────────────────────────────────────
   /**
+   * "Today" on each timeline is the ORIGIN airport's calendar day (the hub's
+   * for departures, this airport's for returns), never the device's: a phone
+   * in Tokyo still labels a Montréal evening flight "Today".
+   */
+  protected readonly outToday = computed(() => todayKey(airportTz(this.state.hub()), this.state.nowMs()));
+  private readonly retToday = computed(() => todayKey(airportTz(this.code()), this.state.nowMs()));
+
+  /**
    * Timelines start at the selected day, else at the browsed week's start,
-   * and never before today.
+   * and never before today (at the hub).
    */
   private readonly startKey = computed(() => {
-    const today = this.state.todayKey();
+    const today = this.outToday();
+    const base = this.state.selectedDateKey() ?? this.state.weekStartKey();
+    return base > today ? base : today;
+  });
+  /** The return timeline's start: the same day, never before today where it leaves from. */
+  private readonly retStartKey = computed(() => {
+    const today = this.retToday();
     const base = this.state.selectedDateKey() ?? this.state.weekStartKey();
     return base > today ? base : today;
   });
@@ -491,13 +505,13 @@ export class DestinationPage {
   readonly retLimit = linkedSignal({ source: () => [this.code(), this.startKey(), this.firstLimit()] as const, computation: ([, , n]) => n });
 
   protected readonly outItems = computed(() =>
-    timelineItems(this.outList().slice(0, this.outLimit()), this.state.todayKey(), this.state.nowMs(), this.state.timeFormat()));
+    timelineItems(this.outList().slice(0, this.outLimit()), this.outToday(), this.state.nowMs(), this.state.timeFormat()));
   protected readonly outMore = computed(() => this.outList().length > this.outLimit());
 
   private readonly retDirect = computed(() =>
-    upcoming(this.code(), this.state.hub(), this.startKey(), this.state.nowMs(), 'direct', this.state.connect()));
+    upcoming(this.code(), this.state.hub(), this.retStartKey(), this.state.nowMs(), 'direct', this.state.connect()));
   private readonly retVia = computed(() =>
-    upcoming(this.code(), this.state.hub(), this.startKey(), this.state.nowMs(), 'via', this.state.connect()));
+    upcoming(this.code(), this.state.hub(), this.retStartKey(), this.state.nowMs(), 'via', this.state.connect()));
   /**
    * The user's Nonstop / Via choice for returns. Keyed on the route only, so
    * the 30s clock tick (which rebuilds the lists) never resets it.
@@ -522,13 +536,13 @@ export class DestinationPage {
   });
   private readonly retList = computed(() => (this.retMode() === 'via' ? this.retVia() : this.retDirect()));
   protected readonly retItems = computed(() =>
-    timelineItems(this.retList().slice(0, this.retLimit()), this.state.todayKey(), this.state.nowMs(), this.state.timeFormat(), false));
+    timelineItems(this.retList().slice(0, this.retLimit()), this.retToday(), this.state.nowMs(), this.state.timeFormat(), false));
   protected readonly retMore = computed(() => this.retList().length > this.retLimit());
 
   // ── Header ────────────────────────────────────────────────────────────────
   protected readonly summary = computed(() =>
     destSummary(this.state.hub(), this.code(), this.state.weekStartKey(), this.outDirect().length ? this.outDirect() : this.outVia()));
-  protected readonly next = computed(() => nextDeparture(this.outList()[0], this.state.todayKey(), this.state.timeFormat()));
+  protected readonly next = computed(() => nextDeparture(this.outList()[0], this.outToday(), this.state.timeFormat()));
 
   // ── States ────────────────────────────────────────────────────────────────
   /** The next connection beyond the horizon, looked up only when both lists are empty. */
@@ -539,7 +553,7 @@ export class DestinationPage {
   });
   protected readonly hasConnections = computed(() => this.outVia().length > 0 || !!this.farConnection());
   protected readonly status = computed(() =>
-    destState(this.state.hub(), this.code(), this.state.weekStartKey(), this.state.todayKey(), this.state.coverage(), this.hasConnections()));
+    destState(this.state.hub(), this.code(), this.state.weekStartKey(), this.outToday(), this.state.coverage(), this.hasConnections()));
   protected readonly routeOnlyText = ROUTE_ONLY_TEXT;
   protected readonly routeOnly = computed(() => this.status().kind === 'route-only');
   protected readonly routeOnlyDetail = computed(() => {

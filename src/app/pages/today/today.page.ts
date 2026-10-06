@@ -16,6 +16,7 @@ import { recoverPath, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
 import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
 import { TodayTimelineComponent } from './today-timeline.component';
+import { TodayInAirComponent } from './in-air.component';
 import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
 /**
@@ -28,7 +29,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 @Component({
   selector: 'app-today-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent],
+  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent, TodayInAirComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -63,6 +64,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
         </section>
 
         <app-today-pass [tripId]="v.tripId" [legId]="v.legId" />
+        <app-today-in-air [ref]="v.ref" [status]="v.status" />
         <app-today-timeline [tripId]="v.tripId" [legId]="v.legId" />
 
         @if (!v.final) {

@@ -40,7 +40,7 @@ const FLICK_MS = 1000;
           <p class="none ui-sub" data-surprise-empty>No destinations match your filters this week.</p>
         } @else {
           <div class="map">
-            <app-route-map [hub]="state.hub()" [points]="points()" [highlight]="shown()" view="world" [padding]="10" [pulse]="false" />
+            <app-route-map [hub]="state.hub()" [points]="points()" [highlight]="shown()" [animate]="animateMap()" view="world" [padding]="10" [pulse]="false" />
           </div>
           <div class="out">
             <p class="ui-visually-hidden" aria-live="polite">{{ settled() ? line() : '' }}</p>
@@ -91,6 +91,8 @@ export class SurpriseSheetComponent {
   protected readonly pick = signal<RouteEntry | null>(null);
   protected readonly shown = signal<string | null>(null);
   protected readonly settled = signal(false);
+  /** Arc draw-in and plane glide: on from the final highlight (so it draws once, with no blink on settle), off while flicking. */
+  protected readonly animateMap = signal(false);
   protected readonly empty = signal(false);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -134,12 +136,14 @@ export class SurpriseSheetComponent {
     const entries = this.entries();
     const p = surprisePick(entries, this.profile.profile(), loadRecent(), Math.random, this.state.nowMs());
     this.settled.set(false);
+    this.animateMap.set(false);
     this.shown.set(null);
     this.pick.set(p);
     this.empty.set(!p);
     if (!p) return;
     rememberPick(p.destination.code);
     if (reducedMotion()) {
+      this.animateMap.set(true);
       this.shown.set(p.destination.code);
       this.settled.set(true);
       return;
@@ -150,6 +154,7 @@ export class SurpriseSheetComponent {
     const next = (): void => {
       this.shown.set(seq[i]);
       if (i === seq.length - 1) {
+        this.animateMap.set(true);
         success();
         this.timer = setTimeout(() => this.settled.set(true), 250);
         return;

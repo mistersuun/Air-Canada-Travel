@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, booleanAttribute, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, input, linkedSignal,
   output, signal,
 } from '@angular/core';
-import { GeoProjection, geoNaturalEarth1, geoPath } from 'd3-geo';
+import { GeoProjection, geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { findDestination, findHub } from '../utils/airports';
 import { GeoService } from '../state/geo.service';
 
@@ -63,7 +63,14 @@ export const DRAG_PX = 4;
             <path class="arc" [class.arc--connect]="p.kind === 'connect'" [attr.d]="p.arc" />
           }
         }
-        @if (hotPoint(); as p) { <path class="arc hot" [attr.d]="p.arc" /> }
+        @for (p of hotList(); track p.code) {
+          <path class="arc hot" [class.arc--draw]="animate()" [attr.d]="p.arc" pathLength="1" />
+          @if (glide() && p.arc) {
+            <g class="plane plane--glide" [style.offset-path]="'path(&quot;' + p.arc + '&quot;)'" data-glide>
+              <path class="plane__p" transform="translate(-6 -6) scale(.5) rotate(90 12 12)" d="M21.5 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13.5 19v-5.5l8 2.5Z" />
+            </g>
+          }
+        }
       }
       @for (p of drawn(); track p.code) {
         <circle class="dotp" [class.dotp--connect]="p.kind === 'connect'" [class.hot]="p.hot"
@@ -74,6 +81,12 @@ export const DRAG_PX = 4;
       }
       @for (l of labelled(); track l.code) {
         <text class="mlab" [attr.x]="l.x + 7" [attr.y]="l.y - 6">{{ l.text }}</text>
+      }
+      @if (marker(); as m) {
+        <g class="plane" [attr.transform]="'translate(' + m.x + ' ' + m.y + ') rotate(' + m.angle + ')'" data-progress-plane>
+          <circle r="9" class="plane__halo" />
+          <path class="plane__p" transform="translate(-7 -7) scale(.58) rotate(90 12 12)" d="M21.5 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13.5 19v-5.5l8 2.5Z" />
+        </g>
       }
       @if (hubXY(); as o) {
         @if (pulse()) { <circle class="pulse" [attr.cx]="o[0]" [attr.cy]="o[1]" r="9" /> }
@@ -90,7 +103,14 @@ export const DRAG_PX = 4;
     .land { fill: var(--land); stroke: var(--surface); stroke-width: .7; }
     .arc { fill: none; stroke: var(--blue); stroke-width: 1; opacity: .45; }
     .arc--connect { stroke: var(--amber); stroke-dasharray: 3 3; }
-    .arc.hot { stroke: var(--red); stroke-width: 2.2; opacity: 1; }
+    .arc.hot { stroke: var(--red); stroke-width: 2.2; opacity: 1; stroke-dasharray: 1; }
+    .arc.hot.arc--draw { animation: map-draw 700ms var(--ease-out) both; }
+    .plane__p { fill: var(--ink); stroke: var(--surface); stroke-width: 1.2; paint-order: stroke; }
+    .plane__halo { fill: var(--surface); opacity: .85; }
+    .plane { pointer-events: none; }
+    .plane--glide { opacity: 0; offset-rotate: auto; animation: map-glide 1.6s cubic-bezier(.4, 0, .6, 1) 700ms both; }
+    @keyframes map-glide { 0% { offset-distance: 0%; opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+    @keyframes map-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
     .dotp { fill: var(--surface); stroke: var(--blue); stroke-width: 1.4; }
     .dotp--connect { stroke: var(--amber); }
     .dotp.hot { stroke: var(--red); }
@@ -101,7 +121,7 @@ export const DRAG_PX = 4;
       fill: var(--blue); opacity: .25; pointer-events: none;
       animation: ui-pulse 2s ease-out infinite; transform-box: fill-box; transform-origin: center;
     }
-    @media (prefers-reduced-motion: reduce) { .pulse { animation: none; opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .arc.hot.arc--draw { animation: none; stroke-dashoffset: 0; } .plane--glide { display: none; } .pulse { animation: none; opacity: 0; } }
   `],
 })
 export class RouteMapComponent {
@@ -120,6 +140,10 @@ export class RouteMapComponent {
   readonly arcs = input(true, { transform: booleanAttribute });
   readonly pulse = input(true, { transform: booleanAttribute });
   readonly interactive = input(false, { transform: booleanAttribute });
+  /** Animate the hot arc draw-in and plane glide; pass false while flicking through many destinations. */
+  readonly animate = input(true, { transform: booleanAttribute });
+  /** 0..1 along the great circle from the hub to the highlighted destination: shows a static plane there (an estimate). */
+  readonly progress = input<number | null>(null);
 
   readonly pointClick = output<string>();
   readonly pointHover = output<string | null>();
@@ -151,6 +175,9 @@ export class RouteMapComponent {
       if (coords.length < 2) {
         p.scale(w * 0.9).center([0, 0]).rotate([-coords[0][0], 0]).center([0, coords[0][1]]).translate([w / 2, h / 2]);
       } else {
+        // A route over the antimeridian: centre the projection on its mid-longitude first.
+        const dest = this.progress() !== null || this.points().length === 1 ? this.routeEnd() : null;
+        if (dest) p.rotate([-geoInterpolate(this.hubLngLat(), dest)(0.5)[0], 0]);
         p.fitExtent([[pad, pad], [w - pad, h - pad]], { type: 'MultiPoint', coordinates: coords });
         // Very close points would zoom to street level: cap at ~12× the world scale.
         const worldScale = w / 5.5;
@@ -198,6 +225,44 @@ export class RouteMapComponent {
   });
 
   protected readonly hotPoint = computed(() => this.drawn().find(d => d.hot) ?? null);
+
+  /** [lng, lat] of the highlighted destination (or the only point). */
+  private routeEnd(): [number, number] | null {
+    const hot = this.highlight() ?? this.points()[0]?.code;
+    const d = this.points().find(q => q.code === hot) ?? findDestination(hot) ?? findHub(hot);
+    return d ? [d.lng, d.lat] : null;
+  }
+
+  /** The hot arc as a one-item list tracked by code: re-created (and so re-animated) only when the destination changes. */
+  protected readonly hotList = computed(() => {
+    const p = this.hotPoint();
+    return p ? [p] : [];
+  });
+
+  /** The one-shot plane glide. Not rendered under reduced motion (also hidden by CSS), when `animate` is off, or when a progress marker is shown instead. */
+  protected readonly glide = computed(() => this.animate() && this.progress() === null && !prefersReducedMotion());
+
+  /** The progress plane: screen position and heading along the projected great circle. */
+  protected readonly marker = computed(() => {
+    const t = this.progress();
+    const hot = this.highlight();
+    if (t === null || !hot) return null;
+    const dest = this.routeEnd();
+    if (!dest) return null;
+    const p = this.projection();
+    const at = geoInterpolate(this.hubLngLat(), dest);
+    const k = Math.min(1, Math.max(0, t));
+    const xy = p(at(k));
+    let a = p(at(Math.max(0, k - 0.01)));
+    let b = p(at(Math.min(1, k + 0.01)));
+    if (!xy || !a || !b) return null;
+    // Across the map's seam the two samples land on opposite edges: use the pair on the same side.
+    if (Math.abs(b[0] - a[0]) > this.w() / 2) {
+      if (Math.abs(xy[0] - a[0]) < this.w() / 2) b = xy; else a = xy;
+    }
+    const angle = Math.round(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI);
+    return { x: round(xy[0]), y: round(xy[1]), angle };
+  });
 
   protected readonly labelled = computed(() => {
     const want = new Set(this.labels());
@@ -315,6 +380,14 @@ export class RouteMapComponent {
     if (!this.interactive()) return;
     e.preventDefault();
     this.zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15);
+  }
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
   }
 }
 

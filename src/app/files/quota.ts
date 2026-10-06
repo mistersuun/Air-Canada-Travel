@@ -80,6 +80,7 @@ export async function storageInfo(): Promise<StorageInfo> {
 /** Asks the browser to keep this site's data. A refusal is fine. */
 export async function requestPersist(): Promise<boolean> {
   try {
+    if (await manager()?.persisted?.()) return true;
     return (await manager()?.persist?.()) ?? false;
   } catch {
     return false;

@@ -32,12 +32,12 @@ export const MAX_BACKUP_BYTES = 5_000_000;
       @if (result(); as r) { <p class="res" [class.is-err]="r.error" role="status">{{ r.text }}</p> }
       @if (count()) { <p class="hint tn">{{ count() }} on this device.</p> }
       @if (keepLine(); as k) { <p class="hint" data-persisted>{{ k }}</p> }
-      @if (trips.damaged().length) {
+      @if (trips.damaged(); as d) {
         <div class="dmg" data-damaged>
-          <p class="hint">A damaged copy of your trips was kept.</p>
+          <p class="hint">A damaged copy of your {{ d }} was kept.</p>
           <div class="acts">
             <button type="button" class="btn" data-damaged-download (click)="downloadDamaged()">Download</button>
-            <button type="button" class="btn btn--del" data-damaged-delete (click)="trips.deleteDamaged()">Delete</button>
+            <button type="button" class="btn btn--del" data-damaged-delete (click)="deleteDamaged()">{{ confirmDelete() ? 'Tap again to delete' : 'Delete' }}</button>
           </div>
         </div>
       }
@@ -86,6 +86,19 @@ export class SettingsDataComponent {
     const r = this.trips.downloadBackup();
     this.result.set(r ? { text: `Downloaded ${r.filename}`, error: false }
       : { text: 'Could not create the file on this browser.', error: true });
+  }
+
+  protected readonly confirmDelete = signal(false);
+
+  /** Two taps: the first arms it, the second deletes (the first disarms itself after 4 s). */
+  deleteDamaged(): void {
+    if (!this.confirmDelete()) {
+      this.confirmDelete.set(true);
+      setTimeout(() => this.confirmDelete.set(false), 4000);
+      return;
+    }
+    this.confirmDelete.set(false);
+    this.trips.deleteDamaged();
   }
 
   downloadDamaged(): void {

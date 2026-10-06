@@ -411,14 +411,16 @@ describe('TripsService', () => {
       expect(TestBed.inject(PrefsService).prefs().lastBackupAt).toBe(new Date(nowMs).toISOString());
       expect(svc.backupReminder()).toBeNull();
     });
-    it('lists and deletes the damaged copies', () => {
-      const store = seeded();
-      store.setItem('ac.trips.corrupt', '{broken');
+    it('shows damage found on this launch, and deletes it', () => {
+      const store = new MemoryStorage();
+      store.setItem(TRIPS_KEY, '{broken');
       const svc = make(store);
-      expect(svc.damaged().map(d => d.text)).toEqual(['{broken']);
-      expect(svc.damaged()[0].filename).toBe('routes-trips-damaged-2026-10-01.json');
+      expect(svc.damaged()).toBe('trips');
+      store.setItem('ac.flightlog.corrupt', 'x');
+      svc.onStorage({ key: null, storageArea: store });
+      expect(svc.damaged()).toBe('trips and flight log');
       svc.deleteDamaged();
-      expect(svc.damaged()).toEqual([]);
+      expect(svc.damaged()).toBeNull();
       expect(store.getItem('ac.trips.corrupt')).toBeNull();
     });
   });

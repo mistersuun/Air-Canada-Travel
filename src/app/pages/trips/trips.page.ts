@@ -37,11 +37,11 @@ export const STARRED_PREVIEW = 3;
       }
 
       @if (trips.unsaved()) {
-        <p class="note note--amber" data-unsaved><app-icon name="warning" [size]="16" />
-          <span>Couldn't save on this phone. Export a backup now. <button type="button" class="lnk" (click)="exportNow()">Export trips</button></span></p>
+        <p class="note note--amber" data-unsaved role="status"><app-icon name="warning" [size]="16" />
+          <span>Couldn't save on this phone. Export a backup now. <button type="button" class="lnk" (click)="exportNow()">Export</button></span></p>
       } @else if (trips.backupReminder(); as n) {
         <p class="note note--blue" data-backup-nudge><app-icon name="info" [size]="16" />
-          <span>{{ n }} <button type="button" class="lnk" (click)="exportNow()">Export trips</button></span></p>
+          <span>{{ n }} <button type="button" class="lnk" (click)="exportNow()">Export now</button></span></p>
       }
 
       @if (active().length) {
@@ -163,7 +163,8 @@ export class TripsPage {
   });
 
   protected exportNow(): void {
-    if (!this.trips.downloadBackup()) this.state.flash('Could not create the file on this browser.');
+    const r = this.trips.downloadBackup();
+    this.state.flash(r ? `Downloaded ${r.filename}` : 'Could not create the file on this browser.');
   }
 
   protected warnFor(t: Parameters<typeof returnNotListed>[0]): boolean {

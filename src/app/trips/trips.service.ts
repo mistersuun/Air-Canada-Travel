@@ -36,6 +36,9 @@ export interface GroundEstimateLike {
   provenance: 'scheduled' | 'estimated' | 'unknown';
 }
 
+/** How long a download's object URL lives (iOS Safari reads it late). */
+const DOWNLOAD_REVOKE_MS = 10_000;
+
 export const UNSAVED_NOTICE = "Couldn't save on this phone. Export a backup now.";
 
 export const BAD_DATA_NOTICE = 'The latest schedules look incomplete. Your plans are unchanged.';
@@ -62,7 +65,7 @@ export class TripsService {
   private persistAsked = false;
   private readonly tripsUnsaved = signal(false);
   private readonly logUnsaved = signal(false);
-  private readonly corruptState = signal(loadCorrupt(this.storage));
+  private readonly corruptState = signal(loadCorrupt(null));
 
   /** All trips, newest outbound first. */
   readonly trips: Signal<Trip[]> = computed(() =>
@@ -88,15 +91,12 @@ export class TripsService {
   readonly unsaved: Signal<boolean> = computed(() => this.tripsUnsaved() || this.logUnsaved());
   /** The quiet "export a backup" reminder, or null (see backupNudge). */
   readonly backupReminder: Signal<string | null> = computed(() =>
-    backupNudge(this.file().trips, this.prefs.prefs().lastBackupAt, Math.max(this.tick(), this.now())));
-  /** Damaged copies kept by a failed load (ac.trips.corrupt, ac.flightlog.corrupt). */
-  readonly damaged: Signal<{ filename: string; text: string }[]> = computed(() => {
+    backupNudge(this.file().trips, this.log(), this.prefs.prefs().lastBackupAt, Math.max(this.tick(), this.now())));
+  /** Which damaged copies a failed load kept (ac.trips.corrupt, ac.flightlog.corrupt), or null. */
+  readonly damaged: Signal<'trips' | 'flight log' | 'trips and flight log' | null> = computed(() => {
     const c = this.corruptState();
-    const day = new Date(this.now()).toISOString().slice(0, 10);
-    return [
-      ...(c.trips !== null ? [{ filename: `routes-trips-damaged-${day}.json`, text: c.trips }] : []),
-      ...(c.log !== null ? [{ filename: `routes-flightlog-damaged-${day}.json`, text: c.log }] : []),
-    ];
+    if (c.trips !== null && c.log !== null) return 'trips and flight log';
+    return c.trips !== null ? 'trips' : c.log !== null ? 'flight log' : null;
   });
 
   constructor() {
@@ -105,6 +105,7 @@ export class TripsService {
     this.file.set(t.file);
     this.log.set(l.file);
     this.readOnlyState.set(t.readOnly || l.readOnly);
+    this.corruptState.set(loadCorrupt(this.storage));
     this.tick.set(this.now());
     this.checkChanges();
     // Another tab or window of the app saved: reload, so this tab never writes back a stale copy.
@@ -124,6 +125,7 @@ export class TripsService {
       this.log.set(l.file);
       if (l.readOnly) this.readOnlyState.set(true);
     }
+    this.corruptState.set(loadCorrupt(this.storage));
   }
 
   // ── Reads ─────────────────────────────────────────────────────────────────
@@ -464,9 +466,12 @@ export class TripsService {
     return { filename };
   }
 
-  /** Downloads each damaged copy as a JSON file. False when the browser can't make a file. */
+  /** Downloads the damaged copies as one JSON file (the raw text of each, as strings). False when the browser can't make a file. */
   downloadDamaged(): boolean {
-    return this.damaged().map(d => this.download(d.filename, d.text)).every(Boolean);
+    const c = this.corruptState();
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    const text = JSON.stringify({ kind: 'routes-damaged', savedAt: this.iso(), trips: c.trips, flightlog: c.log }, null, 1);
+    return this.download(`routes-damaged-${day}.json`, text);
   }
 
   /** Deletes the damaged copies. */
@@ -492,7 +497,7 @@ export class TripsService {
       this.doc.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => win?.URL.revokeObjectURL(url), 1000);
+      setTimeout(() => win?.URL.revokeObjectURL(url), DOWNLOAD_REVOKE_MS);
       return true;
     } catch {
       return false;

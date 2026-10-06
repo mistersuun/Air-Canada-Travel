@@ -60,6 +60,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import http.client
 import io
 import json
 import math
@@ -633,7 +634,7 @@ def fetch(feed_id: str, cache: pathlib.Path, offline: bool, log=print) -> pathli
             path.touch()
         else:
             log(f"  {feed_id}: HTTP {e.code}{', using cache' if path.exists() else ''}")
-    except (OSError, ValueError) as e:
+    except (OSError, ValueError, http.client.HTTPException) as e:
         tmp.unlink(missing_ok=True)
         log(f"  {feed_id}: {e}{', using cache' if path.exists() else ''}")
     return path if path.exists() else None
@@ -653,7 +654,7 @@ def source_entry(feed_id: str, fetched: str) -> dict:
 
 def assemble(corridors: dict[str, dict], fetched: dict[str, str], previous: dict | None, failed: set[str],
              today: date) -> dict:
-    """The ground.json document. Corridors of failed feeds come from the previous file while still valid."""
+    """The ground.json document. Corridors of failed or unselected feeds come from the previous file while still valid."""
     corr = dict(corridors)
     sources = {fid: source_entry(fid, d) for fid, d in fetched.items()}
     if previous:
@@ -757,7 +758,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(f"  {c['key']:<12} no departures in the next {SCAN_DAYS} days: left out")
 
-    doc = assemble(built, fetched, previous, failed, today)
+    # Feeds not run this time (opt-in without --include, --only/--skip) keep their previous corridors too.
+    doc = assemble(built, fetched, previous, failed | (set(FEEDS) - set(feeds)), today)
     text = encode(doc)
     size = len(text.encode("utf-8"))
     if size > MAX_BYTES:

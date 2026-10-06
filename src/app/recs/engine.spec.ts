@@ -3,7 +3,7 @@ import { resetScheduleSource, setScheduleSource } from '../data/schedule-index';
 import type { Outcome, OutcomeKind } from '../trips/model';
 import { decodeClimate } from './climate';
 import {
-  RecInput, dayItineraries, pairable, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
+  RecInput, dayItineraries, holidayRecs, pairable, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
   scheduleLine, seasonWindow, shortDuration, styleRecs, whyText,
 } from './engine';
 import { longWeekends } from './long-weekends';
@@ -33,6 +33,34 @@ const texts = (lines: Recommendation['lines']) => lines.map(l => l.text);
 
 beforeEach(() => setScheduleSource(RECS_ROUTES, RECS_META));
 afterEach(() => resetScheduleSource());
+
+describe('dayItineraries: departed flights', () => {
+  it('drops flights already gone today, keeps all on other days', () => {
+    const all = dayItineraries(input(), 'YUL', 'FLL', '2026-10-09');
+    expect(all.length).toBeGreaterThan(1);
+    const cut = all[0].departUtc;
+    const today = input({ todayKey: '2026-10-08', nowMs: cut });
+    expect(dayItineraries(today, 'YUL', 'FLL', '2026-10-09').map(i => i.departUtc)).toEqual(
+      all.map(i => i.departUtc).filter(u => u > cut),
+    );
+    expect(dayItineraries(input({ todayKey: '2026-10-09', nowMs: cut }), 'YUL', 'FLL', '2026-10-09', true)).toHaveLength(all.length);
+    expect(dayItineraries(input({ nowMs: cut - 1 }), 'YUL', 'FLL', '2026-10-09')).toHaveLength(all.length);
+  });
+});
+
+describe('holiday out day with all flights gone', () => {
+  it('falls back to the next acceptable out day, with title and aside to match', () => {
+    const lw = longWeekends('2026-10-01', 60, 'YUL')[0];
+    const day1 = dayItineraries(input(), 'YUL', 'FLL', '2026-10-09');
+    const lastUtc = Math.max(...['LGA', 'FLL'].flatMap(c => dayItineraries(input(), 'YUL', c, '2026-10-09').map(i => i.departUtc)), ...day1.map(i => i.departUtc));
+    const late = input({ todayKey: '2026-10-09', nowMs: lastUtc });
+    const rec = holidayRecs(late, lw);
+    expect(rec.length).toBeGreaterThan(0);
+    expect(rec[0].out?.dateKey).toBe('2026-10-10');
+    const g = recommend(late).find(x => x.id === lw.id)!;
+    expect(g.aside).toBe(holidayGroupAside('2026-10-10', '2026-10-12'));
+  });
+});
 
 describe('recommend: Thanksgiving 2026 (real schedule rows, see recs-fixture)', () => {
   it('opens with the Thanksgiving long weekend: LGA by counts, FLL by times', () => {

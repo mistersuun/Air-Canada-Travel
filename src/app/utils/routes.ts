@@ -5,7 +5,7 @@
  */
 import { DESTINATIONS, Destination, DestinationType } from '../data/destinations';
 import { isCovered } from '../data/schedule-index';
-import { matchesAlias } from '../data/search-aliases';
+import { matchesAlias, splitWords } from '../data/search-aliases';
 import { isWidebody } from './aircraft';
 import {
   ConnectOptions,
@@ -129,7 +129,7 @@ export function matchesQuery(d: Destination, query: string | null | undefined): 
   const q = normalizeText(query ?? '');
   if (!q) return true;
   const hay = normalizeText(`${d.city} ${d.country} ${d.code} ${d.region}`);
-  return q.split(/\s+/).every(t => hay.includes(t) || matchesAlias(d, t));
+  return splitWords(q).every(t => hay.includes(t) || matchesAlias(d, t));
 }
 
 function inWindow(hhmm: string, windows: readonly DepartWindow[]): boolean {

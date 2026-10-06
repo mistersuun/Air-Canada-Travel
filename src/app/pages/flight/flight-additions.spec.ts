@@ -11,6 +11,7 @@ import { FLIGHTLOG_KEY, LoadNote, TRIPS_KEY, Trip } from '../../trips/model';
 import { TRIPS_STORAGE } from '../../trips/storage';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, SEVILLE_TRIPS_FILE, sevilleTrip } from '../../trips/testing/seville-fixture';
 import { TripsService } from '../../trips/trips.service';
+import { placeFromDestination } from '../../places/place';
 import { allItineraries, directItineraries } from '../../utils/connections';
 import { toUtcMs } from '../../utils/time';
 import { FlightPage, homeByFor } from './flight.page';
@@ -282,10 +283,48 @@ describe('FlightPage additions (g6)', () => {
     expect(t.homeBy).toEqual({ dateKey: '2026-10-13', hhmm: '22:00' });
   });
 
-  it('homeByFor uses the return arrival date, and end of day when it lands after 22:00', () => {
+  it('Start (no flight) → flight page → pick a return → Add puts both legs in the trip and moves its dates', async () => {
+    configure(at('2026-10-02', '09:00'), { seedTrip: false });
+    const svc = TestBed.inject(TripsService);
+    // What the destination page's Start leaves behind: a trip with no leg, on a guessed day.
+    const trip = svc.create({
+      goal: placeFromDestination('LIS'), fromHub: 'YUL', outboundDate: '2026-10-08',
+      homeBy: { dateKey: '2026-10-13', hhmm: '22:00' },
+    });
+    const { el, fixture } = await render('LIS', '2026-10-09');
+    const ret = directItineraries('LIS', 'YUL', '2026-10-14')[0];
+    expect(ret).toBeTruthy();
+    (fixture.componentInstance as unknown as { returnPick: { set(v: unknown): void } }).returnPick.set(ret);
+    const btn = el.querySelector('[data-add-trip]') as HTMLButtonElement;
+    expect(clean(btn.textContent)).toContain('Add to');
+    btn.click();
+    const t = svc.trip(trip.id)!;
+    expect(t.legs.map(l => (l.kind === 'flight' ? `${l.role}:${l.refs[0].flightNumber}` : l.kind))).toEqual(['outbound:AC812', 'return:AC813']);
+    expect(t.outboundDate).toBe('2026-10-09');
+    expect(t.homeBy).toEqual({ dateKey: ret.arrDateKey, hhmm: '22:00' });
+  });
+
+  it('Start (no flight) → Add without a return shifts home-by with the outbound day', async () => {
+    configure(at('2026-10-02', '09:00'), { seedTrip: false });
+    const svc = TestBed.inject(TripsService);
+    const trip = svc.create({
+      goal: placeFromDestination('LIS'), fromHub: 'YUL', outboundDate: '2026-10-08',
+      homeBy: { dateKey: '2026-10-13', hhmm: '22:00' },
+    });
+    const { el } = await render('LIS', '2026-10-09');
+    (el.querySelector('[data-add-trip]') as HTMLButtonElement).click();
+    const t = svc.trip(trip.id)!;
+    expect(t.outboundDate).toBe('2026-10-09');
+    expect(t.homeBy).toEqual({ dateKey: '2026-10-14', hhmm: '22:00' });
+    expect(t.legs).toHaveLength(1);
+  });
+
+  it('homeByFor uses the return arrival date, end of day after 22:00, and 08:00 for a small-hours arrival', () => {
     const ret = directItineraries('LIS', 'YUL', '2026-10-13')[0];
     expect(homeByFor(ret)).toEqual({ dateKey: ret.arrDateKey, hhmm: '22:00' });
     const late = { ...ret, legs: [{ ...ret.legs[0], arrLocal: '23:15' }] };
     expect(homeByFor(late)).toEqual({ dateKey: ret.arrDateKey, hhmm: '23:59' });
+    const early = { ...ret, legs: [{ ...ret.legs[0], arrLocal: '02:30' }] };
+    expect(homeByFor(early)).toEqual({ dateKey: ret.arrDateKey, hhmm: '08:00' });
   });
 });

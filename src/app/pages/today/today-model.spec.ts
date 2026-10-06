@@ -169,6 +169,8 @@ describe('today model (Seville fixture)', () => {
     const item = (id: string, done: boolean) => ({ id, title: '', detail: null, link: null, critical: true, source: 'legStatus' as const, done });
     expect(statusForTick(item('list:x:0', false), 'planned')).toBe('listed');
     expect(statusForTick(item('list:x:0', true), 'listed')).toBe('planned');
+    expect(statusForTick(item('list:x:0', true), 'checkedIn')).toBeNull();
+    expect(statusForTick(item('list:x:0', false), 'checkedIn')).toBeNull();
     expect(statusForTick(item('checkin:x', false), 'listed')).toBe('checkedIn');
     expect(statusForTick(item('checkin:x', true), 'checkedIn')).toBe('listed');
     expect(statusForTick(item('custom:x', false), 'listed')).toBeNull();

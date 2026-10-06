@@ -106,7 +106,7 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
           </label>
           <label class="row" for="fs-max">
             <span class="row__tx"><span class="nm">Max flight time</span>
-              <span class="hint" data-max-hint>{{ f().maxHours ? 'Up to ' + f().maxHours + 'h' : 'Any length' }}</span></span>
+              <span class="hint" data-max-hint>{{ f().maxHours ? 'Up to ' + f().maxHours + 'h, door to door for one-stops' : 'Any length' }}</span></span>
             <input id="fs-max" type="checkbox" role="switch" class="switch" data-max-switch
                    [checked]="!!f().maxHours" (change)="setMax(checked($event) ? maxDefault() : null)">
           </label>

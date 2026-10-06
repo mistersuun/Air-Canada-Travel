@@ -43,7 +43,7 @@ export function base64Encode(bytes: Uint8Array): string {
 /** Bytes of a base64 string; null when it isn't valid base64. */
 export function base64Decode(s: string): Uint8Array | null {
   const clean = s.replace(/\s+/g, '');
-  if (clean.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(clean) || /=[^=]/.test(clean)) return null;
+  if (clean.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(clean)) return null;
   const pad = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
   const out = new Uint8Array((clean.length / 4) * 3 - pad);
   let o = 0;

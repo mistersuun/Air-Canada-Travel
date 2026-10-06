@@ -59,11 +59,13 @@ describe('DestTripActionsComponent', () => {
 
   it('sends the user to the day picker when nothing flies on the selected day', async () => {
     configure(false);
+    TestBed.inject(AppStateService).setShowConnections(false);
     const f = await render('LIS', '2026-10-10');
     (f.nativeElement.querySelector('button') as HTMLButtonElement).click();
     await f.whenStable();
     expect(TestBed.inject(TripsService).trips()[0].legs).toEqual([]);
     expect(TestBed.inject(Router).url.split('?')[0]).toBe('/calendar/LIS');
+    expect(TestBed.inject(Router).url).toContain('dep=2026-10-10');
   });
 
   it('offers "Add to Seville trip" when the active trip covers the selected day', async () => {

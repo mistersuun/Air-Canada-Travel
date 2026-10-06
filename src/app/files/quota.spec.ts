@@ -55,6 +55,9 @@ describe('backup helpers', () => {
     }
     expect(base64Decode('abc')).toBeNull();
     expect(base64Decode('ab$=')).toBeNull();
+    expect(base64Decode('A===')).toBeNull();
+    expect(base64Decode('====')).toBeNull();
+    expect(base64Decode('AA=A')).toBeNull();
   });
 
   it('streams a blob as base64 chunks that concatenate', async () => {

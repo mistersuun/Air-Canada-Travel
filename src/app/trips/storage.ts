@@ -14,7 +14,7 @@
  *   save can overwrite it.
  */
 import { InjectionToken } from '@angular/core';
-import { isDateKey } from '../utils/time';
+import { isDateKey, isValidTimeZone } from '../utils/time';
 import {
   Alternate, FLIGHTLOG_CORRUPT_KEY, FLIGHTLOG_KEY, FlightLeg, FlightLog, FlightRef, GROUND_MODES, GroundLeg,
   GroundMode, GroundTimes, LEG_STATUSES, LegEnd, LegStatus, LoadNote, OUTCOME_KINDS, Outcome, OutcomeKind,
@@ -49,6 +49,11 @@ function str(v: unknown, fallback = '', max = MAX_TEXT): string {
 }
 function nonEmpty(v: unknown, max = 200): string | null {
   return typeof v === 'string' && v.trim() ? v.slice(0, max) : null;
+}
+/** A non-empty, loadable IANA zone (max 64 chars), else null: bad zones would throw later in toUtcMs. */
+function validTz(v: unknown): string | null {
+  const tz = nonEmpty(v, 64);
+  return tz && isValidTimeZone(tz) ? tz : null;
 }
 function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -92,7 +97,7 @@ export function sanitizePlace(raw: unknown): Place | null {
     country: str(r['country'], '', 120),
     iso2: typeof r['iso2'] === 'string' && /^[A-Z]{2}$/.test(r['iso2']) ? r['iso2'] : '',
     lat, lng,
-    tz: nonEmpty(r['tz'], 64),
+    tz: validTz(r['tz']),
   };
   const admin1 = nonEmpty(r['admin1'], 120);
   if (admin1) p.admin1 = admin1;
@@ -135,7 +140,7 @@ function sanitizeEnd(raw: unknown): LegEnd | null {
   const e: LegEnd = { name, lat, lng };
   const c = code(r['code']);
   if (c) e.code = c;
-  if (r['tz'] === null || typeof r['tz'] === 'string') e.tz = nonEmpty(r['tz'], 64);
+  if (r['tz'] === null || typeof r['tz'] === 'string') e.tz = validTz(r['tz']);
   return e;
 }
 

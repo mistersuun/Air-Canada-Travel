@@ -8,7 +8,9 @@ import { weekRangeLabel } from '../../ui/format';
 import { calendarPath, destPath, flightPath } from '../../ui/links';
 import { PhotoCardComponent } from '../../ui/photo-card.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
+import { airportTz } from '../../utils/airports';
 import { directItinerary } from '../../utils/connections';
+import { todayKey } from '../../utils/time';
 import {
   cardMeta, directDots, footerDays, heroMeta, rowMeta, starredDots, upcoming, watchingMeta, type UpcomingItem,
 } from './saved-model';
@@ -163,9 +165,12 @@ export class SavedPage {
   readonly view = computed<SavedTab>(() => (this.tab() === 'watching' ? 'watching' : 'upcoming'));
   readonly count = computed(() => this.state.starredThisWeek().length);
 
+  /** Today at the hub: flight dates are hub-local, so the device's date can be a day off. */
+  private readonly hubToday = computed(() => todayKey(airportTz(this.state.hub()), this.state.nowMs()));
+
   readonly up = computed(() =>
     upcoming(
-      this.state.hub(), this.state.favourites(), this.state.todayKey(), this.state.nowMs(),
+      this.state.hub(), this.state.favourites(), this.hubToday(), this.state.nowMs(),
       this.state.coverage(), this.state.timeFormat(), this.state.connect(),
     ),
   );
@@ -175,7 +180,7 @@ export class SavedPage {
 
   /** The other departures as rows. */
   readonly rows = computed(() => {
-    const today = this.state.todayKey();
+    const today = this.hubToday();
     const fmt = this.state.timeFormat();
     const byCode = this.state.routeByCode();
     const week = this.state.weekStartKey();

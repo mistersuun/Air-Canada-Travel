@@ -213,6 +213,15 @@ def build_file(codes: dict[str, dict], total: int, now: datetime | None = None) 
     }
 
 
+def load_existing_codes(path: pathlib.Path) -> dict[str, dict]:
+    """The codes of the file already on disk ({} when missing or unreadable)."""
+    try:
+        codes = json.loads(path.read_text(encoding="utf-8")).get("codes")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return codes if isinstance(codes, dict) else {}
+
+
 def write_file(path: pathlib.Path, data: dict) -> int:
     text = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -265,12 +274,18 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     dests = order_first(parse_destinations(DESTINATIONS_TS.read_text(encoding="utf-8")), args.first)
+    all_codes = {d["code"] for d in dests}
+    total = len(dests)
     if args.limit:
         dests = dests[: args.limit]
     get = offline_get if args.offline else http_get
     codes, stopped = run(dests, args.cache, get=get, pause=lambda: None if args.offline else time.sleep(args.sleep))
-    size = write_file(args.out, build_file(codes, len(dests)))
-    print(f"wrote {args.out} ({size} bytes): {len(codes)}/{len(dests)} locations"
+    if stopped or args.limit or args.offline:
+        # A partial run never reduces coverage (codes no longer in the destination list are dropped).
+        old = {c: v for c, v in load_existing_codes(args.out).items() if c in all_codes}
+        codes = {**old, **codes}
+    size = write_file(args.out, build_file(codes, total))
+    print(f"wrote {args.out} ({size} bytes): {len(codes)}/{total} locations"
           + (" (partial: API limit reached)" if stopped else ""))
     return 0
 

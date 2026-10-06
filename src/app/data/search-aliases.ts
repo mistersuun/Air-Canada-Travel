@@ -29,7 +29,7 @@ const A: Record<string, readonly string[]> = {
   IAD: ['Virginia', 'VA', 'Dulles', 'DC'], DCA: ['Virginia', 'VA', 'Reagan', 'DC'], ORD: ['Illinois', 'IL', "O'Hare"],
   ATL: ['Georgia', 'GA', 'Hartsfield-Jackson'], DEN: ['Colorado', 'CO', 'Rockies'], IAH: ['Texas', 'TX', 'Bush'],
   AUS: ['Texas', 'TX'], DFW: ['Texas', 'TX', 'Dallas', 'Fort Worth'], SAT: ['Texas', 'TX'], PHX: ['Arizona', 'AZ'],
-  SEA: ['Washington State', 'WA', 'Sea-Tac', 'Tacoma'], MSY: ['Louisiana', 'LA', 'Nola'], PDX: ['Oregon', 'OR'],
+  SEA: ['WA', 'Sea-Tac', 'Tacoma'], MSY: ['Louisiana', 'Nola'], PDX: ['Oregon', 'OR'],
   RDU: ['North Carolina', 'NC', 'Raleigh', 'Durham'], CLT: ['North Carolina', 'NC'], CHS: ['South Carolina', 'SC'],
   ANC: ['Alaska', 'AK', 'Ted Stevens'], MSP: ['Minnesota', 'MN', 'Twin Cities', 'Minneapolis-Saint Paul'],
   DTW: ['Michigan', 'MI', 'Detroit Metro'], CLE: ['Ohio', 'OH'], CMH: ['Ohio', 'OH'], CVG: ['Kentucky', 'KY', 'Ohio', 'Cincinnati'],
@@ -45,7 +45,7 @@ const A: Record<string, readonly string[]> = {
   BER: ['Brandenburg'], BSL: ['EuroAirport', 'Mulhouse'], GVA: ['Cointrin'], ZRH: ['Kloten'], ARN: ['Arlanda'], CPH: ['Kastrup'],
   KEF: ['Keflavik'], BUD: ['Ferenc Liszt'], DBV: ['Dalmatia', 'Cilipi'], ATH: ['Eleftherios Venizelos', 'Attica'],
   HND: ['Haneda', 'Honshu'], NRT: ['Narita', 'Honshu'], KIX: ['Kansai', 'Honshu', 'Kyoto'], CTS: ['Hokkaido', 'New Chitose'],
-  ICN: ['Incheon', 'Korea'], PEK: ['Capital', 'Peking'], PVG: ['Pudong'], CAN: ['Baiyun', 'Guangdong', 'Canton'], HKG: ['Chek Lap Kok'],
+  ICN: ['Incheon', 'Korea'], PEK: ['Peking'], PVG: ['Pudong'], CAN: ['Baiyun', 'Guangdong', 'Canton'], HKG: ['Chek Lap Kok'],
   SIN: ['Changi'], BKK: ['Suvarnabhumi'], DEL: ['Indira Gandhi', 'New Delhi'], MNL: ['Ninoy Aquino', 'Luzon'],
   SYD: ['Kingsford Smith', 'New South Wales', 'NSW'], BNE: ['Queensland', 'QLD'], AKL: ['North Island'],
   BOG: ['El Dorado'], CTG: ['Bolivar', 'Rafael Nunez'], GRU: ['Guarulhos', 'Sao Paulo'], GIG: ['Galeao'], LIM: ['Jorge Chavez'],
@@ -75,15 +75,29 @@ const ACTIVITY: Readonly<Record<string, readonly string[]>> = {
 
 const norm = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
-/** Normalised alias words (state, island, airport, country synonyms) for a destination. */
+/** Hyphens, apostrophes and dots read as spaces, in aliases and in the query alike ("O'Hare", "Sea-Tac"). */
+export const splitWords = (s: string): string[] => norm(s).replace(/[-'’.]/g, ' ').split(/\s+/).filter(Boolean);
+
+const WORDS = new Map<string, string[]>();
+
+/** Normalised alias words (state, island, airport, country synonyms) for a destination; computed once per code. */
 export function aliasWords(d: Pick<Destination, 'code' | 'iso2'>): string[] {
-  const phrases = [...(A[d.code] ?? []), ...(COUNTRY[d.iso2] ?? [])];
-  return phrases.flatMap(p => norm(p.replace(/[-']/g, ' ')).split(/\s+/)).filter(Boolean);
+  const key = `${d.code}|${d.iso2}`;
+  let w = WORDS.get(key);
+  if (!w) {
+    w = [...(A[d.code] ?? []), ...(COUNTRY[d.iso2] ?? [])].flatMap(splitWords);
+    WORDS.set(key, w);
+  }
+  return w;
 }
 
-/** True when `token` (already normalised) starts an alias word, or names the type or activity of `d`. */
+/**
+ * True when `token` (already normalised) starts an alias word, or names the
+ * type or activity of `d`. Words of up to two letters ('HI', 'FL', 'UK')
+ * match whole, so 'h' or 'f' do not light up every state.
+ */
 export function matchesAlias(d: Pick<Destination, 'code' | 'iso2' | 'type'>, token: string): boolean {
   if (TYPE_WORDS[token] === d.type) return true;
   if (ACTIVITY[token]?.includes(d.code)) return true;
-  return aliasWords(d).some(w => w.startsWith(token));
+  return aliasWords(d).some(w => (w.length <= 2 ? w === token : w.startsWith(token)));
 }

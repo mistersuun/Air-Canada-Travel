@@ -131,8 +131,17 @@ describe('computeRoutes: filters, search and sort', () => {
     // Every word must match, mixing city and alias words.
     expect(matchesQuery(d('MIA'), 'miami florida')).toBe(true);
     expect(matchesQuery(d('MIA'), 'orlando florida')).toBe(false);
-    // Two-letter state codes match whole alias words, not stray substrings of other fields.
-    expect(matchesQuery(d('CUN'), 'fl')).toBe(false);
+    // Alias words of up to two letters match whole: 'fl' is Florida, but 'w' is not Washington's 'wa'.
+    expect(matchesQuery(d('MCO'), 'fl')).toBe(true);
+    expect(matchesQuery(d('SEA'), 'wa')).toBe(true);
+    expect(matchesQuery(d('SEA'), 'w')).toBe(false);
+    // Punctuation reads as a space, in the query and the aliases.
+    expect(matchesQuery(d('ORD'), "O'Hare")).toBe(true);
+    expect(matchesQuery(d('SEA'), 'Sea-Tac')).toBe(true);
+    expect(matchesQuery(d('SEA'), 'sea tac')).toBe(true);
+    // Dropped as too generic.
+    expect(matchesQuery(d('PEK'), 'capital')).toBe(false);
+    expect(matchesQuery(d('MSY'), 'la')).toBe(false);
   });
 
   it('filters by departure window', () => {

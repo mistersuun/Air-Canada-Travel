@@ -15,6 +15,8 @@ import { endTz, refArrUtc, refDepUtc } from './legs';
 const CRLF = '\r\n';
 const PRODID = '-//Routes//Trip export//EN';
 const UID_DOMAIN = 'routes-trips';
+/** SEQUENCE is seconds since this epoch: monotonic per export, and inside a 32-bit int. */
+const SEQUENCE_EPOCH_S = 1_700_000_000;
 /** Replaced legs are history, not plans. */
 const SKIP: readonly TripLeg['status'][] = ['notBoarded', 'abandoned', 'didntTry'];
 
@@ -22,7 +24,7 @@ const MODE_LABEL: Record<GroundLeg['mode'], string> = {
   train: 'train', bus: 'bus', car: 'drive', ferry: 'ferry', flight: 'flight', other: 'trip',
 };
 
-function flightEvent(trip: Trip, ref: FlightRef, stamp: string): string[] {
+function flightEvent(trip: Trip, ref: FlightRef, stamp: string, seq: number): string[] {
   const label = `${ref.flightNumber} ${ref.origin}→${ref.dest}`;
   const plane = ref.aircraft ? ` · ${aircraftName(ref.aircraft)}` : '';
   const desc = [
@@ -34,6 +36,8 @@ function flightEvent(trip: Trip, ref: FlightRef, stamp: string): string[] {
     'BEGIN:VEVENT',
     `UID:${trip.id}-${ref.flightNumber}-${ref.origin}${ref.dest}-${ref.dateKey}@${UID_DOMAIN}`,
     `DTSTAMP:${stamp}`,
+    `LAST-MODIFIED:${stamp}`,
+    `SEQUENCE:${seq}`,
     `DTSTART:${icsUtc(refDepUtc(ref))}`,
     `DTEND:${icsUtc(refArrUtc(ref))}`,
     'STATUS:TENTATIVE',
@@ -50,10 +54,10 @@ function flightEvent(trip: Trip, ref: FlightRef, stamp: string): string[] {
   ];
 }
 
-function groundEvent(trip: Trip, leg: GroundLeg, stamp: string): string[] {
+function groundEvent(trip: Trip, leg: GroundLeg, stamp: string, seq: number): string[] {
   const route = `${leg.from.name} → ${leg.to.name}`;
   const mode = MODE_LABEL[leg.mode];
-  const out = ['BEGIN:VEVENT', `UID:${trip.id}-${leg.id}@${UID_DOMAIN}`, `DTSTAMP:${stamp}`];
+  const out = ['BEGIN:VEVENT', `UID:${trip.id}-${leg.id}@${UID_DOMAIN}`, `DTSTAMP:${stamp}`, `LAST-MODIFIED:${stamp}`, `SEQUENCE:${seq}`];
   const fromTz = endTz(leg.from) ?? trip.goal.tz ?? 'UTC';
   const toTz = endTz(leg.to) ?? fromTz;
   if (leg.provenance === 'saved' && leg.userTimes) {
@@ -82,6 +86,7 @@ function groundEvent(trip: Trip, leg: GroundLeg, stamp: string): string[] {
 
 export function buildTripIcs(trip: Trip, now: number): string {
   const stamp = icsUtc(now);
+  const seq = Math.max(0, Math.floor(now / 1000) - SEQUENCE_EPOCH_S);
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -92,8 +97,8 @@ export function buildTripIcs(trip: Trip, now: number): string {
   ];
   for (const leg of trip.legs) {
     if (SKIP.includes(leg.status)) continue;
-    if (leg.kind === 'flight') for (const ref of leg.refs) lines.push(...flightEvent(trip, ref, stamp));
-    else lines.push(...groundEvent(trip, leg, stamp));
+    if (leg.kind === 'flight') for (const ref of leg.refs) lines.push(...flightEvent(trip, ref, stamp, seq));
+    else lines.push(...groundEvent(trip, leg, stamp, seq));
   }
   lines.push('END:VCALENDAR');
   return lines.map(foldIcsLine).join(CRLF) + CRLF;

@@ -85,7 +85,7 @@ describe('HomePage', () => {
     // Today (Wed, index 2) is ringed.
     expect(nonstop.querySelectorAll('app-dot-row')[0].querySelectorAll('i')[2].classList).toContain('sel');
     expect(el.querySelector('app-results-list')).toBeNull();
-  }, 20000);
+  });
 
   it('Seasonal & ending soon lists Athens ending Oct 30', async () => {
     configure();

@@ -178,3 +178,19 @@ def test_order_first_and_offline(tmp_path):
     other = {"code": "OPO", "lat": 41.24, "lng": -8.68, "type": "City"}
     codes, stopped = bc.run([DEST, other], tmp_path, get=bc.offline_get, log=lambda *_: None)
     assert not stopped and list(codes) == ["LIS"]
+
+
+def test_partial_run_merges_into_the_existing_file(tmp_path, monkeypatch):
+    out = tmp_path / "climate.json"
+    old = {"OLD": {"m": 1}, "LIS": {"m": "stale"}}
+    bc.write_file(out, bc.build_file(old, 5))
+    monkeypatch.setattr(bc, "parse_destinations", lambda text: [DEST, {**DEST, "code": "OLD"}])
+    monkeypatch.setattr(bc, "run", lambda *a, **k: ({"LIS": {"m": "new"}}, True))
+    assert bc.main(["--out", str(out), "--cache", str(tmp_path / "c")]) == 0
+    codes = json.loads(out.read_text(encoding="utf-8"))["codes"]
+    assert codes == {"OLD": {"m": 1}, "LIS": {"m": "new"}}
+    # A code that left the destination list is not resurrected; total is the full list.
+    monkeypatch.setattr(bc, "parse_destinations", lambda text: [DEST])
+    assert bc.main(["--out", str(out), "--cache", str(tmp_path / "c")]) == 0
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert list(data["codes"]) == ["LIS"] and data["total"] == 1

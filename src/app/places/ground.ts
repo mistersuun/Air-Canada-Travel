@@ -66,6 +66,8 @@ export const CORRIDOR_MATCH_KM = 25;
 export const LATE_ARRIVAL = '23:30';
 /** Before this hour, local times count as "late last night", not early today. */
 const NIGHT_END_MIN = 5 * 60;
+/** From here a traveller is ready "this evening": a small-hours departure that night is still tonight's. */
+const EVENING_START_MIN = 18 * 60;
 /** Next-morning departure assumed when the last train is missed (no timetable). */
 const NEXT_MORNING = '08:00';
 /** A day's rides further apart than this are shown as a range. */
@@ -335,7 +337,10 @@ function byTimetable(readyUtc: number, dir: TimetableDir, gatewayTz: string): Go
   }
   const leaveUtc = toUtcMs(next.dateKey, next.hhmm, dir.tz);
   const utc = leaveUtc + next.dep.rideMin * MINUTE_MS;
-  const caughtTonight = next.sameDay && (!smallHours || next.dep.depMin < NIGHT_END_MIN);
+  // Ready in the evening, a small-hours departure just after midnight is still tonight's, as when ready after midnight.
+  const pastMidnight = readyMin >= EVENING_START_MIN && next.dateKey === addDays(ready.dateKey, 1) && next.dep.depMin < NIGHT_END_MIN
+    && 1440 + next.dep.depMin - readyMin <= 3 * 60;
+  const caughtTonight = (next.sameDay && (!smallHours || next.dep.depMin < NIGHT_END_MIN)) || pastMidnight;
   const lastDepMissed = !caughtTonight && evening.length > 0;
   const waitsOutTheNight = smallHours && next.dep.depMin >= NIGHT_END_MIN;
   const leave = utcToLocal(leaveUtc, gatewayTz);
@@ -343,7 +348,7 @@ function byTimetable(readyUtc: number, dir: TimetableDir, gatewayTz: string): Go
   const endsLate = end.dateKey !== leave.dateKey || nightMin(end.hhmm) > nightMin(LATE_ARRIVAL);
   return {
     utc,
-    overnightLikely: !next.sameDay || waitsOutTheNight || endsLate,
+    overnightLikely: !(next.sameDay || pastMidnight) || waitsOutTheNight || endsLate,
     lastDepMissed,
     departure: { dateKey: next.dateKey, hhmm: next.hhmm, rideMin: next.dep.rideMin, sameDay: next.sameDay },
   };

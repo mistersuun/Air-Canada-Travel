@@ -8,7 +8,7 @@ import { TripsService } from '../../trips/trips.service';
 import { prettyFlight } from '../../ui/format';
 import { calendarPath, flightPath, tripUrl } from '../../ui/links';
 import { airportTz } from '../../utils/airports';
-import { Itinerary, directItineraries } from '../../utils/connections';
+import { Itinerary, allItineraries, directItineraries } from '../../utils/connections';
 import { addDays, todayKey } from '../../utils/time';
 import { DEFAULT_HOME_HHMM, DEFAULT_LEAD_DAYS, DEFAULT_STAY_DAYS } from '../reach/reach-model';
 
@@ -101,9 +101,12 @@ export class DestTripActionsComponent {
       homeBy: { dateKey: addDays(dep, DEFAULT_STAY_DAYS), hhmm: DEFAULT_HOME_HHMM },
     });
     // Never pick a flight for the user: send them to choose one (the day's flights, else the day picker).
-    const flies = directItineraries(hub, code, dep).length > 0;
+    // Same source as the flight page: nonstops, plus connections when they are shown.
+    const flies = (this.state.showConnections() ? allItineraries(hub, code, dep, this.state.connect()) : directItineraries(hub, code, dep)).length > 0;
     this.state.flash('Trip started. Pick your flight to add it.');
-    void this.router.navigate(flies ? flightPath(code, dep) : calendarPath(code), { queryParams: this.state.globalParams() });
+    void this.router.navigate(flies ? flightPath(code, dep) : calendarPath(code), {
+      queryParams: flies ? this.state.globalParams() : { ...this.state.globalParams(), dep },
+    });
   }
 
   add(a: TripAddition): void {

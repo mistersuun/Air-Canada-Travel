@@ -37,6 +37,7 @@ text fixtures; pdfplumber is only imported when a real PDF is opened.
 
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import os
@@ -595,7 +596,7 @@ def fetch_pdf(url: str, opener=urllib.request.urlopen, sleep=time.sleep) -> tupl
             if 400 <= e.code < 500 and e.code not in (408, 429):
                 raise RuntimeError(f"HTTP {e.code}: {e.reason}") from e
             last_err = e
-        except (urllib.error.URLError, OSError, TimeoutError) as e:
+        except (OSError, http.client.HTTPException) as e:  # URLError, resets, IncompleteRead
             last_err = e
     raise RuntimeError(f"download failed after {len(FETCH_BACKOFF_S) + 1} attempts: {last_err}")
 

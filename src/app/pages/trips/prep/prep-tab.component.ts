@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { EventsCardComponent } from '../../../events/events-card.component';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { buildPrepChecklist, tripEssentials } from '../../../places/prep';
 import { ReferenceService } from '../../../reference/reference.service';
@@ -22,7 +23,7 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
 @Component({
   selector: 'app-prep-tab',
   standalone: true,
-  imports: [IconComponent, TripChangesComponent],
+  imports: [IconComponent, TripChangesComponent, EventsCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pp">
@@ -65,6 +66,10 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
         </div>
         <p class="ui-visually-hidden" id="pp-leg-hint">Opens the leg so you can save the times you found.</p>
       </section>
+
+      @if (trip().goal.acCode; as ev) {
+        <app-events-card [code]="ev" [from]="trip().outboundDate" [to]="trip().homeBy.dateKey" />
+      }
 
       @if (ess(); as e) {
         <div class="ui-ess tn pp__ess" data-ess>

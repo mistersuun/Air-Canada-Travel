@@ -45,7 +45,6 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
             <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
-          @if (v.then) { <p class="td__sub tn">{{ v.then }}</p> }
           @if (v.note; as n) {
             <p class="td__note" data-note>Your note, {{ n.time }}: <b>{{ n.text }}</b></p>
           }
@@ -64,7 +63,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
         </section>
 
         <app-today-pass [tripId]="v.tripId" [legId]="v.legId" />
-        <app-today-timeline [tripId]="v.tripId" [legId]="v.legId" [left]="v.left" />
+        <app-today-timeline [tripId]="v.tripId" [legId]="v.legId" />
 
         @if (!v.final) {
           <div class="td__acts">

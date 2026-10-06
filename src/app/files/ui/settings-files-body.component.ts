@@ -190,6 +190,7 @@ export class SettingsFilesBodyComponent {
       a.click();
       a.remove();
       setTimeout(() => win?.URL.revokeObjectURL(url), 10_000);
+      this.trips.markBackedUp();
       this.result.set({ text: `Downloaded ${a.download} (${formatBytes(blob.size)})`, error: false });
     } catch {
       this.result.set({ text: 'Could not create the backup on this browser.', error: true });

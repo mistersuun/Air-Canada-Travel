@@ -347,7 +347,7 @@ export function migrateTrips(raw: unknown): { file: TripsFile; readOnly: boolean
   const schema = schemaOf(r);
   const readOnly = schema !== null && schema > TRIPS_SCHEMA;
   const trips = uniqueById(arr(r?.['trips']).map(sanitizeTrip).filter((t): t is Trip => !!t));
-  return { file: { schema: 1, trips }, readOnly };
+  return { file: { schema: TRIPS_SCHEMA, trips }, readOnly };
 }
 
 /** Parsed JSON → a valid FlightLog. Never throws. */
@@ -357,7 +357,7 @@ export function migrateFlightLog(raw: unknown): { file: FlightLog; readOnly: boo
   const readOnly = schema !== null && schema > TRIPS_SCHEMA;
   return {
     file: {
-      schema: 1,
+      schema: TRIPS_SCHEMA,
       notes: uniqueById(arr(r?.['notes']).map(sanitizeLoadNote).filter((n): n is LoadNote => !!n)),
       outcomes: uniqueById(arr(r?.['outcomes']).map(sanitizeOutcome).filter((o): o is Outcome => !!o)),
       dismissed: [...new Set(arr(r?.['dismissed']).filter((k): k is string => typeof k === 'string').map(k => k.slice(0, 80)))].slice(-500),
@@ -440,6 +440,29 @@ export function loadTrips(storage: Storage | null): { file: TripsFile; readOnly:
 /** Writes the trips file. False when storage is blocked or full (the app keeps it in memory). */
 export function saveTrips(storage: Storage | null, file: TripsFile): boolean {
   return save(storage, TRIPS_KEY, file);
+}
+
+/** The damaged copies load() kept (ac.trips.corrupt, ac.flightlog.corrupt); null when absent or storage is blocked. */
+export function loadCorrupt(storage: Storage | null): { trips: string | null; log: string | null } {
+  const read = (key: string): string | null => {
+    try {
+      return storage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  };
+  return { trips: read(TRIPS_CORRUPT_KEY), log: read(FLIGHTLOG_CORRUPT_KEY) };
+}
+
+/** Deletes both damaged copies. */
+export function clearCorrupt(storage: Storage | null): void {
+  for (const key of [TRIPS_CORRUPT_KEY, FLIGHTLOG_CORRUPT_KEY]) {
+    try {
+      storage?.removeItem(key);
+    } catch {
+      // Blocked: nothing to delete.
+    }
+  }
 }
 
 export function loadFlightLog(storage: Storage | null): { file: FlightLog; readOnly: boolean } {

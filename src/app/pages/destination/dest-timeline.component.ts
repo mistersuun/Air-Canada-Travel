@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, booleanAttribute, inject, input, ou
 import { RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { flightPath } from '../../ui/links';
-import { itinKey } from '../../ui/format';
+import { itinKey, prettyFlight } from '../../ui/format';
 import type { TimelineItem } from './dest-model';
 
 /**
@@ -25,13 +25,13 @@ import type { TimelineItem } from './dest-model';
                  [routerLink]="path(t)" [queryParams]="state.globalParams()">
                 <div class="d">{{ t.dateLabel }}</div>
                 <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}</div>
+                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you>{{ r }}</span> }</div>
               </a>
             } @else {
               <div class="ui-tl__it" [class.ui-tl__it--now]="first">
                 <div class="d">{{ t.dateLabel }}</div>
                 <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}</div>
+                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you>{{ r }}</span> }</div>
               </div>
             }
           </li>
@@ -47,6 +47,7 @@ import type { TimelineItem } from './dest-model';
   styles: [`
     :host { display: block; }
     li { list-style: none; }
+    .you { margin-left: 8px; }
     .more { display: inline-block; margin: 6px 0 0 26px; font-size: 13.5px; padding: 4px 0; }
   `],
 })
@@ -58,11 +59,18 @@ export class DestTimelineComponent {
   readonly linked = input(false, { transform: booleanAttribute });
   readonly more = input(false, { transform: booleanAttribute });
   readonly label = input<string>('');
+  /** 'you: 3/4' per flight number (your own saved outcomes), shown beside the row. */
+  readonly records = input<Readonly<Record<string, string>>>({});
 
   readonly showMore = output<void>();
 
   protected key(t: TimelineItem): string {
     return itinKey(t.it);
+  }
+
+  protected tags(t: TimelineItem): string[] {
+    const r = this.records();
+    return t.it.legs.map(l => r[prettyFlight(l.flightNumber)]).filter((x): x is string => !!x);
   }
 
   protected path(t: TimelineItem): string[] {

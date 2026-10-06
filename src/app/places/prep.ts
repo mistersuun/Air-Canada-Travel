@@ -4,6 +4,8 @@
  * listing reminders per flight leg, and "find the real train/bus" for each
  * ground leg. Pure.
  */
+import { monthsBetween, typicalForMonths } from '../recs/climate';
+import type { ClimateIndex } from '../recs/model';
 import { currencyName } from '../pages/destination/currency';
 import type { FlightLeg, FlightRef, GroundLeg, LegEnd, LegStatus, Trip } from '../trips/model';
 import { calendarKey, isFinalStatus } from '../trips/model';
@@ -201,13 +203,29 @@ function groundItem(leg: GroundLeg): PrepItem {
   };
 }
 
+/** 'Typical 8° / 2°, 14 wet days — pack a rain layer' for the trip's months; nothing without normals. Not critical. */
+export function weatherItems(trip: Trip, climate: ClimateIndex | null | undefined): PrepItem[] {
+  const t = typicalForMonths(climate, trip.goal.acCode, monthsBetween(trip.outboundDate, trip.homeBy.dateKey));
+  if (!t) return [];
+  const id = 'weather:typical';
+  return [{
+    id,
+    title: t.advice.length ? `${t.text} — pack ${t.advice.join(' and ')}` : t.text,
+    detail: 'Typical for these months, not a forecast',
+    link: null,
+    critical: false,
+    source: 'manual',
+    done: !!trip.prep[id]?.done,
+  }];
+}
+
 /**
  * The checklist: entry items, then listing items (leg order), then ground
  * items (leg order), then the user's own items. Final legs (boarded, not
  * boarded, didn't try, dropped) add nothing. Check-in items are not part of
  * it (see legPrepItems).
  */
-export function buildPrepChecklist(trip: Trip): PrepItem[] {
+export function buildPrepChecklist(trip: Trip, climate?: ClimateIndex | null): PrepItem[] {
   const listing: PrepItem[] = [];
   const ground: PrepItem[] = [];
   for (const leg of trip.legs) {
@@ -219,7 +237,7 @@ export function buildPrepChecklist(trip: Trip): PrepItem[] {
     id: `custom:${c.id}`, title: c.text, detail: null, link: null, critical: false, source: 'manual',
     done: !!trip.prep[`custom:${c.id}`]?.done,
   }));
-  return [...entryItems(trip), ...listing, ...ground, ...custom];
+  return [...entryItems(trip), ...listing, ...ground, ...weatherItems(trip, climate), ...custom];
 }
 
 /** One leg's own to-dos (Today's "Left to do"): listing and check-in for a flight, finding the ride for a ground leg. */

@@ -32,6 +32,12 @@ import { factsView } from './flight-model';
       } @else {
         <p class="fc__unk" data-unknown>Unknown · not published yet</p>
       }
+      @if (record(); as r) {
+        <p class="fc__rec" data-record>
+          <span><b>Your record</b> · {{ r }}</span>
+          <app-provenance-tag value="saved" />
+        </p>
+      }
       @if (view().holiday; as h) {
         <p class="fc__note" data-holiday><app-icon name="calendar" [size]="16" /><span>{{ h }}</span></p>
       }
@@ -46,6 +52,8 @@ import { factsView } from './flight-model';
     .fc__ess dt { font-size: 11.5px; color: var(--ink-2); }
     .fc__ess dd { margin: 1px 0 0; font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
     .fc__unk { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+    .fc__rec { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; font-size: 13px; line-height: 1.4; color: var(--ink-2); }
+    .fc__rec b { color: var(--ink); font-weight: 650; }
     .fc__note {
       display: flex; gap: 10px; align-items: flex-start; margin: 0; padding: 11px 12px; border-radius: 14px;
       font-size: 13px; line-height: 1.4;
@@ -60,6 +68,8 @@ export class FactsCardComponent {
   readonly dest = input.required<string>();
   readonly dateKey = input.required<string>();
   readonly timeFormat = input<TimeFormat>('24h');
+  /** Your own track record line for the shown flight (counts only), or null. */
+  readonly record = input<string | null>(null);
 
   protected readonly view = computed(() =>
     factsView(scheduleFacts(this.origin(), this.dest(), this.dateKey()), holidayNote(this.dateKey()), this.timeFormat()));

@@ -54,3 +54,39 @@ export const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Au
 export function typicalText(c: ClimateMonth): string {
   return formatTypical(c, MONTH_SHORT[c.month - 1]);
 }
+
+export const COLD_BELOW_C = 5;
+export const WET_DAYS_RAIN = 10;
+export const HOT_FROM_C = 30;
+
+/** Month numbers (1..12) from `fromKey` to `toKey` (date keys), at most 12, in order, without repeats. */
+export function monthsBetween(fromKey: string, toKey: string): number[] {
+  const m = (k: string) => Number(k.slice(5, 7));
+  const out: number[] = [];
+  const a = m(fromKey);
+  const span = Math.min(11, Math.max(0, (Number(toKey.slice(0, 4)) - Number(fromKey.slice(0, 4))) * 12 + m(toKey) - a));
+  for (let i = 0; i <= span; i++) out.push(((a - 1 + i) % 12) + 1);
+  return out;
+}
+
+/**
+ * One line of typical weather for the months of a trip, with a packing nudge
+ * from simple thresholds (cold under 5°, 10+ wet days, hot from 30°), or null
+ * when the code has no normals. Averages over the months, so it stays a
+ * typical, never a forecast.
+ */
+export function typicalForMonths(
+  index: ClimateIndex | null | undefined,
+  code: string | null | undefined,
+  months: readonly number[],
+): { text: string; hi: number; lo: number; wet: number; advice: string[] } | null {
+  const rows = months.map(m => climateFor(index, code, m)).filter((c): c is ClimateMonth => !!c);
+  if (!rows.length) return null;
+  const avg = (f: (c: ClimateMonth) => number) => Math.round(rows.reduce((s, c) => s + f(c), 0) / rows.length);
+  const hi = avg(c => c.tmaxC), lo = avg(c => c.tminC), wet = avg(c => c.wetDays);
+  const advice: string[] = [];
+  if (wet >= WET_DAYS_RAIN) advice.push('a rain layer');
+  if (lo < COLD_BELOW_C) advice.push('warm layers');
+  if (hi >= HOT_FROM_C) advice.push('for the heat');
+  return { text: `Typical ${hi}° / ${lo}°, ${wet} wet days`, hi, lo, wet, advice };
+}

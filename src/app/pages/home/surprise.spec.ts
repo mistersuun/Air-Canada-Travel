@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { RouteEntry } from '../../utils/routes';
 import { flickSequence, surprisePick, surpriseCandidates } from './surprise';
 
-function entry(code: string, n: number, type = 'City'): RouteEntry {
+function entry(code: string, n: number, type = 'City', dep = 1000): RouteEntry {
   return {
     destination: { code, city: code, type } as RouteEntry['destination'],
     isDirect: n > 0, weekDays: [], daysFlying: n, isFavourite: false,
-    flights: Array.from({ length: n }, () => ({}) as RouteEntry['flights'][number]),
+    flights: Array.from({ length: n }, () => ({ depUtc: dep }) as RouteEntry['flights'][number]),
   };
 }
 
@@ -47,6 +47,25 @@ describe('surprisePick', () => {
 
   it('falls back to everything when all are recent', () => {
     expect(surprisePick([entry('LIS', 2)], none, ['LIS'], () => 0.5)?.destination.code).toBe('LIS');
+  });
+
+  it('with several candidates all recent, still avoids the last pick', () => {
+    const two = [entry('LIS', 2), entry('AMS', 2)];
+    const rng = seeded(9);
+    for (let i = 0; i < 100; i++) expect(surprisePick(two, none, ['LIS', 'AMS'], rng)?.destination.code).toBe('LIS');
+  });
+
+  it('skips entries whose flights have all departed, and weights by upcoming ones', () => {
+    const gone = entry('OLD', 5, 'City', 500);
+    const now = entry('NEW', 1, 'City', 2000);
+    const rng = seeded(4);
+    for (let i = 0; i < 100; i++) expect(surprisePick([gone, now], none, [], rng, 1000)?.destination.code).toBe('NEW');
+    const mixed = { ...now, flights: [...gone.flights, ...now.flights] };
+    expect(surprisePick([mixed], none, [], rng, 1000)?.destination.code).toBe('NEW');
+  });
+
+  it('falls back to all flights when everything has departed', () => {
+    expect(surprisePick([entry('OLD', 2, 'City', 500)], none, [], () => 0.1, 1000)?.destination.code).toBe('OLD');
   });
 
   it('is deterministic with a seeded rng', () => {

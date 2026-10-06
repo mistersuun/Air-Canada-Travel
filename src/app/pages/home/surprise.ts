@@ -26,9 +26,13 @@ export function surpriseCandidates(entries: readonly RouteEntry[]): RouteEntry[]
   return entries.filter(e => e.flights.length > 0);
 }
 
-function weight(e: RouteEntry, profile: Pick<TravelProfile, 'styles'> | null): number {
+function upcoming(e: RouteEntry, nowMs: number): number {
+  return e.flights.filter(f => f.depUtc >= nowMs).length;
+}
+
+function weight(e: RouteEntry, profile: Pick<TravelProfile, 'styles'> | null, nowMs: number, live: boolean): number {
   const liked = !!profile?.styles.includes(e.destination.type as TripStyle);
-  return e.flights.length * (liked ? STYLE_NUDGE : 1);
+  return (live ? upcoming(e, nowMs) : e.flights.length) * (liked ? STYLE_NUDGE : 1);
 }
 
 /**
@@ -42,16 +46,27 @@ export function surprisePick(
   profile: Pick<TravelProfile, 'styles'> | null,
   recent: readonly string[],
   rng: () => number,
+  nowMs = -Infinity,
 ): RouteEntry | null {
   const all = surpriseCandidates(entries);
   if (!all.length) return null;
+  // Only flights still to depart count; when none are left, fall back to the whole scope.
+  const notDeparted = all.filter(e => upcoming(e, nowMs) > 0);
+  const live = notDeparted.length > 0;
+  const base = live ? notDeparted : all;
   const skip = new Set(recent);
-  const fresh = all.filter(e => !skip.has(code(e)));
-  const pool = fresh.length ? fresh : all;
-  const total = pool.reduce((s, e) => s + weight(e, profile), 0);
+  const fresh = base.filter(e => !skip.has(code(e)));
+  let pool = fresh;
+  if (!pool.length) {
+    // Everything is recent: still avoid repeating the very last pick when there is a choice.
+    const last = recent[recent.length - 1];
+    const others = base.filter(e => code(e) !== last);
+    pool = others.length ? others : base;
+  }
+  const total = pool.reduce((s, e) => s + weight(e, profile, nowMs, live), 0);
   let r = Math.min(Math.max(rng(), 0), 0.999999999) * total;
   for (const e of pool) {
-    r -= weight(e, profile);
+    r -= weight(e, profile, nowMs, live);
     if (r < 0) return e;
   }
   return pool[pool.length - 1];
@@ -74,12 +89,16 @@ export function nextDeparture(e: RouteEntry, nowMs: number): FlightInstance | nu
   return e.flights.find(f => f.depUtc >= nowMs) ?? e.flights[0] ?? null;
 }
 
+/** 'nonstop Thu 21:40' (empty when there is no flight). */
+export function surpriseMeta(e: RouteEntry, nowMs: number, fmt: TimeFormat = '24h'): string {
+  const f = nextDeparture(e, nowMs);
+  return f ? `nonstop ${WEEKDAY_SHORT[weekdayIndex(f.dateKey)]} ${formatClock(f.depLocal, fmt)}` : '';
+}
+
 /** 'Porto · nonstop Thu 21:40'. */
 export function surpriseLine(e: RouteEntry, nowMs: number, fmt: TimeFormat = '24h'): string {
-  const f = nextDeparture(e, nowMs);
-  const city = e.destination.city;
-  if (!f) return city;
-  return `${city} · nonstop ${WEEKDAY_SHORT[weekdayIndex(f.dateKey)]} ${formatClock(f.depLocal, fmt)}`;
+  const m = surpriseMeta(e, nowMs, fmt);
+  return m ? `${e.destination.city} · ${m}` : e.destination.city;
 }
 
 // ── Recent picks (sessionStorage; every access guarded) ──────────────────────

@@ -36,6 +36,14 @@ export const STARRED_PREVIEW = 3;
           <span>These trips were saved by a newer version of the app. They show here, but changes won't be kept.</span></p>
       }
 
+      @if (trips.unsaved()) {
+        <p class="note note--amber" data-unsaved role="status"><app-icon name="warning" [size]="16" />
+          <span>Couldn't save on this phone. Export a backup now. <button type="button" class="lnk" (click)="exportNow()">Export</button></span></p>
+      } @else if (trips.backupReminder(); as n) {
+        <p class="note note--blue" data-backup-nudge><app-icon name="info" [size]="16" />
+          <span>{{ n }} <button type="button" class="lnk" (click)="exportNow()">Export now</button></span></p>
+      }
+
       @if (active().length) {
         @for (t of active(); track t.id; let first = $first) {
           <app-trip-card [trip]="t" mode="link" [compact]="!first" />
@@ -95,6 +103,7 @@ export const STARRED_PREVIEW = 3;
     .note--amber app-icon { color: var(--amber); }
     .note--blue { background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue-ink); }
     .note--blue app-icon { color: var(--blue); }
+    .lnk { font: inherit; font-weight: 600; text-decoration: underline; color: inherit; cursor: pointer; padding: 0 0 0 4px; }
     .sec { margin-top: 8px; }
     .sec__h { margin: 0 2px 10px; }
     .sec__h .ui-h3 { font-size: 19px; }
@@ -152,6 +161,11 @@ export class TripsPage {
     ];
     return rows.slice(0, STARRED_PREVIEW);
   });
+
+  protected exportNow(): void {
+    const r = this.trips.downloadBackup();
+    this.state.flash(r ? `Downloaded ${r.filename}` : 'Could not create the file on this browser.');
+  }
 
   protected warnFor(t: Parameters<typeof returnNotListed>[0]): boolean {
     return returnNotListed(t, this.state.nowMs());

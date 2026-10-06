@@ -11,7 +11,10 @@ import { DOCUMENT, Injectable, Injector, Signal, computed, inject, signal } from
 import { getSchedulesMeta } from '../data/schedule-index';
 import { findDestination, findHub } from '../utils/airports';
 import type { Itinerary } from '../utils/connections';
+import { requestPersist } from '../files/quota';
 import { AppStateService, NOW } from '../state/app-state.service';
+import { PrefsService } from '../state/prefs.service';
+import { backupNudge } from './backup-nudge';
 import { deadlineUtc } from './engine/homeby';
 import { changeKey, detectChanges, looksLikeBadData, refreshAircraft, scanTrip } from './engine/changes';
 import { ESTIMATED_FLIGHT, refsFromItinerary, sameRefs, sortLegs } from './engine/legs';
@@ -20,11 +23,11 @@ import { backupFilename, exportBackup, mergeBackup, parseBackup } from './export
 import { newId } from './ids';
 import {
   Alternate, FlightLeg, FlightLog, GroundLeg, GroundMode, GroundTimes, LegEnd, LegStatus, LoadNote, NewTrip,
-  FLIGHTLOG_KEY, Outcome, calendarKey, OutcomeKind, SharedTripPreview, TRIPS_KEY, Trip, TripLeg, TripsFile, defaultTripName, instanceKey,
+  FLIGHTLOG_KEY, Outcome, TRIPS_SCHEMA, calendarKey, OutcomeKind, SharedTripPreview, TRIPS_KEY, Trip, TripLeg, TripsFile, defaultTripName, instanceKey,
   isFinalStatus,
 } from './model';
 import { decodeTripShare, encodeTripShare, shareUrl } from './share-codec';
-import { TRIPS_STORAGE, loadFlightLog, loadTrips, saveFlightLog, saveTrips, sanitizeLeg } from './storage';
+import { TRIPS_STORAGE, clearCorrupt, loadCorrupt, loadFlightLog, loadTrips, saveFlightLog, saveTrips, sanitizeLeg } from './storage';
 
 /** What swapLeg needs from a ground estimate (places/ground GroundEstimate fits). */
 export interface GroundEstimateLike {
@@ -32,6 +35,11 @@ export interface GroundEstimateLike {
   totalMin: number | null;
   provenance: 'scheduled' | 'estimated' | 'unknown';
 }
+
+/** How long a download's object URL lives (iOS Safari reads it late). */
+const DOWNLOAD_REVOKE_MS = 10_000;
+
+export const UNSAVED_NOTICE = "Couldn't save on this phone. Export a backup now.";
 
 export const BAD_DATA_NOTICE = 'The latest schedules look incomplete. Your plans are unchanged.';
 
@@ -46,13 +54,18 @@ export class TripsService {
   private readonly now = inject(NOW);
   private readonly injector = inject(Injector);
   private readonly doc = inject(DOCUMENT);
+  private readonly prefs = inject(PrefsService);
 
-  private readonly file = signal<TripsFile>({ schema: 1, trips: [] });
-  private readonly log = signal<FlightLog>({ schema: 1, notes: [], outcomes: [], dismissed: [] });
+  private readonly file = signal<TripsFile>({ schema: TRIPS_SCHEMA, trips: [] });
+  private readonly log = signal<FlightLog>({ schema: TRIPS_SCHEMA, notes: [], outcomes: [], dismissed: [] });
   private readonly readOnlyState = signal(false);
   /** Epoch ms of the last check (refreshes the time-based lists). */
   private readonly tick = signal(0);
   private badDataNoticeFor: string | null = null;
+  private persistAsked = false;
+  private readonly tripsUnsaved = signal(false);
+  private readonly logUnsaved = signal(false);
+  private readonly corruptState = signal(loadCorrupt(null));
 
   /** All trips, newest outbound first. */
   readonly trips: Signal<Trip[]> = computed(() =>
@@ -74,6 +87,17 @@ export class TripsService {
     pendingOutcomePrompts(this.file().trips, this.log(), this.tick()));
   /** Set while the latest schedules look incomplete (see looksLikeBadData). */
   readonly scheduleNotice = signal<string | null>(null);
+  /** True while the latest change could not be written to this phone (storage full or blocked); the next change retries. */
+  readonly unsaved: Signal<boolean> = computed(() => this.tripsUnsaved() || this.logUnsaved());
+  /** The quiet "export a backup" reminder, or null (see backupNudge). */
+  readonly backupReminder: Signal<string | null> = computed(() =>
+    backupNudge(this.file().trips, this.log(), this.prefs.prefs().lastBackupAt, Math.max(this.tick(), this.now())));
+  /** Which damaged copies a failed load kept (ac.trips.corrupt, ac.flightlog.corrupt), or null. */
+  readonly damaged: Signal<'trips' | 'flight log' | 'trips and flight log' | null> = computed(() => {
+    const c = this.corruptState();
+    if (c.trips !== null && c.log !== null) return 'trips and flight log';
+    return c.trips !== null ? 'trips' : c.log !== null ? 'flight log' : null;
+  });
 
   constructor() {
     const t = loadTrips(this.storage);
@@ -81,6 +105,7 @@ export class TripsService {
     this.file.set(t.file);
     this.log.set(l.file);
     this.readOnlyState.set(t.readOnly || l.readOnly);
+    this.corruptState.set(loadCorrupt(this.storage));
     this.tick.set(this.now());
     this.checkChanges();
     // Another tab or window of the app saved: reload, so this tab never writes back a stale copy.
@@ -100,6 +125,7 @@ export class TripsService {
       this.log.set(l.file);
       if (l.readOnly) this.readOnlyState.set(true);
     }
+    this.corruptState.set(loadCorrupt(this.storage));
   }
 
   // ── Reads ─────────────────────────────────────────────────────────────────
@@ -433,6 +459,52 @@ export class TripsService {
     return backupFilename(this.now());
   }
 
+  /** Downloads the trips backup as a file and records the time. False when the browser can't make the file. */
+  downloadBackup(): { filename: string } | null {
+    const filename = this.backupFilename();
+    if (!this.download(filename, this.exportBackup())) return null;
+    this.markBackedUp();
+    return { filename };
+  }
+
+  /** Downloads the damaged copies as one JSON file (the raw text of each, as strings). False when the browser can't make a file. */
+  downloadDamaged(): boolean {
+    const c = this.corruptState();
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    const text = JSON.stringify({ kind: 'routes-damaged', savedAt: this.iso(), trips: c.trips, flightlog: c.log }, null, 1);
+    return this.download(`routes-damaged-${day}.json`, text);
+  }
+
+  /** Deletes the damaged copies. */
+  deleteDamaged(): void {
+    clearCorrupt(this.storage);
+    this.corruptState.set(loadCorrupt(this.storage));
+  }
+
+  /** Records that trips were just exported (also called after "Export backup with files"). */
+  markBackedUp(): void {
+    this.prefs.update({ lastBackupAt: this.iso() });
+  }
+
+  private download(filename: string, text: string): boolean {
+    const win = this.doc.defaultView;
+    try {
+      const url = win?.URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      if (!url) return false;
+      const a = this.doc.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      this.doc.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => win?.URL.revokeObjectURL(url), DOWNLOAD_REVOKE_MS);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   importBackup(text: string): { added: number; updated: number } | { error: string } {
     if (this.readOnlyState()) return { error: 'Your trips were saved by a newer version of the app, so they cannot be changed here.' };
     const parsed = parseBackup(text);
@@ -522,14 +594,29 @@ export class TripsService {
   }
 
   private setTrips(trips: Trip[]): void {
-    const file: TripsFile = { schema: 1, trips };
+    const file: TripsFile = { schema: TRIPS_SCHEMA, trips };
     this.file.set(file);
-    if (!this.readOnlyState()) saveTrips(this.storage, file);
+    if (this.readOnlyState()) return;
+    if (!this.persistAsked) {
+      this.persistAsked = true;
+      void requestPersist();
+    }
+    this.persist('trips');
   }
 
   private setLog(log: FlightLog): void {
     this.log.set(log);
-    if (!this.readOnlyState()) saveFlightLog(this.storage, log);
+    if (!this.readOnlyState()) this.persist('log');
+  }
+
+  /** Writes what changed (plus whichever file failed last time); a failure raises `unsaved` (once, with a toast) and the next change tries again. */
+  private persist(changed: 'trips' | 'log'): void {
+    const was = this.unsaved();
+    if (changed === 'trips' || this.tripsUnsaved()) this.tripsUnsaved.set(!saveTrips(this.storage, this.file()));
+    if (changed === 'log' || this.logUnsaved()) this.logUnsaved.set(!saveFlightLog(this.storage, this.log()));
+    if (this.unsaved() && !was) {
+      this.flash(UNSAVED_NOTICE, { label: 'Export', run: () => void this.downloadBackup() });
+    }
   }
 
   private flash(message: string, action?: { label: string; run: () => void }): void {

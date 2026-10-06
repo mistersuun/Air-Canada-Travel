@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { storageInfo } from '../../files/quota';
 import { AppStateService } from '../../state/app-state.service';
-import { TripsService } from '../trips.service';
+import { TripsService, UNSAVED_NOTICE } from '../trips.service';
 
 /** Largest backup file Import trips reads (bytes). */
 export const MAX_BACKUP_BYTES = 5_000_000;
@@ -26,8 +27,20 @@ export const MAX_BACKUP_BYTES = 5_000_000;
                  [disabled]="trips.readOnly()" (change)="importFile($event)">
         </label>
       </div>
+      @if (trips.unsaved()) { <p class="res is-err" role="status" data-unsaved>{{ unsavedText }}</p> }
+      @if (trips.backupReminder(); as n) { <p class="hint" data-backup-nudge>{{ n }}</p> }
       @if (result(); as r) { <p class="res" [class.is-err]="r.error" role="status">{{ r.text }}</p> }
       @if (count()) { <p class="hint tn">{{ count() }} on this device.</p> }
+      @if (keepLine(); as k) { <p class="hint" data-persisted>{{ k }}</p> }
+      @if (trips.damaged(); as d) {
+        <div class="dmg" data-damaged>
+          <p class="hint">A damaged copy of your {{ d }} was kept.</p>
+          <div class="acts">
+            <button type="button" class="btn" data-damaged-download (click)="downloadDamaged()">Download</button>
+            <button type="button" class="btn btn--del" data-damaged-delete (click)="deleteDamaged()">{{ confirmDelete() ? 'Tap again to delete' : 'Delete' }}</button>
+          </div>
+        </div>
+      }
     </section>
   `,
   styles: [`
@@ -40,6 +53,8 @@ export const MAX_BACKUP_BYTES = 5_000_000;
       border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600;
       cursor: pointer; border: 1px solid var(--hair);
     }
+    .btn--del { color: var(--red-ink); }
+    .dmg { display: grid; gap: 8px; }
     .btn:focus-within { box-shadow: 0 0 0 2px var(--blue); }
     .btn.is-off { opacity: .45; cursor: not-allowed; }
     .res { font-size: 13px; color: var(--teal-ink); }
@@ -49,7 +64,6 @@ export const MAX_BACKUP_BYTES = 5_000_000;
 export class SettingsDataComponent {
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
-  private readonly doc = inject(DOCUMENT);
 
   protected readonly result = signal<{ text: string; error: boolean } | null>(null);
   protected readonly count = computed(() => {
@@ -57,25 +71,38 @@ export class SettingsDataComponent {
     return n ? `${n} ${n === 1 ? 'trip' : 'trips'}` : '';
   });
 
+  protected readonly unsavedText = UNSAVED_NOTICE;
+  private readonly persisted = signal<boolean | null>(null);
+  protected readonly keepLine = computed(() => {
+    const p = this.persisted();
+    return p === null ? '' : p ? 'This phone keeps your trips unless you clear site data.' : 'Your browser may clear your trips if space runs low. A backup keeps them safe.';
+  });
+
+  constructor() {
+    void storageInfo().then(i => this.persisted.set(i.persisted), () => undefined);
+  }
+
   exportTrips(): void {
-    const json = this.trips.exportBackup();
-    const win = this.doc.defaultView;
-    try {
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = win?.URL.createObjectURL(blob);
-      if (!url) throw new Error('no URL');
-      const a = this.doc.createElement('a');
-      a.href = url;
-      a.download = this.trips.backupFilename();
-      a.rel = 'noopener';
-      this.doc.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => win?.URL.revokeObjectURL(url), 1000);
-      this.result.set({ text: `Downloaded ${a.download}`, error: false });
-    } catch {
-      this.result.set({ text: 'Could not create the file on this browser.', error: true });
+    const r = this.trips.downloadBackup();
+    this.result.set(r ? { text: `Downloaded ${r.filename}`, error: false }
+      : { text: 'Could not create the file on this browser.', error: true });
+  }
+
+  protected readonly confirmDelete = signal(false);
+
+  /** Two taps: the first arms it, the second deletes (the first disarms itself after 4 s). */
+  deleteDamaged(): void {
+    if (!this.confirmDelete()) {
+      this.confirmDelete.set(true);
+      setTimeout(() => this.confirmDelete.set(false), 4000);
+      return;
     }
+    this.confirmDelete.set(false);
+    this.trips.deleteDamaged();
+  }
+
+  downloadDamaged(): void {
+    if (!this.trips.downloadDamaged()) this.result.set({ text: 'Could not create the file on this browser.', error: true });
   }
 
   async importFile(e: Event): Promise<void> {

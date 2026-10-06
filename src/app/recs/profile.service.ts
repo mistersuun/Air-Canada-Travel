@@ -1,6 +1,6 @@
 import { Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
 import { PROFILE_KEY, TravelProfile } from './model';
-import { EMPTY_PROFILE, MAX_DISMISSED, profileSummary, sanitizeProfile } from './profile';
+import { EMPTY_PROFILE, MAX_DISMISSED, profileSummary, sanitizeProfile, sanitizeUsualItems } from './profile';
 
 /** Storage backing the travel profile (same pattern as PREFS_STORAGE). Null when blocked. */
 export const PROFILE_STORAGE = new InjectionToken<Storage | null>('PROFILE_STORAGE', {
@@ -35,7 +35,7 @@ export class ProfileService {
 
   /** Back to the empty profile ("Not set up"). */
   reset(): void {
-    this.set({ ...EMPTY_PROFILE, styles: [], days: [], dismissed: [] });
+    this.set({ ...EMPTY_PROFILE, styles: [], days: [], dismissed: [], usualItems: [] });
   }
 
   /** Hide a recommendation ("Not for me"). Does not mark the profile as set up. */
@@ -50,6 +50,17 @@ export class ProfileService {
     const p = this.state();
     if (!p.dismissed.includes(recId)) return;
     this.set({ ...p, dismissed: p.dismissed.filter(id => id !== recId) });
+  }
+
+  /** Add one usual item (no-op when blank, a duplicate or the list is full). Marks the profile as set up. */
+  addUsualItem(text: string): void {
+    const next = sanitizeUsualItems([...this.state().usualItems, text]);
+    if (next.length === this.state().usualItems.length) return;
+    this.update({ usualItems: next });
+  }
+
+  removeUsualItem(text: string): void {
+    this.update({ usualItems: this.state().usualItems.filter(i => i !== text) });
   }
 
   /** 'City, Sun · long weekends · up to 7h · Thu–Mon', or 'Not set up'. */

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, signal } f
 import { Router } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { buildPrepChecklist, tripEssentials } from '../../../places/prep';
+import { ProfileService } from '../../../recs/profile.service';
 import { AppStateService } from '../../../state/app-state.service';
 import type { Trip } from '../../../trips/model';
 import { TripsService } from '../../../trips/trips.service';
@@ -42,6 +43,10 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
                 <span class="chk__m">{{ r.pre }}@if (r.link; as l) {<a [href]="l.url" target="_blank" rel="noopener">{{ l.label }}</a>}{{ r.post }}</span>
               }
               @if (r.customId; as cid) {
+                @if (!isUsual(r.item.title)) {
+                  <button type="button" class="chk__save" data-save-usual (click)="saveUsual(r.item.title)"
+                          [attr.aria-label]="'Save ' + r.item.title + ' as a usual item'">Save as usual</button>
+                }
                 <button type="button" class="chk__rm" [attr.aria-label]="'Remove ' + r.item.title" (click)="removeCustom(cid)">
                   <app-icon name="close" [size]="15" />
                 </button>
@@ -92,6 +97,10 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
       border-radius: 12px; color: var(--ink-3); cursor: pointer;
     }
     .chk__rm:hover { color: var(--ink); }
+    .chk__save {
+      grid-column: 1; grid-row: 3; justify-self: start; min-height: 44px; margin: -4px 0 0 34px; padding: 0 4px;
+      font-size: 12.5px; font-weight: 600; color: var(--blue); cursor: pointer;
+    }
     .add { display: flex; gap: 8px; align-items: center; padding: 10px 0 12px; }
     .add__in {
       flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--hair);
@@ -109,6 +118,7 @@ export class PrepTabComponent {
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly router = inject(Router);
+  private readonly profile = inject(ProfileService);
 
   readonly trip = input.required<Trip>();
 
@@ -151,6 +161,16 @@ export class PrepTabComponent {
     if (!text) return;
     this.trips.addCustomPrep(this.trip().id, text);
     this.draft.set('');
+  }
+
+  protected isUsual(text: string): boolean {
+    const t = text.trim().toLowerCase();
+    return this.profile.profile().usualItems.some(i => i.toLowerCase() === t);
+  }
+
+  protected saveUsual(text: string): void {
+    this.profile.addUsualItem(text);
+    this.state.flash('Saved to My usual items');
   }
 
   protected removeCustom(id: string): void {

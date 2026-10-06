@@ -122,6 +122,28 @@ describe('ProfilePage', () => {
     expect(q('[data-style="Adventure"]').getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('adds a usual item with one tap on a suggestion, then removes it', async () => {
+    const { click, q, el, saved } = await render();
+    expect(el.querySelectorAll('[data-suggest]').length).toBeGreaterThan(3);
+    const first = q('[data-suggest]').textContent!.replace('+', '').trim();
+    await click('[data-suggest]');
+    expect(saved().usualItems).toEqual([first]);
+    expect(q('[data-usual]').textContent).toContain(first);
+    expect(Array.from(el.querySelectorAll('[data-suggest]')).some(b => b.textContent!.includes(first))).toBe(false);
+    await click('[data-usual-rm]');
+    expect(saved().usualItems).toEqual([]);
+  });
+
+  it('adds a typed usual item', async () => {
+    const { fixture, q, click, saved } = await render();
+    const input = q<HTMLInputElement>('[data-usual-input]');
+    input.value = 'Neck pillow';
+    input.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    await click('[data-usual-add]');
+    expect(saved().usualItems).toEqual(['Neck pillow']);
+  });
+
   it('toggles values in a list', () => {
     expect(toggled([1, 2], 2)).toEqual([1]);
     expect(toggled([1], 3)).toEqual([1, 3]);

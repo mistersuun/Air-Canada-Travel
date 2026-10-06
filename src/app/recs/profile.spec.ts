@@ -122,3 +122,28 @@ describe('ProfileService', () => {
     expect(setup(storage).profile()).toEqual(EMPTY_PROFILE);
   });
 });
+
+describe('usualItems', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('sanitizes: trims, caps length and count, de-duplicates, drops non-strings; old files give []', () => {
+    const many = Array.from({ length: 40 }, (_, i) => `item ${i}`);
+    expect(sanitizeProfile({ usualItems: [' Phone  charger ', 'phone charger', 3, '', 'x'.repeat(200)] }).usualItems)
+      .toEqual(['Phone charger', 'x'.repeat(80)]);
+    expect(sanitizeProfile({ usualItems: many }).usualItems).toHaveLength(30);
+    expect(sanitizeProfile({ styles: ['Sun'] }).usualItems).toEqual([]);
+    expect(sanitizeProfile({ usualItems: 'nope' }).usualItems).toEqual([]);
+  });
+
+  it('adds and removes items through the service and persists them', () => {
+    const storage = new MemoryStorage();
+    const s = setup(storage);
+    s.addUsualItem('Passport / ID');
+    s.addUsualItem('passport / id');
+    s.addUsualItem('  ');
+    expect(s.profile().usualItems).toEqual(['Passport / ID']);
+    expect(JSON.parse(storage.getItem(PROFILE_KEY)!).usualItems).toEqual(['Passport / ID']);
+    s.removeUsualItem('Passport / ID');
+    expect(s.profile().usualItems).toEqual([]);
+  });
+});

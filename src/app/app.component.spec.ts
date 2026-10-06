@@ -38,6 +38,12 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
   }
 
   let tripsStorage: MemoryStorage;
+  /** Prefs storage that has already been through first-run setup, so its sheet stays out of the way. */
+  const prefsStorage = (onboarded = true): MemoryStorage => {
+    const s = new MemoryStorage();
+    if (onboarded) s.setItem('ac.onboarded.v1', '1');
+    return s;
+  };
 
   async function render(url = '/'): Promise<void> {
     window.history.replaceState(null, '', url);
@@ -47,7 +53,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
       providers: [
         provideRouter(routes, withComponentInputBinding()),
         { provide: PlatformLocation, useClass: BrowserPlatformLocation },
-        { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+        { provide: PREFS_STORAGE, useValue: prefsStorage() },
         { provide: TRIPS_STORAGE, useValue: tripsStorage },
         { provide: NOW, useValue: () => NOW_MS },
         { provide: SwUpdate, useValue: { isEnabled: true, versionUpdates, unrecoverable, checkForUpdate } },

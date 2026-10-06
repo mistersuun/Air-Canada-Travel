@@ -24,6 +24,7 @@ import {
 import { groundTimetableLines } from '../../reach/reach-model';
 import { LegFilesComponent } from '../../../files/ui/leg-files.component';
 import { LegPassesComponent } from '../../../passes/ui/leg-passes.component';
+import { OtherWaysComponent } from '../../../places/ui/other-ways.component';
 
 /** Statuses the traveller can set on a flight leg (Dropped is set by a swap). */
 export const SETTABLE_STATUSES: readonly LegStatus[] = ['planned', 'listed', 'checkedIn', 'boarded', 'notBoarded', 'didntTry'];
@@ -41,7 +42,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
 @Component({
   selector: 'app-leg-sheet',
   standalone: true,
-  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent, LegPassesComponent, LegFilesComponent],
+  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent, LegPassesComponent, LegFilesComponent, OtherWaysComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet [title]="title()" [open]="true" (closed)="closed.emit()">
@@ -176,6 +177,9 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
               <a class="ui-link" [href]="links().skyscanner" target="_blank" rel="noopener">Skyscanner</a>
             </p>
           </section>
+          @if (g.provenance !== 'saved') {
+            <app-other-ways [from]="g.from" [to]="g.to" [dateKey]="g.dateKey" [toAirport]="g.to.code" heading="Other ways there" />
+          }
         </div>
       }
     </app-glass-sheet>

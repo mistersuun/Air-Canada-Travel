@@ -442,3 +442,86 @@ def test_unselected_feed_keeps_previous_corridors():
     prev = {"sources": {"cp": {"name": "CP"}}, "corridors": {"K1": entry("cp", "2026-12-01")}}
     doc = bg.assemble({"K3": entry("renfe", "2026-12-20")}, {"renfe": "2026-10-01"}, prev, set(bg.FEEDS) - {"renfe"}, TODAY)
     assert set(doc["corridors"]) == {"K1", "K3"} and "cp" in doc["sources"]
+
+
+# ── Name pins, provisional corridors, VIA / Maritime / Flix entries ────────
+
+NAMED_STOPS = """stop_id,stop_name,parent_station
+a1,Halifax Airport (Stanfield),
+a2,Halifax Bus Terminal,
+b1,Moncton Bus Terminal,
+c1,Montréal,
+"""
+
+
+def test_name_pins_exact_and_substring_case_insensitive():
+    stops = {"a1": "", "a2": "", "b1": "", "c1": ""}
+    names = {"a1": "Halifax Airport (Stanfield)", "a2": "Halifax Bus Terminal", "b1": "Moncton Bus Terminal", "c1": "Montréal"}
+    assert bg.resolve_stops(stops, ["name~:halifax airport"], "k", names) == {"a1"}
+    assert bg.resolve_stops(stops, ["name:MONTRÉAL"], "k", names) == {"c1"}
+    assert bg.resolve_stops(stops, ["name~:halifax", "b1"], "k", names) == {"a1", "a2", "b1"}
+
+
+def test_name_pin_without_match_raises_unless_lenient_with_another_match():
+    stops, names = {"a1": ""}, {"a1": "Halifax Airport"}
+    with pytest.raises(bg.PinnedStopMissing):
+        bg.resolve_stops(stops, ["name~:Nowhere"], "k", names)
+    with pytest.raises(bg.PinnedStopMissing):
+        bg.resolve_stops(stops, ["name~:Nowhere"], "k", names, lenient=True)
+    assert bg.resolve_stops(stops, ["name~:Nowhere", "name~:Halifax"], "k", names, lenient=True) == {"a1"}
+
+
+def test_provisional_corridor_with_unknown_stops_is_skipped_not_fatal(capsys):
+    z = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0")
+    good = corridor()
+    prov = corridor(key="ZZZ-9", provisional=True,
+                    a={"stops": ["name~:Nowhere"], "name": "X", "tz": "Europe/Madrid"})
+    runs = bg.load_feed(z, [good, prov], LO, HI)
+    assert runs["ZZZ-9"] == {"out": [], "back": []}
+    assert bg.build_corridor(good, runs["AAA-1"], TODAY)["out"]["wk"] == [[480, 60, 0]]
+    assert bg.build_corridor(prov, runs["ZZZ-9"], TODAY) is None
+    assert "provisional corridor skipped" in capsys.readouterr().err
+
+
+def test_non_provisional_missing_pin_still_fails_loudly():
+    z = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0")
+    with pytest.raises(bg.PinnedStopMissing):
+        bg.load_feed(z, [corridor(a={"stops": ["NOPE"], "name": "X", "tz": "Europe/Madrid"})], LO, HI)
+
+
+def test_maritime_bus_style_feed_by_stop_names():
+    z = gtfs({
+        "agency.txt": "agency_id,agency_name,agency_timezone\nMB,Maritime Bus,America/Halifax",
+        "stops.txt": NAMED_STOPS,
+        "routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nR,MB,,Halifax - Moncton,3",
+        "trips.txt": "trip_id,route_id,service_id\nT1,R,S",
+        "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"
+                        "S,1,1,1,1,1,1,1,20261001,20261231",
+        "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\n"
+                          "T1,08:00:00,08:00:00,a1,1,0,0\nT1,11:35:00,11:35:00,b1,2,0,0",
+    })
+    c = next(x for x in bg.CORRIDORS if x["key"] == "YHZ-6076211")
+    runs = bg.load_feed(z, [c], LO, HI)["YHZ-6076211"]
+    e = bg.build_corridor(c, runs, TODAY)
+    assert e["mode"] == "bus"
+    assert e["out"]["wk"] == [[480, 215, 0]] and e["out"]["p"] == ["Maritime Bus"]
+    assert e["out"]["tz"] == "America/Halifax" and e["out"]["src"] == "maritime"
+
+
+def test_new_feeds_are_optional_and_carry_a_licence_and_credit():
+    for fid in ("via", "maritime"):
+        f = bg.FEEDS[fid]
+        assert f["optional"] and f["licence"] and f["credit"] and f["page"]
+        assert fid not in bg.selected_feeds([], [], [])
+        assert fid in bg.selected_feeds([], [fid], [])
+        assert bg.source_entry(fid, "2026-10-01")["credit"] == f["credit"]
+
+
+def test_every_corridor_names_a_known_feed_and_has_a_row_in_corridors_ts():
+    import re
+    ts = (ROOT / "src" / "app" / "places" / "corridors.ts").read_text(encoding="utf-8")
+    rows_ = {(m.group(1), m.group(2)) for m in re.finditer(r"code: '([A-Z]{3})', geonameId: (\d+)", ts)}
+    for c in bg.CORRIDORS:
+        assert c["feed"] in bg.FEEDS, c["key"]
+        code, gid = c["key"].split("-")
+        assert (code, gid) in rows_, f"{c['key']} has no row in corridors.ts"

@@ -26,6 +26,7 @@
           "/data/route-network.json",
           "/data/land-110m.json",
           "/data/ground.json",
+          "/data/airport-hotels.json",
           "/data/climate.json"
         ]
       }

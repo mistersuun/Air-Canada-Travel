@@ -40,7 +40,7 @@ const FLICK_MS = 1000;
           <p class="none ui-sub" data-surprise-empty>No destinations match your filters this week.</p>
         } @else {
           <div class="map">
-            <app-route-map [hub]="state.hub()" [points]="points()" [highlight]="shown()" view="world" [padding]="10" [pulse]="false" />
+            <app-route-map [hub]="state.hub()" [points]="points()" [highlight]="shown()" [animate]="settled()" view="world" [padding]="10" [pulse]="false" />
           </div>
           <div class="out">
             <p class="ui-visually-hidden" aria-live="polite">{{ settled() ? line() : '' }}</p>

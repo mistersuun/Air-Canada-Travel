@@ -139,3 +139,67 @@ describe('RouteMapComponent', () => {
     expect(el.querySelector('circle.hub')!.getAttribute('cx')).toBe(x0);
   });
 });
+
+describe('RouteMapComponent plane and arc animation', () => {
+  type Internals = { marker(): { x: number; y: number; angle: number } | null; hubXY(): number[] | null; hotList(): { code: string }[] };
+  const internals = (c: unknown) => c as Internals;
+  const SYD: MapPoint = { code: 'SYD', lat: -33.95, lng: 151.18 };
+
+  function reduced(on: boolean): void {
+    Object.defineProperty(globalThis, 'matchMedia', {
+      configurable: true, writable: true,
+      value: (q: string) => ({ matches: on && q.includes('reduce'), media: q }),
+    });
+  }
+
+  it('draws the hot arc with the draw class and a glide plane, once per destination', async () => {
+    reduced(false);
+    const { el, fixture, cmp } = await render({ highlight: 'LIS' });
+    expect(internals(cmp).hotList().map(h => h.code)).toEqual(['LIS']);
+    const arc = el.querySelector('path.arc.hot')!;
+    expect(arc.classList.contains('arc--draw')).toBe(true);
+    expect(el.querySelectorAll('[data-glide]')).toHaveLength(1);
+    // Unrelated change (zoom): the same element survives, so the animation does not replay.
+    fixture.componentRef.setInput('zoom', 1.5);
+    await fixture.whenStable();
+    expect(el.querySelector('path.arc.hot')).toBe(arc);
+    // A new destination replaces it.
+    fixture.componentRef.setInput('highlight', 'NRT');
+    await fixture.whenStable();
+    expect(el.querySelector('path.arc.hot')).not.toBe(arc);
+  });
+
+  it('has no glide under reduced motion, with animate off, or with a progress marker', async () => {
+    reduced(true);
+    expect((await render({ highlight: 'LIS' })).el.querySelector('[data-glide]')).toBeNull();
+    reduced(false);
+    const off = await render({ highlight: 'LIS', animate: false });
+    expect(off.el.querySelector('[data-glide]')).toBeNull();
+    expect(off.el.querySelector('path.arc.hot')?.classList.contains('arc--draw')).toBe(false);
+    expect((await render({ highlight: 'LIS', progress: 0.5 })).el.querySelector('[data-glide]')).toBeNull();
+  });
+
+  it('puts the progress plane on the hub at 0 and on the destination at 1', async () => {
+    reduced(false);
+    const a = await render({ highlight: 'LIS', progress: 0 });
+    const m0 = internals(a.cmp).marker()!;
+    expect([m0.x, m0.y]).toEqual(internals(a.cmp).hubXY());
+    const b = await render({ highlight: 'LIS', progress: 1 });
+    const dot = b.el.querySelector('circle.dotp.hot')!;
+    const m1 = internals(b.cmp).marker()!;
+    expect(m1.x).toBeCloseTo(Number(dot.getAttribute('cx')), 0);
+    expect(m1.y).toBeCloseTo(Number(dot.getAttribute('cy')), 0);
+    expect((await render({ highlight: 'LIS' })).el.querySelector('[data-progress-plane]')).toBeNull();
+  });
+
+  it('keeps a Vancouver to Sydney route on one side of the map, heading west (the short way over the Pacific)', async () => {
+    reduced(false);
+    for (const k of [0.1, 0.5, 0.9]) {
+      const { cmp } = await render({ hub: 'YVR', points: [SYD], highlight: 'SYD', progress: k });
+      const m = internals(cmp).marker()!;
+      expect(m.x).toBeGreaterThan(0);
+      expect(m.x).toBeLessThan(320);
+      expect(Math.abs(m.angle)).toBeGreaterThan(90);
+    }
+  });
+});

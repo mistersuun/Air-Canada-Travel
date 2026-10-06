@@ -64,7 +64,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
         </section>
 
         <app-today-pass [tripId]="v.tripId" [legId]="v.legId" />
-        <app-today-in-air [ref]="v.ref" />
+        <app-today-in-air [ref]="v.ref" [status]="v.status" />
         <app-today-timeline [tripId]="v.tripId" [legId]="v.legId" />
 
         @if (!v.final) {

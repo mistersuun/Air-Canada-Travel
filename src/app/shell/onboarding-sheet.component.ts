@@ -20,7 +20,7 @@ import { WEEKDAY_LONG } from '../utils/time';
   imports: [GlassSheetComponent, HubPickerComponent, SegComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet title="Welcome" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet title="Welcome" [open]="true" (closed)="done()">
       <p class="ob__step tn" data-step>Step {{ step() }} of 3</p>
       @switch (step()) {
         @case (1) {
@@ -55,7 +55,7 @@ import { WEEKDAY_LONG } from '../utils/time';
         }
       }
       <div class="ob__row">
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-skip (click)="skip()">{{ step() === 3 ? 'Close' : 'Skip' }}</button>
+        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-skip (click)="done()">{{ step() === 3 ? 'Close' : 'Skip' }}</button>
         <button type="button" class="ui-btn ui-btn--sm" data-next (click)="next()">{{ step() === 3 ? 'Done' : 'Next' }}</button>
       </div>
     </app-glass-sheet>
@@ -102,11 +102,12 @@ export class OnboardingSheetComponent {
 
   protected next(): void {
     if (this.step() === 2) this.saveProfile();
-    if (this.step() >= 3) this.closed.emit();
+    if (this.step() >= 3) this.done();
     else this.step.update(s => s + 1);
   }
 
-  protected skip(): void {
+  protected done(): void {
+    this.saveProfile();
     this.closed.emit();
   }
 

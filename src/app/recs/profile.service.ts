@@ -52,11 +52,19 @@ export class ProfileService {
     this.set({ ...p, dismissed: p.dismissed.filter(id => id !== recId) });
   }
 
-  /** Add one usual item (no-op when blank, a duplicate or the list is full). Marks the profile as set up. */
-  addUsualItem(text: string): void {
-    const next = sanitizeUsualItems([...this.state().usualItems, text]);
-    if (next.length === this.state().usualItems.length) return;
+  /** Add one usual item (false when blank, a duplicate or the list is full). Marks the profile as set up. */
+  addUsualItem(text: string): boolean {
+    const have = this.state().usualItems;
+    const next = sanitizeUsualItems([...have, text]);
+    if (next.length === have.length) return false;
     this.update({ usualItems: next });
+    return true;
+  }
+
+  /** True when the text (normalised like a saved item) is already in the list. */
+  hasUsualItem(text: string): boolean {
+    const [t] = sanitizeUsualItems([text]);
+    return !!t && this.state().usualItems.some(i => i.toLowerCase() === t.toLowerCase());
   }
 
   removeUsualItem(text: string): void {

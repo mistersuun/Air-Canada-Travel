@@ -282,8 +282,8 @@ export function sanitizeTrip(raw: unknown): Trip | null {
         const o = obj(c);
         const cid = o && nonEmpty(o['id'], 40);
         const text = o && nonEmpty(o['text'], 300);
-        return cid && text ? { id: cid, text } : null;
-      }).filter((c): c is { id: string; text: string } => !!c),
+        return cid && text ? { id: cid, text, ...(o['usual'] === true ? { usual: true as const } : {}) } : null;
+      }).filter((c): c is { id: string; text: string; usual?: true } => !!c),
       changes: arr(r['changes']).slice(0, 100).map(sanitizeChange)
         .filter((c): c is PendingChange => !!c && legIds.has(c.legId)),
       scheduleGeneratedAt: nonEmpty(r['scheduleGeneratedAt'], 40),

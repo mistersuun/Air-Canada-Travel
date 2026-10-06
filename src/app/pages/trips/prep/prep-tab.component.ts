@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, signal } f
 import { Router } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { buildPrepChecklist, tripEssentials } from '../../../places/prep';
+import { MAX_USUAL_ITEMS } from '../../../recs/profile';
 import { ProfileService } from '../../../recs/profile.service';
 import { AppStateService } from '../../../state/app-state.service';
 import type { Trip } from '../../../trips/model';
@@ -164,13 +165,12 @@ export class PrepTabComponent {
   }
 
   protected isUsual(text: string): boolean {
-    const t = text.trim().toLowerCase();
-    return this.profile.profile().usualItems.some(i => i.toLowerCase() === t);
+    return this.profile.hasUsualItem(text);
   }
 
   protected saveUsual(text: string): void {
-    this.profile.addUsualItem(text);
-    this.state.flash('Saved to My usual items');
+    if (this.profile.addUsualItem(text)) this.state.flash('Saved to My usual items');
+    else this.state.flash(`My usual items is full (${MAX_USUAL_ITEMS})`);
   }
 
   protected removeCustom(id: string): void {

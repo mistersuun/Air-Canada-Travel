@@ -35,6 +35,21 @@ describe('OnboardingService', () => {
     expect(setup({ flag: true }).svc.visible()).toBe(false);
   });
 
+  it('treats any other ac.* data as an existing user and records the flag at once', () => {
+    TestBed.resetTestingModule();
+    const store = new MemoryStorage();
+    store.setItem('ac.trips.v1', '{}');
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PREFS_STORAGE, useValue: store },
+        { provide: PROFILE_STORAGE, useValue: store },
+        { provide: PlatformLocation, useValue: { pathname: '/' } },
+      ],
+    });
+    expect(TestBed.inject(OnboardingService).visible()).toBe(false);
+    expect(store.getItem(ONBOARDED_KEY)).toBe('1');
+  });
+
   it.each([
     ['saved prefs', { prefs: true }],
     ['a set-up profile', { profile: true }],

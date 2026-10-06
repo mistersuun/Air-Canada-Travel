@@ -165,7 +165,7 @@ export class TripsService {
       homeBy: { ...input.homeBy },
       legs: sortLegs(input.legs ?? []),
       prep: {},
-      customPrep: this.profile.profile().usualItems.map(text => ({ id: newId(), text })),
+      customPrep: this.profile.profile().usualItems.map(text => ({ id: newId(), text, usual: true as const })),
       changes: [],
       scheduleGeneratedAt: getSchedulesMeta()?.generatedAt ?? null,
       offlineSavedAt: null,

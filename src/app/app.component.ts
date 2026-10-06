@@ -55,7 +55,9 @@ interface ToastView {
       <app-shortcuts-sheet (closed)="state.closeShortcuts()" />
     }
     @if (onboarding.visible()) {
-      <app-onboarding-sheet (closed)="onboarding.finish()" />
+      @defer (when onboarding.visible()) {
+        <app-onboarding-sheet (closed)="onboarding.finish()" />
+      }
     }
     @if (toast(); as t) {
       <app-toast [message]="t.message" [actionLabel]="t.actionLabel" (action)="t.onAction()" (dismiss)="t.onDismiss()" />

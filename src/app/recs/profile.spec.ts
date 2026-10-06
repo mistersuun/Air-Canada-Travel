@@ -138,9 +138,10 @@ describe('usualItems', () => {
   it('adds and removes items through the service and persists them', () => {
     const storage = new MemoryStorage();
     const s = setup(storage);
-    s.addUsualItem('Passport / ID');
-    s.addUsualItem('passport / id');
-    s.addUsualItem('  ');
+    expect(s.addUsualItem('Passport / ID')).toBe(true);
+    expect(s.addUsualItem('passport / id')).toBe(false);
+    expect(s.addUsualItem('  ')).toBe(false);
+    expect(s.hasUsualItem('  PASSPORT  /  ID ')).toBe(true);
     expect(s.profile().usualItems).toEqual(['Passport / ID']);
     expect(JSON.parse(storage.getItem(PROFILE_KEY)!).usualItems).toEqual(['Passport / ID']);
     s.removeUsualItem('Passport / ID');

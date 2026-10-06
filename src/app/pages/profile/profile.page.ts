@@ -259,6 +259,7 @@ export class ProfilePage {
 
   /** Standby suggestions not already in the list. */
   protected suggestions(have: readonly string[]): string[] {
+    if (have.length >= MAX_USUAL_ITEMS) return [];
     const lower = new Set(have.map(h => h.toLowerCase()));
     return USUAL_SUGGESTIONS.filter(s => !lower.has(s.toLowerCase()));
   }

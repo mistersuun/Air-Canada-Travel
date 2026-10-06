@@ -50,6 +50,15 @@ describe('OnboardingSheetComponent', () => {
     expect(closed()).toBe(1);
   });
 
+  it('keeps step-2 choices when skipped from step 2', async () => {
+    const { click, store, closed } = await render();
+    await click('[data-next]');
+    await click('[data-style="City"]');
+    await click('[data-skip]');
+    expect(JSON.parse(store.getItem(PROFILE_KEY)!).styles).toEqual(['City']);
+    expect(closed()).toBe(1);
+  });
+
   it('skipping leaves the profile untouched', async () => {
     const { click, store, closed } = await render();
     await click('[data-next]');

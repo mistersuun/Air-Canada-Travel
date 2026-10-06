@@ -5,6 +5,7 @@
  */
 import { DESTINATIONS, Destination, DestinationType } from '../data/destinations';
 import { isCovered } from '../data/schedule-index';
+import { matchesAlias } from '../data/search-aliases';
 import { isWidebody } from './aircraft';
 import {
   ConnectOptions,
@@ -46,6 +47,8 @@ export interface Filters {
   widebodyOnly: boolean;
   /** Keep only starred destinations. */
   starredOnly: boolean;
+  /** Longest flight to keep, in hours (null = any). Itineraries count door to door. */
+  maxHours: number | null;
 }
 
 export const EMPTY_FILTERS: Filters = {
@@ -55,13 +58,14 @@ export const EMPTY_FILTERS: Filters = {
   viaHubs: [],
   widebodyOnly: false,
   starredOnly: false,
+  maxHours: null,
 };
 
 /** Number of filters that differ from EMPTY_FILTERS (for a badge). */
 export function activeFilterCount(f: Partial<Filters> | null | undefined): number {
   if (!f) return 0;
   return (f.types?.length ? 1 : 0) + (f.departWindows?.length ? 1 : 0) + (f.sameDayArrival ? 1 : 0)
-    + (f.viaHubs?.length ? 1 : 0) + (f.widebodyOnly ? 1 : 0) + (f.starredOnly ? 1 : 0);
+    + (f.viaHubs?.length ? 1 : 0) + (f.widebodyOnly ? 1 : 0) + (f.starredOnly ? 1 : 0) + (f.maxHours ? 1 : 0);
 }
 
 /** Pseudo-region that selects starred destinations. */
@@ -116,12 +120,16 @@ export function normalizeText(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
 
-/** Accent-insensitive match of every query word against city, country, code and region. */
+/**
+ * Accent-insensitive match of every query word against city, country, code and
+ * region, plus state/province, airport names, island groups and trip-type
+ * words ('Hawaii', 'Heathrow', 'beach', 'ski'; see data/search-aliases).
+ */
 export function matchesQuery(d: Destination, query: string | null | undefined): boolean {
   const q = normalizeText(query ?? '');
   if (!q) return true;
   const hay = normalizeText(`${d.city} ${d.country} ${d.code} ${d.region}`);
-  return q.split(/\s+/).every(t => hay.includes(t));
+  return q.split(/\s+/).every(t => hay.includes(t) || matchesAlias(d, t));
 }
 
 function inWindow(hhmm: string, windows: readonly DepartWindow[]): boolean {
@@ -137,18 +145,20 @@ function flightPredicate(f: Filters): (x: FlightInstance) => boolean {
   return x =>
     inWindow(x.depLocal, f.departWindows)
     && (!f.sameDayArrival || x.arrDayOffset <= 0)
-    && (!f.widebodyOnly || isWidebody(x.aircraft));
+    && (!f.widebodyOnly || isWidebody(x.aircraft))
+    && (!f.maxHours || x.durationMin <= f.maxHours * 60);
 }
 
 /** Itinerary filter, or undefined when no itinerary-level filter is active. */
 function itineraryFilter(f: Filters): ItineraryFilter | undefined {
-  if (!f.departWindows.length && !f.sameDayArrival && !f.widebodyOnly) return undefined;
+  if (!f.departWindows.length && !f.sameDayArrival && !f.widebodyOnly && !f.maxHours) return undefined;
   return {
-    key: `${[...f.departWindows].sort()}|${f.sameDayArrival}|${f.widebodyOnly}`,
+    key: `${[...f.departWindows].sort()}|${f.sameDayArrival}|${f.widebodyOnly}|${f.maxHours}`,
     keep: x =>
       inWindow(x.legs[0].depLocal, f.departWindows)
       && (!f.sameDayArrival || x.arrDayOffset <= 0)
-      && (!f.widebodyOnly || x.legs.some(l => isWidebody(l.aircraft))),
+      && (!f.widebodyOnly || x.legs.some(l => isWidebody(l.aircraft)))
+      && (!f.maxHours || x.totalMin <= f.maxHours * 60),
   };
 }
 
@@ -184,7 +194,7 @@ export function computeRoutes(p: ComputeRoutesParams): RouteEntry[] {
   };
   const keepFlight = flightPredicate(filters);
   const keepItin = itineraryFilter(filters);
-  const trivialFlightFilter = !filters.departWindows.length && !filters.sameDayArrival && !filters.widebodyOnly;
+  const trivialFlightFilter = !filters.departWindows.length && !filters.sameDayArrival && !filters.widebodyOnly && !filters.maxHours;
   const starredOnly = filters.starredOnly || p.region === STARRED_REGION;
 
   const direct: RouteEntry[] = [];

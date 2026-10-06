@@ -11,9 +11,9 @@ import { FLIGHTLOG_KEY, LoadNote, TRIPS_KEY, Trip } from '../../trips/model';
 import { TRIPS_STORAGE } from '../../trips/storage';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, SEVILLE_TRIPS_FILE, sevilleTrip } from '../../trips/testing/seville-fixture';
 import { TripsService } from '../../trips/trips.service';
-import { allItineraries } from '../../utils/connections';
+import { allItineraries, directItineraries } from '../../utils/connections';
 import { toUtcMs } from '../../utils/time';
-import { FlightPage } from './flight.page';
+import { FlightPage, homeByFor } from './flight.page';
 import { agoLabel, factsView, noteFlights, noteRow, tripConnects, tripTarget, tripsCovering, tripsFor } from './flight-model';
 
 const TZ = 'America/Toronto';
@@ -156,7 +156,7 @@ describe('FlightPage additions (g6)', () => {
       fixture.detectChanges();
       await fixture.whenStable();
     };
-    return { el, nav, stable, svc: TestBed.inject(TripsService), state: TestBed.inject(AppStateService) };
+    return { el, nav, stable, fixture, svc: TestBed.inject(TripsService), state: TestBed.inject(AppStateService) };
   }
 
   const storedTrip = (): Trip => JSON.parse(trips.getItem(TRIPS_KEY)!).trips.find((t: Trip) => t.id === SEVILLE_IDS.trip);
@@ -268,5 +268,24 @@ describe('FlightPage additions (g6)', () => {
     expect(t.outboundDate).toBe('2026-10-09');
     expect(t.legs).toHaveLength(1);
     expect(nav).toHaveBeenCalledWith(['/trips', t.id], expect.anything());
+  });
+
+  it('"Start a trip" with a chosen return adds it as the return leg and sets home-by from its arrival', async () => {
+    configure(at('2026-10-02', '09:00'), { seedTrip: false });
+    const { el, svc, fixture } = await render('LIS', '2026-10-09');
+    const ret = directItineraries('LIS', 'YUL', '2026-10-13')[0];
+    expect(ret).toBeTruthy();
+    (fixture.componentInstance as unknown as { returnPick: { set(v: unknown): void } }).returnPick.set(ret);
+    (el.querySelector('[data-add-trip]') as HTMLButtonElement).click();
+    const t = svc.trips()[0];
+    expect(t.legs.map(l => (l.kind === 'flight' ? `${l.role}:${l.refs[0].flightNumber}` : l.kind))).toEqual(['outbound:AC812', 'return:AC813']);
+    expect(t.homeBy).toEqual({ dateKey: '2026-10-13', hhmm: '22:00' });
+  });
+
+  it('homeByFor uses the return arrival date, and end of day when it lands after 22:00', () => {
+    const ret = directItineraries('LIS', 'YUL', '2026-10-13')[0];
+    expect(homeByFor(ret)).toEqual({ dateKey: ret.arrDateKey, hhmm: '22:00' });
+    const late = { ...ret, legs: [{ ...ret.legs[0], arrLocal: '23:15' }] };
+    expect(homeByFor(late)).toEqual({ dateKey: ret.arrDateKey, hhmm: '23:59' });
   });
 });

@@ -6,7 +6,7 @@ import { AppStateService } from '../../state/app-state.service';
 import { type FlightLeg, type Trip, isFinalStatus } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { prettyFlight } from '../../ui/format';
-import { tripUrl } from '../../ui/links';
+import { calendarPath, flightPath, tripUrl } from '../../ui/links';
 import { airportTz } from '../../utils/airports';
 import { Itinerary, directItineraries } from '../../utils/connections';
 import { addDays, todayKey } from '../../utils/time';
@@ -49,7 +49,8 @@ export function tripAddition(trip: Trip, code: string, dayKey: string): TripAddi
 /**
  * "Start a trip to Lisbon" / "Add to Seville trip" on the destination page
  * (one ghost button). Start creates a trip to the destination with the
- * selected day's first nonstop as a Planned outbound leg.
+ * selected day and no flight: the user is sent to that day's flights (or the
+ * day picker when nothing flies) to pick one, so a flight is never chosen for them.
  */
 @Component({
   selector: 'app-dest-trip-actions',
@@ -99,9 +100,10 @@ export class DestTripActionsComponent {
       goal: placeFromDestination(code), fromHub: hub, outboundDate: dep,
       homeBy: { dateKey: addDays(dep, DEFAULT_STAY_DAYS), hhmm: DEFAULT_HOME_HHMM },
     });
-    const it = directItineraries(hub, code, dep)[0];
-    if (it) this.trips.addFlightLeg(trip.id, it, 'outbound');
-    void this.router.navigateByUrl(tripUrl(trip.id));
+    // Never pick a flight for the user: send them to choose one (the day's flights, else the day picker).
+    const flies = directItineraries(hub, code, dep).length > 0;
+    this.state.flash('Trip started. Pick your flight to add it.');
+    void this.router.navigate(flies ? flightPath(code, dep) : calendarPath(code), { queryParams: this.state.globalParams() });
   }
 
   add(a: TripAddition): void {

@@ -34,6 +34,12 @@ import { ReturnPanelComponent } from './return-panel.component';
 /** Other options listed before "Show all". */
 export const OPTIONS_SHOWN = 4;
 
+/** Home-by for a chosen return: its local arrival date, 22:00 unless it lands later (then end of day). */
+export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
+  const arr = ret.legs[ret.legs.length - 1].arrLocal;
+  return { dateKey: ret.arrDateKey, hhmm: arr > '22:00' ? '23:59' : '22:00' };
+}
+
 /**
  * Flight details, /flight/:code/:date/:flight? (spec §4.3).
  *
@@ -514,13 +520,15 @@ export class FlightPage {
       this.addTo(list[0]);
       return;
     }
+    const ret = this.returnPick();
     const trip = this.trips.create({
       goal: placeFromDestination(this.dest()),
       fromHub: this.hub(),
       outboundDate: it.dateKey,
-      homeBy: { dateKey: addDays(it.dateKey, this.nightCount()), hhmm: '22:00' },
+      homeBy: ret ? homeByFor(ret) : { dateKey: addDays(it.dateKey, this.nightCount()), hhmm: '22:00' },
     });
     this.trips.addFlightLeg(trip.id, it, 'outbound');
+    if (ret) this.trips.addFlightLeg(trip.id, ret, 'return');
     void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() });
   }
 

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, model } from '@angular/core';
 import { HUBS, REGIONS, TYPES } from '../../../data/destinations';
 import type { DestinationType } from '../../../data/destinations';
+import { ProfileService } from '../../../recs/profile.service';
 import { AppStateService } from '../../../state/app-state.service';
 import { aircraftName, widebodyCodes } from '../../../utils/aircraft';
 import { regionVar } from '../../../utils/region-color';
@@ -9,6 +10,8 @@ import { minToHhmm } from '../../../utils/time';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import type { SegOption } from '../../../ui/seg.component';
 import { hubDisplayName } from '../../../ui/format';
+
+const DEFAULT_MAX_HOURS = 6;
 
 export const SORT_OPTIONS: readonly { key: SortKey; label: string; short: string }[] = [
   { key: 'az', label: 'A–Z', short: 'A–Z' },
@@ -101,6 +104,16 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
             <input id="fs-same" type="checkbox" role="switch" class="switch"
                    [checked]="f().sameDayArrival" (change)="patch({ sameDayArrival: checked($event) })">
           </label>
+          <label class="row" for="fs-max">
+            <span class="row__tx"><span class="nm">Max flight time</span>
+              <span class="hint" data-max-hint>{{ f().maxHours ? 'Up to ' + f().maxHours + 'h' : 'Any length' }}</span></span>
+            <input id="fs-max" type="checkbox" role="switch" class="switch" data-max-switch
+                   [checked]="!!f().maxHours" (change)="setMax(checked($event) ? maxDefault() : null)">
+          </label>
+          @if (f().maxHours; as h) {
+            <input type="range" class="range" min="1" max="12" step="1" data-max-range aria-label="Longest flight in hours"
+                   [value]="h" [attr.aria-valuetext]="'Up to ' + h + ' hours'" (input)="setMax(num($event))">
+          }
           <label class="row" for="fs-wide">
             <span class="row__tx"><span class="nm">Widebody only</span><span class="hint">{{ widebodyHint() }}</span></span>
             <input id="fs-wide" type="checkbox" role="switch" class="switch"
@@ -140,6 +153,7 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
     .chip b { font-size: 11px; font-weight: 700; letter-spacing: .04em; opacity: .7; }
     .rng { font-size: 11px; opacity: .65; }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .range { width: 100%; accent-color: var(--teal); }
     .switch {
       appearance: none; flex: none; width: 50px; height: 30px; margin: 0; border-radius: 999px;
       background: var(--hair); position: relative; cursor: pointer;
@@ -161,6 +175,7 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
 })
 export class FilterSheetComponent {
   protected readonly state = inject(AppStateService);
+  private readonly profile = inject(ProfileService);
   readonly open = model(false);
 
   protected readonly f = this.state.filters;
@@ -184,6 +199,17 @@ export class FilterSheetComponent {
     return names.length ? names.join(', ') : 'Twin-aisle aircraft';
   });
   protected readonly count = computed(() => this.state.routes().length);
+
+  /** What the switch turns on: the profile's longest flight when it has one, else 6 hours. */
+  protected readonly maxDefault = computed(() => this.profile.profile().maxFlightHours ?? DEFAULT_MAX_HOURS);
+
+  protected num(e: Event): number {
+    return Number((e.target as HTMLInputElement).value);
+  }
+
+  setMax(h: number | null): void {
+    this.patch({ maxHours: h && Number.isFinite(h) ? Math.min(12, Math.max(1, Math.round(h))) : null });
+  }
 
   protected dot(r: string): string | null {
     return r === 'All' || r === STARRED_REGION ? null : regionVar(r);

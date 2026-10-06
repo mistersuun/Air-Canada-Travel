@@ -79,7 +79,11 @@ export class PassesService {
     return this.ready.then(async store => {
       if (store && !this.cleaned) {
         this.cleaned = true;
-        await this.cleanupExpired(this.trips.trips(), this.now());
+        try {
+          await this.cleanupExpired(this.trips.trips(), this.now());
+        } catch {
+          // best effort: it is retried on the next launch
+        }
       }
     });
   }

@@ -30,6 +30,8 @@ export interface Prefs {
   allowOvernight: boolean;
   /** Starred destination codes, in the order they were starred. */
   favourites: string[];
+  /** When trips were last exported (ISO), or null. Drives the backup reminder. */
+  lastBackupAt: string | null;
 }
 
 export const PREFS_KEY = 'ac.prefs.v1';
@@ -49,6 +51,7 @@ export const DEFAULT_PREFS: Readonly<Prefs> = Object.freeze({
   maxLayover: 360,
   allowOvernight: false,
   favourites: [] as string[],
+  lastBackupAt: null,
 }) as Readonly<Prefs>;
 
 const HUB_CODES = new Set(HUBS.map(h => h.code));
@@ -93,6 +96,8 @@ export function sanitizePrefs(raw: unknown): Prefs {
     maxLayover: MAX_LAYOVER_OPTIONS.includes(r['maxLayover'] as number) ? (r['maxLayover'] as number) : d.maxLayover,
     allowOvernight: typeof r['allowOvernight'] === 'boolean' ? r['allowOvernight'] : d.allowOvernight,
     favourites: favs,
+    lastBackupAt: typeof r['lastBackupAt'] === 'string' && !Number.isNaN(Date.parse(r['lastBackupAt']))
+      ? new Date(r['lastBackupAt']).toISOString() : d.lastBackupAt,
   };
 }
 
@@ -158,6 +163,19 @@ export class PrefsService {
 
   constructor() {
     effect(() => applyTheme(this.doc, this.theme()));
+    // Another tab saved: adopt its prefs, so this tab never writes back a stale copy.
+    this.doc.defaultView?.addEventListener('storage', e => this.onStorage(e));
+  }
+
+  /** Adopts the prefs another tab wrote. */
+  onStorage(e: Pick<StorageEvent, 'key' | 'newValue' | 'storageArea'>): void {
+    if (e.key !== PREFS_KEY || e.newValue === null) return;
+    if (this.storage && e.storageArea && e.storageArea !== this.storage) return;
+    try {
+      this.state.set(sanitizePrefs(JSON.parse(e.newValue)));
+    } catch {
+      // Unreadable value: keep the current prefs.
+    }
   }
 
   update(patch: Partial<Prefs>): void {
@@ -185,9 +203,9 @@ export class PrefsService {
     this.update({ favourites: favs.includes(code) ? favs.filter(c => c !== code) : [...favs, code] });
   }
 
-  /** Reset every setting to its default. Favourites are kept: they are data, not settings. */
+  /** Reset every setting to its default. Favourites and the last backup time are kept: they are data, not settings. */
   reset(): void {
-    this.update({ ...DEFAULT_PREFS, favourites: this.state().favourites });
+    this.update({ ...DEFAULT_PREFS, favourites: this.state().favourites, lastBackupAt: this.state().lastBackupAt });
   }
 
   private load(): Prefs {

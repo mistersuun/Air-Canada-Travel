@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
+import { Router } from '@angular/router';
+import { logbookPath } from '../../extras/links';
 import { HUBS } from '../../data/destinations';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
@@ -10,6 +12,7 @@ import { SegComponent, SegOption } from '../../ui/seg.component';
 import { hubDisplayName } from '../../ui/format';
 import { IconComponent } from '../shared/icons.component';
 import { DataCreditsComponent } from '../../places/ui/data-credits.component';
+import { SettingsBackgroundComponent } from './settings-background.component';
 import { SettingsDataComponent } from '../../trips/ui/settings-data.component';
 import { SettingsHistoryComponent } from '../../trips/ui/settings-history.component';
 import { SettingsFilesComponent } from '../../files/ui/settings-files.component';
@@ -30,7 +33,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
   standalone: true,
   imports: [
     GlassSheetComponent, SegComponent, IconComponent, SettingsDataComponent, SettingsHistoryComponent, DataCreditsComponent,
-    SettingsProfileComponent, SettingsFilesComponent, ClimateCreditComponent, GroundCreditComponent,
+    SettingsProfileComponent, SettingsFilesComponent, SettingsBackgroundComponent, ClimateCreditComponent, GroundCreditComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -90,18 +93,23 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
         <app-settings-profile />
 
         <section class="grp">
+          <button type="button" class="row row--btn" data-logbook-row (click)="openLogbook()">
+            <span class="nm">Logbook</span><span class="chev" aria-hidden="true">›</span>
+          </button>
           <button type="button" class="row row--btn" (click)="openShortcuts()">
             <span class="nm">Keyboard shortcuts</span><span class="chev" aria-hidden="true">›</span>
           </button>
           <div class="info">
             <span class="nm">Schedules</span>
             <span class="hint tn">{{ state.dataInfo().updatedLabel }}</span>
-            @if (state.dataInfo().staleDays !== null) {
-              <span class="ui-tag ui-tag--amber">Data {{ state.dataInfo().staleDays }} days old</span>
+            @if (state.dataInfo().staleTag !== null) {
+              <button type="button" class="ui-tag ui-tag--amber" [attr.title]="state.dataInfo().staleDetail"
+                      (click)="state.flash(state.dataInfo().staleDetail)">{{ state.dataInfo().staleTag }}</button>
             }
           </div>
         </section>
 
+        <app-settings-background />
         <app-settings-data />
         <app-settings-files />
         <app-settings-history />
@@ -181,6 +189,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
   `],
 })
 export class SettingsComponent {
+  private readonly router = inject(Router);
   protected readonly prefs = inject(PrefsService);
   protected readonly state = inject(AppStateService);
   protected readonly photos = inject(PhotoService);
@@ -219,6 +228,11 @@ export class SettingsComponent {
 
   protected setOvernight(e: Event): void {
     this.prefs.update({ allowOvernight: (e.target as HTMLInputElement).checked });
+  }
+
+  protected openLogbook(): void {
+    this.state.closeSettings();
+    void this.router.navigate(logbookPath(), { queryParams: this.state.globalParams() });
   }
 
   protected openShortcuts(): void {

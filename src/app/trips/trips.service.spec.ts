@@ -7,7 +7,8 @@ import { directItinerary } from '../utils/connections';
 import { toUtcMs } from '../utils/time';
 import { flightsOn } from '../utils/week';
 import { AppStateService, NOW } from '../state/app-state.service';
-import { PREFS_STORAGE } from '../state/prefs.service';
+import { PROFILE_STORAGE, ProfileService } from '../recs/profile.service';
+import { PREFS_STORAGE, PrefsService } from '../state/prefs.service';
 import { BlockedStorage, MemoryStorage } from '../state/testing';
 import { FLIGHTLOG_KEY, TRIPS_KEY, Trip } from './model';
 import { TRIPS_STORAGE } from './storage';
@@ -32,6 +33,7 @@ function make(store: Storage | null = seeded()): TripsService {
       { provide: NOW, useValue: () => nowMs },
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+      { provide: PROFILE_STORAGE, useValue: new MemoryStorage() },
     ],
   });
   return TestBed.inject(TripsService);
@@ -83,6 +85,17 @@ describe('TripsService', () => {
     expect(t.party).toEqual({ count: 1, stayTogether: true, splitNote: '' });
     expect(t.scheduleGeneratedAt).toBe(SEVILLE_META.generatedAt);
     expect(reload().trip(t.id)).toEqual(t);
+  });
+
+  it('copies the profile usual items into a new trip custom prep', () => {
+    const svc = make(new MemoryStorage());
+    const profile = TestBed.inject(ProfileService);
+    profile.addUsualItem('Phone charger');
+    profile.addUsualItem('Passport / ID');
+    const t = svc.create({ goal: SEVILLE_PLACE, fromHub: 'YUL', outboundDate: '2026-10-08', homeBy: { dateKey: '2026-10-13', hhmm: '22:00' } });
+    expect(t.customPrep.map(c => c.text)).toEqual(['Phone charger', 'Passport / ID']);
+    expect(new Set(t.customPrep.map(c => c.id)).size).toBe(2);
+    expect(profile.profile().usualItems).toHaveLength(2);
   });
 
   it('keeps trips in memory when storage is blocked', () => {
@@ -374,5 +387,54 @@ describe('TripsService', () => {
     expect(svc.trip(SEVILLE_IDS.trip)!.customPrep).toEqual([]);
     svc.archive(SEVILLE_IDS.trip);
     expect(svc.activeTrips()).toEqual([]);
+  });
+
+  describe('failed saves', () => {
+    it('raises unsaved when storage rejects the write, and retries on the next change', () => {
+      const store = seeded();
+      const svc = make(store);
+      const real = store.setItem.bind(store);
+      store.setItem = () => { throw new DOMException('full', 'QuotaExceededError'); };
+      svc.archive(SEVILLE_IDS.trip);
+      expect(svc.unsaved()).toBe(true);
+      store.setItem = real;
+      svc.archive(SEVILLE_IDS.trip, false);
+      expect(svc.unsaved()).toBe(false);
+      expect(stored().trips[0].archived).toBe(false);
+    });
+    it('flashes once with an Export action', () => {
+      const store = seeded();
+      const svc = make(store);
+      const flash = vi.spyOn(TestBed.inject(AppStateService), 'flash');
+      store.setItem = () => { throw new DOMException('full', 'QuotaExceededError'); };
+      svc.archive(SEVILLE_IDS.trip);
+      svc.archive(SEVILLE_IDS.trip, false);
+      expect(flash).toHaveBeenCalledTimes(1);
+      expect(flash.mock.calls[0][0]).toBe("Couldn't save on this phone. Export a backup now.");
+      expect(flash.mock.calls[0][1]?.label).toBe('Export');
+    });
+  });
+
+  describe('backup bookkeeping', () => {
+    it('markBackedUp records the time and silences the reminder', () => {
+      const svc = make();
+      nowMs = yul('2026-10-06', '09:00');
+      expect(svc.backupReminder()).toContain('leaves within 3 days');
+      svc.markBackedUp();
+      expect(TestBed.inject(PrefsService).prefs().lastBackupAt).toBe(new Date(nowMs).toISOString());
+      expect(svc.backupReminder()).toBeNull();
+    });
+    it('shows damage found on this launch, and deletes it', () => {
+      const store = new MemoryStorage();
+      store.setItem(TRIPS_KEY, '{broken');
+      const svc = make(store);
+      expect(svc.damaged()).toBe('trips');
+      store.setItem('ac.flightlog.corrupt', 'x');
+      svc.onStorage({ key: null, storageArea: store });
+      expect(svc.damaged()).toBe('trips and flight log');
+      svc.deleteDamaged();
+      expect(svc.damaged()).toBeNull();
+      expect(store.getItem('ac.trips.corrupt')).toBeNull();
+    });
   });
 });

@@ -1,12 +1,13 @@
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, linkedSignal, signal,
+  ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, untracked,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
+import { RecentService } from '../../state/recent.service';
 import { ShareService } from '../../state/share.service';
-import { airportTz, findDestination, getOrigins } from '../../utils/airports';
+import { airportTz, findDestination, findHub, getOrigins } from '../../utils/airports';
 import { formatKm, greatCircleKm } from '../../utils/geo';
 import type { Itinerary } from '../../utils/connections';
 import { addDays, formatKey, todayKey } from '../../utils/time';
@@ -16,7 +17,10 @@ import { SegComponent, type SegOption } from '../../ui/seg.component';
 import { RouteMapComponent, type MapPoint } from '../../ui/route-map.component';
 import { DestPhotoComponent } from '../../ui/dest-photo.component';
 import { calendarPath, flightPath } from '../../ui/links';
-import { hubDisplayName, tzDiffLabel } from '../../ui/format';
+import { hubDisplayName, itinKey, prettyFlight, tzDiffLabel } from '../../ui/format';
+import { tap } from '../../ui/haptics';
+import { getDestinationCodes } from '../../data/schedule-index';
+import { dailyFact } from './fun-facts';
 import { currencyName } from './currency';
 import {
   HORIZON_DAYS, bestHub, destState, destSummary, nextConnectionDate, nextDeparture, placeLabel, timelineItems, upcoming,
@@ -24,6 +28,12 @@ import {
 } from './dest-model';
 import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
+import { DestClimateComponent } from './dest-climate.component';
+import { DestForecastComponent } from './dest-forecast.component';
+import { EventsCardComponent } from '../../events/events-card.component';
+import { DestReferenceComponent } from '../../reference/dest-reference.component';
+import { historyFor, recordAria, recordTag, type HistoryCounts } from '../../trips/engine/track-record';
+import { TripsService } from '../../trips/trips.service';
 import { DestHomeByComponent } from './dest-home-by.component';
 import { DestTripActionsComponent } from './dest-trip-actions.component';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
@@ -61,7 +71,8 @@ const AC_URL = 'https://www.aircanada.com/';
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent,
+    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent,
+    DestReferenceComponent, EventsCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -77,7 +88,7 @@ const AC_URL = 'https://www.aircanada.com/';
           <button type="button" class="ui-circ" aria-label="Share" (click)="shareIt()">
             <app-icon name="share" [size]="18" />
           </button>
-          <button type="button" class="ui-circ star" [attr.aria-pressed]="isFav()"
+          <button type="button" class="ui-circ star" [class.pop]="popped()" (animationend)="popped.set(false)" [attr.aria-pressed]="isFav()"
                   [attr.aria-label]="isFav() ? 'Remove ' + city() + ' from Saved' : 'Save ' + city()"
                   (click)="toggleFav()">
             <app-icon name="star" [size]="18" [filled]="isFav()" />
@@ -201,7 +212,7 @@ const AC_URL = 'https://www.aircanada.com/';
           <app-seg class="out-seg" [options]="outOptions()" [value]="outMode()" (valueChange)="setOutMode($event)"
                    ariaLabel="Departures" />
         }
-        <app-dest-timeline [items]="outItems()" [code]="code()" linked [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
+        <app-dest-timeline [items]="outItems()" [code]="code()" [records]="records()" linked [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
                            [label]="'Departures from ' + hubName()">
           <div class="empty">
             @if (routeOnly()) {
@@ -256,6 +267,11 @@ const AC_URL = 'https://www.aircanada.com/';
             <div><span class="ic"><app-icon name="sun" [size]="16" /></span><span>Season</span><b>{{ s.season }}</b></div>
             <div><span class="ic"><app-icon name="plane" [size]="16" /></span><span>Aircraft</span><b>{{ s.aircraftShort || '—' }}</b></div>
           </div>
+          <app-dest-reference [iso2]="dest()?.iso2" [todayKey]="climateDay()" />
+          <app-dest-climate [code]="code()" [dateKey]="climateDay()" />
+          <app-dest-forecast [code]="code()" [dateKey]="climateDay()" />
+          <app-events-card [code]="code()" [from]="eventsFrom()" [to]="eventsTo()" />
+          @if (fact(); as f) { <p class="ui-sub fact" data-fact><b>Did you know</b> · {{ f }}</p> }
         </section>
       </div>
 
@@ -288,6 +304,7 @@ const AC_URL = 'https://www.aircanada.com/';
       display: flex; justify-content: space-between;
     }
     .hero__acts { display: flex; gap: 8px; }
+    .star.pop { animation: ui-pop 240ms var(--ease-out); }
     .star[aria-pressed='true'] { color: #FFFFFF; background: var(--red); border-color: color-mix(in srgb, var(--red) 60%, #FFFFFF); }
     .credit {
       position: absolute; z-index: 2; right: 16px; bottom: 72px; max-width: calc(100% - 32px);
@@ -327,6 +344,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .map { display: block; height: 260px; border-radius: 16px; overflow: hidden; background: var(--sea); }
     .dist { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 0; font-size: 13px; }
     .ess__h { margin-bottom: 12px; }
+    .fact { margin: 12px 0 0; }
     .ui-ess .ic { color: var(--blue); }
     .m-actions { display: grid; gap: 10px; margin-top: 24px; }
 
@@ -406,6 +424,8 @@ export class DestinationPage {
   private readonly sharer = inject(ShareService);
   private readonly router = inject(Router);
   private readonly doc = inject(DOCUMENT);
+  private readonly recent = inject(RecentService);
+  private readonly trips = inject(TripsService);
 
   readonly code = input.required<string>();
   /** ?tab= (mobile seg), bound from the query by withComponentInputBinding. */
@@ -426,6 +446,15 @@ export class DestinationPage {
 
   // ── Destination facts ─────────────────────────────────────────────────────
   protected readonly dest = computed(() => findDestination(this.code()));
+
+  constructor() {
+    // Opening a destination puts it first in Home's "Recent" row.
+    effect(() => {
+      const d = this.dest();
+      if (d) untracked(() => this.recent.add(d.code));
+    });
+  }
+
   protected readonly city = computed(() => this.dest()?.city ?? this.code());
   protected readonly place = computed(() => {
     const d = this.dest();
@@ -606,6 +635,51 @@ export class DestinationPage {
     const abbr = zoneAbbr(d.tz, d.iso2, now);
     return [tzDiffLabel(d.tz, this.state.hubInfo().tz, now), abbr].filter(Boolean).join(' · ');
   });
+  /** One "Did you know" line, stable for the day. */
+  protected readonly fact = computed(() => {
+    const d = this.dest();
+    if (!d) return null;
+    const hub = this.state.hubInfo();
+    const nonstops = getDestinationCodes(hub.code).map(c => findHub(c) ?? findDestination(c)).filter((x): x is NonNullable<typeof x> => !!x);
+    return dailyFact(d, hub, nonstops, this.state.nowMs());
+  });
+  /** "What's on": the shown day and 3 days either side (the card clamps to what the server accepts). */
+  protected readonly eventsFrom = computed(() => addDays(this.climateDay(), -3));
+  protected readonly eventsTo = computed(() => addDays(this.climateDay(), 3));
+  /** The day the weather is for: the picked day, else today at the destination. */
+  protected readonly climateDay = computed(() => {
+    const tz = this.dest()?.tz;
+    return this.state.selectedDateKey() ?? (tz ? todayKey(tz, this.state.nowMs()) : this.outToday());
+  });
+  /**
+   * 'you: 3/4' tags for the departures, keyed by row: only the first row of each
+   * flight number (and route) carries it, and only where you have tried it.
+   * Rows with several legs prefix each tag with its flight number. Counts only.
+   */
+  protected readonly records = computed(() => {
+    const out: Record<string, { text: string; aria: string }[]> = {};
+    const outcomes = this.trips.outcomes();
+    if (!outcomes.length) return out;
+    const seen = new Set<string>();
+    const cache = new Map<string, HistoryCounts>();
+    for (const t of this.outItems()) {
+      const tags: { text: string; aria: string }[] = [];
+      for (const l of t.it.legs) {
+        const n = prettyFlight(l.flightNumber);
+        if (!n || l.estimated) continue;
+        const k = `${n}|${l.origin}|${l.dest}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        let c = cache.get(k);
+        if (!c) cache.set(k, c = historyFor({ outcomes }, { flightNumber: n, route: { origin: l.origin, dest: l.dest } }).overall);
+        const tag = recordTag(c);
+        if (tag) tags.push({ text: t.it.legs.length > 1 ? `${n} ${tag}` : tag, aria: `${n}. ${recordAria(c)}` });
+      }
+      if (tags.length) out[itinKey(t.it)] = tags;
+    }
+    return out;
+  });
+  protected readonly popped = signal(false);
   protected readonly currency = computed(() => currencyName(this.dest()?.iso2));
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -630,6 +704,8 @@ export class DestinationPage {
     const city = this.city();
     const was = this.isFav();
     this.state.toggleFavourite(code);
+    tap();
+    if (!was) this.popped.set(true);
     if (was) {
       this.state.flash(`Removed ${city}`, {
         label: 'Undo',

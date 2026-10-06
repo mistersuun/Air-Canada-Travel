@@ -70,8 +70,15 @@ export function stopsLabel(it: Itinerary): string {
 
 // ── From the week strip ──────────────────────────────────────────────────────
 
-/** Schedules at least this many days old are flagged as possibly stale. */
-export const STALE_AFTER_DAYS = 14;
+/** Schedules scraped more than this many days ago are flagged. */
+export const STALE_AFTER_DAYS = 45;
+
+/**
+ * Schedules whose last published date is fewer than this many days away are
+ * flagged. Age since the scrape is no signal (it only moves when the data
+ * does); running out of published dates is.
+ */
+export const STALE_COVERAGE_DAYS = 21;
 
 /** 'Sep 28 – Oct 4' within a year; 'Dec 28, 2026 – Jan 3, 2027' across years. */
 export function weekRangeLabel(weekStart: string): string {

@@ -110,9 +110,37 @@ export const routes: Routes = [
     title: 'Share trip · Routes',
   },
   {
+    path: 'trips/:id/recap',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/share/recap.page').then(m => m.RecapPage),
+    title: 'Trip recap · Routes',
+  },
+  {
+    // Web Share Target (?id= from the service worker) and desktop File Handling.
+    path: 'share-in',
+    loadComponent: () => import('./pages/share-in/share-in.page').then(m => m.ShareInPage),
+    title: 'Add to a trip · Routes',
+  },
+  {
+    // End-to-end encrypted group plan: the key is in the URL fragment.
+    path: 'g/:id',
+    loadComponent: () => import('./pages/group/group.page').then(m => m.GroupPage),
+    title: 'Group trip · Routes',
+  },
+  {
+    path: 'logbook',
+    loadComponent: () => import('./pages/logbook/logbook.page').then(m => m.LogbookPage),
+    title: 'Logbook · Routes',
+  },
+  {
     path: 'profile',
     loadComponent: () => import('./pages/profile/profile.page').then(m => m.ProfilePage),
     title: 'Travel profile · Routes',
+  },
+  {
+    path: 'weekend',
+    loadComponent: () => import('./pages/weekend/weekend.page').then(m => m.WeekendPage),
+    title: 'Weekend finder · Routes',
   },
   {
     path: 'today',

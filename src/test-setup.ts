@@ -36,6 +36,10 @@ try {
 
 // ---- jsdom gaps --------------------------------------------------------------
 if (typeof window !== 'undefined') {
+  // jsdom logs "Not implemented" for canvas; report "no 2D context" quietly (celebrate() then skips).
+  if (typeof HTMLCanvasElement !== 'undefined') {
+    HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement['getContext'];
+  }
   if (!window.matchMedia) {
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,

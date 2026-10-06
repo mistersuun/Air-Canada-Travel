@@ -1,3 +1,6 @@
+import { celebrate } from '../../ui/celebrate';
+import { success } from '../../ui/haptics';
+import { clearedMessage } from '../../trips/cleared';
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject, input, signal } from '@angular/core';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { Router, RouterLink } from '@angular/router';
@@ -12,6 +15,11 @@ import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component'
 import { recoverPath, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
 import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
+import { TodayTimelineComponent } from './today-timeline.component';
+import { TodayInAirComponent } from './in-air.component';
+import { LiveStatusComponent } from '../../live/live-status.component';
+import { recoverTarget } from '../../live/flight-status';
+import { refDepUtc } from '../../trips/engine/legs';
 import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
 /**
@@ -24,7 +32,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 @Component({
   selector: 'app-today-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent],
+  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent, TodayInAirComponent, LiveStatusComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -41,7 +49,8 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
             <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
-          @if (v.then) { <p class="td__sub tn">{{ v.then }}</p> }
+          <app-live-status [flightNumber]="v.ref.flightNumber" [origin]="v.ref.origin" [depUtc]="depUtc(v.ref)"
+                           [recoverLink]="live(v).link" [recoverParams]="live(v).params" [recoverLabel]="live(v).label" />
           @if (v.note; as n) {
             <p class="td__note" data-note>Your note, {{ n.time }}: <b>{{ n.text }}</b></p>
           }
@@ -60,10 +69,12 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
         </section>
 
         <app-today-pass [tripId]="v.tripId" [legId]="v.legId" />
+        <app-today-in-air [ref]="v.ref" [status]="v.status" />
+        <app-today-timeline [tripId]="v.tripId" [legId]="v.legId" />
 
         @if (!v.final) {
           <div class="td__acts">
-            <button type="button" class="td__big ui-btn ui-btn--dark" data-boarded (click)="boarded()">
+            <button type="button" class="td__big ui-btn ui-btn--dark" data-boarded (click)="boarded($event)">
               <app-icon name="check" [size]="18" [strokeWidth]="2.4" />I boarded
             </button>
             <button type="button" class="td__big td__miss ui-btn" data-not-boarded (click)="notBoarded()">
@@ -228,6 +239,13 @@ export class TodayPage {
     return v ? ['/trips', v.tripId] : this.tripsLink;
   });
 
+  protected depUtc = refDepUtc;
+
+  /** Where "Cancelled" points: Recover, or the Return tab for a return leg. */
+  protected live(v: { tripId: string; legId: string; isReturn: boolean; ref: { origin: string } }) {
+    return recoverTarget(v.tripId, v.isReturn, v.ref.origin, v.legId);
+  }
+
   protected statusLabel(s: LegStatus): string {
     return LEG_STATUS_LABEL[s];
   }
@@ -237,7 +255,7 @@ export class TodayPage {
   }
 
   /** Records "Everyone boarded" for this segment (sets the leg Boarded), with Undo. */
-  protected boarded(): void {
+  protected boarded(ev?: Event): void {
     const v = this.view();
     const trip = v && this.trips.trip(v.tripId);
     if (!v || !trip) return;
@@ -250,7 +268,9 @@ export class TodayPage {
     });
     const key = instanceKey(ref);
     const rec = this.trips.outcomes().find(o => o.tripId === trip.id && instanceKey(o) === key);
-    this.state.flash(`${ref.flightNumber} marked Boarded`, {
+    celebrate(ev?.currentTarget as Element | null);
+    success();
+    this.state.flash(clearedMessage(ref.origin, ref.dest), {
       label: 'Undo',
       run: () => {
         if (rec) this.trips.removeOutcome(rec.id);

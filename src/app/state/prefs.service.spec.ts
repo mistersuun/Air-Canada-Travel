@@ -22,7 +22,7 @@ describe('sanitizePrefs', () => {
     });
     expect(p).toEqual({
       hub: 'YVR', region: 'All', showConnections: false, theme: 'auto', timeFormat: '12h',
-      minConnect: 90, maxLayover: 360, allowOvernight: false, favourites: ['LHR', 'ATH', 'DJT'],
+      minConnect: 90, maxLayover: 360, allowOvernight: false, favourites: ['LHR', 'ATH', 'DJT'], lastBackupAt: null,
     });
   });
 
@@ -37,6 +37,16 @@ describe('sanitizePrefs', () => {
 });
 
 describe('PrefsService', () => {
+  it('adopts prefs written by another tab, ignoring other keys and bad values', () => {
+    const svc = setup(new MemoryStorage());
+    svc.onStorage({ key: PREFS_KEY, newValue: JSON.stringify({ favourites: ['LHR'] }), storageArea: null });
+    expect(svc.favourites()).toEqual(['LHR']);
+    svc.onStorage({ key: 'other', newValue: JSON.stringify({ favourites: ['ATH'] }), storageArea: null });
+    svc.onStorage({ key: PREFS_KEY, newValue: '{bad', storageArea: null });
+    svc.onStorage({ key: PREFS_KEY, newValue: null, storageArea: null });
+    expect(svc.favourites()).toEqual(['LHR']);
+  });
+
   afterEach(() => {
     document.documentElement.removeAttribute('data-theme');
   });
@@ -157,5 +167,12 @@ describe('applyTheme', () => {
     expect(metas.map(m => m.content)).toEqual(['#CFE6FF', '#CFE6FF']);
     applyTheme(document, 'auto');
     expect(metas.map(m => m.content)).toEqual(['#CFE6FF', '#0F2238']);
+  });
+
+  it('sanitises lastBackupAt: a valid date is kept, anything else becomes null, old prefs load without it', () => {
+    expect(sanitizePrefs({ lastBackupAt: '2026-10-01T13:38:00Z' }).lastBackupAt).toBe('2026-10-01T13:38:00.000Z');
+    expect(sanitizePrefs({ lastBackupAt: 'yesterday' }).lastBackupAt).toBeNull();
+    expect(sanitizePrefs({ lastBackupAt: 5 }).lastBackupAt).toBeNull();
+    expect(sanitizePrefs({ hub: 'YYZ' }).lastBackupAt).toBeNull();
   });
 });

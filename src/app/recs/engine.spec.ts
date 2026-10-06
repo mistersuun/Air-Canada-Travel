@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../data/schedule-index';
 import type { Outcome, OutcomeKind } from '../trips/model';
+import { flightsOn } from '../utils/week';
 import { decodeClimate } from './climate';
 import {
-  RecInput, dayItineraries, pairable, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
+  RecInput, weatherRecs, dayItineraries, holidayRecs, pairable, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
   scheduleLine, seasonWindow, shortDuration, styleRecs, whyText,
 } from './engine';
 import { longWeekends } from './long-weekends';
@@ -33,6 +34,34 @@ const texts = (lines: Recommendation['lines']) => lines.map(l => l.text);
 
 beforeEach(() => setScheduleSource(RECS_ROUTES, RECS_META));
 afterEach(() => resetScheduleSource());
+
+describe('dayItineraries: departed flights', () => {
+  it('drops flights already gone today, keeps all on other days', () => {
+    const all = dayItineraries(input(), 'YUL', 'FLL', '2026-10-09');
+    expect(all.length).toBeGreaterThan(1);
+    const cut = all[0].departUtc;
+    const today = input({ todayKey: '2026-10-08', nowMs: cut });
+    expect(dayItineraries(today, 'YUL', 'FLL', '2026-10-09').map(i => i.departUtc)).toEqual(
+      all.map(i => i.departUtc).filter(u => u > cut),
+    );
+    expect(dayItineraries(input({ todayKey: '2026-10-09', nowMs: cut }), 'YUL', 'FLL', '2026-10-09', true)).toHaveLength(all.length);
+    expect(dayItineraries(input({ nowMs: cut - 1 }), 'YUL', 'FLL', '2026-10-09')).toHaveLength(all.length);
+  });
+});
+
+describe('holiday out day with all flights gone', () => {
+  it('falls back to the next acceptable out day, with title and aside to match', () => {
+    const lw = longWeekends('2026-10-01', 60, 'YUL')[0];
+    const day1 = dayItineraries(input(), 'YUL', 'FLL', '2026-10-09');
+    const lastUtc = Math.max(...['LGA', 'FLL'].flatMap(c => dayItineraries(input(), 'YUL', c, '2026-10-09').map(i => i.departUtc)), ...day1.map(i => i.departUtc));
+    const late = input({ todayKey: '2026-10-09', nowMs: lastUtc });
+    const rec = holidayRecs(late, lw);
+    expect(rec.length).toBeGreaterThan(0);
+    expect(rec[0].out?.dateKey).toBe('2026-10-10');
+    const g = recommend(late).find(x => x.id === lw.id)!;
+    expect(g.aside).toBe(holidayGroupAside('2026-10-10', '2026-10-12'));
+  });
+});
 
 describe('recommend: Thanksgiving 2026 (real schedule rows, see recs-fixture)', () => {
   it('opens with the Thanksgiving long weekend: LGA by counts, FLL by times', () => {
@@ -293,5 +322,89 @@ describe('holiday recs never suggest the past, and pair out and back', () => {
     const none = pairable([it(12, 15)], [it(9, 11)]);
     expect(none.out).toEqual([]);
     expect(none.back).toEqual([]);
+  });
+});
+
+describe('weather recs: Escape the cold / Cooler escapes', () => {
+  const flat = (tmax: number) => ({ tmax: Array(12).fill(tmax), tmin: Array(12).fill(tmax - 8), precip: Array(12).fill(50), wet: Array(12).fill(5) });
+  const climate = (home: number | null, there: Record<string, number>) => decodeClimate({
+    ...CLIMATE_FIXTURE,
+    codes: { ...(home === null ? {} : { YUL: flat(home) }), ...Object.fromEntries(Object.entries(there).map(([k, v]) => [k, flat(v)])) },
+  });
+  // Explore dedupes against the holiday card (FLL is already there), so kind-level checks use weatherRecs.
+  const weatherOf = (over: Partial<RecInput>) => { const items = weatherRecs(input(over)); return items.length ? { items } : undefined; };
+
+  it('cold hub: warm nonstops by warmth delta, with the Trade line and delta', () => {
+    const g = weatherOf({ climate: climate(3, { FLL: 29, CUN: 31, LIS: 20 }) })!;
+    const group = recommend(input({ climate: climate(3, { FLL: 29, CUN: 31, LIS: 20 }) })).find(x => x.id === 'weather')!;
+    expect(group.title).toBe('Escape the cold');
+    expect(group.items.map(r => r.code)).toEqual(['CUN']);   // FLL already shown in the holiday card
+    expect(g.items.map(r => r.code)).toEqual(['CUN', 'FLL']);
+    const [cun, fll] = g.items;
+    expect(cun.kind).toBe('weather');
+    expect(cun.deltaC).toBe(28);
+    expect(fll.deltaC).toBe(26);
+    expect(fll.lines[0]).toEqual({ text: 'Trade 3° for 29°', label: 'typical' });
+    expect(fll.lines[1].text).toMatch(/^Nonstop (Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
+    expect(fll.lines[1].label).toBe('scheduled');
+    expect(fll.weather).toBeNull();
+  });
+
+  it('hot hub: cooler destinations only', () => {
+    const g = weatherOf({ climate: climate(27, { FLL: 31, LIS: 20, OPO: 18, CUN: 32 }) })!;
+    expect(recommend(input({ climate: climate(27, { FLL: 31, LIS: 20, OPO: 18, CUN: 32 }) })).find(x => x.id === 'weather')!.title).toBe('Cooler escapes');
+    expect(g.items.map(r => r.code)).toEqual(['OPO', 'LIS']);
+    expect(g.items[0].deltaC).toBe(-9);
+  });
+
+  it('mild hub month or no hub climate: nothing', () => {
+    expect(weatherOf({ climate: climate(15, { FLL: 29 }) })).toBeUndefined();
+    expect(weatherOf({ climate: climate(null, { FLL: 29, CUN: 31 }) })).toBeUndefined();
+    expect(weatherOf({ climate: null })).toBeUndefined();
+  });
+
+  it('respects dismissals and flights that already left', () => {
+    const c = climate(3, { FLL: 29, CUN: 31 });
+    const dismissed = { ...RECS_PROFILE, dismissed: ['weather:CUN:'] };
+    expect(weatherOf({ climate: c, profile: dismissed })!.items.map(r => r.code)).toEqual(['FLL']);
+    const later = input({ climate: c, nowMs: Date.parse('2028-01-10T12:00:00Z'), todayKey: '2028-01-10' });
+    expect(weatherRecs(later)).toEqual([]);
+  });
+
+  it('hot threshold is 26 degrees at home', () => {
+    expect(weatherRecs(input({ climate: climate(26, { LIS: 20 }) })).map(r => r.code)).toEqual(['LIS']);
+    expect(weatherRecs(input({ climate: climate(25, { LIS: 20 }) }))).toEqual([]);
+  });
+
+  it('applies the profile flight-time limit', () => {
+    const c = climate(3, { FLL: 29, CUN: 31 });
+    expect(weatherRecs(input({ climate: c, profile: { ...RECS_PROFILE, maxFlightHours: 1 } }))).toEqual([]);
+    expect(weatherRecs(input({ climate: c, profile: { ...RECS_PROFILE, maxFlightHours: null } })).length).toBeGreaterThan(0);
+  });
+
+  it('skips a flight today that already left and uses a later day', () => {
+    const c = climate(3, { FLL: 29 });
+    const today = flightsOn('YUL', 'FLL', RECS_TODAY);
+    expect(today.length).toBeGreaterThan(0);
+    const before = weatherRecs(input({ climate: c, nowMs: today[0].depUtc - 60_000 }))[0];
+    expect(before.link.path.join('/')).toContain(RECS_TODAY);
+    const after = weatherRecs(input({ climate: c, nowMs: today[today.length - 1].depUtc }))[0];
+    expect(after.link.path.join('/')).not.toContain(RECS_TODAY);
+  });
+
+  it("uses the destination's normals for the flight's month", () => {
+    const month = (v: number[]) => ({ tmax: v, tmin: v.map(x => x - 8), precip: Array(12).fill(50), wet: Array(12).fill(5) });
+    const oct20 = Array(12).fill(20), nov31 = Array(12).fill(20);
+    nov31[10] = 31;   // warm only in November
+    const c = decodeClimate({ ...CLIMATE_FIXTURE, codes: { YUL: { ...month(Array(12).fill(3)) }, FLL: month(nov31) } });
+    expect(oct20.length).toBe(12);
+    // Late October: the flight found in the next 10 days may fall in November; October highs of 20 would not qualify.
+    const rec = weatherRecs(input({ climate: c, todayKey: '2026-10-30', nowMs: Date.parse('2026-10-30T00:00:00-04:00') }));
+    for (const r of rec) expect(r.lines[0].text).toBe('Trade 3° for 31°');
+  });
+
+  it('is not part of the Trips ideas', () => {
+    const g = recommend(input({ climate: climate(3, { FLL: 29 }), context: 'trips' }));
+    expect(allRecs(g).some(r => r.kind === 'weather')).toBe(false);
   });
 });

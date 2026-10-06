@@ -58,6 +58,26 @@ describe('share links', () => {
     await expect(encodeTripShare(huge, [], NOW)).rejects.toBeInstanceOf(ShareTooLargeError);
   });
 
+  it('skips an attempt whose JSON is over what the decoder accepts, even when it compresses small', async () => {
+    const notes = [{ ...NOTE, id: 'big', text: 'a'.repeat(450_000) }];
+    const payload = await encodeTripShare(SEVILLE_TRIP, notes, NOW);
+    const back = (await decodeTripShare(payload))!;
+    expect(back).not.toBeNull();
+    expect(back.notes).toEqual([]);
+  });
+
+  it('keeps manually added prep items but strips usual items copied from the profile', async () => {
+    const trip = {
+      ...sevilleTrip(),
+      customPrep: [
+        { id: 'u1', text: 'Phone charger', usual: true as const },
+        { id: 'm1', text: 'Euros for the bus' },
+      ],
+    };
+    const back = (await decodeTripShare(await encodeTripShare(trip, [], NOW)))!;
+    expect(back.trip.customPrep.map(c => c.text)).toEqual(['Euros for the bus']);
+  });
+
   it('returns null for garbage, never throws', async () => {
     for (const bad of ['', 'x', 'zzzz', 'j!!!', 'jAAAA', 'qabc', 'j' + btoa('{"s":1,"trip":{}}'), 'z' + 'A'.repeat(70_000)]) {
       expect(await decodeTripShare(bad)).toBeNull();

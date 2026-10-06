@@ -145,6 +145,34 @@ describe('arrivalAtGoal', () => {
     expect(utcToLocal(r.utc!, tz)).toEqual({ dateKey: '2026-10-10', hhmm: '14:20' });
   });
 
+  it('a 00:30 departure after midnight is tonight\'s only when ready in the evening', () => {
+    const deps = [{ depMin: 30, rideMin: 120, product: '0' }];
+    const dir = {
+      src: 't', op: 'Op', from: 'A', to: 'B', tz, validFrom: '2026-01-01', validTo: '2026-12-31',
+      wk: deps, sat: deps, sun: deps, noService: new Set<string>(), note: null,
+    } as unknown as NonNullable<GroundEstimate['timetable']>['dir'];
+    const tt = { ...g, timetable: { dir } } as unknown as GroundEstimate;
+    const evening = arrivalAtGoal(toUtcMs('2026-10-09', '23:00', tz), tt, tz);
+    expect(evening.lastDepMissed).toBe(false);
+    expect(evening.departure).toMatchObject({ dateKey: '2026-10-10', hhmm: '00:30' });
+    expect(evening.overnightLikely).toBe(true); // arrives 02:30, a late arrival either way
+    const morning = arrivalAtGoal(toUtcMs('2026-10-09', '06:00', tz), tt, tz);
+    expect(morning.lastDepMissed).toBe(true);
+    expect(morning.overnightLikely).toBe(true);
+  });
+
+  it('a long wait to a small-hours train still counts the last departure as missed', () => {
+    const mk = (depMin: number[]) => depMin.map(d => ({ depMin: d, rideMin: 120, product: '0' }));
+    const deps = mk([4 * 60 + 30, 17 * 60 + 30]);
+    const dir = {
+      src: 't', op: 'Op', from: 'A', to: 'B', tz, validFrom: '2026-01-01', validTo: '2026-12-31',
+      wk: deps, sat: deps, sun: deps, noService: new Set<string>(), note: null,
+    } as unknown as NonNullable<GroundEstimate['timetable']>['dir'];
+    const tt = { ...g, exitMin: 0, timetable: { dir } } as unknown as GroundEstimate;
+    const r = arrivalAtGoal(toUtcMs('2026-10-09', '18:00', tz), tt, tz);
+    expect(r.lastDepMissed).toBe(true);
+  });
+
   it('unknown onward has no arrival', () => {
     const cmn = groundEstimate(at('CMN'), SEVILLE_PLACE);
     expect(arrivalAtGoal(0, cmn, 'Africa/Casablanca')).toEqual({ utc: null, overnightLikely: false, lastDepMissed: false, departure: null });

@@ -366,6 +366,55 @@ def test_main_offline_writes_a_file(tmp_path, monkeypatch):
     assert out.stat().st_mtime_ns == mtime  # only dates changed: left as is
 
 
+def test_assemble_adds_corridor_valid_to_as_the_latest_direction():
+    e = entry("renfe", "2026-12-20")
+    e["back"] = {**e["out"], "validTo": "2026-12-31"}
+    doc = bg.assemble({"K3": e, "K4": entry("renfe", "2026-11-01")}, {"renfe": "2026-10-01"}, None, set(), TODAY)
+    assert doc["corridors"]["K3"]["validTo"] == "2026-12-31"
+    assert doc["corridors"]["K4"]["validTo"] == "2026-11-01"
+    assert "validTo" not in e  # the input is not mutated
+
+
+def test_app_decoder_inputs_unaffected_by_corridor_valid_to():
+    # The app reads only mode/out/back from a corridor (src/app/places/timetable.ts decodeGround).
+    doc = bg.assemble({"K3": entry("renfe", "2026-12-20")}, {"renfe": "2026-10-01"}, None, set(), TODAY)
+    assert {"mode", "out", "validTo"} <= set(doc["corridors"]["K3"])
+
+
+def test_expiring_corridors_within_ten_days():
+    doc = {"corridors": {"A-1": {"validTo": "2026-10-11"}, "B-2": {"validTo": "2026-10-12"},
+                         "C-3": {"validTo": "2026-10-01"}, "D-4": {"validTo": "2027-01-01"}}}
+    assert bg.expiring_corridors(doc, TODAY) == [("A-1", "2026-10-11"), ("C-3", "2026-10-01")]
+    lines = bg.expiry_warnings(doc, TODAY)
+    assert lines[0] == "::warning title=Ground corridor expiring::A-1 timetable ends 2026-10-11 (9 days)"
+    assert "ended 2026-10-01" in lines[1]
+    assert bg.expiry_warnings({"corridors": {"X-1": {"validTo": "2027-01-01"}}}, TODAY) == []
+
+
+def test_main_warns_and_writes_step_summary(tmp_path, monkeypatch, capsys):
+    z = tmp_path / "cache" / "t.zip"
+    z.parent.mkdir()
+    src = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0")
+    with zipfile.ZipFile(z, "w") as w:
+        for n in src.namelist():
+            w.writestr(n, src.read(n))
+    monkeypatch.setitem(bg.FEEDS, "t", {"name": "T", "url": "", "page": "", "licence": "CC BY 4.0",
+                                        "licenceUrl": bg.CC_BY, "credit": "T", "optional": True})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor()])
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    out = tmp_path / "ground.json"
+    assert bg.main(["--offline", "--cache", str(z.parent), "--only", "t", "--out", str(out),
+                    "--today", "2026-10-02"]) == 0
+    doc = json.loads(out.read_text())
+    valid_to = doc["corridors"]["AAA-1"]["validTo"]
+    assert valid_to == doc["corridors"]["AAA-1"]["out"]["validTo"]
+    printed = capsys.readouterr().out
+    expiring = bool(bg.expiring_corridors(doc, TODAY))
+    assert ("::warning title=Ground corridor expiring::AAA-1" in printed) == expiring
+    assert summary.exists() == expiring
+
+
 # ── The committed file ──────────────────────────────────────────────────────
 
 @pytest.mark.skipif(not GROUND_JSON.exists(), reason="ground.json not built")
@@ -387,3 +436,130 @@ def test_committed_file_shape():
                 assert [m for m, _, _ in x[g]] == sorted(m for m, _, _ in x[g])
     for s in doc["sources"].values():
         assert s["licence"] and s["credit"] and s["url"]
+
+
+def test_unselected_feed_keeps_previous_corridors():
+    prev = {"sources": {"cp": {"name": "CP"}}, "corridors": {"K1": entry("cp", "2026-12-01")}}
+    doc = bg.assemble({"K3": entry("renfe", "2026-12-20")}, {"renfe": "2026-10-01"}, prev, set(bg.FEEDS) - {"renfe"}, TODAY)
+    assert set(doc["corridors"]) == {"K1", "K3"} and "cp" in doc["sources"]
+
+
+# ── Name pins, provisional corridors, VIA / Maritime / Flix entries ────────
+
+NAMED_STOPS = """stop_id,stop_name,parent_station
+a1,Halifax Airport (Stanfield),
+a2,Halifax Bus Terminal,
+b1,Moncton Bus Terminal,
+c1,Montréal,
+"""
+
+
+def test_name_pins_exact_and_substring_case_insensitive():
+    stops = {"a1": "", "a2": "", "b1": "", "c1": ""}
+    names = {"a1": "Halifax Airport (Stanfield)", "a2": "Halifax Bus Terminal", "b1": "Moncton Bus Terminal", "c1": "Montréal"}
+    assert bg.resolve_stops(stops, ["name~:halifax airport"], "k", names) == {"a1"}
+    assert bg.resolve_stops(stops, ["name:MONTRÉAL"], "k", names) == {"c1"}
+    assert bg.resolve_stops(stops, ["name~:halifax", "b1"], "k", names) == {"a1", "a2", "b1"}
+
+
+def test_name_pin_without_match_raises_unless_lenient_with_another_match():
+    stops, names = {"a1": ""}, {"a1": "Halifax Airport"}
+    with pytest.raises(bg.PinnedStopMissing):
+        bg.resolve_stops(stops, ["name~:Nowhere"], "k", names)
+    with pytest.raises(bg.PinnedStopMissing):
+        bg.resolve_stops(stops, ["name~:Nowhere"], "k", names, lenient=True)
+    assert bg.resolve_stops(stops, ["name~:Nowhere", "name~:Halifax"], "k", names, lenient=True) == {"a1"}
+
+
+def test_provisional_corridor_with_unknown_stops_is_skipped_not_fatal(capsys):
+    z = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0")
+    good = corridor()
+    prov = corridor(key="ZZZ-9", provisional=True,
+                    a={"stops": ["name~:Nowhere"], "name": "X", "tz": "Europe/Madrid"})
+    runs = bg.load_feed(z, [good, prov], LO, HI)
+    assert runs["ZZZ-9"] == {"out": [], "back": []}
+    assert bg.build_corridor(good, runs["AAA-1"], TODAY)["out"]["wk"] == [[480, 60, 0]]
+    assert bg.build_corridor(prov, runs["ZZZ-9"], TODAY) is None
+    assert "provisional corridor skipped" in capsys.readouterr().err
+
+
+def test_non_provisional_missing_pin_still_fails_loudly():
+    z = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0")
+    with pytest.raises(bg.PinnedStopMissing):
+        bg.load_feed(z, [corridor(a={"stops": ["NOPE"], "name": "X", "tz": "Europe/Madrid"})], LO, HI)
+
+
+def test_maritime_bus_style_feed_by_stop_names():
+    z = gtfs({
+        "agency.txt": "agency_id,agency_name,agency_timezone\nMB,Maritime Bus,America/Halifax",
+        "stops.txt": NAMED_STOPS,
+        "routes.txt": "route_id,agency_id,route_short_name,route_long_name,route_type\nR,MB,,Halifax - Moncton,3",
+        "trips.txt": "trip_id,route_id,service_id\nT1,R,S",
+        "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n"
+                        "S,1,1,1,1,1,1,1,20261001,20261231",
+        "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type\n"
+                          "T1,08:00:00,08:00:00,a1,1,0,0\nT1,11:35:00,11:35:00,b1,2,0,0",
+    })
+    c = next(x for x in bg.CORRIDORS if x["key"] == "YHZ-6076211")
+    runs = bg.load_feed(z, [c], LO, HI)["YHZ-6076211"]
+    e = bg.build_corridor(c, runs, TODAY)
+    assert e["mode"] == "bus"
+    assert e["out"]["wk"] == [[480, 215, 0]] and e["out"]["p"] == ["Maritime Bus"]
+    assert e["out"]["tz"] == "America/Halifax" and e["out"]["src"] == "maritime"
+
+
+def test_new_feeds_are_optional_and_carry_a_licence_and_credit():
+    for fid in ("via", "maritime"):
+        f = bg.FEEDS[fid]
+        assert f["optional"] and f["licence"] and f["credit"] and f["page"]
+        assert fid not in bg.selected_feeds([], [], [])
+        assert fid in bg.selected_feeds([], [fid], [])
+        assert bg.source_entry(fid, "2026-10-01")["credit"] == f["credit"]
+
+
+def test_every_corridor_names_a_known_feed_and_has_a_row_in_corridors_ts():
+    import re
+    ts = (ROOT / "src" / "app" / "places" / "corridors.ts").read_text(encoding="utf-8")
+    rows_ = {(m.group(1), m.group(2)) for m in re.finditer(r"code: '([A-Z]{3})', geonameId: (\d+)", ts)}
+    for c in bg.CORRIDORS:
+        assert c["feed"] in bg.FEEDS, c["key"]
+        code, gid = c["key"].split("-")
+        assert (code, gid) in rows_, f"{c['key']} has no row in corridors.ts"
+
+
+def _write_zip(path, src):
+    with zipfile.ZipFile(path, "w") as w:
+        for n in src.namelist():
+            w.writestr(n, src.read(n))
+
+
+def test_broken_optional_feed_is_skipped_and_keeps_previous_corridors(tmp_path, monkeypatch, capsys):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    _write_zip(cache / "t.zip", feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0"))
+    with zipfile.ZipFile(cache / "u.zip", "w") as w:      # no stops.txt
+        w.writestr("agency.txt", "agency_id,agency_name,agency_timezone\nX,X,UTC\n")
+    base = {"url": "", "page": "", "licence": "CC BY 4.0", "licenceUrl": bg.CC_BY, "credit": "T"}
+    monkeypatch.setitem(bg.FEEDS, "t", {**base, "name": "T"})
+    monkeypatch.setitem(bg.FEEDS, "u", {**base, "name": "U", "optional": True})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor(), corridor(key="UUU-2", feed="u")])
+    out = tmp_path / "ground.json"
+    prev = bg.assemble({"UUU-2": entry("u", "2026-12-20")}, {"u": "2026-09-01"}, None, set(), TODAY)
+    monkeypatch.setitem(bg.FEEDS, "u", {**bg.FEEDS["u"]})
+    out.write_text(bg.encode(prev))
+    assert bg.main(["--offline", "--cache", str(cache), "--only", "t,u", "--out", str(out), "--today", "2026-10-02"]) == 0
+    doc = json.loads(out.read_text())
+    assert set(doc["corridors"]) == {"AAA-1", "UUU-2"}
+    assert "::warning title=Ground feed skipped::u:" in capsys.readouterr().out
+    assert not (cache / "u.zip").exists()
+
+
+def test_broken_required_feed_still_fails(tmp_path, monkeypatch):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    with zipfile.ZipFile(cache / "t.zip", "w") as w:
+        w.writestr("agency.txt", "agency_id\nX\n")
+    monkeypatch.setitem(bg.FEEDS, "t", {"name": "T", "url": "", "page": "", "licence": "x", "licenceUrl": "", "credit": "T"})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor()])
+    with pytest.raises(KeyError):
+        bg.main(["--offline", "--cache", str(cache), "--only", "t", "--out", str(tmp_path / "g.json"), "--today", "2026-10-02"])

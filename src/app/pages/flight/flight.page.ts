@@ -8,7 +8,7 @@ import { ShareService } from '../../state/share.service';
 import { findDestination } from '../../utils/airports';
 import { allItineraries, findAlternatives, type Itinerary } from '../../utils/connections';
 import { buildIcs, downloadIcs, icsFilename } from '../../utils/ics';
-import { addDays, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
+import { addDays, diffDays, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
@@ -20,11 +20,13 @@ import { refFromInstance } from '../../trips/engine/legs';
 import { type Trip, instanceKey } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component';
-import { countdown, isOutside, itinKey, relativeDay, shortDay } from '../../ui/format';
+import { countdown, isOutside, itinKey, prettyFlight, relativeDay, shortDay } from '../../ui/format';
 import {
   backupGroups, choose, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering, tripsFor,
   type Pick,
 } from './flight-model';
+import { historyFor, recordLine } from '../../trips/engine/track-record';
+import { LiveStatusComponent } from '../../live/live-status.component';
 import { FactsCardComponent } from './facts-card.component';
 import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
@@ -33,6 +35,18 @@ import { ReturnPanelComponent } from './return-panel.component';
 
 /** Other options listed before "Show all". */
 export const OPTIONS_SHOWN = 4;
+
+/**
+ * Home-by for a chosen return, from its local arrival at home: 22:00 on the
+ * arrival date, or 23:59 when it lands after 22:00. A small-hours arrival
+ * (before 05:00) would otherwise give a deadline already past, so the deadline
+ * is 08:00 that morning.
+ */
+export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
+  const arr = ret.legs[ret.legs.length - 1].arrLocal;
+  if (arr < '05:00') return { dateKey: ret.arrDateKey, hhmm: '08:00' };
+  return { dateKey: ret.arrDateKey, hhmm: arr > '22:00' ? '23:59' : '22:00' };
+}
 
 /**
  * Flight details, /flight/:code/:date/:flight? (spec §4.3).
@@ -50,7 +64,7 @@ export const OPTIONS_SHOWN = 4;
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
-    FactsCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent,
+    FactsCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -84,6 +98,9 @@ export const OPTIONS_SHOWN = 4;
             </div>
           } @else if (ticket(); as t) {
             <app-ticket [model]="t" [label]="ticketLabel()" />
+            @if (liveLeg(); as l) {
+              <app-live-status [flightNumber]="l.flightNumber" [origin]="l.origin" [depUtc]="l.depUtc" [leadMs]="sixHours" />
+            }
             @if (clock(); as c) {
               <p class="cd tn" [class.cd--live]="c.live"><app-icon name="clock" [size]="15" />{{ c.text }}</p>
             }
@@ -119,7 +136,7 @@ export const OPTIONS_SHOWN = 4;
           }
 
           <div class="adds">
-            <app-facts-card [origin]="hub()" [dest]="dest()" [dateKey]="dateKey()" [timeFormat]="state.timeFormat()" />
+            <app-facts-card [origin]="hub()" [dest]="dest()" [dateKey]="dateKey()" [timeFormat]="state.timeFormat()" [records]="records()" />
             @if (noteFlights().length) {
               <app-load-notes [flights]="noteFlights()" [selected]="noteKey()" [partySize]="partySize()" [timeFormat]="state.timeFormat()" />
             }
@@ -295,6 +312,14 @@ export class FlightPage {
     return it ? ticketModel(it, this.state.timeFormat(), this.state.connect().minConnect ?? 60) : null;
   });
 
+  /** The first flight of the shown itinerary, for live status (the component only acts within -12h..+36h of departure). */
+  protected readonly sixHours = 6 * 3_600_000;
+  protected readonly liveLeg = computed(() => {
+    const it = this.current();
+    const leg = it?.legs[0];
+    return it && leg?.flightNumber ? { flightNumber: leg.flightNumber,origin: it.origin, depUtc: it.departUtc } : null;
+  });
+
   protected readonly ticketLabel = computed(() => {
     const t = this.ticket();
     return t ? `${t.origin} ${t.dep} to ${t.dest} ${t.arr}, ${t.depDate}, ${t.nonstop ? 'nonstop' : t.tag.toLowerCase()}` : '';
@@ -367,6 +392,20 @@ export class FlightPage {
   protected readonly noteKey = computed(() => {
     const it = this.current();
     return it?.legs[0]?.flightNumber ? instanceKey(refFromInstance(it.legs[0])) : null;
+  });
+  /** Your own saved outcomes, one line per leg of the shown itinerary that you have tried (same number and route). Counts only. */
+  protected readonly records = computed(() => {
+    const outcomes = this.trips.outcomes();
+    const out: string[] = [];
+    if (!outcomes.length) return out;
+    for (const l of this.current()?.legs ?? []) {
+      const fn = prettyFlight(l.flightNumber);
+      if (!fn || l.estimated) continue;
+      const h = historyFor({ outcomes }, { flightNumber: fn, route: { origin: l.origin, dest: l.dest }, dateKey: l.dateKey });
+      const line = recordLine(h, fn, l.dateKey);
+      if (line) out.push(line);
+    }
+    return out;
   });
   protected readonly coveringTrips = computed(() => tripsCovering(this.trips.activeTrips(), this.dateKey()));
   /** Trips on these dates that the shown flight connects to (goes to the trip's side, or comes home from it). */
@@ -514,13 +553,18 @@ export class FlightPage {
       this.addTo(list[0]);
       return;
     }
+    // Same return date the Return panel shows: an explicit ?ret= on/after arrival, else nights from arrival.
+    const pick = this.returnPick();
+    const retDate = this.ret();
+    const homeDate = retDate && isDateKey(retDate) && retDate >= it.arrDateKey ? retDate : addDays(it.arrDateKey, this.nightCount());
     const trip = this.trips.create({
       goal: placeFromDestination(this.dest()),
       fromHub: this.hub(),
       outboundDate: it.dateKey,
-      homeBy: { dateKey: addDays(it.dateKey, this.nightCount()), hhmm: '22:00' },
+      homeBy: pick ? homeByFor(pick) : { dateKey: homeDate, hhmm: '22:00' },
     });
     this.trips.addFlightLeg(trip.id, it, 'outbound');
+    if (pick) this.trips.addFlightLeg(trip.id, pick, 'return');
     void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() });
   }
 
@@ -538,7 +582,22 @@ export class FlightPage {
       this.trips.addAlternate(trip.id, target.legId, it);
       this.state.flash(`Added ${flights} to ${trip.name} as a backup for ${target.flight}`, open);
     } else {
+      const first = target.role === 'outbound';
+      const empty = !trip.legs.some(l => l.kind === 'flight');
+      if (first && empty && trip.outboundDate !== it.dateKey) {
+        // A trip started without a flight takes the chosen flight's day; its home-by moves by the same offset.
+        const shift = diffDays(trip.outboundDate, it.dateKey);
+        this.trips.update(trip.id, t => ({
+          ...t, outboundDate: it.dateKey, homeBy: { ...t.homeBy, dateKey: addDays(t.homeBy.dateKey, shift) },
+        }));
+      }
       this.trips.addFlightLeg(trip.id, it, target.role);
+      const pick = this.returnPick();
+      const hasReturn = trip.legs.some(l => l.kind === 'flight' && l.role === 'return' && l.status !== 'abandoned');
+      if (first && pick && !hasReturn) {
+        this.trips.addFlightLeg(trip.id, pick, 'return');
+        this.trips.update(trip.id, t => ({ ...t, homeBy: homeByFor(pick) }));
+      }
       this.state.flash(`Added ${flights} to ${trip.name}`, open);
     }
   }

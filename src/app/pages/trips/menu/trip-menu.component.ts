@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, output, signal } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 import { IconComponent } from '../../../components/shared/icons.component';
-import { getCoverage, getSchedulesMeta, scheduleVersion } from '../../../data/schedule-index';
+import { SCHEDULES_URL, getCoverage, getSchedulesMeta, scheduleVersion } from '../../../data/schedule-index';
+import { PhotoService } from '../../../state/photo.service';
 import { AppStateService } from '../../../state/app-state.service';
 import { buildTripIcs, tripIcsFilename } from '../../../trips/engine/trip-ics';
 import type { Trip } from '../../../trips/model';
@@ -9,10 +10,9 @@ import { TripsService } from '../../../trips/trips.service';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { downloadIcs } from '../../../utils/ics';
 import { monthDay, offlineAirportsLabel, offlineUntil, savedAtLabel } from '../trips-model';
+import { GroupSectionComponent } from '../../../group/ui/group-section.component';
 import { ShareEntryComponent } from '../../../share/ui/share-entry.component';
-
-/** The schedules file the service worker caches (ngsw-config "schedules" group). */
-export const SCHEDULES_URL = 'data/schedules.json';
+import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type OfflineItemResult } from './offline-save';
 
 /**
  * Trip menu (mockup g8): what is ready offline (honest ticks only), "Save
@@ -23,7 +23,7 @@ export const SCHEDULES_URL = 'data/schedules.json';
 @Component({
   selector: 'app-trip-menu',
   standalone: true,
-  imports: [IconComponent, GlassSheetComponent, ShareEntryComponent],
+  imports: [IconComponent, GlassSheetComponent, ShareEntryComponent, GroupSectionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet [title]="trip().name" [open]="true" (closed)="closed.emit()">
@@ -52,9 +52,10 @@ export const SCHEDULES_URL = 'data/schedules.json';
               <span class="ui-visually-hidden">Not available offline</span>
             </li>
           </ul>
-          <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost tm__save" data-save-offline (click)="saveOffline()">
+          <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost tm__save" data-save-offline [disabled]="saving()" (click)="saveOffline()">
             <app-icon name="download" [size]="16" /> {{ trip().offlineSavedAt ? 'Save again' : 'Save for offline' }}
           </button>
+          @if (reportText()) { <p class="ui-sub tm__fine" data-offline-report>{{ reportText() }}</p> }
         </section>
 
         <section class="grp" data-share>
@@ -78,6 +79,8 @@ export const SCHEDULES_URL = 'data/schedules.json';
             <p class="ui-sub tm__fine">Calendar file has a reminder to list 48 hours before each flight.</p>
           }
         </section>
+
+        <app-group-section [trip]="trip()" />
 
         <button type="button" class="tm__del" data-delete (click)="remove()">Delete this trip</button>
       </div>
@@ -116,6 +119,7 @@ export const SCHEDULES_URL = 'data/schedules.json';
 export class TripMenuComponent {
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
+  private readonly photos = inject(PhotoService);
   private readonly doc = inject(DOCUMENT);
   private readonly sw = inject(SwUpdate, { optional: true });
 
@@ -125,6 +129,8 @@ export class TripMenuComponent {
   readonly deleted = output<void>();
 
   protected readonly busy = signal(false);
+  /** True while "Save for offline" is fetching. */
+  protected readonly saving = signal(false);
   /** True when the schedules file is in the service worker cache (or the worker is off and the data is loaded). */
   protected readonly cached = signal<boolean | null>(null);
 
@@ -135,6 +141,9 @@ export class TripMenuComponent {
     scheduleVersion();
     return monthDay(offlineUntil(this.trip(), getCoverage(this.trip().fromHub).to));
   });
+  /** Per-item result of the last "Save for offline" (null before the first). */
+  protected readonly report = signal<OfflineItemResult[] | null>(null);
+  protected readonly reportText = computed(() => { const r = this.report(); return r ? offlineReportLabel(r) : ''; });
   protected readonly schedulesReady = computed(() => this.cached() === true);
 
   constructor() {
@@ -163,15 +172,27 @@ export class TripMenuComponent {
 
   protected async saveOffline(): Promise<void> {
     this.trips.markOfflineSaved(this.trip().id);
-    // Ask for the schedules once so the service worker has them, then re-check.
-    if (this.sw?.isEnabled) {
+    // Ask for each file once so the service worker has it, then re-check the schedules.
+    let results: OfflineItemResult[] | null = null;
+    const win = this.doc.defaultView;
+    if (this.sw?.isEnabled && win) {
+      this.saving.set(true);
       try {
-        await this.doc.defaultView?.fetch(SCHEDULES_URL);
-      } catch {
-        // offline: the cache check below tells the truth
+        const signal = () => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(15000) } : {});
+        results = await warmOffline(offlineItems(this.trip(), c => this.photos.has(c), c => this.photos.hasHero(c)),
+          u => win.fetch(u, signal()));
+      } finally {
+        this.saving.set(false);
       }
     }
     await this.checkCache();
+    if (results) {
+      // The schedules tick also needs the file to be in the cache, not just fetched.
+      results = results.map(r => (r.id === 'schedules' ? { ...r, ok: r.ok && this.cached() === true } : r));
+      this.report.set(results);
+      this.state.flash(offlineFlash(results));
+      return;
+    }
     this.state.flash(this.cached() ? 'Saved for offline' : 'Plan saved. Schedules need a connection to download.');
   }
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { ApplicationRef, Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
@@ -408,16 +409,70 @@ describe('AppStateService', () => {
       expect(state.nowMs()).toBe(clock.now);
     });
 
-    it('dataInfo describes the coverage and flags stale data', () => {
+    it('dataInfo describes the coverage and flags an old scrape or running-out coverage', () => {
       const { state, clock } = setup();
+      const at = (iso: string) => { clock.now = new Date(`${iso}T12:00:00`).getTime(); state.refreshToday(); };
       const info = state.dataInfo();
       expect(info.to).toBe('2027-03-31');
-      expect(info.updatedLabel).toContain('data to Mar 31, 2027');
-      clock.now = new Date('2027-01-20T12:00:00').getTime();
-      state.refreshToday();
       expect(info.updatedLabel).toBe('Updated Sep 28 · data to Mar 31, 2027');
-      expect(info.staleDays).toBeNull();
-      expect(state.dataInfo().staleDays).toBe(114);
+      expect(info.staleTag).toBeNull();
+      expect(info.staleDetail).toBe('');
+      // Scrape 45 days old is fine; 46 flags it, while coverage is still long.
+      at('2026-11-12');
+      expect(state.dataInfo().staleTag).toBeNull();
+      at('2026-11-13');
+      expect(state.dataInfo().staleTag).toBe('Schedules last updated Sep 28');
+      expect(state.dataInfo().staleDetail).toContain('46 days ago');
+      // Coverage: 21 days left is not flagged for coverage (the old scrape still is), 20 is.
+      at('2027-03-10');
+      expect(state.dataInfo().staleTag).toBe('Schedules last updated Sep 28');
+      at('2027-03-11');
+      expect(state.dataInfo().staleTag).toBe('Schedules published to Mar 31');
+      expect(state.dataInfo().staleDetail).toContain('20 days from today');
+      // Last day is still "published to"; past it, "No schedules after".
+      at('2027-03-31');
+      expect(state.dataInfo().staleTag).toBe('Schedules published to Mar 31');
+      at('2027-04-01');
+      expect(state.dataInfo().staleTag).toBe('No schedules after Mar 31');
+    });
+
+    it('dataLoad starts ok; a retry that succeeds clears a failure and reloads the page', async () => {
+      const { state } = setup();
+      expect(state.dataLoad()).toBe('ok');
+      state.reportDataLoad(false);
+      expect(state.dataLoad()).toBe('failed');
+      const file = JSON.parse(readFileSync(`${process.cwd()}/public/data/schedules.json`, 'utf8'));
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(file))));
+      const reload = vi.spyOn(state, 'reloadPage').mockImplementation(() => undefined);
+      try {
+        await state.retryDataLoad();
+        expect(state.dataLoad()).toBe('ok');
+        expect(reload).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.unstubAllGlobals();
+        setScheduleSource(FIXTURE_ROUTES, FIXTURE_META);
+      }
+    });
+
+    it('a retry that fails stays failed, and going online retries a failed load', async () => {
+      const { state } = setup();
+      state.reportDataLoad(false);
+      const fetchMock = vi.fn(async () => new Response('', { status: 503 }));
+      vi.stubGlobal('fetch', fetchMock);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const reload = vi.spyOn(state, 'reloadPage').mockImplementation(() => undefined);
+      try {
+        await state.retryDataLoad();
+        expect(state.dataLoad()).toBe('failed');
+        expect(reload).not.toHaveBeenCalled();
+        const before = fetchMock.mock.calls.length;
+        window.dispatchEvent(new Event('online'));
+        await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
+        expect(state.dataLoad()).toBe('failed');
+      } finally {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+      }
     });
   });
   describe('starredThisWeek', () => {

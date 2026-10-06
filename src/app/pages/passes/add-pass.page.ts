@@ -1,3 +1,4 @@
+import { success } from '../../ui/haptics';
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
@@ -10,6 +11,7 @@ import { BarcodeService } from '../../passes/barcode.service';
 import { displayText, parseBcbp } from '../../passes/bcbp';
 import { NOT_BCBP_TEXT, NO_BARCODE_TEXT, type DecodedRead, type PassRecord } from '../../passes/model';
 import { PassSwapService } from '../../passes/pass-swap.service';
+import { ShareInboxService } from '../../share-in/share-inbox.service';
 import { PassesService } from '../../passes/passes.service';
 import { AppStateService } from '../../state/app-state.service';
 import { LEG_STATUS_LABEL, type FlightLeg, type FlightRef, type Trip } from '../../trips/model';
@@ -333,6 +335,7 @@ export class AddPassPage {
   private readonly passes = inject(PassesService);
   private readonly files = inject(FilesService);
   private readonly barcode = inject(BarcodeService);
+  private readonly inbox = inject(ShareInboxService);
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
@@ -420,6 +423,9 @@ export class AddPassPage {
     void this.passes.ensureReady();
     void this.files.ensureReady().then(() => this.deleteAfter.set(this.files.prefs().deletePassesAfterTrip));
     this.deleteAfter.set(this.files.prefs().deletePassesAfterTrip);
+    // A photo or PDF shared into the app (/share-in) arrives here to be read like a picked file.
+    const shared = this.inbox.takeHandoff();
+    if (shared) afterNextRender(() => void this.readFile(shared, shared.type === 'application/pdf' || /\.pdf$/i.test(shared.name) ? 'pdf' : 'image'), { injector: this.injector });
     // ?src=camera starts the scanner; ?src=file puts focus on "Photo or screenshot".
     effect(() => {
       const src = this.src();
@@ -509,6 +515,7 @@ export class AddPassPage {
     const hint = this.hintLeg();
     const choices: Record<string, DraftChoice | null> = {};
     for (const d of drafts) choices[d.key] = initialChoice(d, hint);
+    success();
     this.decoded.set({ drafts, images, source, file });
     this.choices.set(choices);
     // Multi-leg barcodes: legs that matched are ticked; with a single draft it is always included.

@@ -4,12 +4,18 @@
  * listing reminders per flight leg, and "find the real train/bus" for each
  * ground leg. Pure.
  */
+import { monthsBetween, typicalForMonths } from '../recs/climate';
+import type { ClimateIndex } from '../recs/model';
 import { currencyName } from '../pages/destination/currency';
 import type { FlightLeg, FlightRef, GroundLeg, LegEnd, LegStatus, Trip } from '../trips/model';
 import { calendarKey, isFinalStatus } from '../trips/model';
 import { hubDisplayName, tzDiffLabel } from '../ui/format';
 import { airportTz, findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
+import {
+  advisoryUpdated, holidayKey, holidayName, holidaysBetween, shortDate,
+  type AdvisoryIndex, type HolidayIndex,
+} from '../reference/reference';
 import { acAirports, countryName } from './place';
 import { ENTRY_RULES, EntryRule, SCHENGEN, TRAVEL_GC_SLUG_OVERRIDES } from './prep-rules';
 
@@ -201,13 +207,75 @@ function groundItem(leg: GroundLeg): PrepItem {
   };
 }
 
+/** The goal's AC code, else where the last flight leg lands. */
+function weatherCode(trip: Trip): string | null {
+  if (trip.goal.acCode) return trip.goal.acCode;
+  for (let i = trip.legs.length - 1; i >= 0; i--) {
+    const leg = trip.legs[i];
+    if (leg.kind === 'flight' && leg.refs.length) return leg.refs[leg.refs.length - 1].dest;
+  }
+  return null;
+}
+
+/** 'Typical 8° / 2°, 14 wet days — pack a rain layer' for the trip's months; nothing without normals. Not critical. */
+export function weatherItems(trip: Trip, climate: ClimateIndex | null | undefined): PrepItem[] {
+  const t = typicalForMonths(climate, weatherCode(trip), monthsBetween(trip.outboundDate, trip.homeBy.dateKey));
+  if (!t) return [];
+  const id = 'weather:typical';
+  return [{
+    id,
+    title: t.advice.length ? `${t.text} — pack ${t.advice.join(' and ')}` : t.text,
+    detail: 'Typical for these months, not a forecast',
+    link: null,
+    critical: false,
+    source: 'manual',
+    done: !!trip.prep[id]?.done,
+  }];
+}
+
+/** Reference facts the checklist can use (all optional: a missing file adds nothing). */
+export interface PrepReference { advisories?: AdvisoryIndex | null; holidays?: HolidayIndex | null }
+
+/**
+ * Not critical, from the destination country's static data: the Government of
+ * Canada advice when its level is 2 or 3 ('Avoid non-essential travel') or a
+ * regional advisory is in effect, and nationwide public holidays that fall
+ * within the trip dates.
+ */
+export function referenceItems(trip: Trip, ref: PrepReference | null | undefined): PrepItem[] {
+  const iso = trip.goal.iso2;
+  if (!iso || !ref) return [];
+  const out: PrepItem[] = [];
+  const adv = ref.advisories?.get(iso.toUpperCase());
+  if (adv && (adv.level >= 2 || adv.regional)) {
+    const id = 'advisory:gc';
+    const upd = advisoryUpdated(adv, trip.outboundDate);
+    out.push({
+      id, title: `Government of Canada advice for ${countryName(iso)}: ${adv.text}${adv.regional ? ' · regional advisories in effect' : ''}`,
+      detail: `Official travel.gc.ca page${upd ? ` · ${upd}` : ''}`,
+      link: { label: 'Official travel.gc.ca page', url: adv.url },
+      critical: false, source: 'manual', done: !!trip.prep[id]?.done,
+    });
+  }
+  for (const h of holidaysBetween(ref.holidays ?? null, iso, trip.outboundDate, trip.homeBy.dateKey)) {
+    if (!h.global) continue;
+    const id = `holiday:${iso}:${holidayKey(h)}`;
+    out.push({
+      id, title: `Public holiday in ${countryName(iso)} · ${shortDate(h.date, trip.outboundDate)} · ${holidayName(h)}`,
+      detail: 'Public holiday',
+      link: null, critical: false, source: 'manual', done: !!trip.prep[id]?.done,
+    });
+  }
+  return out;
+}
+
 /**
  * The checklist: entry items, then listing items (leg order), then ground
  * items (leg order), then the user's own items. Final legs (boarded, not
  * boarded, didn't try, dropped) add nothing. Check-in items are not part of
  * it (see legPrepItems).
  */
-export function buildPrepChecklist(trip: Trip): PrepItem[] {
+export function buildPrepChecklist(trip: Trip, climate?: ClimateIndex | null, ref?: PrepReference | null): PrepItem[] {
   const listing: PrepItem[] = [];
   const ground: PrepItem[] = [];
   for (const leg of trip.legs) {
@@ -219,7 +287,7 @@ export function buildPrepChecklist(trip: Trip): PrepItem[] {
     id: `custom:${c.id}`, title: c.text, detail: null, link: null, critical: false, source: 'manual',
     done: !!trip.prep[`custom:${c.id}`]?.done,
   }));
-  return [...entryItems(trip), ...listing, ...ground, ...custom];
+  return [...entryItems(trip), ...listing, ...ground, ...weatherItems(trip, climate), ...referenceItems(trip, ref), ...custom];
 }
 
 /** One leg's own to-dos (Today's "Left to do"): listing and check-in for a flight, finding the ride for a ground leg. */

@@ -546,6 +546,12 @@ button.ui-tag { cursor: pointer; }
   to { opacity: 1; transform: none; }
 }
 
+@keyframes ui-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
 // View transitions between routes: a quick cross-fade.
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 180ms; }
 

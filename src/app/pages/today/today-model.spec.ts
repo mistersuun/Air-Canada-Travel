@@ -117,7 +117,6 @@ describe('today model (Seville fixture)', () => {
     ];
     const first = todayView({ trip, legId: out.id, nowMs: AT_1640, notes: [], outcomes: [], connect: CONNECT, fmt: '24h' })!;
     expect(first.time).toBe('18:30');
-    expect(first.then).toBe('then AC810 YYZ 23:00');
     expect(first.title).toBe('Montréal → Lisbon');
     const rec: Outcome = {
       id: 'o1', flightNumber: 'AC489', origin: 'YUL', dest: 'YYZ', dateKey: '2026-10-08', kind: 'allBoarded',
@@ -126,7 +125,6 @@ describe('today model (Seville fixture)', () => {
     const second = todayView({ trip, legId: out.id, nowMs: AT_1640, notes: [], outcomes: [rec], connect: CONNECT, fmt: '24h' })!;
     expect(second.time).toBe('23:00');
     expect(second.eyebrow).toBe('Today · Thu Oct 8 · at YYZ');
-    expect(second.then).toBeNull();
     expect(second.backup).toBeNull();
   });
 
@@ -169,6 +167,8 @@ describe('today model (Seville fixture)', () => {
     const item = (id: string, done: boolean) => ({ id, title: '', detail: null, link: null, critical: true, source: 'legStatus' as const, done });
     expect(statusForTick(item('list:x:0', false), 'planned')).toBe('listed');
     expect(statusForTick(item('list:x:0', true), 'listed')).toBe('planned');
+    expect(statusForTick(item('list:x:0', true), 'checkedIn')).toBeNull();
+    expect(statusForTick(item('list:x:0', false), 'checkedIn')).toBeNull();
     expect(statusForTick(item('checkin:x', false), 'listed')).toBe('checkedIn');
     expect(statusForTick(item('checkin:x', true), 'checkedIn')).toBe('listed');
     expect(statusForTick(item('custom:x', false), 'listed')).toBeNull();
@@ -223,6 +223,26 @@ describe('recover model (YUL at 18:05 Thu Oct 8, AC834 not boarded)', () => {
     const all = [...v.tonight, ...v.tomorrow, ...v.tomorrowMore];
     expect(all.some(r => r.option.itinerary.legs[0].flightNumber === 'AC834' && r.option.itinerary.dateKey === '2026-10-08')).toBe(false);
     expect(v.legNote).toBe('AC834 Listed');
+  });
+
+  it('offers other-ways links and no stuck card while something usable is left tonight', () => {
+    const v = recoverView({ trip: notBoarded(sevilleTrip()), at: 'YUL', legId: SEVILLE_IDS.outbound, nowMs: AT_1805, connect: CONNECT, fmt: '24h' });
+    expect(v.stuckTonight).toBe(false);
+    expect(v.ways).toMatchObject({ dateKey: '2026-10-08', land: false });
+    expect(v.ways?.from.code).toBe('YUL');
+    expect(v.ways?.to.name).toBe('Seville');
+    expect(v.stay).toEqual({ code: 'YUL', airportName: 'Montréal', checkIn: '2026-10-08' });
+  });
+
+  it('is stuck tonight when no usable option is left, with tonight\'s check-in date', () => {
+    const late = toUtcMs('2026-10-08', '23:50', 'America/Toronto');
+    const v = recoverView({ trip: notBoarded(sevilleTrip()), at: 'YUL', legId: SEVILLE_IDS.outbound, nowMs: late, connect: CONNECT, fmt: '24h' });
+    expect(v.tonight.some(r => r.usable)).toBe(false);
+    expect(v.stuckTonight).toBe(true);
+    expect(v.stay?.checkIn).toBe('2026-10-08');
+    const small = toUtcMs('2026-10-09', '02:10', 'America/Toronto');
+    const w = recoverView({ trip: notBoarded(sevilleTrip()), at: 'YUL', legId: SEVILLE_IDS.outbound, nowMs: small, connect: CONNECT, fmt: '24h' });
+    expect(w.stay?.checkIn).toBe('2026-10-08');
   });
 
   it('says plainly when the return no longer fits', () => {

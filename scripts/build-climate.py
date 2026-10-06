@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Builds public/data/climate.json: typical monthly weather (normals) for every
-Air Canada destination, shown in the app as "Typical, not a forecast".
+Air Canada destination and hub, shown in the app as "Typical, not a forecast".
 
 Source: Open-Meteo Historical Weather API (https://open-meteo.com), ERA5
 reanalysis, CC BY 4.0. Contains modified Copernicus Climate Change Service
@@ -98,6 +98,36 @@ def parse_destinations(ts: str) -> list[dict]:
         out.append({"code": code, "lat": float(fields["lat"].group(1)),
                     "lng": float(fields["lng"].group(1)), "type": typ})
     return out
+
+
+_HUB_ENTRY = re.compile(r"\{[^{}]*?code:\s*'([A-Z]{3})'[^{}]*?\}")
+
+
+def parse_hubs(ts: str) -> list[dict]:
+    """[{code, lat, lng, type: 'Hub'}] from the HUBS list of destinations.ts (YUL, YYZ, YVR, ...)."""
+    start = ts.find("export const HUBS")
+    if start < 0:
+        return []
+    end = ts.find("];", start)
+    body = ts[start:end if end > 0 else len(ts)]
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in _HUB_ENTRY.finditer(body):
+        block = m.group(0)
+        lat, lng = _FIELD["lat"].search(block), _FIELD["lng"].search(block)
+        code = m.group(1)
+        if not (lat and lng) or code in seen:
+            continue
+        seen.add(code)
+        out.append({"code": code, "lat": float(lat.group(1)), "lng": float(lng.group(1)), "type": "Hub"})
+    return out
+
+
+def parse_locations(ts: str) -> list[dict]:
+    """Destinations plus hubs (hubs are needed for the "Escape the cold" comparison)."""
+    dests = parse_destinations(ts)
+    codes = {d["code"] for d in dests}
+    return dests + [h for h in parse_hubs(ts) if h["code"] not in codes]
 
 
 # ── Requests and cache ──────────────────────────────────────────────────────
@@ -213,6 +243,15 @@ def build_file(codes: dict[str, dict], total: int, now: datetime | None = None) 
     }
 
 
+def load_existing_codes(path: pathlib.Path) -> dict[str, dict]:
+    """The codes of the file already on disk ({} when missing or unreadable)."""
+    try:
+        codes = json.loads(path.read_text(encoding="utf-8")).get("codes")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return codes if isinstance(codes, dict) else {}
+
+
 def write_file(path: pathlib.Path, data: dict) -> int:
     text = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -264,13 +303,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--offline", action="store_true", help="cache only: no requests, write what is complete")
     args = ap.parse_args(argv)
 
-    dests = order_first(parse_destinations(DESTINATIONS_TS.read_text(encoding="utf-8")), args.first)
+    dests = order_first(parse_locations(DESTINATIONS_TS.read_text(encoding="utf-8")), args.first)
+    all_codes = {d["code"] for d in dests}
+    total = len(dests)
     if args.limit:
         dests = dests[: args.limit]
     get = offline_get if args.offline else http_get
     codes, stopped = run(dests, args.cache, get=get, pause=lambda: None if args.offline else time.sleep(args.sleep))
-    size = write_file(args.out, build_file(codes, len(dests)))
-    print(f"wrote {args.out} ({size} bytes): {len(codes)}/{len(dests)} locations"
+    if stopped or args.limit or args.offline:
+        # A partial run never reduces coverage (codes no longer in the destination list are dropped).
+        old = {c: v for c, v in load_existing_codes(args.out).items() if c in all_codes}
+        codes = {**old, **codes}
+    size = write_file(args.out, build_file(codes, total))
+    print(f"wrote {args.out} ({size} bytes): {len(codes)}/{total} locations"
           + (" (partial: API limit reached)" if stopped else ""))
     return 0
 

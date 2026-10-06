@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       include:
-        description: 'Opt-in feeds (comma-separated): cp, trenitalia, swiss'
+        description: 'Extra opt-in feeds (comma-separated): cp, trenitalia, swiss, maritime (via always runs)'
         type: string
         default: ''
 
@@ -30,6 +30,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # npm ci install scripts must not be able to read the write token.
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,7 +56,8 @@ jobs:
         # Leaves the file untouched when only dates would change.
         env:
           INCLUDE: ${{ inputs.include }}
-        run: python3 scripts/build-ground.py ${INCLUDE:+--include "$INCLUDE"}
+        # via is opt-in in the script (stop names not machine-checked) but belongs to the scheduled build. A broken optional feed is skipped (::warning::, its previous corridors kept); a pinned stop missing from a required feed fails the run.
+        run: python3 scripts/build-ground.py --include "via${INCLUDE:+,$INCLUDE}"
 
       - name: Diff summary
         run: |
@@ -77,13 +81,15 @@ jobs:
           npx ng build
 
       - name: Commit and push if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git diff --quiet -- public/data/ground.json && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/ground.json
           git commit -m "chore: update ground timetables from open GTFS feeds"
-          git push
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF}"
 
       - name: Open an issue on failure
         if: failure()

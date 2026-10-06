@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { STATUS_FETCH } from '../../live/flight-status.service';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { FORECAST_FETCH, FORECAST_STORAGE } from '../../recs/forecast.service';
 import { GROUND_FETCH, GroundTimetableService } from '../../places/ground-timetable.service';
 import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
 import { groundTimetables, setGroundTimetables } from '../../places/timetable';
@@ -40,6 +42,14 @@ function seeded(withNote = true): MemoryStorage {
   return s;
 }
 
+const FORECAST_RAW = {
+  daily: {
+    time: ['2026-10-08', '2026-10-09'], temperature_2m_max: [24, 25], temperature_2m_min: [17, 18],
+    precipitation_probability_max: [80, 10], weather_code: [63, 1],
+  },
+};
+let forecastFetch: ReturnType<typeof vi.fn<(url: string) => Promise<unknown>>>;
+
 function configure(nowMs: number, store = seeded()) {
   storage = store;
   TestBed.configureTestingModule({
@@ -48,7 +58,10 @@ function configure(nowMs: number, store = seeded()) {
       { provide: NOW, useValue: () => nowMs },
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+      { provide: STATUS_FETCH, useValue: async () => ({ status: 503, body: { error: 'not-configured' } }) },
       { provide: GROUND_FETCH, useValue: (groundFetch = vi.fn(async () => null)) },
+      { provide: FORECAST_STORAGE, useValue: new MemoryStorage() },
+      { provide: FORECAST_FETCH, useValue: (forecastFetch = vi.fn(async (_url: string) => FORECAST_RAW)) },
     ],
   });
 }
@@ -95,6 +108,15 @@ describe('Today', () => {
     expect(clean(el.textContent)).toBe('');
   });
 
+  it('shows the travel-day timeline as an ordered list, past rows dimmed', async () => {
+    const { el } = await render(TodayPage, AT_1805);
+    const items = [...el.querySelectorAll('[data-timeline] ol > li')];
+    expect(items.map(i => i.getAttribute('data-kind'))).toContain('depart');
+    expect(items.find(i => i.getAttribute('data-kind') === 'depart')?.hasAttribute('data-past')).toBe(true);
+    expect(items.find(i => i.getAttribute('data-kind') === 'arrive')?.hasAttribute('data-past')).toBe(false);
+    expect(clean(el.querySelector('[data-kind="arrive"]')?.textContent)).toContain('+6h vs Montréal');
+  });
+
   it('g4: time, status, countdown, note, three buttons, left to do and the backup', async () => {
     const { el, text } = await render(TodayPage, AT_1640);
     expect(text('.td__eyebrow')).toBe('Today · Thu Oct 8 · at YUL');
@@ -120,7 +142,7 @@ describe('Today', () => {
     expect(el.querySelector('[data-final]')?.textContent).toContain('AC834 marked Boarded');
     expect(el.querySelector('[data-boarded]')).toBeNull();
     const notice = state.notice()!;
-    expect(notice.message).toBe('AC834 marked Boarded');
+    expect(notice.message).toBe('Cleared · YUL → MAD · 5,552 km');
     notice.action!();
     await stable();
     expect(legStatus(SEVILLE_IDS.outbound)).toBe('listed');
@@ -190,11 +212,24 @@ describe('Today', () => {
     expect(el.querySelector('[data-empty] a')?.getAttribute('href')).toBe('/trips');
   });
 
-  it('makes no network calls besides loading the ground timetable (cached data)', async () => {
+  it('makes no direct network calls besides the ground timetable (cached data); live status goes through its own injectable fetch', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await render(TodayPage, AT_1640);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(groundFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a labelled forecast on the arrival row, asking only for the destination coordinates', async () => {
+    const { el, stable } = await render(TodayPage, AT_1640);
+    await vi.waitFor(() => expect(forecastFetch).toHaveBeenCalled());
+    await stable();
+    for (const [url] of forecastFetch.mock.calls) {
+      const u = new URL(url);
+      expect(u.origin).toBe('https://api.open-meteo.com');
+      expect([...u.searchParams.keys()].sort()).toEqual(['daily', 'forecast_days', 'latitude', 'longitude', 'timezone']);
+    }
+    const fc = el.querySelector('[data-forecast]');
+    expect(fc?.textContent).toMatch(/^Forecast · \d+° \/ \d+° · /);
   });
 
   it('loads the ground timetable itself, so ground legs get real times without another screen', async () => {

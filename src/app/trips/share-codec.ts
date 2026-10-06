@@ -21,13 +21,13 @@ interface SharePayload {
   notes: LoadNote[];
 }
 
-function toBase64Url(bytes: Uint8Array): string {
+export function toBase64Url(bytes: Uint8Array): string {
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-function fromBase64Url(s: string): Uint8Array {
+export function fromBase64Url(s: string): Uint8Array {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
   const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
   const out = new Uint8Array(bin.length);
@@ -72,8 +72,10 @@ export class ShareTooLargeError extends Error {
   }
 }
 
-async function encodePayload(payload: SharePayload): Promise<string> {
+async function encodePayload(payload: SharePayload): Promise<string | null> {
   const json = new TextEncoder().encode(JSON.stringify(payload));
+  // The decoder rejects anything that inflates past MAX_JSON, so never emit it.
+  if (json.length > MAX_JSON) return null;
   if (hasCompression()) {
     try {
       return 'z' + toBase64Url(await pipe(json, new CompressionStream('deflate-raw' as CompressionFormat)));
@@ -91,7 +93,9 @@ async function encodePayload(payload: SharePayload): Promise<string> {
  * ShareTooLargeError is thrown.
  */
 export async function encodeTripShare(trip: Trip, notes: readonly LoadNote[] = [], nowMs: number = Date.now()): Promise<string> {
-  const { prep: _p, changes: _c, offlineSavedAt: _o, calendarExportedAt: _k, calendarRefs: _r, archived: _a, ...rest } = trip;
+  const { prep: _p, changes: _c, offlineSavedAt: _o, calendarExportedAt: _k, calendarRefs: _r, archived: _a, ...base } = trip;
+  // Usual items come from the private travel profile: never in a share link.
+  const rest = { ...base, customPrep: base.customPrep.filter(c => !c.usual) };
   const at = new Date(nowMs).toISOString();
   const noAlternates = { ...rest, legs: rest.legs.map(l => (l.kind === 'flight' ? { ...l, alternates: [] } : l)) };
   const attempts: SharePayload[] = [
@@ -101,7 +105,7 @@ export async function encodeTripShare(trip: Trip, notes: readonly LoadNote[] = [
   ];
   for (const p of attempts) {
     const out = await encodePayload(p);
-    if (out.length <= MAX_SHARE_PAYLOAD) return out;
+    if (out !== null && out.length <= MAX_SHARE_PAYLOAD) return out;
   }
   throw new ShareTooLargeError();
 }

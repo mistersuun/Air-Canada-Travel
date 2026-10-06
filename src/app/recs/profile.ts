@@ -8,6 +8,34 @@ import { TravelProfile, TripLength, TripStyle } from './model';
 export const TRIP_STYLES: readonly TripStyle[] = ['Sun', 'City', 'Adventure'];
 export const TRIP_LENGTHS: readonly TripLength[] = ['day', 'weekend', 'week'];
 export const MAX_DISMISSED = 200;
+export const MAX_USUAL_ITEMS = 30;
+export const MAX_USUAL_ITEM_LEN = 80;
+/** One-tap suggestions for "My usual items" (standby trips: the flight you want may be full). */
+export const USUAL_SUGGESTIONS: readonly string[] = [
+  'Change of clothes in carry-on',
+  'Phone charger',
+  'Passport / ID',
+  'Snacks for a long wait',
+  'Medications',
+  'Reusable water bottle',
+];
+
+/** Trimmed, non-empty, de-duplicated (case-insensitive) items, each capped, at most MAX_USUAL_ITEMS. */
+export function sanitizeUsualItems(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== 'string') continue;
+    const t = v.replace(/\s+/g, ' ').trim().slice(0, MAX_USUAL_ITEM_LEN).trim();
+    const k = t.toLowerCase();
+    if (!t || seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+    if (out.length >= MAX_USUAL_ITEMS) break;
+  }
+  return out;
+}
 
 export const EMPTY_PROFILE: Readonly<TravelProfile> = Object.freeze({
   v: 1,
@@ -18,6 +46,7 @@ export const EMPTY_PROFILE: Readonly<TravelProfile> = Object.freeze({
   days: [],
   onwardBudget: 'any',
   dismissed: [],
+  usualItems: [],
   updatedAt: null,
 }) as Readonly<TravelProfile>;
 
@@ -49,6 +78,7 @@ export function sanitizeProfile(raw: unknown): TravelProfile {
     days,
     onwardBudget: r['onwardBudget'] === 'low' ? 'low' : 'any',
     dismissed,
+    usualItems: sanitizeUsualItems(r['usualItems']),
     updatedAt: typeof r['updatedAt'] === 'string' && !Number.isNaN(Date.parse(r['updatedAt'])) ? r['updatedAt'] : null,
   };
 }

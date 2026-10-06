@@ -66,7 +66,7 @@ export const FONT = {
 } as const;
 
 export const PAD = 60;
-const INNER = CARD_WIDTH - PAD * 2;
+export const INNER = CARD_WIDTH - PAD * 2;
 const TITLE_MAX = 112;
 const TITLE_MIN = 64;
 const ROW_H = 138;
@@ -197,8 +197,8 @@ export function cardHead(trip: Trip, opts: ShareOptions, measure?: Measure): Car
 
 // ---- drawing -------------------------------------------------------------
 
-type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
+export type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+export type AnyCanvas = HTMLCanvasElement | OffscreenCanvas;
 
 export interface CardDeps {
   canvas?: (w: number, h: number) => AnyCanvas;
@@ -222,7 +222,7 @@ export async function loadCardFonts(doc: Document | null = typeof document === '
   await Promise.race([all, new Promise<void>(r => setTimeout(r, 1500))]);
 }
 
-function makeCanvas(w: number, h: number): AnyCanvas {
+export function makeCanvas(w: number, h: number): AnyCanvas {
   if (typeof document !== 'undefined') {
     const c = document.createElement('canvas');
     c.width = w;
@@ -232,7 +232,7 @@ function makeCanvas(w: number, h: number): AnyCanvas {
   return new OffscreenCanvas(w, h);
 }
 
-function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
+export function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -242,12 +242,12 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
   ctx.closePath();
 }
 
-function setSpacing(ctx: Ctx, v: string): void {
+export function setSpacing(ctx: Ctx, v: string): void {
   if ('letterSpacing' in ctx) (ctx as { letterSpacing: string }).letterSpacing = v;
 }
 
 /** A 24-unit app icon at (x, y), `size` px, stroked like <app-icon>. */
-function drawIcon(ctx: Ctx, name: IconName, x: number, y: number, size: number, color: string, filled = false): void {
+export function drawIcon(ctx: Ctx, name: IconName, x: number, y: number, size: number, color: string, filled = false): void {
   if (typeof Path2D === 'undefined') return;
   ctx.save();
   ctx.translate(x, y);
@@ -265,7 +265,7 @@ function drawIcon(ctx: Ctx, name: IconName, x: number, y: number, size: number, 
   ctx.restore();
 }
 
-function drawBackground(ctx: Ctx, w: number, h: number): void {
+export function drawBackground(ctx: Ctx, w: number, h: number): void {
   // 165deg sky wash, as the mock's .scard.
   const g = ctx.createLinearGradient(w * 0.37, 0, w * 0.63, h);
   g.addColorStop(0, CARD.skyTop);
@@ -282,14 +282,14 @@ function drawBackground(ctx: Ctx, w: number, h: number): void {
   ctx.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
 }
 
-function ellipsize(ctx: Ctx, text: string, max: number): string {
+export function ellipsize(ctx: Ctx, text: string, max: number): string {
   if (ctx.measureText(text).width <= max) return text;
   let t = text;
   while (t.length > 1 && ctx.measureText(`${t}…`).width > max) t = t.slice(0, -1);
   return `${t.trimEnd()}…`;
 }
 
-function drawArc(ctx: Ctx, y: number, h: number, from: string, to: string): void {
+export function drawArc(ctx: Ctx, y: number, h: number, from: string, to: string): void {
   const x0 = PAD + 20, x1 = CARD_WIDTH - PAD - 20, base = y + h - 34;
   ctx.save();
   ctx.strokeStyle = CARD.blue;
@@ -382,7 +382,7 @@ function drawNote(ctx: Ctx, b: Extract<CardBlock, { kind: 'note' }>): void {
   b.lines.forEach((line, i) => ctx.fillText(line, PAD + 36, b.y + 30 + 40 + 36 + i * NOTE_LINE));
 }
 
-function drawFooter(ctx: Ctx, b: Extract<CardBlock, { kind: 'footer' }>): void {
+export function drawFooter(ctx: Ctx, b: Extract<CardBlock, { kind: 'footer' }>): void {
   const mid = b.y + FOOT_H / 2;
   ctx.fillStyle = CARD.red;
   roundRect(ctx, PAD, mid - 27, 54, 54, 16);
@@ -451,7 +451,7 @@ export function drawCard(ctx: Ctx, layout: CardLayout): void {
   }
 }
 
-async function toPng(canvas: AnyCanvas): Promise<Blob> {
+export async function toPng(canvas: AnyCanvas): Promise<Blob> {
   if ('convertToBlob' in canvas) return canvas.convertToBlob({ type: 'image/png' });
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob(b => (b ? resolve(b) : reject(new Error('The card could not be drawn.'))), 'image/png'));

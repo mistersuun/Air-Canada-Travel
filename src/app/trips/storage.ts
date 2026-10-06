@@ -14,7 +14,7 @@
  *   save can overwrite it.
  */
 import { InjectionToken } from '@angular/core';
-import { isDateKey } from '../utils/time';
+import { isDateKey, isValidTimeZone } from '../utils/time';
 import {
   Alternate, FLIGHTLOG_CORRUPT_KEY, FLIGHTLOG_KEY, FlightLeg, FlightLog, FlightRef, GROUND_MODES, GroundLeg,
   GroundMode, GroundTimes, LEG_STATUSES, LegEnd, LegStatus, LoadNote, OUTCOME_KINDS, Outcome, OutcomeKind,
@@ -49,6 +49,11 @@ function str(v: unknown, fallback = '', max = MAX_TEXT): string {
 }
 function nonEmpty(v: unknown, max = 200): string | null {
   return typeof v === 'string' && v.trim() ? v.slice(0, max) : null;
+}
+/** A non-empty, loadable IANA zone (max 64 chars), else null: bad zones would throw later in toUtcMs. */
+function validTz(v: unknown): string | null {
+  const tz = nonEmpty(v, 64);
+  return tz && isValidTimeZone(tz) ? tz : null;
 }
 function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -92,7 +97,7 @@ export function sanitizePlace(raw: unknown): Place | null {
     country: str(r['country'], '', 120),
     iso2: typeof r['iso2'] === 'string' && /^[A-Z]{2}$/.test(r['iso2']) ? r['iso2'] : '',
     lat, lng,
-    tz: nonEmpty(r['tz'], 64),
+    tz: validTz(r['tz']),
   };
   const admin1 = nonEmpty(r['admin1'], 120);
   if (admin1) p.admin1 = admin1;
@@ -135,7 +140,7 @@ function sanitizeEnd(raw: unknown): LegEnd | null {
   const e: LegEnd = { name, lat, lng };
   const c = code(r['code']);
   if (c) e.code = c;
-  if (r['tz'] === null || typeof r['tz'] === 'string') e.tz = nonEmpty(r['tz'], 64);
+  if (r['tz'] === null || typeof r['tz'] === 'string') e.tz = validTz(r['tz']);
   return e;
 }
 
@@ -277,8 +282,8 @@ export function sanitizeTrip(raw: unknown): Trip | null {
         const o = obj(c);
         const cid = o && nonEmpty(o['id'], 40);
         const text = o && nonEmpty(o['text'], 300);
-        return cid && text ? { id: cid, text } : null;
-      }).filter((c): c is { id: string; text: string } => !!c),
+        return cid && text ? { id: cid, text, ...(o['usual'] === true ? { usual: true as const } : {}) } : null;
+      }).filter((c): c is { id: string; text: string; usual?: true } => !!c),
       changes: arr(r['changes']).slice(0, 100).map(sanitizeChange)
         .filter((c): c is PendingChange => !!c && legIds.has(c.legId)),
       scheduleGeneratedAt: nonEmpty(r['scheduleGeneratedAt'], 40),
@@ -347,7 +352,7 @@ export function migrateTrips(raw: unknown): { file: TripsFile; readOnly: boolean
   const schema = schemaOf(r);
   const readOnly = schema !== null && schema > TRIPS_SCHEMA;
   const trips = uniqueById(arr(r?.['trips']).map(sanitizeTrip).filter((t): t is Trip => !!t));
-  return { file: { schema: 1, trips }, readOnly };
+  return { file: { schema: TRIPS_SCHEMA, trips }, readOnly };
 }
 
 /** Parsed JSON → a valid FlightLog. Never throws. */
@@ -357,7 +362,7 @@ export function migrateFlightLog(raw: unknown): { file: FlightLog; readOnly: boo
   const readOnly = schema !== null && schema > TRIPS_SCHEMA;
   return {
     file: {
-      schema: 1,
+      schema: TRIPS_SCHEMA,
       notes: uniqueById(arr(r?.['notes']).map(sanitizeLoadNote).filter((n): n is LoadNote => !!n)),
       outcomes: uniqueById(arr(r?.['outcomes']).map(sanitizeOutcome).filter((o): o is Outcome => !!o)),
       dismissed: [...new Set(arr(r?.['dismissed']).filter((k): k is string => typeof k === 'string').map(k => k.slice(0, 80)))].slice(-500),
@@ -440,6 +445,29 @@ export function loadTrips(storage: Storage | null): { file: TripsFile; readOnly:
 /** Writes the trips file. False when storage is blocked or full (the app keeps it in memory). */
 export function saveTrips(storage: Storage | null, file: TripsFile): boolean {
   return save(storage, TRIPS_KEY, file);
+}
+
+/** The damaged copies load() kept (ac.trips.corrupt, ac.flightlog.corrupt); null when absent or storage is blocked. */
+export function loadCorrupt(storage: Storage | null): { trips: string | null; log: string | null } {
+  const read = (key: string): string | null => {
+    try {
+      return storage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  };
+  return { trips: read(TRIPS_CORRUPT_KEY), log: read(FLIGHTLOG_CORRUPT_KEY) };
+}
+
+/** Deletes both damaged copies. */
+export function clearCorrupt(storage: Storage | null): void {
+  for (const key of [TRIPS_CORRUPT_KEY, FLIGHTLOG_CORRUPT_KEY]) {
+    try {
+      storage?.removeItem(key);
+    } catch {
+      // Blocked: nothing to delete.
+    }
+  }
 }
 
 export function loadFlightLog(storage: Storage | null): { file: FlightLog; readOnly: boolean } {

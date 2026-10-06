@@ -68,6 +68,7 @@ export class FilterChipsComponent {
     }
     if (f.sameDayArrival) out.push({ id: 'same', label: 'Same-day arrival', remove: () => this.patch({ sameDayArrival: false }) });
     if (f.widebodyOnly) out.push({ id: 'wide', label: 'Widebody', remove: () => this.patch({ widebodyOnly: false }) });
+    if (f.maxHours) out.push({ id: 'max', label: `Up to ${f.maxHours}h`, remove: () => this.patch({ maxHours: null }) });
     if (f.starredOnly) out.push({ id: 'star', label: 'Starred only', remove: () => this.patch({ starredOnly: false }) });
     const s = this.state.sort();
     if (s !== 'az') {

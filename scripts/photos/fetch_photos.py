@@ -361,71 +361,91 @@ def cmd_fetch(args) -> None:
     commons_titles = [p["commons"] for c, p in picks.items() if "commons" in p]
     info = commons_info(commons_titles)
     photos: dict[str, dict] = {}
-    for code, pick in sorted(picks.items()):
-        main, small = OUT / f"{code}.webp", OUT / f"{code}-400.webp"
-        if "skip" in pick:
-            for f in (main, small):
-                f.unlink(missing_ok=True)
-            continue
-        pos = pick.get("position", "50% 50%")
-        have = main.exists() and small.exists() and code in old
-        pid = pick.get("commons") or pick.get("unsplash")
-        same = have and fetched_key(fetched.get(code)) == (pid, pos)
-        if same and not args.force_all and code not in force:
-            entry = dict(old[code])
-            entry["position"] = pos
-            photos[code] = entry
-            continue
+    try:
+        for code, pick in sorted(picks.items()):
+            main, small = OUT / f"{code}.webp", OUT / f"{code}-400.webp"
+            if "skip" in pick:
+                for f in (main, small):
+                    f.unlink(missing_ok=True)
+                continue
+            pos = pick.get("position", "50% 50%")
+            have = main.exists() and small.exists() and code in old
+            pid = pick.get("commons") or pick.get("unsplash")
+            same = have and fetched_key(fetched.get(code)) == (pid, pos)
+            if same and not args.force_all and code not in force:
+                entry = dict(old[code])
+                entry["position"] = pos
+                photos[code] = entry
+                continue
 
-        def keep_old() -> None:
-            # A failed refetch keeps the working photo and credit (never deletes them).
-            if have:
-                photos[code] = old[code]
-        if "commons" in pick:
-            page = info.get(pick["commons"])
-            if not page:
-                print(f"{code}: {pick['commons']} not found", file=sys.stderr)
+            def keep_old() -> None:
+                # A failed refetch keeps the working photo and credit (never deletes them).
+                if have:
+                    photos[code] = old[code]
+            try:
+                if "commons" in pick:
+                    page = info.get(pick["commons"])
+                    if not page:
+                        print(f"{code}: {pick['commons']} not found", file=sys.stderr)
+                        keep_old()
+                        continue
+                    meta = describe(page)
+                    if not meta:
+                        print(f"{code}: licence not allowed", file=sys.stderr)
+                        keep_old()
+                        continue
+                else:
+                    meta = unsplash_meta(pick["unsplash"])
+                if pick.get("subject"):
+                    meta["subject"] = pick["subject"]
+                im = crop_aspect(load_image(meta["_download"]), pos)
+                # Encode everything first so a failure leaves the old files untouched.
+                main_bytes = encode(im, MAIN_W, MAIN_Q, MAIN_MAX)
+                small_bytes = encode(im, SMALL_W, SMALL_Q, SMALL_MAX)
+                hero = OUT / f"{code}-{HERO_W}.webp"
+                hero_bytes = encode(im, HERO_W, HERO_Q, HERO_MAX) if im.width >= HERO_W else None
+                entry = {k: v for k, v in meta.items() if not k.startswith("_")}
+                entry["position"] = pos
+                entry["tone"] = tone(im)
+            except Exception as e:
+                print(f"{code}: refetch failed: {e}", file=sys.stderr)
                 keep_old()
                 continue
-            meta = describe(page)
-            if not meta:
-                print(f"{code}: licence not allowed", file=sys.stderr)
+            # Stage every file under a temp name, then swap them in only once all are written.
+            staged = [(main, main_bytes), (small, small_bytes)] + ([(hero, hero_bytes)] if hero_bytes else [])
+            tmps = [(f.with_name(f.name + ".tmp"), f) for f, _ in staged]
+            try:
+                for (tmp, _), (_, data) in zip(tmps, staged):
+                    tmp.write_bytes(data)
+            except Exception as e:
+                for tmp, _ in tmps:
+                    tmp.unlink(missing_ok=True)
+                print(f"{code}: write failed: {e}", file=sys.stderr)
                 keep_old()
                 continue
-        else:
-            meta = unsplash_meta(pick["unsplash"])
-        if pick.get("subject"):
-            meta["subject"] = pick["subject"]
-        try:
-            im = load_image(meta["_download"])
-        except Exception as e:
-            print(f"{code}: download failed: {e}", file=sys.stderr)
-            keep_old()
-            continue
-        im = crop_aspect(im, pos)
-        main.write_bytes(encode(im, MAIN_W, MAIN_Q, MAIN_MAX))
-        small.write_bytes(encode(im, SMALL_W, SMALL_Q, SMALL_MAX))
-        hero = OUT / f"{code}-{HERO_W}.webp"
-        entry = {k: v for k, v in meta.items() if not k.startswith("_")}
-        if im.width >= HERO_W:
-            hero.write_bytes(encode(im, HERO_W, HERO_Q, HERO_MAX))
-            entry["hero"] = True
-        else:
-            hero.unlink(missing_ok=True)
-        entry["position"] = pos
-        entry["tone"] = tone(im)
-        fetched[code] = {"id": pid, "position": pos}
-        photos[code] = entry
-        print(f"{code}: {main.stat().st_size // 1024} KB / {small.stat().st_size // 1024} KB  {entry['license']}  {entry['author']}")
-        time.sleep(0.3)
-    # Only list codes whose files exist.
-    photos = {c: e for c, e in photos.items() if (OUT / f"{c}.webp").exists() and (OUT / f"{c}-400.webp").exists()}
-    for f in OUT.glob("*.webp"):
-        if f.name.split("-")[0].split(".")[0] not in photos:
-            f.unlink()
-    CREDITS.write_text(json.dumps({"version": 1, "generated": date.today().isoformat(), "photos": photos},
-                                  indent=1, ensure_ascii=False) + "\n")
-    FETCHED.write_text(json.dumps({c: fetched[c] for c in sorted(photos) if c in fetched}, indent=1, ensure_ascii=False) + "\n")
+            for tmp, final in tmps:
+                os.replace(tmp, final)
+            if hero_bytes:
+                entry["hero"] = True
+            else:
+                hero.unlink(missing_ok=True)
+            fetched[code] = {"id": pid, "position": pos}
+            photos[code] = entry
+            print(f"{code}: {main.stat().st_size // 1024} KB / {small.stat().st_size // 1024} KB  {entry['license']}  {entry['author']}")
+            time.sleep(0.3)
+    finally:
+        # Also on a crash or SystemExit (missing API key): credits always match the files on disk.
+        for code, pick in picks.items():
+            if "skip" not in pick and code in old:
+                photos.setdefault(code, old[code])  # not reached (or crashed on): keep its photo and credit
+        # Only list codes whose files exist.
+        photos = {c: e for c, e in photos.items() if (OUT / f"{c}.webp").exists() and (OUT / f"{c}-400.webp").exists()}
+        for f in OUT.glob("*.webp"):
+            if f.name.split("-")[0].split(".")[0] not in photos:
+                f.unlink()
+        CREDITS.write_text(json.dumps({"version": 1, "generated": date.today().isoformat(), "photos": photos},
+                                      indent=1, ensure_ascii=False) + "\n")
+        FETCHED.write_text(json.dumps({c: fetched[c] for c in sorted(photos) if c in fetched}, indent=1, ensure_ascii=False) + "\n")
     print(f"{len(photos)} photos, credits written")
 
 

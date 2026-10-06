@@ -23,10 +23,11 @@ export interface TravelProfile {
   days: number[];                // ISO weekdays 1..7 (Mon..Sun) you can usually leave or come back; [] = any
   onwardBudget: 'low' | 'any';   // default 'any'
   dismissed: string[];           // Recommendation ids, newest last, capped at 200
+  usualItems: string[];          // "My usual items": copied into new trips' prep list (max 30, each <= 80 chars)
   updatedAt: string | null;      // null = never set up ("empty profile")
 }
 
-export type RecKind = 'holiday' | 'seasonEnding' | 'style' | 'yourLog' | 'onward';
+export type RecKind = 'holiday' | 'seasonEnding' | 'style' | 'yourLog' | 'onward' | 'weather';
 export type ReasonKind = 'holiday' | 'profile' | 'starred' | 'log' | 'schedule';
 export interface Reason { kind: ReasonKind; text: string }   // 'Holiday Monday', 'You travel Thu to Mon'
 export type LineLabel = Provenance | 'typical';
@@ -46,6 +47,8 @@ export interface Recommendation {
   weather: ClimateMonth | null;  // rendered '[Oct] 30° / 23°' + 'Typical' tag
   reason: Reason[];              // ≥ 1. Rendered as "Why this" + texts joined with '. ' + '.'
   link: { path: string[]; query: Record<string, string> };
+  /** 'weather' only: destination typical high minus the hub's, in °C (shown as '+26° vs home'). */
+  deltaC?: number;
   rank: number;                  // internal sort key; NEVER rendered
 }
 

@@ -11,7 +11,7 @@
  * that no string helper ever renders. Party size only prefers days with more
  * departures; it never guesses seats.
  */
-import { DESTINATIONS, Destination } from '../data/destinations';
+import { DESTINATIONS, Destination, HUBS } from '../data/destinations';
 import { getCoverage, getSchedulesForRoute, isCovered } from '../data/schedule-index';
 import { CORRIDORS } from '../places/corridors';
 import type { TimeFormat } from '../state/prefs.service';
@@ -110,14 +110,15 @@ function median(xs: readonly number[]): number {
  * one-stops only when connections are on and the day has no nonstop at all.
  * Estimated legs never count (only Scheduled facts are shown).
  */
-export function dayItineraries(input: RecInput, from: string, to: string, day: string): Itinerary[] {
+export function dayItineraries(input: RecInput, from: string, to: string, day: string, includeDeparted = false): Itinerary[] {
   if (!isCovered(day, input.hub)) return [];
   const max = maxMinutes(input.profile);
   const fits = (it: Itinerary) => !it.estimated && (max === null || it.totalMin <= max);
+  const notDeparted = (it: Itinerary) => includeDeparted || it.departUtc > input.nowMs;
   const nonstops = flightsOn(from, to, day);
-  if (nonstops.length) return nonstops.map(directItinerary).filter(fits);
+  if (nonstops.length) return nonstops.map(directItinerary).filter(it => fits(it) && notDeparted(it));
   if (!input.showConnections) return [];
-  return allItineraries(from, to, day, input.connect).filter(it => it.legs.length > 1 && fits(it));
+  return allItineraries(from, to, day, input.connect).filter(it => it.legs.length > 1 && fits(it) && notDeparted(it));
 }
 
 function via(it: Itinerary): string {
@@ -164,7 +165,7 @@ function upcoming(input: RecInput, code: string, profileDaysOnly: boolean): Upco
     const day = addDays(input.todayKey, i);
     const iso = weekdayIndex(day) + 1;
     if (profileDaysOnly && input.profile.days.length && !input.profile.days.includes(iso)) continue;
-    its.push(...dayItineraries(input, input.hub, code, day));
+    its.push(...dayItineraries(input, input.hub, code, day, true));
   }
   return { count: its.length, its };
 }
@@ -226,9 +227,21 @@ export function pairable(out: Itinerary[], back: Itinerary[]): { out: Itinerary[
 
 /** Recommendations for one long weekend: the top 2, of different types where possible. */
 export function holidayRecs(input: RecInput, lw: LongWeekend): Recommendation[] {
-  const days = pickDays(lw, input.profile, input.todayKey);
-  if (!days) return [];
-  const { outKey, backKey } = days;
+  return holidayPlan(input, lw)?.recs ?? [];
+}
+
+/** The first acceptable out day, with its recs; today's out day moves on to the next when all its flights have left. */
+function holidayPlan(input: RecInput, lw: LongWeekend): { outKey: string; backKey: string; recs: Recommendation[] } | null {
+  for (let from = input.todayKey; ;) {
+    const days = pickDays(lw, input.profile, from);
+    if (!days) return null;
+    const recs = holidayRecsFor(input, lw, days.outKey, days.backKey);
+    if (recs.length || days.outKey > input.todayKey) return { ...days, recs };
+    from = addDays(days.outKey, 1);
+  }
+}
+
+function holidayRecsFor(input: RecInput, lw: LongWeekend, outKey: string, backKey: string): Recommendation[] {
   const p = input.profile;
   const fmt = input.fmt;
   const outDay = weekdayShort(outKey);
@@ -236,7 +249,7 @@ export function holidayRecs(input: RecInput, lw: LongWeekend): Recommendation[] 
   const hName = lw.holiday.name;
   const holidayText = p.length === 'day' || p.length === 'week'
     ? hName
-    : `Holiday ${WEEKDAY_LONG[weekdayIndex(lw.holiday.dateKey)]}`;
+    : `Holiday ${WEEKDAY_LONG[weekdayIndex(lw.observedKey)]}`;
 
   const recs: Recommendation[] = [];
   for (const d of CANDIDATES) {
@@ -322,9 +335,9 @@ export function seasonWindow(hub: string, code: string, todayKey: string): { las
   return { last: end, resume };
 }
 
-function lastFlightOnOrBefore(from: string, to: string, key: string, floorKey: string) {
+function lastFlightOnOrBefore(from: string, to: string, key: string, floorKey: string, nowMs = -Infinity) {
   for (let d = key; d >= floorKey; d = addDays(d, -1)) {
-    const f = flightsOn(from, to, d);
+    const f = flightsOn(from, to, d).filter(x => x.depUtc > nowMs);
     if (f.length) return f[f.length - 1];
   }
   return null;
@@ -347,7 +360,7 @@ export function seasonEndingRecs(input: RecInput): Recommendation[] {
     if (!d || d.type === 'Hub') continue;
     const w = seasonWindow(input.hub, code, input.todayKey);
     if (!w) continue;
-    const lastOut = lastFlightOnOrBefore(input.hub, code, w.last, input.todayKey);
+    const lastOut = lastFlightOnOrBefore(input.hub, code, w.last, input.todayKey, input.nowMs);
     if (!lastOut) continue;
     const last = lastOut.dateKey;
     if (last < input.todayKey || diffDays(input.todayKey, last) > SEASON_AHEAD_DAYS) continue;
@@ -464,7 +477,7 @@ export function onwardRecs(input: RecInput, exclude: ReadonlySet<string>): Recom
     let dep: string | null = null;
     for (let i = 0; i < NEXT_DAYS && !dep; i++) {
       const day = addDays(input.todayKey, i);
-      if (isCovered(day, input.hub) && flightsOn(input.hub, c.code, day).length) dep = day;
+      if (isCovered(day, input.hub) && flightsOn(input.hub, c.code, day).some(f => f.depUtc > input.nowMs)) dep = day;
     }
     if (!dep) continue;
     const gateway = findDestination(c.code)?.city ?? c.code;
@@ -480,6 +493,88 @@ export function onwardRecs(input: RecInput, exclude: ReadonlySet<string>): Recom
     }];
   }
   return [];
+}
+
+// ── Kind: weather ("Escape the cold" / "Cooler escapes") ───────────────────
+
+/** Weather recs: look-ahead for the nonstop (days), and how many to show. */
+export const WEATHER_AHEAD_DAYS = 10;
+export const WEATHER_MAX = 2;
+/** Hub typical high below this (°C) is "cold"; destinations must reach WARM_MIN_C. */
+export const COLD_BELOW_C = 8;
+export const WARM_MIN_C = 24;
+/** Hub typical high at or above this is "hot"; destinations must stay at or under COOL_MAX_C. */
+export const HOT_FROM_C = 26;
+export const COOL_MAX_C = 22;
+
+export type WeatherSeason = 'cold' | 'hot';
+
+/** Calendar month (1..12) of an instant in a time zone. */
+function monthIn(tz: string | undefined, nowMs: number, fallbackKey: string): number {
+  try {
+    const m = Number(new Intl.DateTimeFormat('en-CA', { timeZone: tz, month: 'numeric' }).format(new Date(nowMs)));
+    if (m >= 1 && m <= 12) return m;
+  } catch { /* fall through */ }
+  return Number(fallbackKey.slice(5, 7));
+}
+
+function hubMonth(input: RecInput): number {
+  return monthIn(HUBS.find(h => h.code === input.hub)?.tz, input.nowMs, input.todayKey);
+}
+
+/** Which variant applies for the hub this month, or null (no hub climate, or a mild month). */
+export function weatherSeason(input: RecInput): WeatherSeason | null {
+  const home = climateFor(input.climate, input.hub, hubMonth(input));
+  if (!home) return null;
+  return home.tmaxC < COLD_BELOW_C ? 'cold' : home.tmaxC >= HOT_FROM_C ? 'hot' : null;
+}
+
+export function weatherGroupTitle(season: WeatherSeason): string {
+  return season === 'cold' ? 'Escape the cold' : 'Cooler escapes';
+}
+
+/**
+ * Nonstop destinations with a flight in the next 10 days whose typical high
+ * is far from the hub's (24° or more from a cold hub, 22° or less from a hot
+ * one), by biggest difference, then soonest flight. Typical normals, never a forecast.
+ */
+export function weatherRecs(input: RecInput): Recommendation[] {
+  const season = weatherSeason(input);
+  if (!season) return [];
+  const home = climateFor(input.climate, input.hub, hubMonth(input))!;
+  const max = maxMinutes(input.profile);
+  const recs: Recommendation[] = [];
+  for (const d of CANDIDATES) {
+    const id = recId('weather', d.code, null);
+    if (input.profile.dismissed.includes(id)) continue;
+    let next: { dateKey: string; at: number } | null = null;
+    for (let i = 0; i < WEATHER_AHEAD_DAYS && !next; i++) {
+      const day = addDays(input.todayKey, i);
+      if (!isCovered(day, input.hub)) continue;
+      const f = flightsOn(input.hub, d.code, day).find(x => x.depUtc > input.nowMs && (max === null || directItinerary(x).totalMin <= max));
+      if (f) next = { dateKey: day, at: f.depUtc };
+    }
+    if (!next) continue;
+    // The destination's normals for the month of the flight (it can fall in next month).
+    const there = climateFor(input.climate, d.code, Number(next.dateKey.slice(5, 7)));
+    if (!there) continue;
+    if (season === 'cold' ? there.tmaxC < WARM_MIN_C : there.tmaxC > COOL_MAX_C) continue;
+    const delta = there.tmaxC - home.tmaxC;
+    recs.push({
+      id, kind: 'weather', code: d.code, placeId: null, title: d.city,
+      out: null, back: null,
+      lines: [
+        { text: `Trade ${home.tmaxC}° for ${there.tmaxC}°`, label: 'typical' },
+        { text: `Nonstop ${weekdayShort(next.dateKey)}`, label: 'scheduled' },
+      ],
+      weather: null,   // the highs are already in the first line
+      reason: [{ kind: 'schedule', text: season === 'cold' ? 'Warmer than home this month' : 'Cooler than home this month' }],
+      link: { path: flightPath(d.code, next.dateKey), query: {} },
+      deltaC: delta,
+      rank: Math.abs(delta) * 1000 - next.at / 3_600_000,
+    });
+  }
+  return recs.sort(byRank).slice(0, WEATHER_MAX);
 }
 
 // ── Text ────────────────────────────────────────────────────────────────────
@@ -552,9 +647,11 @@ export function recommend(input: RecInput): RecGroup[] {
   const used = new Set<string>();
   const groups: RecGroup[] = [];
   for (const lw of lws) {
-    const items = takeUnique(holidayRecs(input, lw), used, 2);
+    const plan = holidayPlan(input, lw);
+    if (!plan) continue;
+    const items = takeUnique(plan.recs, used, 2);
     if (!items.length) continue;
-    const { outKey, backKey } = pickDays(lw, input.profile, input.todayKey)!;
+    const { outKey, backKey } = plan;
     groups.push({
       id: lw.id,
       title: holidayGroupTitle(lw.name, input.todayKey, outKey),
@@ -564,6 +661,11 @@ export function recommend(input: RecInput): RecGroup[] {
   }
   const season = takeUnique(seasonEndingRecs(input), used, 2);
   if (season.length) groups.push({ id: 'season', title: 'Season ends soon', aside: null, items: season });
+  const wx = weatherSeason(input);
+  if (wx) {
+    const items = takeUnique(weatherRecs(input), used, WEATHER_MAX);
+    if (items.length) groups.push({ id: 'weather', title: weatherGroupTitle(wx), aside: null, items });
+  }
   if (!empty) {
     const more = takeUnique([...logRecs(input), ...styleRecs(input, used), ...onwardRecs(input, used)], used, 3);
     if (more.length) groups.push({ id: 'more', title: 'More for you', aside: null, items: more });

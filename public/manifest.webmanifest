@@ -9,6 +9,38 @@
   "scope": "/",
   "start_url": "/",
   "orientation": "any",
+  "shortcuts": [
+    { "name": "Today", "short_name": "Today", "url": "/today", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "My trips", "short_name": "Trips", "url": "/trips", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "Saved", "short_name": "Saved", "url": "/saved", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "This weekend", "short_name": "Weekend", "url": "/weekend", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] }
+  ],
+  "share_target": {
+    "action": "/share-in",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        { "name": "files", "accept": ["image/*", "application/pdf", ".pdf", "text/plain", "text/calendar", ".ics"] }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/share-in",
+      "accept": {
+        "application/pdf": [".pdf"],
+        "text/calendar": [".ics"],
+        "image/png": [".png"],
+        "image/jpeg": [".jpg", ".jpeg"],
+        "image/webp": [".webp"],
+        "image/heic": [".heic"]
+      }
+    }
+  ],
   "icons": [
     { "src": "icons/icon-72x72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },

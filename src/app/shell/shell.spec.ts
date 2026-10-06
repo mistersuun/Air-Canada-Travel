@@ -1,9 +1,17 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { stageDeepLink } from './deep-link';
-import { hasSkywash, hidesTopNav, isDetailPath, navSection } from './nav-model';
+import { hasSkywash, hidesTopNav, isDetailPath, isPassView, navSection } from './nav-model';
 import { SHORTCUTS } from './shortcuts-sheet.component';
 
 describe('nav-model', () => {
+  it('isPassView matches pass views and the add flow only', () => {
+    expect(isPassView('/trips/t1/pass/p1')).toBe(true);
+    expect(isPassView('/trips/t1/passes/add')).toBe(true);
+    expect(isPassView('/passes/p1')).toBe(false);
+    expect(isPassView('/trips/t1')).toBe(false);
+    expect(isPassView('/saved')).toBe(false);
+  });
+
   it('maps paths to nav sections and chrome', () => {
     expect(navSection('/')).toBe('explore');
     expect(navSection('/to/LIS')).toBe('explore');
@@ -17,12 +25,12 @@ describe('nav-model', () => {
     expect(navSection('/calendar/CUN')).toBe('calendar');
     expect(['/to/LIS', '/flight/LIS/2026-10-01/AC812', '/calendar', '/calendar/CUN'].every(isDetailPath)).toBe(true);
     expect(['/trips/abc', '/trips/abc/recover', '/trips/import', '/today', '/reach/gn-1', '/reach/gn-1/MAD'].every(isDetailPath)).toBe(true);
-    expect(['/profile', '/trips/abc/files', '/trips/abc/passes/add', '/trips/abc/pass/p1', '/trips/abc/share'].every(isDetailPath)).toBe(true);
+    expect(['/profile', '/trips/abc/files', '/trips/abc/passes/add', '/trips/abc/pass/p1', '/trips/abc/share', '/trips/abc/recap', '/logbook'].every(isDetailPath)).toBe(true);
     expect(['/', '/map', '/saved', '/trips'].some(isDetailPath)).toBe(false);
     expect(hidesTopNav('/to/LIS')).toBe(true);
     expect(hidesTopNav('/flight/LIS/2026-10-01')).toBe(false);
     expect(['/', '/saved', '/flight/LIS/2026-10-01'].every(hasSkywash)).toBe(true);
-    expect(['/trips', '/trips/abc', '/reach/gn-1', '/profile'].every(hasSkywash)).toBe(true);
+    expect(['/trips', '/trips/abc', '/reach/gn-1', '/profile', '/logbook'].every(hasSkywash)).toBe(true);
     expect(['/to/LIS', '/map', '/calendar', '/today'].some(hasSkywash)).toBe(false);
   });
 

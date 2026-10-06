@@ -80,6 +80,20 @@ describe('TripDetailPage', () => {
     expect(el.querySelector('app-leg-sheet')).toBeNull();
   });
 
+  it('offers "Make a recap" only once the return flight is boarded', async () => {
+    const first = await render();
+    expect(first.el.querySelector('[data-recap]')).toBeNull();
+    TestBed.resetTestingModule();
+    const store = seeded();
+    const file = JSON.parse(store.getItem(TRIPS_KEY)!);
+    file.trips[0].legs.find((l: { id: string }) => l.id === SEVILLE_IDS.ret).status = 'boarded';
+    store.setItem(TRIPS_KEY, JSON.stringify(file));
+    const { el } = await render({}, store);
+    const link = el.querySelector('[data-recap]') as HTMLAnchorElement;
+    expect(clean(link.textContent)).toContain('Make a recap');
+    expect(link.getAttribute('href')).toContain(`/trips/${SEVILLE_IDS.trip}/recap`);
+  });
+
   it('tapping a leg puts ?leg= in the URL (replaceUrl)', async () => {
     const { el, nav } = await render();
     el.querySelector<HTMLButtonElement>('[data-leg="leg-ret813"] button')!.click();

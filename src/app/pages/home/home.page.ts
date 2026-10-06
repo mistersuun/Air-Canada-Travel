@@ -3,8 +3,9 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
+import { RecentService } from '../../state/recent.service';
 import { PhotoService } from '../../state/photo.service';
-import { airportTz } from '../../utils/airports';
+import { airportTz, findDestination } from '../../utils/airports';
 import { activeFilterCount } from '../../utils/routes';
 import { formatKey, todayKey } from '../../utils/time';
 import { IconComponent } from '../../components/shared/icons.component';
@@ -23,8 +24,10 @@ import {
   seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
 import { CityIndexService } from '../../places/city-index.service';
+import { SurpriseSheetComponent } from './surprise-sheet.component';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
+import { ComingUpBannerComponent } from '../../trips/ui/coming-up-banner.component';
 import { TodayBannerComponent } from '../today/today-banner.component';
 import { ForYouComponent } from '../../recs/ui/for-you.component';
 
@@ -56,12 +59,14 @@ interface ListRow {
   standalone: true,
   imports: [
     RouterLink, IconComponent, HubPickerComponent, SegComponent, WeekStripComponent, PhotoCardComponent, DestRowComponent,
-    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent, ForYouComponent,
+    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent, ComingUpBannerComponent, ForYouComponent,
+    SurpriseSheetComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page home">
       <app-today-banner />
+      <app-coming-up-banner />
       <div class="hero">
         <div class="hero__main">
           @if (narrow()) {
@@ -95,6 +100,10 @@ interface ListRow {
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
                           [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
+          <div class="xrow">
+            <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder ›</a>
+            <app-surprise-sheet [entries]="results()" [timeFormat]="state.timeFormat()" />
+          </div>
         </div>
         @if (wide()) {
           <app-week-card [hub]="state.hub()" [range]="range()" [stats]="state.stats()" [entries]="state.allRoutes()"
@@ -126,6 +135,16 @@ interface ListRow {
                             (toggleFavourite)="state.toggleFavourite($event)" />
         </section>
       } @else {
+        @if (recent().length) {
+          <section class="sec recent" aria-labelledby="h-recent" data-recent>
+            <div class="ui-sec-h"><h2 class="ui-h2 st" id="h-recent">Recent</h2></div>
+            <div class="rrow ui-snap-row">
+              @for (r of recent(); track r.code) {
+                <a class="rchip" [routerLink]="dest(r.code)" [queryParams]="state.globalParams()">{{ r.city }} <b>{{ r.code }}</b></a>
+              }
+            </div>
+          </section>
+        }
         <app-for-you />
         @if (picks().length) {
           <section class="sec" aria-labelledby="h-picks">
@@ -199,6 +218,8 @@ interface ListRow {
   `,
   styles: [`
     :host { display: block; }
+    .xrow { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+    .wkend { display: inline-block; }
     .hero { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; margin-top: 40px; align-items: start; }
     .hero__main { min-width: 0; }
     .greet { font-size: 15px; }
@@ -219,6 +240,8 @@ interface ListRow {
     .sec { margin-top: 40px; }
     .st { margin: 0; }
     .picks { gap: 16px; }
+    .rrow { gap: 8px; margin-top: 12px; }
+    .rrow .rchip b { font-size: 11px; letter-spacing: .04em; opacity: .6; margin-left: 4px; }
     .pick { width: calc((100% - 80px) / 6); min-width: 150px; }
 
     .lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 40px; align-items: start; }
@@ -279,6 +302,14 @@ export class HomePage {
   private readonly route = inject(ActivatedRoute);
   private readonly doc = inject(DOCUMENT);
   private readonly cities = inject(CityIndexService);
+  private readonly recentSvc = inject(RecentService);
+
+  /** Last viewed destinations (empty search state only), newest first. */
+  protected readonly recent = computed(() =>
+    this.recentSvc.codes().flatMap(c => {
+      const d = findDestination(c);
+      return d && d.code !== this.state.hub() ? [{ code: d.code, city: d.city }] : [];
+    }));
 
   protected readonly connectOptions = CONNECT_OPTIONS;
   protected readonly dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];

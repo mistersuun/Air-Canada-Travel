@@ -27,7 +27,7 @@ function boot(opts: { schedules?: unknown } = {}) {
   let windows: { postMessage(m: unknown): void }[] = [];
   const importScripts = vi.fn();
   const self = {
-    location: { href: 'https://app.test/sw.js' },
+    location: { href: 'https://app.test/sw.js', origin: 'https://app.test' },
     addEventListener: (t: string, h: Handler) => void (handlers[t] ??= []).push(h),
     registration: { showNotification: async (title: string, o: { data: unknown }) => void shown.push({ title, opts: o }) },
     clients: { matchAll: async () => windows, openWindow: vi.fn() },
@@ -59,7 +59,7 @@ describe('public/sw.js', () => {
     form.append('title', 'Hotel');
     form.append('text', 'Room 12');
     form.append('files', new File(['pdf'], 'a.pdf', { type: 'application/pdf' }));
-    const { ev, results } = await sw.fire('fetch', { request: { method: 'POST', url: 'https://app.test/share-in', formData: async () => form } });
+    const { ev, results } = await sw.fire('fetch', { request: { method: 'POST', mode: 'navigate', referrer: 'https://app.test/', url: 'https://app.test/share-in', formData: async () => form } });
     expect(ev.stopImmediatePropagation).toHaveBeenCalled();
     const res = results[0] as Response;
     expect(res.status).toBe(303);
@@ -70,6 +70,32 @@ describe('public/sw.js', () => {
     const meta = JSON.parse(await store.get(`/__share/${id}/meta.json`)!.text());
     expect(meta).toMatchObject({ title: 'Hotel', text: 'Room 12', files: [{ name: 'a.pdf', type: 'application/pdf' }] });
     expect(store.has(`/__share/${id}/0`)).toBe(true);
+  });
+
+  it('refuses cross-origin, non-navigation and foreign-referrer posts', async () => {
+    const sw = boot();
+    const base = { method: 'POST', mode: 'navigate', referrer: '', url: 'https://app.test/share-in', formData: async () => new FormData() };
+    for (const r of [{ ...base, url: 'https://evil.test/share-in' }, { ...base, mode: 'cors' }, { ...base, referrer: 'https://evil.test/x' }]) {
+      const { ev } = await sw.fire('fetch', { request: r });
+      expect(ev.stopImmediatePropagation).not.toHaveBeenCalled();
+    }
+  });
+
+  it('redirects an oversized share to ?id=too-large without stashing files', async () => {
+    const sw = boot();
+    const form = new FormData();
+    for (let i = 0; i < 6; i++) form.append('files', new File(['x'], `f${i}.png`, { type: 'image/png' }));
+    const { results } = await sw.fire('fetch', { request: { method: 'POST', mode: 'navigate', referrer: '', url: 'https://app.test/share-in', formData: async () => form } });
+    expect((results[0] as Response).headers.get('location')).toBe('https://app.test/share-in?id=too-large');
+    expect(sw.stores.get('ac-share-in')?.size ?? 0).toBe(0);
+  });
+
+  it('never moves the seen value backwards', async () => {
+    const sw = boot();
+    await sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'C' } });
+    await sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'A' } });
+    await sw.fire('periodicsync', { tag: 'schedule-check' }); // server has B < C
+    expect(sw.shown).toHaveLength(0);
   });
 
   it('leaves every other request to ngsw', async () => {

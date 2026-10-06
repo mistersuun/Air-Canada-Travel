@@ -82,3 +82,9 @@ export function backgroundChecksSupport(env: {
 
 export const SCHEDULE_CHECK_TAG = 'schedule-check';
 export const SCHEDULE_CHECK_MIN_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
+/** Limits the service worker applies to one share (keep in sync with public/sw.js). */
+export const SHARE_MAX_FILES = 5;
+export const SHARE_MAX_BYTES = 25 * 1024 * 1024;
+export const SHARE_TOO_LARGE_TEXT = 'That share is too big to receive. Share up to 5 files, 25 MB in all.';
+export const SHARE_FAILED_TEXT = "Couldn't receive that share. Try again.";

@@ -23,6 +23,8 @@ var SYNC_CACHE = 'ac-sched-check';
 var SYNC_TAG = 'schedule-check';
 var SEEN_KEY = '/__sched-seen';
 var MAX_AGE_MS = 60 * 60 * 1000;
+var MAX_FILES = 5;
+var MAX_BYTES = 25 * 1024 * 1024;
 
 function str(v) {
   return typeof v === 'string' ? v.slice(0, 100000) : '';
@@ -34,7 +36,10 @@ async function stashShare(form) {
   var cache = await caches.open(SHARE_CACHE);
   await purgeOld(cache);
   var files = [];
-  var entries = form.getAll('files');
+  var entries = form.getAll('files').filter(function (f) { return typeof f !== 'string'; });
+  var total = 0;
+  for (var k = 0; k < entries.length; k++) total += entries[k].size;
+  if (entries.length > MAX_FILES || total > MAX_BYTES) return null;
   for (var i = 0; i < entries.length; i++) {
     var f = entries[i];
     if (typeof f === 'string') continue;
@@ -62,11 +67,16 @@ async function purgeOld(cache) {
 
 self.addEventListener('fetch', function (event) {
   var req = event.request;
-  if (req.method !== 'POST' || new URL(req.url).pathname !== SHARE_PATH) return;
+  var url = new URL(req.url);
+  if (req.method !== 'POST' || url.pathname !== SHARE_PATH) return;
+  // Only a same-origin navigation (the OS share sheet or our own form) may leave files here.
+  if (url.origin !== self.location.origin || req.mode !== 'navigate') return;
+  if (req.referrer && new URL(req.referrer).origin !== self.location.origin) return;
   event.stopImmediatePropagation();
   event.respondWith((async function () {
     try {
       var id = await stashShare(await req.formData());
+      if (id === null) id = 'too-large';
       return Response.redirect(new URL(SHARE_PATH + '?id=' + id, self.location.href).href, 303);
     } catch (e) {
       return Response.redirect(new URL(SHARE_PATH + '?id=failed', self.location.href).href, 303);
@@ -74,9 +84,9 @@ self.addEventListener('fetch', function (event) {
   })());
 });
 
-/** True only for a new value against a known baseline: a first run is not a change. */
+/** True only for a newer value (ISO strings sort) against a known baseline: a first run is not a change. */
 function scheduleChanged(previous, current) {
-  return !!current && !!previous && previous !== current;
+  return !!current && !!previous && current > previous;
 }
 
 async function readSeen() {
@@ -96,7 +106,7 @@ async function checkSchedules() {
   var json = await res.json();
   var current = json && json.meta && typeof json.meta.generatedAt === 'string' ? json.meta.generatedAt : null;
   var previous = await readSeen();
-  if (current) await writeSeen(current);
+  if (current && (!previous || current > previous)) await writeSeen(current);
   if (!scheduleChanged(previous, current)) return;
   var clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   if (clients.length) {
@@ -115,7 +125,9 @@ self.addEventListener('periodicsync', function (event) {
 /** The app reports the schedules it has loaded, so we never notify about what the user already sees. */
 self.addEventListener('message', function (event) {
   var d = event.data;
-  if (d && d.type === 'ac:schedules-seen' && typeof d.generatedAt === 'string') event.waitUntil(writeSeen(d.generatedAt));
+  if (d && d.type === 'ac:schedules-seen' && typeof d.generatedAt === 'string') {
+    event.waitUntil(readSeen().then(function (prev) { if (!prev || d.generatedAt > prev) return writeSeen(d.generatedAt); }));
+  }
 });
 
 self.addEventListener('notificationclick', function (event) {

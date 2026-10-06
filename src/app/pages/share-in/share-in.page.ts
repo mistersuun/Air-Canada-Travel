@@ -9,7 +9,7 @@ import { BarcodeService } from '../../passes/barcode.service';
 import { isBcbp } from '../../passes/decode-core';
 import { ShareInboxService } from '../../share-in/share-inbox.service';
 import {
-  type SharedKind, actionsFor, noteTextFrom, noteTitleFrom, sharedKind,
+  SHARE_FAILED_TEXT, SHARE_TOO_LARGE_TEXT, type SharedKind, actionsFor, noteTextFrom, noteTitleFrom, sharedKind,
 } from '../../share-in/share-payload';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
@@ -36,7 +36,8 @@ interface Row { file: File; kind: SharedKind; passLike: boolean | null }
         <p class="ui-sub" role="status">Opening what you shared…</p>
       } @else if (!hasContent()) {
         <div class="ui-card si__empty" data-empty>
-          <p><b>Nothing to add.</b> This share has expired or was already used.</p>
+          @if (problem()) { <p data-problem><b>{{ problemText() }}</b></p> }
+          @else { <p><b>Nothing to add.</b> This share has expired or was already used.</p> }
           <a class="ui-btn ui-btn--dark ui-btn--sm" routerLink="/trips">My trips</a>
         </div>
       } @else if (!trips().length) {
@@ -109,6 +110,11 @@ export class ShareInPage {
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly problem = signal<'failed' | 'too-large' | null>(null);
+  protected readonly problemText = computed(() => {
+    const p = this.problem();
+    return p === 'too-large' ? SHARE_TOO_LARGE_TEXT : p === 'failed' ? SHARE_FAILED_TEXT : '';
+  });
   protected readonly item = this.inbox.item;
   protected readonly rows = signal<Row[]>([]);
   protected readonly tripId = signal('');
@@ -121,10 +127,16 @@ export class ShareInPage {
   protected readonly actions = actionsFor;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.inbox.clear());
+    // Only the item: a file handed to the add-pass page must survive this page's teardown.
+    inject(DestroyRef).onDestroy(() => this.inbox.item.set(null));
     effect(() => {
       const id = this.id();
       untracked(() => void this.load(id));
+    });
+    // Rows follow the item, so files arriving late (desktop launchQueue) still show.
+    effect(() => {
+      const it = this.item();
+      untracked(() => this.build(it));
     });
     effect(() => {
       const list = this.trips();
@@ -133,11 +145,14 @@ export class ShareInPage {
   }
 
   private async load(id: string | undefined): Promise<void> {
-    if (id) await this.inbox.loadStash(id);
-    const it = this.item();
+    if (id === 'failed' || id === 'too-large') this.problem.set(id);
+    else if (id) await this.inbox.loadStash(id);
+    this.loading.set(false);
+  }
+
+  private build(it: ReturnType<typeof this.item>): void {
     const rows: Row[] = (it?.files ?? []).map(file => ({ file, kind: sharedKind(file), passLike: null }));
     this.rows.set(rows);
-    this.loading.set(false);
     // Boarding-pass check, on this device. Slow for PDFs: results fill in as they finish.
     rows.forEach((r, i) => {
       if (!actionsFor(r.kind).pass) return;

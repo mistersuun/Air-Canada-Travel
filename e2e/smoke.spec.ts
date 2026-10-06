@@ -120,7 +120,7 @@ test('a share POST is caught by the service worker and lands on /share-in', asyn
     document.body.appendChild(f);
     f.submit();
   });
-  await expect(page).toHaveURL(/\/share-in\?id=[a-z0-9]+$/);
+  await expect(page).toHaveURL(/\/share-in\?id=[a-z0-9]+(&|$)/);
   await expect(page.getByRole('heading', { level: 1, name: 'Add to a trip' })).toBeVisible();
   // No trips yet: the page says so, and the temporary copy is already deleted.
   await expect(page.locator('[data-no-trips]')).toBeVisible();

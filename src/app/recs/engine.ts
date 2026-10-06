@@ -504,7 +504,7 @@ export const WEATHER_MAX = 2;
 export const COLD_BELOW_C = 8;
 export const WARM_MIN_C = 24;
 /** Hub typical high at or above this is "hot"; destinations must stay at or under COOL_MAX_C. */
-export const HOT_FROM_C = 28;
+export const HOT_FROM_C = 26;
 export const COOL_MAX_C = 22;
 
 export type WeatherSeason = 'cold' | 'hot';
@@ -541,30 +541,34 @@ export function weatherGroupTitle(season: WeatherSeason): string {
 export function weatherRecs(input: RecInput): Recommendation[] {
   const season = weatherSeason(input);
   if (!season) return [];
-  const month = hubMonth(input);
-  const home = climateFor(input.climate, input.hub, month)!;
+  const home = climateFor(input.climate, input.hub, hubMonth(input))!;
+  const max = maxMinutes(input.profile);
   const recs: Recommendation[] = [];
   for (const d of CANDIDATES) {
-    const there = climateFor(input.climate, d.code, month);
-    if (!there) continue;
-    if (season === 'cold' ? there.tmaxC < WARM_MIN_C : there.tmaxC > COOL_MAX_C) continue;
     const id = recId('weather', d.code, null);
     if (input.profile.dismissed.includes(id)) continue;
     let next: { dateKey: string; at: number } | null = null;
     for (let i = 0; i < WEATHER_AHEAD_DAYS && !next; i++) {
       const day = addDays(input.todayKey, i);
       if (!isCovered(day, input.hub)) continue;
-      const f = flightsOn(input.hub, d.code, day).find(x => x.depUtc > input.nowMs);
+      const f = flightsOn(input.hub, d.code, day).find(x => x.depUtc > input.nowMs && (max === null || directItinerary(x).totalMin <= max));
       if (f) next = { dateKey: day, at: f.depUtc };
     }
     if (!next) continue;
+    // The destination's normals for the month of the flight (it can fall in next month).
+    const there = climateFor(input.climate, d.code, Number(next.dateKey.slice(5, 7)));
+    if (!there) continue;
+    if (season === 'cold' ? there.tmaxC < WARM_MIN_C : there.tmaxC > COOL_MAX_C) continue;
     const delta = there.tmaxC - home.tmaxC;
     recs.push({
       id, kind: 'weather', code: d.code, placeId: null, title: d.city,
       out: null, back: null,
-      lines: [{ text: `Trade ${home.tmaxC}° for ${there.tmaxC}° · nonstop ${weekdayShort(next.dateKey)}`, label: 'scheduled' }],
-      weather: there,
-      reason: [{ kind: 'schedule', text: `Typical high at home this month is ${home.tmaxC}°` }],
+      lines: [
+        { text: `Trade ${home.tmaxC}° for ${there.tmaxC}°`, label: 'typical' },
+        { text: `Nonstop ${weekdayShort(next.dateKey)}`, label: 'scheduled' },
+      ],
+      weather: null,   // the highs are already in the first line
+      reason: [{ kind: 'schedule', text: season === 'cold' ? 'Warmer than home this month' : 'Cooler than home this month' }],
       link: { path: flightPath(d.code, next.dateKey), query: {} },
       deltaC: delta,
       rank: Math.abs(delta) * 1000 - next.at / 3_600_000,

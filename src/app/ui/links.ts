@@ -70,6 +70,11 @@ export function tripUrl(id: string, tab?: TripTabKey | null, leg?: string | null
   return `/trips/${encodeURIComponent(id)}${q ? `?${q}` : ''}`;
 }
 
+/** Command array for `/g/:id` (the key and write token go in the fragment `#k=…&w=…`). */
+export function groupPath(id: string): string[] {
+  return ['/g', id];
+}
+
 /** Command array for `/trips/import` (the payload goes in the fragment `#t=`). */
 export function tripImportPath(): string[] {
   return ['/trips', 'import'];

@@ -66,6 +66,21 @@ How it works: `netlify/functions/events.mts` takes `?code=<IATA>&from=YYYY-MM-DD
 
 Limits and cost controls: the CDN caches each answer for 6 hours (`Netlify-Vary` on code, from and to); only misses reach the function; each IP gets about 10 misses per 10 minutes; cross-site requests are refused; a global daily budget applies. The app asks only when a view is shown (the weekend finder only after tapping "What's on" on a row), and stays silent on any failure. The response fields (`_embedded.events[].name`, `url`, `dates.start.localDate` / `localTime`, `dates.status.code`, `_embedded.venues[0].name`, `classifications[0].segment.name`) follow the documented v2 names; the docs were not reachable when this was written, so verify them on the first live call.
 
+## Group trip links (optional)
+
+A trip's menu has "Group trip": one link for your travel companions that shows the shared plan (read-only) plus every member's own status ("On AC834", "Plan B: AC836", "Bus to YUL"), an expected arrival and a meet-up point. No accounts.
+
+How it works: the device generates an AES-GCM 256 key and a random 128-bit group id. The link is `/g/<groupId>#k=<key>[&w=<write token>]`. The key sits in the URL fragment, which browsers never send to a server, so the server (`netlify/functions/group.mts`, Netlify Blobs store `groups`, strong consistency) only holds ciphertext (AES-GCM with the group id bound as additional data, `ac-group:v1:<id>`), the IV, a version and an expiry. The decrypted document is the trip share payload (`src/app/trips/share-codec.ts`: no prep state, changes, offline/calendar marks or "usual" items) with every leg's free-text note and "If we split up" blanked and no load notes plus a member map `{memberId: {name, planLabel, arrival, updatedAt}}` and a meet-up text. Standby list position, PNR and loads are never part of it. The write token is only ever stored on the server as its sha256; a link without `&w=` is view only.
+
+Concurrency: `GET ?id=` returns `{ciphertext, iv, version, updatedAt, expiresAt}`. `PUT ?id=` with `X-Group-Write: <token>` and `{ciphertext, iv, baseVersion}` is a conditional Blobs write (create-if-new or update-if-ETag-unchanged). A stale `baseVersion` or lost race answers 409; the app then re-fetches, merges member entries and the meet-up by `updatedAt` and retries (up to three times). The app remembers the highest version it has seen per group and ignores older answers; a group is capped at 30 members (the stalest entries are evicted on merge, and joining a full group is refused). `DELETE` with the token is "Stop sharing".
+
+Limits and privacy:
+- Ciphertext at most 96 KB (a trip that does not fit is retried without its backups); 30 writes and 300 reads per IP per 10 minutes; new groups are limited to 5 per IP per hour and spend from a global daily budget (only a genuine create is charged, right before the write), `GROUP_DAILY_CREATES` (Netlify env var, default `50` per UTC day, `0` turns creating off; counted in the strongly consistent Blobs store `groups-budget` with conditional writes; past it creating answers `503 {error:'budget'}` and the app says sharing is unavailable right now); cross-site requests refused; ids and tokens validated; every response is `Cache-Control: no-store`; `/g/*` is served with `Referrer-Policy: no-referrer`.
+- Expiry: 30 days after the trip's last date by default (at least a week and at most 90 days from creation, clamped by the server). A `GET` or `PUT` after expiry answers 410 and deletes the blob; `netlify/functions/group-sweep.mts` (`@daily`) deletes any that are never opened again.
+- Anyone holding the link can read it, and with `&w=` can update it, so keep it to your travel companions. Air Canada pass rules do not allow sharing passes or listing details, and the group page says so. Nicknames are 24 characters at most, labels 40, the meet-up note 80.
+- The key and token are also kept in this browser's local storage so a reload still works (the router drops the fragment). Clearing site data forgets them; the link itself still works.
+- The group page polls every 2 minutes while it is visible. On a host without functions (the e2e static server, `ng serve`) it says "Group sharing needs the online service" and nothing else.
+
 ## Tech Stack
 
 - Angular 17 (standalone components)

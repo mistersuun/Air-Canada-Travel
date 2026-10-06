@@ -122,6 +122,12 @@ export const routes: Routes = [
     title: 'Add to a trip · Routes',
   },
   {
+    // End-to-end encrypted group plan: the key is in the URL fragment.
+    path: 'g/:id',
+    loadComponent: () => import('./pages/group/group.page').then(m => m.GroupPage),
+    title: 'Group trip · Routes',
+  },
+  {
     path: 'logbook',
     loadComponent: () => import('./pages/logbook/logbook.page').then(m => m.LogbookPage),
     title: 'Logbook · Routes',

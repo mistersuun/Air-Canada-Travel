@@ -12,6 +12,7 @@ import { SegComponent, SegOption } from '../../ui/seg.component';
 import { hubDisplayName } from '../../ui/format';
 import { IconComponent } from '../shared/icons.component';
 import { DataCreditsComponent } from '../../places/ui/data-credits.component';
+import { SettingsBackgroundComponent } from './settings-background.component';
 import { SettingsDataComponent } from '../../trips/ui/settings-data.component';
 import { SettingsHistoryComponent } from '../../trips/ui/settings-history.component';
 import { SettingsFilesComponent } from '../../files/ui/settings-files.component';
@@ -32,7 +33,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
   standalone: true,
   imports: [
     GlassSheetComponent, SegComponent, IconComponent, SettingsDataComponent, SettingsHistoryComponent, DataCreditsComponent,
-    SettingsProfileComponent, SettingsFilesComponent, ClimateCreditComponent, GroundCreditComponent,
+    SettingsProfileComponent, SettingsFilesComponent, SettingsBackgroundComponent, ClimateCreditComponent, GroundCreditComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -108,6 +109,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
           </div>
         </section>
 
+        <app-settings-background />
         <app-settings-data />
         <app-settings-files />
         <app-settings-history />

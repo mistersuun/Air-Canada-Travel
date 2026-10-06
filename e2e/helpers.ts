@@ -3,10 +3,14 @@ import { expect, type Page } from '@playwright/test';
 /** Collects console errors, page errors and CSP violations for the lifetime of a page. */
 export async function watchErrors(page: Page): Promise<string[]> {
   const problems: string[] = [];
+  // The forecast API is off-site: answer it locally so a missing network cannot log a failed load.
+  await page.route('https://api.open-meteo.com/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   page.on('console', m => {
-    // The static server has no Netlify Functions, so the optional live-status request 404s and the
-    // browser itself logs "Failed to load resource". The app handles it silently; anything else counts.
-    if (m.type() === 'error' && !m.location().url.includes('/.netlify/functions/')) problems.push(`console: ${m.text()}`);
+    // The static server has no Netlify Functions, so the optional live-status request 404s and the browser
+    // itself logs "Failed to load resource"; and with no network the service worker answers the forecast
+    // request with a 504. The app hides both without a word, so only those expected load failures are ignored.
+    const url = m.location().url;
+    if (m.type() === 'error' && !url.includes('/.netlify/functions/') && !url.startsWith('https://api.open-meteo.com/')) problems.push(`console: ${m.text()}`);
   });
   page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
   await page.addInitScript(() => {

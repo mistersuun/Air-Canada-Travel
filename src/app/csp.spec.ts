@@ -24,11 +24,41 @@ describe('Content-Security-Policy (netlify.toml)', () => {
     expect(policy).not.toMatch(/script-src[^;]*'unsafe-eval'/);
   });
 
+  it('lets the page reach the forecast API and nothing else off-site except fonts', () => {
+    const connect = /connect-src ([^;]+)/.exec(csp())![1].split(' ');
+    expect(connect).toContain('https://api.open-meteo.com');
+    expect(connect.filter(s => s.startsWith('https://')).sort()).toEqual([
+      'https://api.open-meteo.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com',
+    ]);
+  });
+
+  it('does not block geolocation (the nearest-hub button asks on tap)', () => {
+    const toml = read('netlify.toml');
+    expect(toml).not.toMatch(/geolocation=\(\)/);
+  });
+
   it('cannot be framed and loads no plugins', () => {
     const policy = csp();
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("base-uri 'self'");
+  });
+});
+
+describe('custom service worker (public/sw.js)', () => {
+  it('is registered by app.config, wraps ngsw-worker.js and always revalidates', () => {
+    expect(read('src/app/app.config.ts')).toContain("provideServiceWorker('sw.js'");
+    expect(read('public/sw.js')).toContain("importScripts('./ngsw-worker.js')");
+    expect(read('netlify.toml')).toMatch(/for = "\/sw\.js"\s+\[headers\.values\]\s+Cache-Control = "no-cache"/);
+    // same-origin script: covered by worker-src 'self'
+    expect(csp()).toMatch(/worker-src 'self'/);
+  });
+
+  it('declares a share target and file handlers that point at /share-in', () => {
+    const m = JSON.parse(read('public/manifest.webmanifest'));
+    expect(m.share_target).toMatchObject({ action: '/share-in', method: 'POST', enctype: 'multipart/form-data' });
+    expect(m.file_handlers[0].action).toBe('/share-in');
+    expect(Object.keys(m.file_handlers[0].accept)).toEqual(expect.arrayContaining(['application/pdf', 'text/calendar']));
   });
 });
 
@@ -45,5 +75,11 @@ describe('service worker (ngsw-config.json)', () => {
     const urls = (cfg.dataGroups ?? []).flatMap(g => g.urls);
     expect(urls.filter(u => u.includes('netlify') || u === '/**' || u === '/*')).toEqual([]);
     expect(csp()).toMatch(/connect-src 'self'/);
+  });
+
+  it('keeps the last forecast for offline: freshness strategy, short maxAge', () => {
+    const cfg = JSON.parse(read('ngsw-config.json')) as { dataGroups: { name: string; urls: string[]; cacheConfig: { strategy: string; maxAge: string; timeout: string } }[] };
+    const g = cfg.dataGroups.find(d => d.urls.some(u => u.startsWith('https://api.open-meteo.com/')))!;
+    expect(g.cacheConfig).toMatchObject({ strategy: 'freshness', maxAge: '3h', timeout: '3s' });
   });
 });

@@ -23,6 +23,7 @@ import {
 } from '../trips-model';
 import { groundTimetableLines } from '../../reach/reach-model';
 import { LegFilesComponent } from '../../../files/ui/leg-files.component';
+import { ForecastLineComponent } from '../../../recs/ui/forecast-line.component';
 import { LegPassesComponent } from '../../../passes/ui/leg-passes.component';
 
 /** Statuses the traveller can set on a flight leg (Dropped is set by a swap). */
@@ -41,7 +42,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
 @Component({
   selector: 'app-leg-sheet',
   standalone: true,
-  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent, LegPassesComponent, LegFilesComponent],
+  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent, LegPassesComponent, LegFilesComponent, ForecastLineComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet [title]="title()" [open]="true" (closed)="closed.emit()">
@@ -51,6 +52,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             <span>{{ factLine() }}</span>
             <app-provenance-tag [value]="f.provenance" />
           </p>
+          @if (arrival(); as a) { <p class="ls__fc"><app-forecast-line [code]="a.code" [dateKey]="a.dateKey" /></p> }
           @if (f.provenance === 'unknown') {
             @if (routeNote(); as rn) {
               <p class="ls__warn ui-sub" data-route-only>{{ rn }}. Check the Air Canada app before you go.
@@ -237,6 +239,13 @@ export class LegSheetComponent {
     const note = f ? networkNoteFor(f.refs) : null;
     return note ? capitalizeNote(note) : null;
   });
+  /** Where and on which local day the flight lands: the forecast is for that day. */
+  protected readonly arrival = computed(() => {
+    const refs = this.flight()?.refs;
+    const last = refs?.[refs.length - 1];
+    return last ? { code: last.dest, dateKey: last.arrDateKey } : null;
+  });
+
   protected readonly flight = computed(() => {
     const l = this.leg();
     return l?.kind === 'flight' ? l : null;

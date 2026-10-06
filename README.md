@@ -86,3 +86,7 @@ src/
 ## Not Affiliated
 
 This is a personal travel planning tool. Not affiliated with Air Canada or Air Canada Vacations.
+
+## Service worker switch-off
+
+`public/sw.js` is the registered worker: it adds the share target, periodic schedule checks and notification clicks, then `importScripts('./ngsw-worker.js')`. If a deploy ever has to switch the worker off (a bad `sw.js`, or a cache that cannot recover), do not just delete it: browsers keep running the old copy. Replace the contents of `public/sw.js` with a safety worker and deploy. It should skip waiting, delete every cache (`caches.keys()` then `caches.delete`), call `registration.unregister()` and reload open windows (`clients.matchAll()` then `client.navigate(client.url)`). `/sw.js` is served `no-cache` (see `netlify.toml`), so it is picked up on the next visit. Angular ships a similar `safety-worker.js` for the same purpose.

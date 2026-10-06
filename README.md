@@ -36,6 +36,17 @@ ng serve
 open http://localhost:4200
 ```
 
+## Live flight status (optional)
+
+On the day of travel, Today and the flight page can show live status (estimated time, gate, inbound aircraft, cancelled) from FlightAware AeroAPI. It is off until you set a key; without one the app behaves exactly as before.
+
+1. Create an AeroAPI **Personal** key at <https://www.flightaware.com/aeroapi/portal> (the free tier includes about $5 of usage per month; each flight query is billed per call, and the inbound-aircraft lookup is one more call).
+2. In Netlify: Site settings > Environment variables > add `AEROAPI_KEY` (mark it secret, scope: Functions), then redeploy.
+
+How it works: `netlify/functions/flight-status.mts` receives only a flight ident and a date, calls AeroAPI with the key (never exposed to the browser) and returns a small normalised JSON. Responses are cached on Netlify's CDN for 5 minutes (`s-maxage=300`), so many people watching AC834 cost one AeroAPI query per 5 minutes, not one each. The app asks only about flights within -12 h..+36 h of departure, polls every 5 minutes while Today is visible, keeps the last result in sessionStorage and never caches the endpoint in the service worker. The function limits each IP to 30 requests a minute (best effort). It never contacts Air Canada.
+
+Locally, `netlify dev` serves the function; `ng serve` and the e2e static server do not, and the app hides the status line quietly when the endpoint is missing.
+
 ## Tech Stack
 
 - Angular 17 (standalone components)

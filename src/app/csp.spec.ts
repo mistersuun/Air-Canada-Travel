@@ -39,4 +39,11 @@ describe('service worker (ngsw-config.json)', () => {
     expect(vendor.installMode).toBe('prefetch');
     expect(vendor.resources.files).toEqual(expect.arrayContaining(['/vendor/zxing/*.wasm', '/vendor/pdfjs/*.mjs']));
   });
+
+  it('never caches the live flight-status endpoint, and CSP connect-src self covers it', () => {
+    const cfg = JSON.parse(read('ngsw-config.json')) as { dataGroups?: { urls: string[] }[] };
+    const urls = (cfg.dataGroups ?? []).flatMap(g => g.urls);
+    expect(urls.filter(u => u.includes('netlify') || u === '/**' || u === '/*')).toEqual([]);
+    expect(csp()).toMatch(/connect-src 'self'/);
+  });
 });

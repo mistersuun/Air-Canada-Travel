@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { STATUS_FETCH } from '../../live/flight-status.service';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
@@ -48,6 +49,7 @@ function configure(nowMs: number, store = seeded()) {
       { provide: NOW, useValue: () => nowMs },
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
+      { provide: STATUS_FETCH, useValue: async () => ({ status: 503, body: { error: 'not-configured' } }) },
       { provide: GROUND_FETCH, useValue: (groundFetch = vi.fn(async () => null)) },
     ],
   });
@@ -199,7 +201,7 @@ describe('Today', () => {
     expect(el.querySelector('[data-empty] a')?.getAttribute('href')).toBe('/trips');
   });
 
-  it('makes no network calls besides loading the ground timetable (cached data)', async () => {
+  it('makes no direct network calls besides the ground timetable (cached data); live status goes through its own injectable fetch', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await render(TodayPage, AT_1640);
     expect(fetchSpy).not.toHaveBeenCalled();

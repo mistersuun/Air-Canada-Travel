@@ -17,6 +17,8 @@ import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-cha
 import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
 import { TodayTimelineComponent } from './today-timeline.component';
 import { TodayInAirComponent } from './in-air.component';
+import { LiveStatusComponent } from '../../live/live-status.component';
+import { refDepUtc } from '../../trips/engine/legs';
 import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
 /**
@@ -29,7 +31,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 @Component({
   selector: 'app-today-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent, TodayInAirComponent],
+  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent, TodayInAirComponent, LiveStatusComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -46,6 +48,8 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
             <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
+          <app-live-status [flightNumber]="v.ref.flightNumber" [origin]="v.ref.origin" [dateKey]="v.ref.dateKey" [depUtc]="depUtc(v.ref)"
+                           [recoverLink]="recoverLink(v.tripId, v.isReturn)" [recoverParams]="{ at: v.ref.origin, leg: v.legId }" />
           @if (v.note; as n) {
             <p class="td__note" data-note>Your note, {{ n.time }}: <b>{{ n.text }}</b></p>
           }
@@ -233,6 +237,13 @@ export class TodayPage {
     const v = this.view();
     return v ? ['/trips', v.tripId] : this.tripsLink;
   });
+
+  protected depUtc = refDepUtc;
+
+  /** Recover page for a cancelled flight; a return leg has no Recover (its way home is the Return tab). */
+  protected recoverLink(tripId: string, isReturn: boolean): string[] | null {
+    return isReturn ? ['/trips', tripId] : recoverPath(tripId);
+  }
 
   protected statusLabel(s: LegStatus): string {
     return LEG_STATUS_LABEL[s];

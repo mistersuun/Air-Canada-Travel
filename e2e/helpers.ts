@@ -4,7 +4,9 @@ import { expect, type Page } from '@playwright/test';
 export async function watchErrors(page: Page): Promise<string[]> {
   const problems: string[] = [];
   page.on('console', m => {
-    if (m.type() === 'error') problems.push(`console: ${m.text()}`);
+    // The static server has no Netlify Functions, so the optional live-status request 404s and the
+    // browser itself logs "Failed to load resource". The app handles it silently; anything else counts.
+    if (m.type() === 'error' && !m.location().url.includes('/.netlify/functions/')) problems.push(`console: ${m.text()}`);
   });
   page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
   await page.addInitScript(() => {

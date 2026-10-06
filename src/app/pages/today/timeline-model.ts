@@ -67,9 +67,10 @@ function onward(trip: Trip, last: FlightLeg['refs'][number], ground: GroundLeg |
   const landUtc = refArrUtc(last);
   const goalTz = trip.goal.tz ?? airportTz(last.dest);
   const reachRow = (utc: number, note: string, overnight = false): TimelineRow => {
-    const at = utcToLocal(utc, goalTz);
+    // A ground leg that does not end at the goal is reached under its own name and time zone.
+    const at = utcToLocal(utc, ground ? endTz(ground.to) ?? goalTz : goalTz);
     return row({
-      id: 'final', kind: 'final', time: formatClock(at.hhmm, fmt), title: `Reach ${trip.goal.name}`,
+      id: 'final', kind: 'final', time: formatClock(at.hhmm, fmt), title: `Reach ${ground ? ground.to.name : trip.goal.name}`,
       detail: `${dayLabel(at.dateKey)} · ${overnight ? 'overnight likely · ' : ''}${note}`, atUtc: utc,
     });
   };
@@ -136,11 +137,17 @@ function onward(trip: Trip, last: FlightLeg['refs'][number], ground: GroundLeg |
   return { rows: [groundRow], reach: goalUtc !== null ? reachRow(goalUtc, scheduled ? 'scheduled' : 'estimated', !!arr?.overnightLikely && !ground) : null };
 }
 
-/** The leg after this one that flies on before the goal (a return flight leaves the goal, so it does not count). */
-function laterFlight(trip: Trip, idx: number): { leg: FlightLeg; at: number } | null {
+/** Flights to count as "flying on": departing `from` within a day of landing (`landUtc`), if given. */
+const FLY_ON_MAX_MIN = 24 * 60;
+
+/** The next flight leg after `idx` that leaves `from` (a return flight leaves the goal, so it does not count). */
+function laterFlight(trip: Trip, idx: number, from: string, landUtc: number | null): { leg: FlightLeg; at: number } | null {
   for (let i = idx + 1; i < trip.legs.length; i++) {
     const l = trip.legs[i];
-    if (l.kind === 'flight' && l.role !== 'return' && l.refs.length && l.status !== 'abandoned' && l.status !== 'notBoarded') return { leg: l, at: i };
+    if (l.kind !== 'flight' || l.role === 'return' || !l.refs.length || l.status === 'abandoned' || l.status === 'notBoarded') continue;
+    if (l.refs[0].origin !== from) continue;
+    if (landUtc !== null && refDepUtc(l.refs[0]) - landUtc > FLY_ON_MAX_MIN * MINUTE_MS) continue;
+    return { leg: l, at: i };
   }
   return null;
 }
@@ -209,7 +216,7 @@ export function travelTimeline(input: { trip: Trip; leg: TripLeg | undefined; fm
   }
 
   const idx = trip.legs.findIndex(l => l.id === leg.id);
-  const flight = laterFlight(trip, idx);
+  const flight = laterFlight(trip, idx, last.dest, landUtc);
   const groundIdx = trip.legs.findIndex((l, i) => i > idx && l.kind === 'ground' && l.from.code === last.dest && l.status !== 'abandoned');
   const ground = groundIdx >= 0 ? trip.legs[groundIdx] as GroundLeg : null;
 
@@ -224,11 +231,13 @@ export function travelTimeline(input: { trip: Trip; leg: TripLeg | undefined; fm
   }
   const ride = onward(trip, last, ground, fmt);
   if (ride) rows.push(...ride.rows);
-  if (flight) {
-    rows.push(nextFlightRow(flight.leg, fmt));
+  // After the ride, a flight from where it ends means the traveller flies on rather than reaching the goal.
+  const viaGround = ground?.to.code ? laterFlight(trip, groundIdx, ground.to.code, null) : null;
+  if (viaGround) {
+    rows.push(nextFlightRow(viaGround.leg, fmt));
   } else if (ride?.reach) {
     rows.push(ride.reach);
-  } else {
+  } else if (!ride) {
     rows.push(row({
       id: 'final', kind: 'final', time: null, title: `Onward to ${trip.goal.name}`,
       detail: 'Onward ride not found in our data', atUtc: landUtc,

@@ -176,10 +176,32 @@ describe('travelTimeline', () => {
       expect(run(t, leg(t)).map(r => r.kind)).toEqual(['depart', 'arrive', 'next']);
     });
 
-    it('shows the ride then the next flight when a flight follows the ride', () => {
+    it('shows the ride then the next flight when a flight leaves from where the ride ends', () => {
       const t = sevilleTrip();
-      t.legs.splice(2, 0, onwardFlight());
+      train(t).to = { ...train(t).to, code: 'SVQ' };
+      const f = onwardFlight();
+      f.refs[0] = { ...f.refs[0], origin: 'SVQ', dest: 'BCN' };
+      t.legs.splice(2, 0, f);
       expect(run(t, leg(t)).map(r => r.kind)).toEqual(['depart', 'arrive', 'ground', 'next']);
+    });
+
+    it('still reaches the goal when a later onward flight is a side trip days after landing', () => {
+      const t = sevilleTrip();
+      const f = onwardFlight();
+      f.refs[0] = { ...f.refs[0], origin: 'MAD', dest: 'BCN', dateKey: '2026-10-12', arrDateKey: '2026-10-12' };
+      t.legs.splice(2, 0, f);
+      expect(run(t, leg(t)).map(r => r.kind)).toEqual(['depart', 'arrive', 'ground', 'final']);
+      const g = onwardFlight();
+      g.refs[0] = { ...g.refs[0], origin: 'SVQ', dest: 'BCN', dateKey: '2026-10-12', arrDateKey: '2026-10-12' };
+      t.legs.splice(3, 0, g);
+      expect(run(t, leg(t)).map(r => r.kind)).toEqual(['depart', 'arrive', 'ground', 'final']);
+    });
+
+    it('names the ride\'s own end in the Reach row when it stops short of the goal', () => {
+      const t = sevilleTrip();
+      train(t).to = { ...train(t).to, name: 'Toledo' };
+      const reach = run(t, leg(t)).find(r => r.kind === 'final')!;
+      expect(reach.title).toBe('Reach Toledo');
     });
   });
 

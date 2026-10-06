@@ -42,7 +42,7 @@ import { markPast, travelTimeline } from './timeline-model';
     .tl__row:last-child::before { display: none; }
     .tl__time { text-align: right; font-size: 14px; font-weight: 650; color: var(--ink); padding-top: 1px; }
     .tl__dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 3px; background: var(--ink); position: relative; z-index: 1; box-sizing: border-box; }
-    .tl__row[data-kind='prep'] .tl__dot, .tl__row[data-kind='layover'] .tl__dot, .tl__row[data-kind='ground'] .tl__dot {
+    .tl__row[data-kind='layover'] .tl__dot, .tl__row[data-kind='ground'] .tl__dot {
       background: var(--fill); border: 2px solid var(--ink-2);
     }
     .tl__row--alert .tl__dot { border-color: var(--amber); }

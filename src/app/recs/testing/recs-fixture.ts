@@ -416,6 +416,7 @@ export const RECS_PROFILE: TravelProfile = {
   days: [4, 5, 6, 7, 1],
   onwardBudget: 'any',
   dismissed: [],
+  usualItems: [],
   updatedAt: '2026-09-30T12:00:00.000Z',
 };
 

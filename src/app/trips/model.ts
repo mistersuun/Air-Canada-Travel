@@ -126,7 +126,8 @@ export interface Trip {
   homeBy: { dateKey: string; hhmm: string };   // local at homeAirport's tz
   legs: TripLeg[];                   // chronological; replaced legs stay (status notBoarded/abandoned)
   prep: Record<string, PrepState>;
-  customPrep: { id: string; text: string }[];
+  /** `usual`: copied from the travel profile's usual items; never leaves the device in a share link. */
+  customPrep: { id: string; text: string; usual?: true }[];
   changes: PendingChange[];
   scheduleGeneratedAt: string | null; // meta.generatedAt last compared against
   offlineSavedAt: string | null;

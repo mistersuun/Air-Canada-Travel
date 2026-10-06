@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { openFirstDestination, startTripFromFlight, waitForServiceWorker, watchErrors } from './helpers';
+import { openFirstDestination, seedOnboarded, startTripFromFlight, waitForServiceWorker, watchErrors } from './helpers';
 
 test('app boots with no console errors or CSP violations', async ({ page }) => {
+  await seedOnboarded(page);
   const problems = await watchErrors(page);
   const res = await page.goto('/');
   expect(res?.headers()['content-security-policy'], 'CSP header served').toContain("default-src 'self'");
@@ -15,6 +16,7 @@ test('app boots with no console errors or CSP violations', async ({ page }) => {
 });
 
 test('home lists destinations and a destination shows flights', async ({ page }) => {
+  await seedOnboarded(page);
   const problems = await watchErrors(page);
   const dest = await openFirstDestination(page);
   expect(dest).toMatch(/^\/to\/[A-Z]{3}$/);
@@ -24,6 +26,7 @@ test('home lists destinations and a destination shows flights', async ({ page })
 });
 
 test('a trip created from a flight survives a reload', async ({ page }) => {
+  await seedOnboarded(page);
   const problems = await watchErrors(page);
   const tripPath = await startTripFromFlight(page);
   await page.goto('/trips');
@@ -35,7 +38,19 @@ test('a trip created from a flight survives a reload', async ({ page }) => {
   expect(problems).toEqual([]);
 });
 
+test('first run shows the setup sheet once; Skip closes it and a reload does not bring it back', async ({ page }) => {
+  await page.goto('/');
+  const sheet = page.getByRole('dialog', { name: 'Welcome' });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Skip' }).click();
+  await expect(sheet).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Welcome' })).toHaveCount(0);
+});
+
 test('works offline after the service worker takes control', async ({ page, context }) => {
+  await seedOnboarded(page);
   await page.goto('/');
   await waitForServiceWorker(page);
   // The prefetch groups (app shell, schedules, vendor) must be fully cached before going offline.
@@ -59,6 +74,7 @@ test('works offline after the service worker takes control', async ({ page, cont
 });
 
 test('share link round trip: copy link, open in a fresh browser, save', async ({ page, browser, context }) => {
+  await seedOnboarded(page);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const tripPath = await startTripFromFlight(page);
   await expect(page).toHaveURL(new RegExp(tripPath));
@@ -72,6 +88,7 @@ test('share link round trip: copy link, open in a fresh browser, save', async ({
   const other = await browser.newContext({ serviceWorkers: 'block' });
   try {
     const p2 = await other.newPage();
+    await seedOnboarded(p2);
     const problems = await watchErrors(p2);
     const url = new URL(link);
     await p2.goto(url.pathname + url.hash);

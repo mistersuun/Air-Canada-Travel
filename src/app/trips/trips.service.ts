@@ -13,6 +13,7 @@ import { findDestination, findHub } from '../utils/airports';
 import type { Itinerary } from '../utils/connections';
 import { requestPersist } from '../files/quota';
 import { AppStateService, NOW } from '../state/app-state.service';
+import { ProfileService } from '../recs/profile.service';
 import { PrefsService } from '../state/prefs.service';
 import { backupNudge } from './backup-nudge';
 import { deadlineUtc } from './engine/homeby';
@@ -55,6 +56,7 @@ export class TripsService {
   private readonly injector = inject(Injector);
   private readonly doc = inject(DOCUMENT);
   private readonly prefs = inject(PrefsService);
+  private readonly profile = inject(ProfileService);
 
   private readonly file = signal<TripsFile>({ schema: TRIPS_SCHEMA, trips: [] });
   private readonly log = signal<FlightLog>({ schema: TRIPS_SCHEMA, notes: [], outcomes: [], dismissed: [] });
@@ -163,7 +165,7 @@ export class TripsService {
       homeBy: { ...input.homeBy },
       legs: sortLegs(input.legs ?? []),
       prep: {},
-      customPrep: [],
+      customPrep: this.profile.profile().usualItems.map(text => ({ id: newId(), text, usual: true as const })),
       changes: [],
       scheduleGeneratedAt: getSchedulesMeta()?.generatedAt ?? null,
       offlineSavedAt: null,

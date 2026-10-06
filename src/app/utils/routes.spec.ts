@@ -110,6 +110,40 @@ describe('computeRoutes: filters, search and sort', () => {
     expect(normalizeText(' Montréal ')).toBe('montreal');
   });
 
+  it('finds destinations by state, airport, island and trip-type words', () => {
+    const d = (c: string) => DESTINATIONS.find(x => x.code === c)!;
+    expect(matchesQuery(d('HNL'), 'Hawaii')).toBe(true);
+    expect(matchesQuery(d('OGG'), 'hawaii')).toBe(true);
+    expect(matchesQuery(d('KOA'), 'HI')).toBe(true);
+    expect(matchesQuery(d('MIA'), 'Florida')).toBe(true);
+    expect(matchesQuery(d('MCO'), 'florida')).toBe(true);
+    expect(matchesQuery(d('LAX'), 'Florida')).toBe(false);
+    expect(matchesQuery(d('LHR'), 'Heathrow')).toBe(true);
+    expect(matchesQuery(d('MAN'), 'Heathrow')).toBe(false);
+    expect(matchesQuery(d('CUN'), 'Quintana Roo')).toBe(true);
+    expect(matchesQuery(d('SXM'), 'saint martin')).toBe(true);
+    expect(matchesQuery(d('PUJ'), 'beach')).toBe(true);
+    expect(matchesQuery(d('LHR'), 'beach')).toBe(false);
+    expect(matchesQuery(d('LHR'), 'city')).toBe(true);
+    expect(matchesQuery(d('ANC'), 'adventure')).toBe(true);
+    expect(matchesQuery(d('DEN'), 'ski')).toBe(true);
+    expect(matchesQuery(d('MIA'), 'ski')).toBe(false);
+    // Every word must match, mixing city and alias words.
+    expect(matchesQuery(d('MIA'), 'miami florida')).toBe(true);
+    expect(matchesQuery(d('MIA'), 'orlando florida')).toBe(false);
+    // Alias words of up to two letters match whole: 'fl' is Florida, but 'w' is not Washington's 'wa'.
+    expect(matchesQuery(d('MCO'), 'fl')).toBe(true);
+    expect(matchesQuery(d('SEA'), 'wa')).toBe(true);
+    expect(matchesQuery(d('SEA'), 'w')).toBe(false);
+    // Punctuation reads as a space, in the query and the aliases.
+    expect(matchesQuery(d('ORD'), "O'Hare")).toBe(true);
+    expect(matchesQuery(d('SEA'), 'Sea-Tac')).toBe(true);
+    expect(matchesQuery(d('SEA'), 'sea tac')).toBe(true);
+    // Dropped as too generic.
+    expect(matchesQuery(d('PEK'), 'capital')).toBe(false);
+    expect(matchesQuery(d('MSY'), 'la')).toBe(false);
+  });
+
   it('filters by departure window', () => {
     const day = { ...base, dateKey: '2026-10-05' };
     expect(codes(computeRoutes({ ...day, filters: { departWindows: ['evening'] } }))).toEqual(['ATH', 'SYD']);
@@ -149,6 +183,15 @@ describe('computeRoutes: filters, search and sort', () => {
     setScheduleSource([...FIXTURE_ROUTES, route('YUL', 'BOS', rec('AC8', '10:00', '11:30', '2026-10-01', '2026-10-31', undefined, '223'))]);
     expect(codes(computeRoutes(base))).toContain('BOS');
     expect(codes(computeRoutes({ ...base, filters: { widebodyOnly: true } }))).not.toContain('BOS');
+  });
+
+  it('filters by max flight time, and counts it as an active filter', () => {
+    expect(computeRoutes({ ...base, filters: { maxHours: 1 } })).toEqual([]);
+    expect(codes(computeRoutes({ ...base, filters: { maxHours: 12 } }))).toEqual(expect.arrayContaining(['ATH', 'LHR']));
+    expect(codes(computeRoutes({ ...base, dateKey: '2026-10-05', filters: { maxHours: 12 } }))).toEqual(expect.arrayContaining(['ATH', 'LHR']));
+    expect(codes(computeRoutes({ ...base, dateKey: '2026-10-05', filters: { maxHours: 1 } }))).toEqual([]);
+    expect(activeFilterCount({ maxHours: 5 })).toBe(1);
+    expect(activeFilterCount({ maxHours: null })).toBe(0);
   });
 
   it('filters by type and via hub', () => {

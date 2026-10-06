@@ -3,8 +3,9 @@ import {
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
+import { RecentService } from '../../state/recent.service';
 import { PhotoService } from '../../state/photo.service';
-import { airportTz } from '../../utils/airports';
+import { airportTz, findDestination } from '../../utils/airports';
 import { activeFilterCount } from '../../utils/routes';
 import { formatKey, todayKey } from '../../utils/time';
 import { IconComponent } from '../../components/shared/icons.component';
@@ -126,6 +127,16 @@ interface ListRow {
                             (toggleFavourite)="state.toggleFavourite($event)" />
         </section>
       } @else {
+        @if (recent().length) {
+          <section class="sec recent" aria-labelledby="h-recent" data-recent>
+            <div class="ui-sec-h"><h2 class="ui-h2 st" id="h-recent">Recent</h2></div>
+            <div class="rrow ui-snap-row">
+              @for (r of recent(); track r.code) {
+                <a class="rchip" [routerLink]="dest(r.code)" [queryParams]="state.globalParams()">{{ r.city }} <b>{{ r.code }}</b></a>
+              }
+            </div>
+          </section>
+        }
         <app-for-you />
         @if (picks().length) {
           <section class="sec" aria-labelledby="h-picks">
@@ -219,6 +230,8 @@ interface ListRow {
     .sec { margin-top: 40px; }
     .st { margin: 0; }
     .picks { gap: 16px; }
+    .rrow { gap: 8px; margin-top: 12px; }
+    .rrow .rchip b { font-size: 11px; letter-spacing: .04em; opacity: .6; margin-left: 4px; }
     .pick { width: calc((100% - 80px) / 6); min-width: 150px; }
 
     .lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 40px; align-items: start; }
@@ -279,6 +292,14 @@ export class HomePage {
   private readonly route = inject(ActivatedRoute);
   private readonly doc = inject(DOCUMENT);
   private readonly cities = inject(CityIndexService);
+  private readonly recentSvc = inject(RecentService);
+
+  /** Last viewed destinations (empty search state only), newest first. */
+  protected readonly recent = computed(() =>
+    this.recentSvc.codes().flatMap(c => {
+      const d = findDestination(c);
+      return d && d.code !== this.state.hub() ? [{ code: d.code, city: d.city }] : [];
+    }));
 
   protected readonly connectOptions = CONNECT_OPTIONS;
   protected readonly dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];

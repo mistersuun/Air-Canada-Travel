@@ -6,7 +6,10 @@ import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtur
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
+import { RECENT_KEY, RECENT_STORAGE } from '../../state/recent.service';
 import { MemoryStorage } from '../../state/testing';
+import { PROFILE_KEY } from '../../recs/model';
+import { PROFILE_STORAGE } from '../../recs/profile.service';
 import { FilterChipsComponent } from './filters/filter-chips.component';
 import { FilterSheetComponent } from './filters/filter-sheet.component';
 import { HomePage } from './home.page';
@@ -23,12 +26,17 @@ function photo() {
   return { author: 'A', source: 'unsplash', sourceUrl: 'https://u/x', license: 'Unsplash License' };
 }
 
-function configure(prefs?: object) {
+function configure(prefs?: object, recent?: string[], profile?: object) {
   const storage = new MemoryStorage();
+  const recentStore = new MemoryStorage();
+  if (recent) recentStore.setItem(RECENT_KEY, JSON.stringify(recent));
+  const profileStore = new MemoryStorage();
+  if (profile) profileStore.setItem(PROFILE_KEY, JSON.stringify(profile));
   if (prefs) storage.setItem('ac.prefs.v1', JSON.stringify(prefs));
   TestBed.configureTestingModule({
     providers: [
-      provideRouter([]), { provide: PREFS_STORAGE, useValue: storage }, { provide: NOW, useValue: () => CLOCK },
+      provideRouter([]), { provide: PREFS_STORAGE, useValue: storage },
+      { provide: RECENT_STORAGE, useValue: recentStore }, { provide: PROFILE_STORAGE, useValue: profileStore }, { provide: NOW, useValue: () => CLOCK },
       { provide: CITIES_FETCH, useValue: async () => { citiesFetches++; return FIXTURE_CITIES_FILE; } },
     ],
   });
@@ -173,6 +181,43 @@ describe('HomePage', () => {
     await stable();
     expect(state.filters().widebodyOnly).toBe(false);
     expect(state.sort()).toBe('az');
+  });
+
+  it('shows a Recent row of viewed destinations in the empty search state only', async () => {
+    configure(undefined, ['LHR', 'ATH']);
+    const { el, state, stable } = await render();
+    const row = el.querySelector('[data-recent]')!;
+    expect([...row.querySelectorAll('a')].map(a => a.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['London LHR', 'Athens ATH']);
+    expect(row.querySelector('a')!.getAttribute('href')).toContain('/to/LHR');
+    state.setQuery('lon');
+    await stable();
+    expect(el.querySelector('[data-recent]')).toBeNull();
+  });
+
+  it('has no Recent row before anything was viewed', async () => {
+    configure();
+    const { el } = await render();
+    expect(el.querySelector('[data-recent]')).toBeNull();
+  });
+
+  it('the Max flight time switch starts at the profile longest flight and filters live', async () => {
+    configure(undefined, undefined, { v: 1, maxFlightHours: 7 });
+    const { el, state, stable } = await render();
+    el.querySelector<HTMLButtonElement>('.search .f')!.click();
+    await stable();
+    const sw = el.querySelector<HTMLInputElement>('[data-max-switch]')!;
+    expect(el.querySelector('[data-max-hint]')!.textContent!.trim()).toBe('Any length');
+    sw.click();
+    await stable();
+    expect(state.filters().maxHours).toBe(7);
+    const range = el.querySelector<HTMLInputElement>('[data-max-range]')!;
+    range.value = '3';
+    range.dispatchEvent(new Event('input'));
+    await stable();
+    expect(state.filters().maxHours).toBe(3);
+    el.querySelector<HTMLInputElement>('[data-max-switch]')!.click();
+    await stable();
+    expect(state.filters().maxHours).toBeNull();
   });
 
   it('the filter button opens the filter sheet', async () => {

@@ -8,7 +8,7 @@ import { ShareService } from '../../state/share.service';
 import { findDestination } from '../../utils/airports';
 import { allItineraries, findAlternatives, type Itinerary } from '../../utils/connections';
 import { buildIcs, downloadIcs, icsFilename } from '../../utils/ics';
-import { addDays, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
+import { addDays, diffDays, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
@@ -33,6 +33,18 @@ import { ReturnPanelComponent } from './return-panel.component';
 
 /** Other options listed before "Show all". */
 export const OPTIONS_SHOWN = 4;
+
+/**
+ * Home-by for a chosen return, from its local arrival at home: 22:00 on the
+ * arrival date, or 23:59 when it lands after 22:00. A small-hours arrival
+ * (before 05:00) would otherwise give a deadline already past, so the deadline
+ * is 08:00 that morning.
+ */
+export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
+  const arr = ret.legs[ret.legs.length - 1].arrLocal;
+  if (arr < '05:00') return { dateKey: ret.arrDateKey, hhmm: '08:00' };
+  return { dateKey: ret.arrDateKey, hhmm: arr > '22:00' ? '23:59' : '22:00' };
+}
 
 /**
  * Flight details, /flight/:code/:date/:flight? (spec §4.3).
@@ -515,15 +527,17 @@ export class FlightPage {
       return;
     }
     // Same return date the Return panel shows: an explicit ?ret= on/after arrival, else nights from arrival.
-    const ret = this.ret();
-    const homeDate = ret && isDateKey(ret) && ret >= it.arrDateKey ? ret : addDays(it.arrDateKey, this.nightCount());
+    const pick = this.returnPick();
+    const retDate = this.ret();
+    const homeDate = retDate && isDateKey(retDate) && retDate >= it.arrDateKey ? retDate : addDays(it.arrDateKey, this.nightCount());
     const trip = this.trips.create({
       goal: placeFromDestination(this.dest()),
       fromHub: this.hub(),
       outboundDate: it.dateKey,
-      homeBy: { dateKey: homeDate, hhmm: '22:00' },
+      homeBy: pick ? homeByFor(pick) : { dateKey: homeDate, hhmm: '22:00' },
     });
     this.trips.addFlightLeg(trip.id, it, 'outbound');
+    if (pick) this.trips.addFlightLeg(trip.id, pick, 'return');
     void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() });
   }
 
@@ -541,7 +555,22 @@ export class FlightPage {
       this.trips.addAlternate(trip.id, target.legId, it);
       this.state.flash(`Added ${flights} to ${trip.name} as a backup for ${target.flight}`, open);
     } else {
+      const first = target.role === 'outbound';
+      const empty = !trip.legs.some(l => l.kind === 'flight');
+      if (first && empty && trip.outboundDate !== it.dateKey) {
+        // A trip started without a flight takes the chosen flight's day; its home-by moves by the same offset.
+        const shift = diffDays(trip.outboundDate, it.dateKey);
+        this.trips.update(trip.id, t => ({
+          ...t, outboundDate: it.dateKey, homeBy: { ...t.homeBy, dateKey: addDays(t.homeBy.dateKey, shift) },
+        }));
+      }
       this.trips.addFlightLeg(trip.id, it, target.role);
+      const pick = this.returnPick();
+      const hasReturn = trip.legs.some(l => l.kind === 'flight' && l.role === 'return' && l.status !== 'abandoned');
+      if (first && pick && !hasReturn) {
+        this.trips.addFlightLeg(trip.id, pick, 'return');
+        this.trips.update(trip.id, t => ({ ...t, homeBy: homeByFor(pick) }));
+      }
       this.state.flash(`Added ${flights} to ${trip.name}`, open);
     }
   }

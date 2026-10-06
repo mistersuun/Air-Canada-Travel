@@ -1,10 +1,11 @@
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, linkedSignal, signal,
+  ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, untracked,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
+import { RecentService } from '../../state/recent.service';
 import { ShareService } from '../../state/share.service';
 import { airportTz, findDestination, getOrigins } from '../../utils/airports';
 import { formatKm, greatCircleKm } from '../../utils/geo';
@@ -406,6 +407,7 @@ export class DestinationPage {
   private readonly sharer = inject(ShareService);
   private readonly router = inject(Router);
   private readonly doc = inject(DOCUMENT);
+  private readonly recent = inject(RecentService);
 
   readonly code = input.required<string>();
   /** ?tab= (mobile seg), bound from the query by withComponentInputBinding. */
@@ -426,6 +428,15 @@ export class DestinationPage {
 
   // ── Destination facts ─────────────────────────────────────────────────────
   protected readonly dest = computed(() => findDestination(this.code()));
+
+  constructor() {
+    // Opening a destination puts it first in Home's "Recent" row.
+    effect(() => {
+      const d = this.dest();
+      if (d) untracked(() => this.recent.add(d.code));
+    });
+  }
+
   protected readonly city = computed(() => this.dest()?.city ?? this.code());
   protected readonly place = computed(() => {
     const d = this.dest();

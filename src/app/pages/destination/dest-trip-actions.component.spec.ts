@@ -51,8 +51,21 @@ describe('DestTripActionsComponent', () => {
     expect(trip.goal).toMatchObject({ id: 'ac-LIS', name: 'Lisbon', acCode: 'LIS' });
     expect(trip.outboundDate).toBe('2026-10-08');
     expect(trip.homeBy).toEqual({ dateKey: '2026-10-13', hhmm: '22:00' });
-    expect(trip.legs.map(l => (l.kind === 'flight' ? l.refs[0].flightNumber : l.kind))).toEqual(['AC812']);
-    expect(TestBed.inject(Router).url.split('?')[0]).toBe(`/trips/${trip.id}`);
+    // No flight is chosen for the user: the trip starts empty and they are sent to pick one.
+    expect(trip.legs).toEqual([]);
+    expect(TestBed.inject(Router).url.split('?')[0]).toBe('/flight/LIS/2026-10-08');
+    expect(TestBed.inject(AppStateService).notice()?.message).toContain('Pick your flight');
+  });
+
+  it('sends the user to the day picker when nothing flies on the selected day', async () => {
+    configure(false);
+    TestBed.inject(AppStateService).setShowConnections(false);
+    const f = await render('LIS', '2026-10-10');
+    (f.nativeElement.querySelector('button') as HTMLButtonElement).click();
+    await f.whenStable();
+    expect(TestBed.inject(TripsService).trips()[0].legs).toEqual([]);
+    expect(TestBed.inject(Router).url.split('?')[0]).toBe('/calendar/LIS');
+    expect(TestBed.inject(Router).url).toContain('dep=2026-10-10');
   });
 
   it('offers "Add to Seville trip" when the active trip covers the selected day', async () => {

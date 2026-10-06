@@ -17,8 +17,8 @@ Opt-in (--include), pending a licence or size decision:
   cp         CP Comboios de Portugal   no licence stated  (LIS-Porto)
   trenitalia Trenitalia (community GTFS of the official NeTEx)  (FCO-Naples, MXP-Turin, VCE-Florence)
   swiss      opentransportdata.swiss   free, cite source  (ZRH-Basel; 289 MB, about 5 min)
-  via        VIA Rail Canada           VIA Rail open data licence, see its page (YUL-Quebec City, YUL-Ottawa)
-  maritime   Maritime Bus (Mobility Database mdb-2417)  licence per the Mobility Database entry
+  via        VIA Rail Canada           Open Government Licence - Canada 2.0 (YUL-Quebec City, YUL-Ottawa)
+  maritime   Maritime Bus (Trillium)    no licence stated
                                        (YHZ-Moncton, YHZ-Charlottetown)
 FlixBus (feed "flix") also carries the MAD-Valencia and MUC-Salzburg coach corridors. Corridors marked
 "provisional" in CORRIDORS pin stops by name ("name:" exact, "name~:" substring, case-insensitive) because
@@ -152,14 +152,13 @@ FEEDS: dict[str, dict] = {
     "via": {
         "name": "VIA Rail", "url": "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
         "page": "https://www.viarail.ca/en/developer-resources",
-        "licence": "VIA Rail open data licence", "licenceUrl": "https://www.viarail.ca/en/developer-resources",
-        "credit": "VIA Rail Canada (viarail.ca developer resources)", "optional": True,
+        "licence": "Open Government Licence \u2013 Canada 2.0", "licenceUrl": "https://open.canada.ca/en/open-government-licence-canada",
+        "credit": "Contains information licensed under the Open Government Licence \u2013 Canada (VIA Rail Canada)", "optional": True,
     },
     "maritime": {
-        "name": "Maritime Bus", "url": "https://files.mobilitydatabase.org/mdb-2417/latest.zip",
+        "name": "Maritime Bus", "url": "https://data.trilliumtransit.com/gtfs/maritimebus-ca/maritimebus-ca.zip",
         "page": "https://mobilitydatabase.org/feeds/gtfs/mdb-2417",
-        "licence": "As published by Maritime Bus (Mobility Database)",
-        "licenceUrl": "https://mobilitydatabase.org/feeds/gtfs/mdb-2417",
+        "licence": "No licence stated", "licenceUrl": "",
         "credit": "Maritime Bus (via the Mobility Database)", "optional": True,
     },
     "swiss": {
@@ -248,7 +247,8 @@ CORRIDORS: list[dict] = [
      "b": {"stops": ["name:Québec", "name:Quebec"], "name": "Québec (Gare du Palais)", "tz": "America/Toronto"},
      "note": "VIA Rail trains only. Orleans Express and other coaches also run this route."},
     {"key": "YUL-6094817", "feed": "via", "mode": "train", "op": "VIA Rail", "product": "name:VIA Rail", "provisional": True,
-     "a": {"stops": ["name:Montréal", "name:Montreal"], "name": "Montréal Central Station", "tz": "America/Toronto"},
+     "a": {"stops": ["name:Montréal", "name:Montreal", "name:Dorval"], "name": "Montréal Central Station",
+           "tz": "America/Toronto"},
      "b": {"stops": ["name:Ottawa"], "name": "Ottawa", "tz": "America/Toronto"},
      "note": "VIA Rail trains only. Coaches also run this route."},
     {"key": "YHZ-6076211", "feed": "maritime", "mode": "bus", "op": "Maritime Bus", "product": "name:Maritime Bus",
@@ -856,8 +856,20 @@ def main(argv: list[str] | None = None) -> int:
         if not path:
             failed.add(fid)
             continue
-        with zipfile.ZipFile(path) as z:
-            runs = load_feed(z, corridors, lo, hi)  # PinnedStopMissing propagates: fail loudly
+        tolerant = bool(FEEDS[fid].get("optional")) or all(c.get("provisional") for c in corridors)
+        try:
+            with zipfile.ZipFile(path) as z:
+                runs = load_feed(z, corridors, lo, hi)  # PinnedStopMissing propagates for required feeds: fail loudly
+        except PinnedStopMissing:
+            raise
+        except (KeyError, zipfile.BadZipFile, ValueError, UnicodeDecodeError, csv.Error, OSError) as e:
+            if not tolerant:
+                raise
+            # A broken download must not take the other feeds down: keep this feed's previous corridors.
+            print(f"::warning title=Ground feed skipped::{fid}: {type(e).__name__}: {e}")
+            failed.add(fid)
+            path.unlink(missing_ok=True)
+            continue
         fetched[fid] = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).date().isoformat()
         for c in corridors:
             entry = build_corridor(c, runs[c["key"]], today)

@@ -17,7 +17,7 @@ export const STUCK_HOTELS_SHOWN = 5;
   template: `
     <section class="st ui-card" data-stuck-tonight>
       <h2 class="ui-h3 st__h">Stuck tonight?</h2>
-      <p class="st__lead">Nothing else leaves {{ airportName() }} tonight in our schedule data. Hotels near the airport:</p>
+      <p class="st__lead">Nothing else leaves {{ airportName() }} tonight in our schedule data.@if (hotels().length) { Hotels near the airport:}</p>
       @if (hotels().length) {
         <ul class="st__hotels" data-hotels>
           @for (h of hotels(); track h.name + h.lat) {

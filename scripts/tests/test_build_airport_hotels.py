@@ -99,3 +99,19 @@ def test_shipped_file_is_valid_and_small():
     for hotels in doc["airports"].values():
         for name, lat, lng, d in hotels:
             assert name and -90 <= lat <= 90 and -180 <= lng <= 180 and 0 <= d <= 3000
+
+
+def test_overpass_remark_means_failure():
+    assert bh.overpass_failed({"remark": "runtime error: Query timed out in \"query\" at line 1"})
+    assert bh.overpass_failed({"remark": "runtime error: out of memory"})
+    assert not bh.overpass_failed({"elements": []})
+    assert not bh.overpass_failed({"remark": "ok"})
+
+
+def test_every_query_failing_exits_1_and_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(bh, "query_overpass", lambda *a, **k: None)
+    monkeypatch.setattr(bh.time, "sleep", lambda s: None)
+    out = tmp_path / "h.json"
+    out.write_text('{"v":1,"airports":{"YUL":[["Old",1,2,3]]}}\n')
+    assert bh.main(["--out", str(out), "--airports", "YUL,YHZ"]) == 1
+    assert json.loads(out.read_text())["airports"]["YUL"] == [["Old", 1, 2, 3]]

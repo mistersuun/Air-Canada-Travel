@@ -135,13 +135,22 @@ def parse_hotels(resp: dict, lat: float, lng: float, radius: int = RADIUS_M,
     return [[name, round(la, 5), round(lo, 5), int(round(d / 10.0) * 10)] for d, name, la, lo in kept]
 
 
+def overpass_failed(resp: dict) -> bool:
+    """Overpass answers 200 with a `remark` when a query ran out of time or memory: the elements are then partial."""
+    return bool(re.search(r"error|timed out|out of memory", str(resp.get("remark", "")), re.I))
+
+
 def query_overpass(lat: float, lng: float, radius: int = RADIUS_M, log=print) -> dict | None:
     data = urllib.parse.urlencode({"data": overpass_query(lat, lng, radius)}).encode()
     for url in ENDPOINTS:
         req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT})
         try:
             with urllib.request.urlopen(req, timeout=90) as res:
-                return json.loads(res.read().decode("utf-8"))
+                resp = json.loads(res.read().decode("utf-8"))
+            if overpass_failed(resp):
+                log(f"    {url}: {resp.get('remark')}")
+                continue
+            return resp
         except (OSError, ValueError) as e:  # URLError, HTTPError, timeouts, bad JSON
             log(f"    {url}: {e}")
     return None
@@ -220,8 +229,8 @@ def main(argv: list[str] | None = None) -> int:
     if size > MAX_BYTES:
         print(f"refusing to write {size} bytes (limit {MAX_BYTES})", file=sys.stderr)
         return 1
-    if failed and len(failed) == len(coords) and not previous:
-        print("every query failed and there is no previous file: nothing written", file=sys.stderr)
+    if failed and len(failed) == len(coords):
+        print("every query failed: nothing written", file=sys.stderr)
         return 1
     if previous and same_content(previous, doc):
         print(f"{args.out}: unchanged apart from the date, left as is")

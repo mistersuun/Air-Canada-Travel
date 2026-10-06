@@ -7,14 +7,15 @@
  * prices, no odds: we only say where to look. Each opens in a new tab and
  * needs internet.
  *
- * URL formats (taken from each site's public search pages; the sites do not
- * publish a stable contract, so if one stops working the worst case is that
- * it opens its own search form):
- *   Busbud    https://www.busbud.com/en/bus-<from>-<to>?outbound_date=YYYY-MM-DD
- *   FlixBus   https://shop.flixbus.com/search?departureCity=<from>&arrivalCity=<to>&rideDate=DD.MM.YYYY&adult=1
- *   Omio      https://www.omio.com/search?from=<from>&to=<to>&date=YYYY-MM-DD
+ * Link targets: Busbud, FlixBus and Omio only get their home page (their
+ * search URLs need internal ids we cannot build), so the label carries the
+ * route ("Search YUL -> Quebec on Busbud"). Rome2Rio and Kiwi.com take the
+ * route and date in the URL:
+ *   Busbud    https://www.busbud.com/en
+ *   FlixBus   https://www.flixbus.com/
+ *   Omio      https://www.omio.com/
  *   Rome2Rio  https://www.rome2rio.com/map/<From>/<To>   (the same builder onwardLinks() uses)
- *   Kiwi.com  https://www.kiwi.com/en/search/results/<from>/<to>/<YYYY-MM-DD>/no-return   (IATA codes)
+ *   Kiwi.com  https://www.kiwi.com/deep?from=YUL&to=SVQ&departure=YYYY-MM-DD   (IATA codes)
  */
 import type { LegEnd } from '../trips/model';
 import { rome2rioName } from './ground';
@@ -47,19 +48,9 @@ function ymd(dateKey: string): { y: string; m: string; d: string } | null {
   return m ? { y: m[1], m: m[2], d: m[3] } : null;
 }
 
-export function busbudUrl(from: LegEnd, to: LegEnd, dateKey: string): string {
-  return `https://www.busbud.com/en/bus-${slug(cityName(from))}-${slug(cityName(to))}?outbound_date=${q(dateKey)}`;
-}
-
-export function flixbusUrl(from: LegEnd, to: LegEnd, dateKey: string): string {
-  const d = ymd(dateKey);
-  const date = d ? `&rideDate=${d.d}.${d.m}.${d.y}` : '';
-  return `https://shop.flixbus.com/search?departureCity=${q(cityName(from))}&arrivalCity=${q(cityName(to))}${date}&adult=1`;
-}
-
-export function omioUrl(from: LegEnd, to: LegEnd, dateKey: string): string {
-  return `https://www.omio.com/search?from=${q(cityName(from))}&to=${q(cityName(to))}&date=${q(dateKey)}`;
-}
+export const BUSBUD_URL = 'https://www.busbud.com/en';
+export const FLIXBUS_URL = 'https://www.flixbus.com/';
+export const OMIO_URL = 'https://www.omio.com/';
 
 export function rome2rioUrl(from: LegEnd, to: LegEnd): string {
   return `https://www.rome2rio.com/map/${rome2rioName(from)}/${rome2rioName(to)}`;
@@ -69,7 +60,12 @@ export function rome2rioUrl(from: LegEnd, to: LegEnd): string {
 export function kiwiUrl(fromCode: string | undefined, toCode: string | undefined, dateKey: string): string | null {
   if (!fromCode || !toCode || fromCode === toCode || !ymd(dateKey)) return null;
   if (!/^[A-Z]{3}$/.test(fromCode) || !/^[A-Z]{3}$/.test(toCode)) return null;
-  return `https://www.kiwi.com/en/search/results/${fromCode.toLowerCase()}/${toCode.toLowerCase()}/${dateKey}/no-return`;
+  return `https://www.kiwi.com/deep?from=${fromCode}&to=${toCode}&departure=${dateKey}`;
+}
+
+/** 'YUL' for an airport end, else the city name. */
+function shortName(end: LegEnd): string {
+  return end.code && /^[A-Z]{3}$/.test(end.code) ? end.code : cityName(end);
 }
 
 /**
@@ -83,15 +79,17 @@ export function otherWays(input: {
 }): OtherWay[] {
   const { from, to, dateKey } = input;
   const out: OtherWay[] = [];
+  const route = `${shortName(from)} \u2192 ${cityName(to)}`;
   if (input.land !== false) {
     out.push(
-      { id: 'busbud', label: 'Search on Busbud ↗', href: busbudUrl(from, to, dateKey) },
-      { id: 'flixbus', label: 'Search on FlixBus ↗', href: flixbusUrl(from, to, dateKey) },
-      { id: 'omio', label: 'Search on Omio ↗', href: omioUrl(from, to, dateKey) },
+      { id: 'busbud', label: `Search ${route} on Busbud \u2197`, href: BUSBUD_URL },
+      { id: 'flixbus', label: `Search ${route} on FlixBus \u2197`, href: FLIXBUS_URL },
+      { id: 'omio', label: `Search ${route} on Omio \u2197`, href: OMIO_URL },
     );
   }
-  out.push({ id: 'rome2rio', label: 'Search on Rome2Rio ↗', href: rome2rioUrl(from, to) });
-  const kiwi = kiwiUrl(from.code, input.toAirport ?? to.code, dateKey);
-  if (kiwi) out.push({ id: 'kiwi', label: 'Search flights on Kiwi.com ↗', href: kiwi });
+  out.push({ id: 'rome2rio', label: `Search ${route} on Rome2Rio \u2197`, href: rome2rioUrl(from, to) });
+  const toCode = input.toAirport ?? to.code;
+  const kiwi = kiwiUrl(from.code, toCode, dateKey);
+  if (kiwi) out.push({ id: 'kiwi', label: `Search flights ${from.code} \u2192 ${toCode} on Kiwi.com \u2197`, href: kiwi });
   return out;
 }

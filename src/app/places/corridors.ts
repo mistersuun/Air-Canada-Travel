@@ -92,7 +92,7 @@ export const CORRIDORS: readonly Corridor[] = [
   { code: 'YUL', geonameId: 6325494, city: 'Quebec City', lat: 46.81, lng: -71.21, mode: 'train', rideMin: 205, exitMin: 90,
     exitLabel: 'Get to Montréal Central Station', frequency: 'a few trains a day', lastDepLocal: null, reviewed: R },
   { code: 'YUL', geonameId: 6094817, city: 'Ottawa', lat: 45.41, lng: -75.7, mode: 'train', rideMin: 120, exitMin: 90,
-    exitLabel: 'Get to Montréal Central Station', frequency: 'a few trains a day', lastDepLocal: null, reviewed: R },
+    exitLabel: 'Shuttle to Dorval station', frequency: 'a few trains a day', lastDepLocal: null, reviewed: R },
   { code: 'YHZ', geonameId: 6076211, city: 'Moncton', lat: 46.09, lng: -64.8, mode: 'bus', rideMin: 215, exitMin: 30,
     exitLabel: 'Get to the airport coach stop', frequency: 'a few buses a day', lastDepLocal: null, reviewed: R },
   { code: 'YHZ', geonameId: 5920288, city: 'Charlottetown', lat: 46.23, lng: -63.13, mode: 'bus', rideMin: 310, exitMin: 30,

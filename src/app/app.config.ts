@@ -22,6 +22,7 @@ import { routes } from './app.routes';
 import { reloadOnChunkError } from './state/pwa-update.service';
 import { PhotoService } from './state/photo.service';
 import { AppStateService } from './state/app-state.service';
+import { PwaExtrasService } from './share-in/pwa-extras.service';
 import { stageDeepLink } from './shell/deep-link';
 
 /** '/to/LIS' for a route snapshot tree (query params and fragment ignored). */
@@ -64,12 +65,15 @@ export const appConfig: ApplicationConfig = {
       const staged = stageDeepLink(inject(DOCUMENT).defaultView);
       const state = inject(AppStateService);
       if (staged) state.markStagedBack();
+      const extras = inject(PwaExtrasService);
+      extras.init();
       const photos = inject(PhotoService);
       return Promise.all([loadSchedules(), loadRouteNetwork(), photos.load()]).then(([schedulesOk]) => {
         state.reportDataLoad(schedulesOk);
+        extras.announceSchedules();
       });
     }),
-    provideServiceWorker('ngsw-worker.js', {
+    provideServiceWorker('sw.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',
     }),

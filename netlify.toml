@@ -17,8 +17,9 @@
     # (csp.spec.ts fails if either changes). 'wasm-unsafe-eval' is for the
     # zxing barcode reader; worker-src covers the service worker, pdf.js and
     # the barcode decode worker (a same-origin worker-<hash>.js).
-    # connect-src lists the font hosts because the service worker fetches them.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-hashes' 'sha256-RRtvQ/ngPYYKxMKmwEGOBCInozN2Nad/RW3leEYlGYY=' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; worker-src 'self' blob:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    # connect-src lists the font hosts because the service worker fetches them,
+    # and api.open-meteo.com for the weather forecast (destination coordinates only).
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-hashes' 'sha256-RRtvQ/ngPYYKxMKmwEGOBCInozN2Nad/RW3leEYlGYY=' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; worker-src 'self' blob:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://api.open-meteo.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 # Files that must always revalidate so a new deploy (and new schedules) is picked up.
 [[headers]]
@@ -33,6 +34,12 @@
 
 [[headers]]
   for = "/ngsw-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Our service worker wrapper (importScripts of ngsw-worker.js, share target).
+[[headers]]
+  for = "/sw.js"
   [headers.values]
     Cache-Control = "no-cache"
 

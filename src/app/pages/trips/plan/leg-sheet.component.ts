@@ -23,6 +23,7 @@ import {
 } from '../trips-model';
 import { groundTimetableLines } from '../../reach/reach-model';
 import { LegFilesComponent } from '../../../files/ui/leg-files.component';
+import { ForecastLineComponent } from '../../../recs/ui/forecast-line.component';
 import { LegPassesComponent } from '../../../passes/ui/leg-passes.component';
 import { OtherWaysComponent } from '../../../places/ui/other-ways.component';
 
@@ -42,7 +43,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
 @Component({
   selector: 'app-leg-sheet',
   standalone: true,
-  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent, LegPassesComponent, LegFilesComponent, OtherWaysComponent],
+  imports: [RouterLink, IconComponent, GlassSheetComponent, ProvenanceTagComponent, LegPassesComponent, LegFilesComponent, ForecastLineComponent, OtherWaysComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet [title]="title()" [open]="true" (closed)="closed.emit()">
@@ -52,6 +53,7 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             <span>{{ factLine() }}</span>
             <app-provenance-tag [value]="f.provenance" />
           </p>
+          @if (arrival(); as a) { <p class="ls__fc"><app-forecast-line [code]="a.code" [dateKey]="a.dateKey" /></p> }
           @if (f.provenance === 'unknown') {
             @if (routeNote(); as rn) {
               <p class="ls__warn ui-sub" data-route-only>{{ rn }}. Check the Air Canada app before you go.
@@ -172,8 +174,6 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
               <app-icon name="external" [size]="16" /> Find onward transport
             </a>
             <p class="ui-sub ls__also">Also:
-              <a class="ui-link" [href]="links().rome2rio" target="_blank" rel="noopener">Rome2Rio</a> ·
-              <a class="ui-link" [href]="links().omio" target="_blank" rel="noopener">Omio</a> ·
               <a class="ui-link" [href]="links().skyscanner" target="_blank" rel="noopener">Skyscanner</a>
             </p>
           </section>
@@ -241,6 +241,13 @@ export class LegSheetComponent {
     const note = f ? networkNoteFor(f.refs) : null;
     return note ? capitalizeNote(note) : null;
   });
+  /** Where and on which local day the flight lands: the forecast is for that day. */
+  protected readonly arrival = computed(() => {
+    const refs = this.flight()?.refs;
+    const last = refs?.[refs.length - 1];
+    return last ? { code: last.dest, dateKey: last.arrDateKey } : null;
+  });
+
   protected readonly flight = computed(() => {
     const l = this.leg();
     return l?.kind === 'flight' ? l : null;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LegEnd } from '../trips/model';
 import { airportEnd } from './ground';
-import { busbudUrl, cityName, flixbusUrl, kiwiUrl, omioUrl, otherWays, rome2rioUrl, slug } from './other-ways';
+import { BUSBUD_URL, FLIXBUS_URL, OMIO_URL, cityName, kiwiUrl, otherWays, rome2rioUrl, slug } from './other-ways';
 
 const YUL = airportEnd('YUL')!;
 const QUEBEC: LegEnd = { name: 'Québec City', lat: 46.81, lng: -71.21 };
@@ -18,22 +18,18 @@ describe('other ways: builders', () => {
     expect(cityName({ name: 'Montreal', lat: 0, lng: 0 })).toBe('Montreal');
   });
 
-  it('Busbud: city slugs and the date', () => {
-    expect(busbudUrl(YUL, QUEBEC, '2026-10-09')).toBe('https://www.busbud.com/en/bus-montreal-quebec-city?outbound_date=2026-10-09');
+  it('bus sites are plain home pages', () => {
+    expect(BUSBUD_URL).toBe('https://www.busbud.com/en');
+    expect(FLIXBUS_URL).toBe('https://www.flixbus.com/');
+    expect(OMIO_URL).toBe('https://www.omio.com/');
   });
 
-  it('FlixBus: names and DD.MM.YYYY', () => {
-    expect(flixbusUrl(YUL, QUEBEC, '2026-10-09'))
-      .toBe('https://shop.flixbus.com/search?departureCity=Montr%C3%A9al&arrivalCity=Qu%C3%A9bec%20City&rideDate=09.10.2026&adult=1');
-  });
-
-  it('Omio and Rome2Rio', () => {
-    expect(omioUrl(YUL, QUEBEC, '2026-10-09')).toBe('https://www.omio.com/search?from=Montr%C3%A9al&to=Qu%C3%A9bec%20City&date=2026-10-09');
+  it('Rome2Rio carries the route', () => {
     expect(rome2rioUrl(YUL, QUEBEC)).toContain('https://www.rome2rio.com/map/Montr%C3%A9al-YUL-Airport/');
   });
 
-  it('Kiwi.com needs two airport codes and a date', () => {
-    expect(kiwiUrl('YUL', 'YHZ', '2026-10-09')).toBe('https://www.kiwi.com/en/search/results/yul/yhz/2026-10-09/no-return');
+  it('Kiwi.com deep link needs two airport codes and a date', () => {
+    expect(kiwiUrl('YUL', 'SVQ', '2026-10-09')).toBe('https://www.kiwi.com/deep?from=YUL&to=SVQ&departure=2026-10-09');
     expect(kiwiUrl('YUL', undefined, '2026-10-09')).toBeNull();
     expect(kiwiUrl('YUL', 'YUL', '2026-10-09')).toBeNull();
     expect(kiwiUrl('YUL', 'YHZ', 'tomorrow')).toBeNull();
@@ -44,12 +40,13 @@ describe('other ways: builders', () => {
 describe('other ways: the list', () => {
   const ways = otherWays({ from: YUL, to: QUEBEC, dateKey: '2026-10-09', toAirport: 'YQB' });
 
-  it('is labelled "Search on X ↗", in order, with Kiwi.com last', () => {
+  it('shows the route in each label, in order, with Kiwi.com last', () => {
     expect(ways.map(w => w.id)).toEqual(['busbud', 'flixbus', 'omio', 'rome2rio', 'kiwi']);
     expect(ways.map(w => w.label)).toEqual([
-      'Search on Busbud ↗', 'Search on FlixBus ↗', 'Search on Omio ↗', 'Search on Rome2Rio ↗', 'Search flights on Kiwi.com ↗',
+      'Search YUL → Québec City on Busbud ↗', 'Search YUL → Québec City on FlixBus ↗', 'Search YUL → Québec City on Omio ↗',
+      'Search YUL → Québec City on Rome2Rio ↗', 'Search flights YUL → YQB on Kiwi.com ↗',
     ]);
-    expect(ways[4].href).toBe('https://www.kiwi.com/en/search/results/yul/yqb/2026-10-09/no-return');
+    expect(ways[4].href).toBe('https://www.kiwi.com/deep?from=YUL&to=YQB&departure=2026-10-09');
   });
 
   it('has no affiliate ids, tags or prices, only https', () => {
@@ -59,7 +56,7 @@ describe('other ways: the list', () => {
     }
   });
 
-  it('skips bus and train sites without a land route, and Kiwi without an airport', () => {
+  it('skips bus and train sites without a land route', () => {
     const w = otherWays({ from: YUL, to: QUEBEC, dateKey: '2026-10-09', land: false });
     expect(w.map(x => x.id)).toEqual(['rome2rio']);
   });

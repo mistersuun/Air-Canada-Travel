@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { GlassSheetComponent, SHEET_DRAG_CLOSE_PX } from './glass-sheet.component';
-import { HubPickerComponent } from './hub-picker.component';
+import { GEOLOCATION, HubPickerComponent } from './hub-picker.component';
+import { AppStateService } from '../state/app-state.service';
 
 @Component({
   standalone: true,
@@ -126,5 +127,66 @@ describe('HubPickerComponent', () => {
     await fixture.whenStable();
     expect(changes).toEqual(['YYZ']);
     expect(el.querySelector('dialog')!.hasAttribute('open')).toBe(false);
+  });
+});
+
+describe('HubPickerComponent: nearest to me', () => {
+  type Geo = { getCurrentPosition: (ok: (p: GeolocationPosition) => void, err: (e: GeolocationPositionError) => void) => void };
+  async function setup(geo: Geo | null) {
+    TestBed.configureTestingModule({ providers: [{ provide: GEOLOCATION, useValue: geo }] });
+    const fixture = TestBed.createComponent(HubPickerComponent);
+    fixture.componentRef.setInput('hub', 'YYZ');
+    const changes: string[] = [];
+    fixture.componentInstance.hubChange.subscribe(c => changes.push(c));
+    await fixture.whenStable();
+    const el: HTMLElement = fixture.nativeElement;
+    el.querySelector<HTMLButtonElement>('.picker')!.click();
+    await fixture.whenStable();
+    return { fixture, el, changes };
+  }
+
+  it('is hidden without the geolocation API and never asks before the tap', async () => {
+    const ask = vi.fn();
+    const none = await setup(null);
+    expect(none.el.querySelector('[data-nearest]')).toBeNull();
+    TestBed.resetTestingModule();
+    const { el } = await setup({ getCurrentPosition: ask });
+    expect(el.querySelector('[data-nearest]')).toBeTruthy();
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('picks the nearest hub, flashes it with the distance and forgets the position', async () => {
+    const geo: Geo = { getCurrentPosition: ok => ok({ coords: { latitude: 45.5, longitude: -73.6 } } as GeolocationPosition) };
+    const { fixture, el, changes } = await setup(geo);
+    el.querySelector<HTMLButtonElement>('[data-nearest]')!.click();
+    await fixture.whenStable();
+    expect(changes).toEqual(['YUL']);
+    const notice = TestBed.inject(AppStateService).notice();
+    expect(notice?.message).toMatch(/^Nearest hub: YUL · \d+ km$/);
+    expect(el.querySelector('dialog')!.hasAttribute('open')).toBe(false);
+  });
+
+  it('shows a quiet message when location is denied', async () => {
+    const geo: Geo = { getCurrentPosition: (_ok, err) => err({ code: 1 } as GeolocationPositionError) };
+    const { fixture, el, changes } = await setup(geo);
+    el.querySelector<HTMLButtonElement>('[data-nearest]')!.click();
+    await fixture.whenStable();
+    expect(changes).toEqual([]);
+    expect(el.querySelector('[data-nearest-msg]')!.textContent).toContain('pick a hub');
+    expect(el.querySelector<HTMLButtonElement>('[data-nearest]')!.disabled).toBe(false);
+  });
+
+  it('ignores a late position after the traveller picked a hub by hand', async () => {
+    let answer: ((p: GeolocationPosition) => void) | undefined;
+    const geo: Geo = { getCurrentPosition: ok => { answer = ok; } };
+    const { fixture, el, changes } = await setup(geo);
+    el.querySelector<HTMLButtonElement>('[data-nearest]')!.click();
+    await fixture.whenStable();
+    [...el.querySelectorAll<HTMLButtonElement>('.hub')].find(h => h.textContent?.includes('YVR'))!.click();
+    await fixture.whenStable();
+    answer!({ coords: { latitude: 45.5, longitude: -73.6 } } as GeolocationPosition);
+    await fixture.whenStable();
+    expect(changes).toEqual(['YVR']);
+    expect(TestBed.inject(AppStateService).notice()).toBeNull();
   });
 });

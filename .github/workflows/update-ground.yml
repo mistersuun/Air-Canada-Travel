@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       include:
-        description: 'Extra opt-in feeds (comma-separated): cp, trenitalia, swiss (via and maritime always run)'
+        description: 'Extra opt-in feeds (comma-separated): cp, trenitalia, swiss, maritime (via always runs)'
         type: string
         default: ''
 
@@ -56,8 +56,8 @@ jobs:
         # Leaves the file untouched when only dates would change.
         env:
           INCLUDE: ${{ inputs.include }}
-        # via and maritime are opt-in in the script (licence not machine-checked) but belong to the scheduled build.
-        run: python3 scripts/build-ground.py --include "via,maritime${INCLUDE:+,$INCLUDE}"
+        # via is opt-in in the script (stop names not machine-checked) but belongs to the scheduled build. A broken optional feed is skipped (::warning::, its previous corridors kept); a pinned stop missing from a required feed fails the run.
+        run: python3 scripts/build-ground.py --include "via${INCLUDE:+,$INCLUDE}"
 
       - name: Diff summary
         run: |

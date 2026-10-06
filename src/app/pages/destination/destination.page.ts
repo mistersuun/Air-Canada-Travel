@@ -29,6 +29,8 @@ import {
 import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
 import { DestClimateComponent } from './dest-climate.component';
+import { DestForecastComponent } from './dest-forecast.component';
+import { DestReferenceComponent } from '../../reference/dest-reference.component';
 import { historyFor, recordAria, recordTag, type HistoryCounts } from '../../trips/engine/track-record';
 import { TripsService } from '../../trips/trips.service';
 import { DestHomeByComponent } from './dest-home-by.component';
@@ -68,7 +70,8 @@ const AC_URL = 'https://www.aircanada.com/';
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent,
+    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent,
+    DestReferenceComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -263,7 +266,9 @@ const AC_URL = 'https://www.aircanada.com/';
             <div><span class="ic"><app-icon name="sun" [size]="16" /></span><span>Season</span><b>{{ s.season }}</b></div>
             <div><span class="ic"><app-icon name="plane" [size]="16" /></span><span>Aircraft</span><b>{{ s.aircraftShort || '—' }}</b></div>
           </div>
+          <app-dest-reference [iso2]="dest()?.iso2" [todayKey]="climateDay()" />
           <app-dest-climate [code]="code()" [dateKey]="climateDay()" />
+          <app-dest-forecast [code]="code()" [dateKey]="climateDay()" />
           @if (fact(); as f) { <p class="ui-sub fact" data-fact><b>Did you know</b> · {{ f }}</p> }
         </section>
       </div>

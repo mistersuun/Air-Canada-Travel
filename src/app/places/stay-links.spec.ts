@@ -8,7 +8,8 @@ describe('stay links', () => {
     const l = stayLinks({ airportName: 'Montréal', code: 'YUL', checkIn: '2026-10-09' });
     expect(l.map(x => x.id)).toEqual(['booking', 'hostelworld', 'maps']);
     expect(l[0].href).toBe('https://www.booking.com/searchresults.html?ss=Montr%C3%A9al%20YUL%20Airport&checkin=2026-10-09&checkout=2026-10-10&group_adults=1&no_rooms=1');
-    expect(l[1].href).toBe('https://www.hostelworld.com/s?q=Montr%C3%A9al%20YUL%20Airport&from=2026-10-09&to=2026-10-10&guests=1');
+    expect(l[1].href).toBe('https://www.hostelworld.com/');
+    expect(l[1].label).toBe('Search hostels near YUL on Hostelworld ↗');
     expect(l[2].href).toBe('https://www.google.com/maps/search/?api=1&query=hotels%20near%20Montr%C3%A9al%20YUL%20Airport');
     for (const x of l) expect(x.href).not.toMatch(/aid=|aff|label=|utm_|tag=|marker/i);
   });
@@ -44,9 +45,10 @@ describe('airport hotels file', () => {
   });
 
   it('formats distances', () => {
-    expect(distanceLabel(900)).toBe('900 m');
-    expect(distanceLabel(20)).toBe('50 m');
-    expect(distanceLabel(1240)).toBe('1.2 km');
+    expect(distanceLabel(900)).toBe('about 1 km');
+    expect(distanceLabel(20)).toBe('about 0.5 km');
+    expect(distanceLabel(1240)).toBe('about 1 km');
+    expect(distanceLabel(1300)).toBe('about 1.5 km');
   });
 
   it('the service loads once; a missing file gives no hotels', async () => {

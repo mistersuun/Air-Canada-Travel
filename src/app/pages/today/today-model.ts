@@ -491,16 +491,19 @@ export function recoverView(input: {
   };
 }
 
+/** The "Stuck tonight?" card shows from this local time (until 05:00): earlier, tomorrow's flights are still the plan. */
+const STUCK_FROM = '17:00';
+
 /** Everything the recover page needs for "Other ways there" and "Stuck tonight?". */
 function recoverExtras(trip: Trip, at: string, nowMs: number, stuck: boolean):
   Pick<RecoverView, 'stuckTonight' | 'ways' | 'stay'> {
   const from = airportEnd(at);
-  if (!from) return { stuckTonight: stuck, ways: null, stay: null };
+  if (!from) return { stuckTonight: false, ways: null, stay: null };
   const local = utcToLocal(nowMs, airportTz(at));
   const to = placeEnd(trip.goal);
   const land = groundEstimate(from, trip.goal).mode !== 'unknown';
   return {
-    stuckTonight: stuck,
+    stuckTonight: stuck && (local.hhmm >= STUCK_FROM || local.hhmm < '05:00'),
     ways: { from, to, dateKey: local.dateKey, land, toAirport: trip.goal.acCode },
     stay: { code: at, airportName: from.name, checkIn: tonightCheckIn(local.dateKey, local.hhmm) },
   };

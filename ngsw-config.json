@@ -27,7 +27,10 @@
           "/data/land-110m.json",
           "/data/ground.json",
           "/data/airport-hotels.json",
-          "/data/climate.json"
+          "/data/climate.json",
+          "/data/advisories.json",
+          "/data/fx.json",
+          "/data/holidays.json"
         ]
       }
     },
@@ -85,6 +88,18 @@
       "cacheConfig": {
         "maxSize": 10,
         "maxAge": "30d",
+        "timeout": "3s",
+        "strategy": "freshness"
+      }
+    },
+    {
+      "name": "forecast",
+      "urls": [
+        "https://api.open-meteo.com/v1/forecast**"
+      ],
+      "cacheConfig": {
+        "maxSize": 100,
+        "maxAge": "3h",
         "timeout": "3s",
         "strategy": "freshness"
       }

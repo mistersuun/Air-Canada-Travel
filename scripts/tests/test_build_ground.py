@@ -525,3 +525,41 @@ def test_every_corridor_names_a_known_feed_and_has_a_row_in_corridors_ts():
         assert c["feed"] in bg.FEEDS, c["key"]
         code, gid = c["key"].split("-")
         assert (code, gid) in rows_, f"{c['key']} has no row in corridors.ts"
+
+
+def _write_zip(path, src):
+    with zipfile.ZipFile(path, "w") as w:
+        for n in src.namelist():
+            w.writestr(n, src.read(n))
+
+
+def test_broken_optional_feed_is_skipped_and_keeps_previous_corridors(tmp_path, monkeypatch, capsys):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    _write_zip(cache / "t.zip", feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0"))
+    with zipfile.ZipFile(cache / "u.zip", "w") as w:      # no stops.txt
+        w.writestr("agency.txt", "agency_id,agency_name,agency_timezone\nX,X,UTC\n")
+    base = {"url": "", "page": "", "licence": "CC BY 4.0", "licenceUrl": bg.CC_BY, "credit": "T"}
+    monkeypatch.setitem(bg.FEEDS, "t", {**base, "name": "T"})
+    monkeypatch.setitem(bg.FEEDS, "u", {**base, "name": "U", "optional": True})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor(), corridor(key="UUU-2", feed="u")])
+    out = tmp_path / "ground.json"
+    prev = bg.assemble({"UUU-2": entry("u", "2026-12-20")}, {"u": "2026-09-01"}, None, set(), TODAY)
+    monkeypatch.setitem(bg.FEEDS, "u", {**bg.FEEDS["u"]})
+    out.write_text(bg.encode(prev))
+    assert bg.main(["--offline", "--cache", str(cache), "--only", "t,u", "--out", str(out), "--today", "2026-10-02"]) == 0
+    doc = json.loads(out.read_text())
+    assert set(doc["corridors"]) == {"AAA-1", "UUU-2"}
+    assert "::warning title=Ground feed skipped::u:" in capsys.readouterr().out
+    assert not (cache / "u.zip").exists()
+
+
+def test_broken_required_feed_still_fails(tmp_path, monkeypatch):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    with zipfile.ZipFile(cache / "t.zip", "w") as w:
+        w.writestr("agency.txt", "agency_id\nX\n")
+    monkeypatch.setitem(bg.FEEDS, "t", {"name": "T", "url": "", "page": "", "licence": "x", "licenceUrl": "", "credit": "T"})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor()])
+    with pytest.raises(KeyError):
+        bg.main(["--offline", "--cache", str(cache), "--only", "t", "--out", str(tmp_path / "g.json"), "--today", "2026-10-02"])

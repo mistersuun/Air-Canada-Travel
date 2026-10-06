@@ -56,9 +56,10 @@ export function decodeAirportHotels(raw: unknown): AirportHotelsFile | null {
   }
 }
 
-/** '1.2 km', '850 m'. */
+/** Rounded to the nearest half kilometre (straight-line, not a walking time): 'about 0.5 km', 'about 1 km', 'about 1.5 km'. */
 export function distanceLabel(m: number): string {
-  return m < 1000 ? `${Math.max(50, Math.round(m / 50) * 50)} m` : `${(Math.round(m / 100) / 10).toFixed(1)} km`;
+  const km = Math.max(0.5, Math.round(m / 500) / 2);
+  return `about ${km} km`;
 }
 
 /** Google Maps link to one hotel by coordinates (plain link). */

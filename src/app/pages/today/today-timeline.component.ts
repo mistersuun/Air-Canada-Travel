@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { AppStateService } from '../../state/app-state.service';
 import { PrefsService } from '../../state/prefs.service';
 import { TripsService } from '../../trips/trips.service';
+import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
 import { markPast, travelTimeline } from './timeline-model';
 
 /**
@@ -12,6 +13,7 @@ import { markPast, travelTimeline } from './timeline-model';
 @Component({
   selector: 'app-today-timeline',
   standalone: true,
+  imports: [ForecastLineComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (rows().length) {
@@ -25,6 +27,7 @@ import { markPast, travelTimeline } from './timeline-model';
               <span class="tl__ct">
                 <b>{{ r.title }}</b>
                 @if (r.detail) { <small class="tn">{{ r.detail }}</small> }
+                @if (r.forecast; as f) { <small><app-forecast-line [code]="f.code" [dateKey]="f.dateKey" /></small> }
                 @if (r.past) { <span class="ui-visually-hidden">Done</span> }
               </span>
             </li>

@@ -4,7 +4,7 @@
  * claims. They open the site's own search with the place and dates filled in.
  *
  *   Booking.com   https://www.booking.com/searchresults.html?ss=<place>&checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&group_adults=1&no_rooms=1
- *   Hostelworld   https://www.hostelworld.com/s?q=<place>&from=YYYY-MM-DD&to=YYYY-MM-DD&guests=1
+ *   Hostelworld   https://www.hostelworld.com/   (home page only: its search URL needs internal ids; the label names the airport)
  *   Google Maps   https://www.google.com/maps/search/?api=1&query=hotels+near+<airport>
  */
 import { addDays } from '../utils/time';
@@ -27,8 +27,8 @@ export function stayLinks(input: { airportName: string; code: string; checkIn: s
       href: `https://www.booking.com/searchresults.html?ss=${q(place)}&checkin=${input.checkIn}&checkout=${out}&group_adults=1&no_rooms=1`,
     },
     {
-      id: 'hostelworld', label: 'Search hostels on Hostelworld ↗',
-      href: `https://www.hostelworld.com/s?q=${q(place)}&from=${input.checkIn}&to=${out}&guests=1`,
+      id: 'hostelworld', label: `Search hostels near ${input.code} on Hostelworld \u2197`,
+      href: 'https://www.hostelworld.com/',
     },
     {
       id: 'maps', label: 'Hotels near the airport on Google Maps ↗',

@@ -28,7 +28,8 @@ describe('StuckTonightComponent', () => {
   it('lists the nearest hotels first with distances, the three links and the OSM credit', async () => {
     const el = await stuck(structuredClone(FILE));
     const items = [...el.querySelectorAll('[data-hotels] li')].map(li => li.textContent!.replace(/\s+/g, ' ').trim());
-    expect(items).toEqual(['Hotel A400 m', 'Hotel B1.5 km']);
+    expect(el.textContent).toContain('Hotels near the airport:');
+    expect(items).toEqual(['Hotel Aabout 0.5 km', 'Hotel Babout 1.5 km']);
     expect([...el.querySelectorAll('[data-stay]')].map(a => a.getAttribute('data-stay'))).toEqual(['booking', 'hostelworld', 'maps']);
     expect(el.textContent).toContain('OpenStreetMap contributors');
     expect(el.textContent).not.toMatch(/\$|€|per night/);
@@ -39,6 +40,7 @@ describe('StuckTonightComponent', () => {
     const el = await stuck(null);
     expect(el.querySelector('[data-hotels]')).toBeNull();
     expect(el.querySelectorAll('[data-stay]').length).toBe(3);
+    expect(el.textContent).not.toContain('Hotels near the airport:');
     expect(el.textContent).not.toContain('OpenStreetMap');
   });
 });
@@ -53,8 +55,8 @@ describe('OtherWaysComponent', () => {
     const el = f.nativeElement as HTMLElement;
     expect(el.querySelector('h2')!.textContent).toBe('Other ways there');
     const labels = [...el.querySelectorAll('[data-way]')].map(a => a.textContent);
-    expect(labels).toContain('Search on Busbud ↗');
-    expect(labels).toContain('Search on Rome2Rio ↗');
+    expect(labels).toContain('Search YUL → Québec City on Busbud ↗');
+    expect(labels).toContain('Search YUL → Québec City on Rome2Rio ↗');
     TestBed.resetTestingModule();
   });
 });

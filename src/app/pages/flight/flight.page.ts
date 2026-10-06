@@ -20,11 +20,12 @@ import { refFromInstance } from '../../trips/engine/legs';
 import { type Trip, instanceKey } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component';
-import { countdown, isOutside, itinKey, relativeDay, shortDay } from '../../ui/format';
+import { countdown, isOutside, itinKey, prettyFlight, relativeDay, shortDay } from '../../ui/format';
 import {
   backupGroups, choose, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering, tripsFor,
   type Pick,
 } from './flight-model';
+import { historyFor, recordLine } from '../../trips/engine/track-record';
 import { FactsCardComponent } from './facts-card.component';
 import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
@@ -131,7 +132,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
           }
 
           <div class="adds">
-            <app-facts-card [origin]="hub()" [dest]="dest()" [dateKey]="dateKey()" [timeFormat]="state.timeFormat()" />
+            <app-facts-card [origin]="hub()" [dest]="dest()" [dateKey]="dateKey()" [timeFormat]="state.timeFormat()" [records]="records()" />
             @if (noteFlights().length) {
               <app-load-notes [flights]="noteFlights()" [selected]="noteKey()" [partySize]="partySize()" [timeFormat]="state.timeFormat()" />
             }
@@ -379,6 +380,20 @@ export class FlightPage {
   protected readonly noteKey = computed(() => {
     const it = this.current();
     return it?.legs[0]?.flightNumber ? instanceKey(refFromInstance(it.legs[0])) : null;
+  });
+  /** Your own saved outcomes, one line per leg of the shown itinerary that you have tried (same number and route). Counts only. */
+  protected readonly records = computed(() => {
+    const outcomes = this.trips.outcomes();
+    const out: string[] = [];
+    if (!outcomes.length) return out;
+    for (const l of this.current()?.legs ?? []) {
+      const fn = prettyFlight(l.flightNumber);
+      if (!fn || l.estimated) continue;
+      const h = historyFor({ outcomes }, { flightNumber: fn, route: { origin: l.origin, dest: l.dest }, dateKey: l.dateKey });
+      const line = recordLine(h, fn, l.dateKey);
+      if (line) out.push(line);
+    }
+    return out;
   });
   protected readonly coveringTrips = computed(() => tripsCovering(this.trips.activeTrips(), this.dateKey()));
   /** Trips on these dates that the shown flight connects to (goes to the trip's side, or comes home from it). */

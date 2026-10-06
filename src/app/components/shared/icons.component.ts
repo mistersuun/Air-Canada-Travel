@@ -55,7 +55,8 @@ export type IconName =
   | 'lock'
   | 'sparkle'
   | 'thermo'
-  | 'scan';
+  | 'scan'
+  | 'dice';
 
 /** Path data per icon. Paths are stroked; FILLABLE icons also take fill when `filled`. */
 export const ICON_PATHS: Record<IconName, string[]> = {
@@ -150,6 +151,7 @@ export const ICON_PATHS: Record<IconName, string[]> = {
   sparkle: ['M12 3.5 13.8 10.2 20.5 12l-6.7 1.8L12 20.5l-1.8-6.7L3.5 12l6.7-1.8L12 3.5Z', 'M19 3.5v3M17.5 5h3'],
   thermo: ['M10 14.5V5a2 2 0 0 1 4 0v9.5a3.5 3.5 0 1 1-4 0Z', 'M12 17.5V10'],
   scan: ['M4 8V5.5a1.5 1.5 0 0 1 1.5-1.5H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16', 'M4 12h16'],
+  dice: ['M5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13A1.5 1.5 0 0 1 5.5 4Z', 'M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01'],
 };
 
 const FILLABLE: ReadonlySet<IconName> = new Set<IconName>(['star', 'plane', 'moon', 'pin', 'home']);

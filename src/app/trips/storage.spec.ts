@@ -16,6 +16,17 @@ describe('trips storage', () => {
     expect(sanitizeTrip(SEVILLE_TRIP)).toEqual(SEVILLE_TRIP);
   });
 
+  it('turns an invalid IANA zone into null instead of keeping it', () => {
+    const t = JSON.parse(JSON.stringify(SEVILLE_TRIP));
+    const ground = t.legs.find((l: { kind: string }) => l.kind === 'ground');
+    ground.from.tz = 'Not/AZone';
+    t.goal.tz = 'Nope';
+    const back = sanitizeTrip(t)!;
+    const g = back.legs.find(l => l.kind === 'ground') as { from: { tz?: string | null } };
+    expect(g.from.tz).toBeNull();
+    expect(back.goal.tz).toBeNull();
+  });
+
   it('works with storage blocked or absent', () => {
     expect(loadTrips(new BlockedStorage())).toEqual({ file: { schema: 1, trips: [] }, readOnly: false });
     expect(saveTrips(new BlockedStorage(), SEVILLE_TRIPS_FILE)).toBe(false);

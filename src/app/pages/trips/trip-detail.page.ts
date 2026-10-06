@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
@@ -29,7 +29,7 @@ export const TRIP_TABS: SegOption[] = [
 @Component({
   selector: 'app-trip-detail-page',
   standalone: true,
-  imports: [IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripExtrasComponent],
+  imports: [RouterLink, IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripExtrasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -60,6 +60,11 @@ export const TRIP_TABS: SegOption[] = [
         @if (menuOpen()) {
           <app-trip-menu [trip]="t" (closed)="menuOpen.set(false)" (deleted)="afterDelete()" />
         }
+      } @else {
+        <div class="td__empty" data-empty>
+          <h1 class="ui-h2">Trip not found</h1>
+          <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">Open Trips</a>
+        </div>
       }
     </div>
   `,
@@ -69,6 +74,7 @@ export const TRIP_TABS: SegOption[] = [
     .td__title { min-width: 0; text-align: center; }
     .td__title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .td__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
+    .td__empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 12px; }
     .td__ro { text-align: center; font-size: 12.5px; }
     @media (min-width: 720px) {
       .td { padding-top: 24px; }
@@ -111,6 +117,8 @@ export class TripDetailPage {
       replaceUrl: true,
     });
   }
+
+  protected readonly tripsLink = tripsPath();
 
   protected back(): void {
     this.state.goBack(tripsPath());

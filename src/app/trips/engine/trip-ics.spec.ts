@@ -21,6 +21,10 @@ describe('buildTripIcs', () => {
     expect(ics).toContain('List for AC834 (check your pass rules)');
     expect(ics).toContain('not a booking');
     expect(ics).toContain(`DTSTAMP:${icsUtc(NOW)}`);
+    expect(ics.match(/LAST-MODIFIED:/g)).toHaveLength(4);
+    const seq = (t: number) => Number(/SEQUENCE:(\d+)/.exec(buildTripIcs(sevilleTrip(), t))![1]);
+    expect(seq(NOW + 60_000)).toBeGreaterThan(seq(NOW));
+    expect(seq(NOW)).toBeLessThan(2 ** 31);
   });
 
   it('exports ground legs: all-day when estimated, timed when saved; no alternates', () => {

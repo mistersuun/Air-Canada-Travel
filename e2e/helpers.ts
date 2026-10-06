@@ -15,6 +15,17 @@ export async function watchErrors(page: Page): Promise<string[]> {
   return problems;
 }
 
+/** Marks first-run setup as done before the first navigation, so its modal sheet stays out of the way. */
+export async function seedOnboarded(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('ac.onboarded.v1', '1');
+    } catch {
+      // Storage blocked: the sheet does not show then either.
+    }
+  });
+}
+
 /** Opens the first destination in the home list and returns its path (e.g. /to/AMS). */
 export async function openFirstDestination(page: Page): Promise<string> {
   await page.goto('/');

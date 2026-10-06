@@ -3,7 +3,10 @@ import { RouterOutlet } from '@angular/router';
 import { SettingsComponent } from './components/settings/settings.component';
 import { ToastComponent } from './components/toast/toast.component';
 import { AppStateService } from './state/app-state.service';
+import { AppBadgeService } from './state/app-badge.service';
 import { PwaUpdateService } from './state/pwa-update.service';
+import { OnboardingSheetComponent } from './shell/onboarding-sheet.component';
+import { OnboardingService } from './shell/onboarding.service';
 import { ShortcutsSheetComponent } from './shell/shortcuts-sheet.component';
 import { ShellShortcutsDirective } from './shell/shortcuts';
 import { TabBarComponent } from './shell/tab-bar.component';
@@ -26,7 +29,7 @@ interface ToastView {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, TopNavComponent, TabBarComponent, SettingsComponent, ShortcutsSheetComponent, ToastComponent],
+  imports: [RouterOutlet, TopNavComponent, TabBarComponent, SettingsComponent, ShortcutsSheetComponent, ToastComponent, OnboardingSheetComponent],
   hostDirectives: [ShellShortcutsDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -52,6 +55,11 @@ interface ToastView {
     @if (state.shortcutsOpen()) {
       <app-shortcuts-sheet (closed)="state.closeShortcuts()" />
     }
+    @if (onboarding.visible()) {
+      @defer (when onboarding.visible()) {
+        <app-onboarding-sheet (closed)="onboarding.finish()" />
+      }
+    }
     @if (toast(); as t) {
       <app-toast [message]="t.message" [actionLabel]="t.actionLabel" (action)="t.onAction()" (dismiss)="t.onDismiss()" />
     }
@@ -70,8 +78,10 @@ interface ToastView {
 export class AppComponent {
   protected readonly state = inject(AppStateService);
   protected readonly pwa = inject(PwaUpdateService);
+  protected readonly onboarding = inject(OnboardingService);
   private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
+  private readonly badge = inject(AppBadgeService);   // keeps the app-icon badge in step
 
   protected skipToMain(e: Event, main: HTMLElement): void {
     e.preventDefault();

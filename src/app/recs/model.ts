@@ -23,6 +23,7 @@ export interface TravelProfile {
   days: number[];                // ISO weekdays 1..7 (Mon..Sun) you can usually leave or come back; [] = any
   onwardBudget: 'low' | 'any';   // default 'any'
   dismissed: string[];           // Recommendation ids, newest last, capped at 200
+  usualItems: string[];          // "My usual items": copied into new trips' prep list (max 30, each <= 80 chars)
   updatedAt: string | null;      // null = never set up ("empty profile")
 }
 

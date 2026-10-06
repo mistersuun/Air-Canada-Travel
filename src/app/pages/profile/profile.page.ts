@@ -3,29 +3,20 @@ import { Router } from '@angular/router';
 import { logbookPath } from '../../extras/links';
 import { IconComponent } from '../../components/shared/icons.component';
 import type { TravelProfile, TripLength, TripStyle } from '../../recs/model';
-import { TRIP_STYLES } from '../../recs/profile';
+import { MAX_USUAL_ITEMS, TRIP_STYLES, USUAL_SUGGESTIONS } from '../../recs/profile';
+import { DAY_LETTERS, LENGTH_OPTIONS, toggled } from '../../recs/profile-options';
 import { ProfileService } from '../../recs/profile.service';
 import { AppStateService } from '../../state/app-state.service';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { WEEKDAY_LONG } from '../../utils/time';
 
-export const LENGTH_OPTIONS: SegOption[] = [
-  { value: 'day', label: 'Day trip' },
-  { value: 'weekend', label: 'Long weekend' },
-  { value: 'week', label: 'A week+' },
-];
+export { DAY_LETTERS, LENGTH_OPTIONS, toggled };
 export const ONWARD_OPTIONS: SegOption[] = [
   { value: 'low', label: 'Low' },
   { value: 'any', label: 'Any' },
 ];
-export const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
 /** Default slider position when "Any" is unticked. */
 export const DEFAULT_MAX_HOURS = 7;
-
-/** Toggle a value in a list (kept in its natural order by sanitizeProfile). */
-export function toggled<T>(list: readonly T[], v: T): T[] {
-  return list.includes(v) ? list.filter(x => x !== v) : [...list, v];
-}
 
 /**
  * Travel profile (/profile, mock x12): what you like, trip length, longest
@@ -116,6 +107,33 @@ export function toggled<T>(list: readonly T[], v: T): T[] {
         <p class="hint">Mondays that are holidays count too.@if (!p.days.length) { None picked means any day. }</p>
       </div>
 
+      <h2 class="ui-label pf__lbl" id="pf-usual">My usual items</h2>
+      <div class="ui-card pf__card">
+        <p class="hint hint--top">Added to the prep list of every new trip.</p>
+        @if (p.usualItems.length) {
+          <ul class="items" role="list" aria-labelledby="pf-usual" data-usual>
+            @for (it of p.usualItems; track it) {
+              <li class="items__row"><span>{{ it }}</span>
+                <button type="button" class="items__rm" [attr.aria-label]="'Remove ' + it" data-usual-rm (click)="profile.removeUsualItem(it)">
+                  <app-icon name="close" [size]="15" /></button></li>
+            }
+          </ul>
+        }
+        @if (suggestions(p.usualItems).length) {
+          <div class="chips" role="group" aria-label="Suggested items">
+            @for (s of suggestions(p.usualItems); track s) {
+              <button type="button" class="pick" data-suggest (click)="profile.addUsualItem(s)">+ {{ s }}</button>
+            }
+          </div>
+        }
+        <form class="add" (submit)="addUsual($event)">
+          <label class="ui-visually-hidden" for="pf-add">Add a usual item</label>
+          <input id="pf-add" class="add__in" type="text" maxlength="80" autocomplete="off" placeholder="Add your own"
+                 [value]="draft()" (input)="draft.set($any($event.target).value)" data-usual-input>
+          <button type="submit" class="ui-btn ui-btn--ghost ui-btn--sm" [disabled]="!draft().trim() || p.usualItems.length >= maxItems" data-usual-add>Add</button>
+        </form>
+      </div>
+
       <p class="note"><app-icon name="lock" [size]="16" />
         <span>Stays on this phone. Used only to pick suggestions. Not in share links.</span></p>
 
@@ -203,6 +221,18 @@ export function toggled<T>(list: readonly T[], v: T): T[] {
       background: var(--fill); color: var(--ink-2); cursor: pointer;
     }
     .dow button.on { background: color-mix(in srgb, var(--blue) 15%, transparent); color: var(--blue-ink); box-shadow: inset 0 0 0 1.5px var(--blue); }
+    .hint--top { margin: 0 0 8px; }
+    .items { list-style: none; margin: 0 0 8px; padding: 0; }
+    .items__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; font-size: 14.5px; }
+    .items__row + .items__row { border-top: 1px solid var(--hair); }
+    .items__rm { width: 44px; height: 44px; margin-right: -12px; display: grid; place-items: center; color: var(--ink-3); cursor: pointer; border-radius: 12px; }
+    .items__rm:hover { color: var(--ink); }
+    .add { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+    .add__in {
+      flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--hair);
+      background: var(--fill); color: var(--ink); font: inherit; font-size: 14.5px;
+    }
+    .add .ui-btn { min-height: 44px; }
     .note {
       display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; border-radius: 14px; font-size: 12.5px; margin: 16px 0 0;
       background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue-ink);
@@ -234,6 +264,22 @@ export class ProfilePage {
   protected readonly sliderDefault = DEFAULT_MAX_HOURS;
   protected readonly confirming = signal(false);
   private readonly p = computed(() => this.profile.profile());
+
+  protected readonly draft = signal('');
+  protected readonly maxItems = MAX_USUAL_ITEMS;
+
+  /** Standby suggestions not already in the list. */
+  protected suggestions(have: readonly string[]): string[] {
+    if (have.length >= MAX_USUAL_ITEMS) return [];
+    const lower = new Set(have.map(h => h.toLowerCase()));
+    return USUAL_SUGGESTIONS.filter(s => !lower.has(s.toLowerCase()));
+  }
+
+  protected addUsual(e: Event): void {
+    e.preventDefault();
+    this.profile.addUsualItem(this.draft());
+    this.draft.set('');
+  }
 
   protected pct(h: number): string {
     return `${((h - 1) / 11) * 100}%`;

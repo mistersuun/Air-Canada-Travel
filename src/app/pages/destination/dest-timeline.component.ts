@@ -25,13 +25,13 @@ import type { TimelineItem } from './dest-model';
                  [routerLink]="path(t)" [queryParams]="state.globalParams()">
                 <div class="d">{{ t.dateLabel }}</div>
                 <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}</div>
+                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
               </a>
             } @else {
               <div class="ui-tl__it" [class.ui-tl__it--now]="first">
                 <div class="d">{{ t.dateLabel }}</div>
                 <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}</div>
+                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
               </div>
             }
           </li>
@@ -47,6 +47,7 @@ import type { TimelineItem } from './dest-model';
   styles: [`
     :host { display: block; }
     li { list-style: none; }
+    .you { margin-left: 8px; }
     .more { display: inline-block; margin: 6px 0 0 26px; font-size: 13.5px; padding: 4px 0; }
   `],
 })
@@ -58,11 +59,17 @@ export class DestTimelineComponent {
   readonly linked = input(false, { transform: booleanAttribute });
   readonly more = input(false, { transform: booleanAttribute });
   readonly label = input<string>('');
+  /** 'you: 3/4' tags (your own saved outcomes) per row, keyed by itinKey. */
+  readonly records = input<Readonly<Record<string, readonly { text: string; aria: string }[]>>>({});
 
   readonly showMore = output<void>();
 
   protected key(t: TimelineItem): string {
     return itinKey(t.it);
+  }
+
+  protected tags(t: TimelineItem): readonly { text: string; aria: string }[] {
+    return this.records()[itinKey(t.it)] ?? [];
   }
 
   protected path(t: TimelineItem): string[] {

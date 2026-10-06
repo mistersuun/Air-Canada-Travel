@@ -9,6 +9,12 @@
   "scope": "/",
   "start_url": "/",
   "orientation": "any",
+  "shortcuts": [
+    { "name": "Today", "short_name": "Today", "url": "/today", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "My trips", "short_name": "Trips", "url": "/trips", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "Saved", "short_name": "Saved", "url": "/saved", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "This weekend", "short_name": "Weekend", "url": "/weekend", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] }
+  ],
   "icons": [
     { "src": "icons/icon-72x72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },

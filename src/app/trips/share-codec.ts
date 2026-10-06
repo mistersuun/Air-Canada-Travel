@@ -93,7 +93,9 @@ async function encodePayload(payload: SharePayload): Promise<string | null> {
  * ShareTooLargeError is thrown.
  */
 export async function encodeTripShare(trip: Trip, notes: readonly LoadNote[] = [], nowMs: number = Date.now()): Promise<string> {
-  const { prep: _p, changes: _c, offlineSavedAt: _o, calendarExportedAt: _k, calendarRefs: _r, archived: _a, ...rest } = trip;
+  const { prep: _p, changes: _c, offlineSavedAt: _o, calendarExportedAt: _k, calendarRefs: _r, archived: _a, ...base } = trip;
+  // Usual items come from the private travel profile: never in a share link.
+  const rest = { ...base, customPrep: base.customPrep.filter(c => !c.usual) };
   const at = new Date(nowMs).toISOString();
   const noAlternates = { ...rest, legs: rest.legs.map(l => (l.kind === 'flight' ? { ...l, alternates: [] } : l)) };
   const attempts: SharePayload[] = [

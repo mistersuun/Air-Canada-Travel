@@ -366,6 +366,55 @@ def test_main_offline_writes_a_file(tmp_path, monkeypatch):
     assert out.stat().st_mtime_ns == mtime  # only dates changed: left as is
 
 
+def test_assemble_adds_corridor_valid_to_as_the_latest_direction():
+    e = entry("renfe", "2026-12-20")
+    e["back"] = {**e["out"], "validTo": "2026-12-31"}
+    doc = bg.assemble({"K3": e, "K4": entry("renfe", "2026-11-01")}, {"renfe": "2026-10-01"}, None, set(), TODAY)
+    assert doc["corridors"]["K3"]["validTo"] == "2026-12-31"
+    assert doc["corridors"]["K4"]["validTo"] == "2026-11-01"
+    assert "validTo" not in e  # the input is not mutated
+
+
+def test_app_decoder_inputs_unaffected_by_corridor_valid_to():
+    # The app reads only mode/out/back from a corridor (src/app/places/timetable.ts decodeGround).
+    doc = bg.assemble({"K3": entry("renfe", "2026-12-20")}, {"renfe": "2026-10-01"}, None, set(), TODAY)
+    assert {"mode", "out", "validTo"} <= set(doc["corridors"]["K3"])
+
+
+def test_expiring_corridors_within_ten_days():
+    doc = {"corridors": {"A-1": {"validTo": "2026-10-11"}, "B-2": {"validTo": "2026-10-12"},
+                         "C-3": {"validTo": "2026-10-01"}, "D-4": {"validTo": "2027-01-01"}}}
+    assert bg.expiring_corridors(doc, TODAY) == [("A-1", "2026-10-11"), ("C-3", "2026-10-01")]
+    lines = bg.expiry_warnings(doc, TODAY)
+    assert lines[0] == "::warning title=Ground corridor expiring::A-1 timetable ends 2026-10-11 (9 days)"
+    assert "ended 2026-10-01" in lines[1]
+    assert bg.expiry_warnings({"corridors": {"X-1": {"validTo": "2027-01-01"}}}, TODAY) == []
+
+
+def test_main_warns_and_writes_step_summary(tmp_path, monkeypatch, capsys):
+    z = tmp_path / "cache" / "t.zip"
+    z.parent.mkdir()
+    src = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0")
+    with zipfile.ZipFile(z, "w") as w:
+        for n in src.namelist():
+            w.writestr(n, src.read(n))
+    monkeypatch.setitem(bg.FEEDS, "t", {"name": "T", "url": "", "page": "", "licence": "CC BY 4.0",
+                                        "licenceUrl": bg.CC_BY, "credit": "T", "optional": True})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor()])
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    out = tmp_path / "ground.json"
+    assert bg.main(["--offline", "--cache", str(z.parent), "--only", "t", "--out", str(out),
+                    "--today", "2026-10-02"]) == 0
+    doc = json.loads(out.read_text())
+    valid_to = doc["corridors"]["AAA-1"]["validTo"]
+    assert valid_to == doc["corridors"]["AAA-1"]["out"]["validTo"]
+    printed = capsys.readouterr().out
+    expiring = bool(bg.expiring_corridors(doc, TODAY))
+    assert ("::warning title=Ground corridor expiring::AAA-1" in printed) == expiring
+    assert summary.exists() == expiring
+
+
 # ── The committed file ──────────────────────────────────────────────────────
 
 @pytest.mark.skipif(not GROUND_JSON.exists(), reason="ground.json not built")

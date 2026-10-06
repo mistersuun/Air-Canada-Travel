@@ -10,6 +10,10 @@ on:
         description: 'Accept a route/record count below 80% of the committed file (a real seasonal cut)'
         type: boolean
         default: false
+      allow_short_coverage:
+        description: 'Accept schedules that end less than 28 days ahead (14 for a required hub)'
+        type: boolean
+        default: false
 
 concurrency:
   group: update-schedules
@@ -55,7 +59,8 @@ jobs:
         # Leaves the file untouched too when only generatedAt would change.
         env:
           ALLOW_ROUTE_DROP: ${{ inputs.allow_route_drop && '--allow-route-drop' || '' }}
-        run: python3 scripts/fetch-schedules.py $ALLOW_ROUTE_DROP
+          ALLOW_SHORT_COVERAGE: ${{ inputs.allow_short_coverage && '--allow-short-coverage' || '' }}
+        run: python3 scripts/fetch-schedules.py $ALLOW_ROUTE_DROP $ALLOW_SHORT_COVERAGE
 
       - name: Fetch route network (Wikipedia + OurAirports, no times)
         id: route_network

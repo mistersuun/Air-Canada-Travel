@@ -211,6 +211,54 @@ def test_gate_reject_ratio(fs, monkeypatch):
     assert errors == [] and any("rejected" in w for w in warnings)
 
 
+def _routes_to(to_by_hub, from_date="2026-10-01"):
+    rec = {"fromDate": from_date, "days": "Mon", "flightNumber": "AC1",
+           "departure": "10:00", "arrival": "12:00", "aircraft": "320"}
+    return {(h, "DST"): [{**rec, "toDate": to}] for h, to in to_by_hub.items()}
+
+
+def test_gate_coverage_horizon_overall(fs, monkeypatch):
+    monkeypatch.setattr(fs, "MIN_RECORDS", 1)
+    ok = _routes_to({"YYZ": "2026-11-05", "YUL": "2026-11-05", "YVR": "2026-11-05"})
+    assert gates(fs, routes=ok, today="2026-10-08") == ([], [])          # exactly 28 days
+    errors, _ = gates(fs, routes=ok, today="2026-10-09")                  # 27 days
+    assert any("coverageTo" in e and "28 days" in e for e in errors)
+    errors, warnings = gates(fs, routes=ok, today="2026-10-09", allow_short=True)
+    assert errors == [] and any("--allow-short-coverage" in w for w in warnings)
+    assert gates(fs, routes=ok) == ([], [])                               # no today: gate off
+
+
+def test_gate_coverage_horizon_per_required_hub(fs, monkeypatch):
+    monkeypatch.setattr(fs, "MIN_RECORDS", 1)
+    routes = _routes_to({"YYZ": "2026-12-31", "YUL": "2026-10-20", "YVR": "2026-12-31"})
+    errors, _ = gates(fs, routes=routes, today="2026-10-07")             # YUL ends in 13 days
+    assert any("YUL" in e and "14 days" in e for e in errors) and not any("YYZ" in e for e in errors)
+    assert gates(fs, routes=routes, today="2026-10-06")[0] == []         # 14 days is enough
+    # a non-required hub with a short horizon never errors
+    routes = _routes_to({"YYZ": "2026-12-31", "YUL": "2026-12-31", "YVR": "2026-12-31", "YEG": "2026-10-07"})
+    assert gates(fs, routes=routes, hubs=["YYZ", "YUL", "YVR", "YEG"], today="2026-10-06")[0] == []
+
+
+def test_gate_coverage_from_moving_back_only_warns(fs, monkeypatch):
+    monkeypatch.setattr(fs, "MIN_RECORDS", 1)
+    routes = _routes_to({"YYZ": "2026-12-31", "YUL": "2026-12-31", "YVR": "2026-12-31"}, from_date="2026-09-20")
+    errors, warnings = gates(fs, routes=routes, today="2026-10-06", prev_coverage_from="2026-10-01")
+    assert errors == [] and any("coverageFrom moved backwards" in w for w in warnings)
+    _, warnings = gates(fs, routes=routes, today="2026-10-06", prev_coverage_from="2026-09-20")
+    assert warnings == []
+
+
+def test_previous_coverage_from(fs, tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"meta": {"coverageFrom": "2026-10-01"}, "routes": {}}))
+    assert fs.previous_coverage_from(str(p)) == "2026-10-01"
+    p.write_text(json.dumps({"coverageFrom": "2026-09-01", "routes": {}}))  # top-level fallback
+    assert fs.previous_coverage_from(str(p)) == "2026-09-01"
+    p.write_text("not json")
+    assert fs.previous_coverage_from(str(p)) == ""
+    assert fs.previous_coverage_from(str(tmp_path / "missing.json")) == ""
+
+
 # --- end-to-end run() -----------------------------------------------------------
 
 FIXTURE_PDFS = {

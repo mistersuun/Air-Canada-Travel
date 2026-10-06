@@ -78,6 +78,11 @@ export class PhotoService {
     return !!this.manifest().photos[code];
   }
 
+  /** True when the manifest has a 1920w hero variant for the destination. */
+  hasHero(code: string): boolean {
+    return !!this.manifest().photos[code]?.hero;
+  }
+
   /** 'img/dest/LIS.webp' (960w) or 'img/dest/LIS-400.webp'. */
   src(code: string, w: 400 | 960 = 960): string {
     return `${PHOTO_BASE}${code}${w === 400 ? '-400' : ''}.webp`;

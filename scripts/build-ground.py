@@ -652,6 +652,30 @@ def source_entry(feed_id: str, fetched: str) -> dict:
             "url": f["page"], "fetched": fetched}
 
 
+EXPIRY_WARN_DAYS = 10   # warn when a corridor's timetable runs out within this many days
+
+
+def corridor_valid_to(entry: dict) -> str:
+    """The last day any direction of the corridor has a timetable ('' when none)."""
+    return max((entry[d].get("validTo", "") for d in ("out", "back") if isinstance(entry.get(d), dict)), default="")
+
+
+def expiring_corridors(doc: dict, today: date, days: int = EXPIRY_WARN_DAYS) -> list[tuple[str, str]]:
+    """[(key, validTo)] of corridors whose timetable ends before today + days (already ended included)."""
+    limit = (today + timedelta(days=days)).isoformat()
+    return sorted((k, e["validTo"]) for k, e in doc.get("corridors", {}).items() if e.get("validTo", "") < limit)
+
+
+def expiry_warnings(doc: dict, today: date, days: int = EXPIRY_WARN_DAYS) -> list[str]:
+    """One GitHub-annotation line per expiring corridor (plain text anywhere else)."""
+    out = []
+    for key, to in expiring_corridors(doc, today, days):
+        left = (date.fromisoformat(to) - today).days if to else None
+        when = "has no timetable" if left is None else f"timetable ended {to}" if left < 0 else f"timetable ends {to} ({left} days)"
+        out.append(f"::warning title=Ground corridor expiring::{key} {when}")
+    return out
+
+
 def assemble(corridors: dict[str, dict], fetched: dict[str, str], previous: dict | None, failed: set[str],
              today: date) -> dict:
     """The ground.json document. Corridors of failed or unselected feeds come from the previous file while still valid."""
@@ -664,6 +688,8 @@ def assemble(corridors: dict[str, dict], fetched: dict[str, str], previous: dict
                 corr[key] = entry
                 if src in previous.get("sources", {}):
                     sources.setdefault(src, previous["sources"][src])
+    # The app reads the per-direction dates (and ignores this one); it is for the build's expiry warning.
+    corr = {k: {**e, "validTo": corridor_valid_to(e)} for k, e in corr.items()}
     used = {(e.get("out") or e.get("back"))["src"] for e in corr.values()}
     return {
         "v": 1, "builtAt": today.isoformat(), "license": FILE_LICENSE, "licenseNote": FILE_LICENSE_NOTE,
@@ -765,6 +791,14 @@ def main(argv: list[str] | None = None) -> int:
     if size > MAX_BYTES:
         print(f"refusing to write {size} bytes (limit {MAX_BYTES})", file=sys.stderr)
         return 1
+    warns = expiry_warnings(doc, today)
+    for w in warns:
+        print(w)
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if warns and summary:
+        with open(summary, "a", encoding="utf-8") as f:
+            f.write("### Ground timetables running out\n\n"
+                    + "\n".join(f"- {k}: ends {to or 'n/a'}" for k, to in expiring_corridors(doc, today)) + "\n")
     if previous and same_content(previous, doc):
         print(f"{args.out}: unchanged apart from dates, left as is")
         return 0

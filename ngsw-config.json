@@ -24,7 +24,9 @@
         "files": [
           "/data/schedules.json",
           "/data/route-network.json",
-          "/data/land-110m.json"
+          "/data/land-110m.json",
+          "/data/ground.json",
+          "/data/climate.json"
         ]
       }
     },
@@ -34,9 +36,7 @@
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/data/cities.json",
-          "/data/climate.json",
-          "/data/ground.json"
+          "/data/cities.json"
         ]
       }
     },

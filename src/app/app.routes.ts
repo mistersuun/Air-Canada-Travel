@@ -116,6 +116,12 @@ export const routes: Routes = [
     title: 'Trip recap · Routes',
   },
   {
+    // Web Share Target (?id= from the service worker) and desktop File Handling.
+    path: 'share-in',
+    loadComponent: () => import('./pages/share-in/share-in.page').then(m => m.ShareInPage),
+    title: 'Add to a trip · Routes',
+  },
+  {
     path: 'logbook',
     loadComponent: () => import('./pages/logbook/logbook.page').then(m => m.LogbookPage),
     title: 'Logbook · Routes',

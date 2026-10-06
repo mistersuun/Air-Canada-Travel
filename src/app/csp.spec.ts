@@ -45,6 +45,23 @@ describe('Content-Security-Policy (netlify.toml)', () => {
   });
 });
 
+describe('custom service worker (public/sw.js)', () => {
+  it('is registered by app.config, wraps ngsw-worker.js and always revalidates', () => {
+    expect(read('src/app/app.config.ts')).toContain("provideServiceWorker('sw.js'");
+    expect(read('public/sw.js')).toContain("importScripts('./ngsw-worker.js')");
+    expect(read('netlify.toml')).toMatch(/for = "\/sw\.js"\s+\[headers\.values\]\s+Cache-Control = "no-cache"/);
+    // same-origin script: covered by worker-src 'self'
+    expect(csp()).toMatch(/worker-src 'self'/);
+  });
+
+  it('declares a share target and file handlers that point at /share-in', () => {
+    const m = JSON.parse(read('public/manifest.webmanifest'));
+    expect(m.share_target).toMatchObject({ action: '/share-in', method: 'POST', enctype: 'multipart/form-data' });
+    expect(m.file_handlers[0].action).toBe('/share-in');
+    expect(Object.keys(m.file_handlers[0].accept)).toEqual(expect.arrayContaining(['application/pdf', 'text/calendar']));
+  });
+});
+
 describe('service worker (ngsw-config.json)', () => {
   it('prefetches the barcode reader wasm and the pdf.js worker, so passes can be added offline', () => {
     const cfg = JSON.parse(read('ngsw-config.json')) as { assetGroups: { name: string; installMode: string; resources: { files: string[] } }[] };

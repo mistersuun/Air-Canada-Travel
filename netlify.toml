@@ -37,6 +37,12 @@
   [headers.values]
     Cache-Control = "no-cache"
 
+# Our service worker wrapper (importScripts of ngsw-worker.js, share target).
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
 # Schedule data is not content-hashed: always revalidate (the service worker
 # versions it through ngsw.json).
 [[headers]]

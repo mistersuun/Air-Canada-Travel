@@ -10,6 +10,7 @@ import { TripsService } from '../../../trips/trips.service';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { downloadIcs } from '../../../utils/ics';
 import { monthDay, offlineAirportsLabel, offlineUntil, savedAtLabel } from '../trips-model';
+import { GroupSectionComponent } from '../../../group/ui/group-section.component';
 import { ShareEntryComponent } from '../../../share/ui/share-entry.component';
 import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type OfflineItemResult } from './offline-save';
 
@@ -22,7 +23,7 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
 @Component({
   selector: 'app-trip-menu',
   standalone: true,
-  imports: [IconComponent, GlassSheetComponent, ShareEntryComponent],
+  imports: [IconComponent, GlassSheetComponent, ShareEntryComponent, GroupSectionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-glass-sheet [title]="trip().name" [open]="true" (closed)="closed.emit()">
@@ -78,6 +79,8 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
             <p class="ui-sub tm__fine">Calendar file has a reminder to list 48 hours before each flight.</p>
           }
         </section>
+
+        <app-group-section [trip]="trip()" />
 
         <button type="button" class="tm__del" data-delete (click)="remove()">Delete this trip</button>
       </div>

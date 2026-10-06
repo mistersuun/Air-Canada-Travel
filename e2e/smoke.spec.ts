@@ -126,3 +126,14 @@ test('a share POST is caught by the service worker and lands on /share-in', asyn
   await expect(page.locator('[data-no-trips]')).toBeVisible();
   await expect.poll(() => page.evaluate(async () => (await (await caches.open('ac-share-in')).keys()).length)).toBe(0);
 });
+
+test('a group link on a host without the online service says so quietly; a malformed link is explained', async ({ page }) => {
+  await seedOnboarded(page);
+  const problems = await watchErrors(page);
+  await page.goto(`/g/${'A'.repeat(22)}#k=${'k'.repeat(43)}&w=${'w'.repeat(43)}`);
+  await expect(page.getByRole('heading', { name: 'Group sharing needs the online service' })).toBeVisible();
+  await expect(page.locator('[data-pass-rules]')).toBeVisible();
+  await page.goto(`/g/${'A'.repeat(22)}#k=short`);
+  await expect(page.getByRole('heading', { name: 'This link could not be opened' })).toBeVisible();
+  expect(problems).toEqual([]);
+});

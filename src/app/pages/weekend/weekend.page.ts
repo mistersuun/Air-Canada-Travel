@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { ClimateService } from '../../recs/climate.service';
 import { climateFor, typicalText } from '../../recs/climate';
+import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { flightPath } from '../../ui/links';
 import { findDestination, airportTz } from '../../utils/airports';
@@ -19,7 +20,7 @@ import {
 @Component({
   selector: 'app-weekend-page',
   standalone: true,
-  imports: [RouterLink, DestRowComponent],
+  imports: [RouterLink, DestRowComponent, ForecastLineComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page wk">
@@ -71,7 +72,10 @@ import {
         <div class="ui-card list">
           @for (r of shown(); track r.o.code) {
             <app-dest-row [code]="r.o.code" [small]="r.o.code" [meta]="r.meta" [link]="r.link" [queryParams]="r.query">
-              @if (r.weather) { <span trailing class="ui-tag ui-tag--neutral tn">{{ r.weather }}</span> }
+              <span trailing class="wx">
+                @if (r.weather) { <span class="ui-tag ui-tag--neutral tn">{{ r.weather }}</span> }
+                <app-forecast-line [code]="r.o.code" [dateKey]="r.arrKey" />
+              </span>
             </app-dest-row>
           }
         </div>
@@ -98,6 +102,7 @@ import {
     .custom legend { padding: 0; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
     .pair { display: flex; gap: 8px; }
     .pair input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hair); background: var(--bg); color: var(--ink); font: inherit; }
+    .wx { display: grid; justify-items: end; gap: 2px; text-align: right; }
     .sum { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
     .list { padding: 4px 14px; margin-top: 12px; }
     .note { padding: 18px; margin-top: 12px; font-size: 14px; color: var(--ink-2); }
@@ -147,6 +152,7 @@ export class WeekendPage {
         o,
         meta: `${findDestination(o.code)?.city ?? o.code} · ${weekendMeta(o, this.state.showConnections())}`,
         weather: c ? typicalText(c) : null,
+        arrKey: first.arrDateKey,
         link: flightPath(o.code, first.dateKey, first),
         query: { ...globals, ret: o.retKey },
       };

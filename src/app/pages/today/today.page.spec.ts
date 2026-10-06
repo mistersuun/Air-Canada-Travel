@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
+import { FORECAST_FETCH, FORECAST_STORAGE } from '../../recs/forecast.service';
 import { GROUND_FETCH, GroundTimetableService } from '../../places/ground-timetable.service';
 import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
 import { groundTimetables, setGroundTimetables } from '../../places/timetable';
@@ -40,6 +41,14 @@ function seeded(withNote = true): MemoryStorage {
   return s;
 }
 
+const FORECAST_RAW = {
+  daily: {
+    time: ['2026-10-08', '2026-10-09'], temperature_2m_max: [24, 25], temperature_2m_min: [17, 18],
+    precipitation_probability_max: [80, 10], weathercode: [63, 1],
+  },
+};
+let forecastFetch: ReturnType<typeof vi.fn<(url: string) => Promise<unknown>>>;
+
 function configure(nowMs: number, store = seeded()) {
   storage = store;
   TestBed.configureTestingModule({
@@ -49,6 +58,8 @@ function configure(nowMs: number, store = seeded()) {
       { provide: TRIPS_STORAGE, useValue: store },
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
       { provide: GROUND_FETCH, useValue: (groundFetch = vi.fn(async () => null)) },
+      { provide: FORECAST_STORAGE, useValue: new MemoryStorage() },
+      { provide: FORECAST_FETCH, useValue: (forecastFetch = vi.fn(async (_url: string) => FORECAST_RAW)) },
     ],
   });
 }
@@ -204,6 +215,19 @@ describe('Today', () => {
     await render(TodayPage, AT_1640);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(groundFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a labelled forecast on the arrival row, asking only for the destination coordinates', async () => {
+    const { el, stable } = await render(TodayPage, AT_1640);
+    await vi.waitFor(() => expect(forecastFetch).toHaveBeenCalled());
+    await stable();
+    for (const [url] of forecastFetch.mock.calls) {
+      const u = new URL(url);
+      expect(u.origin).toBe('https://api.open-meteo.com');
+      expect([...u.searchParams.keys()].sort()).toEqual(['daily', 'forecast_days', 'latitude', 'longitude', 'timezone']);
+    }
+    const fc = el.querySelector('[data-forecast]');
+    expect(fc?.textContent).toMatch(/^Forecast · \d+° \/ \d+° · /);
   });
 
   it('loads the ground timetable itself, so ground legs get real times without another screen', async () => {

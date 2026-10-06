@@ -89,6 +89,18 @@
       }
     },
     {
+      "name": "forecast",
+      "urls": [
+        "https://api.open-meteo.com/v1/forecast**"
+      ],
+      "cacheConfig": {
+        "maxSize": 40,
+        "maxAge": "3h",
+        "timeout": "3s",
+        "strategy": "freshness"
+      }
+    },
+    {
       "name": "google-fonts-files",
       "urls": [
         "https://fonts.gstatic.com/**"

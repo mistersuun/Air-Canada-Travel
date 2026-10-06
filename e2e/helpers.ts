@@ -3,8 +3,12 @@ import { expect, type Page } from '@playwright/test';
 /** Collects console errors, page errors and CSP violations for the lifetime of a page. */
 export async function watchErrors(page: Page): Promise<string[]> {
   const problems: string[] = [];
+  // The forecast API is off-site: answer it locally so a missing network cannot log a failed load.
+  await page.route('https://api.open-meteo.com/**', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   page.on('console', m => {
-    if (m.type() === 'error') problems.push(`console: ${m.text()}`);
+    // With no network the service worker answers the forecast request with a 504 and the browser logs it.
+    // The app hides the forecast without a word, so only that expected load failure is ignored.
+    if (m.type() === 'error' && !m.location().url.startsWith('https://api.open-meteo.com/')) problems.push(`console: ${m.text()}`);
   });
   page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
   await page.addInitScript(() => {

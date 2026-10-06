@@ -63,6 +63,7 @@ interface ListRow {
   template: `
     <div class="ui-page home">
       <app-today-banner />
+      <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder: where can you go by Sunday night? ›</a>
       <div class="hero">
         <div class="hero__main">
           @if (narrow()) {
@@ -210,6 +211,7 @@ interface ListRow {
   `,
   styles: [`
     :host { display: block; }
+    .wkend { display: inline-block; margin-top: 12px; }
     .hero { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; margin-top: 40px; align-items: start; }
     .hero__main { min-width: 0; }
     .greet { font-size: 15px; }

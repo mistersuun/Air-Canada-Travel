@@ -3,6 +3,7 @@ import { RouterOutlet } from '@angular/router';
 import { SettingsComponent } from './components/settings/settings.component';
 import { ToastComponent } from './components/toast/toast.component';
 import { AppStateService } from './state/app-state.service';
+import { AppBadgeService } from './state/app-badge.service';
 import { PwaUpdateService } from './state/pwa-update.service';
 import { ShortcutsSheetComponent } from './shell/shortcuts-sheet.component';
 import { ShellShortcutsDirective } from './shell/shortcuts';
@@ -72,6 +73,7 @@ export class AppComponent {
   protected readonly pwa = inject(PwaUpdateService);
   private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
+  private readonly badge = inject(AppBadgeService);   // keeps the app-icon badge in step
 
   protected skipToMain(e: Event, main: HTMLElement): void {
     e.preventDefault();

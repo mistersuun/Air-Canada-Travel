@@ -5,7 +5,7 @@ the schedule data the app fetches at startup (kept out of the JS bundle, cached
 by the service worker).
 
 Usage:
-  python3 scripts/fetch-schedules.py [--dry-run] [--skip-domestic] [--allow-route-drop] [--out PATH]
+  python3 scripts/fetch-schedules.py [--dry-run] [--skip-domestic] [--allow-route-drop] [--allow-short-coverage] [--out PATH]
 
 The domestic "CANADA-" PDFs are parsed too, keeping only hub-to-hub legs (both
 ends in destinations.ts HUBS): they are the real first legs of connections.
@@ -28,6 +28,11 @@ dead link cannot silently drop a region nor block every future update.
 --allow-route-drop accepts a route/record count below MIN_ROUTE_RATIO of the
 previous file (a real seasonal cut); the workflow exposes it as an input.
 
+--allow-short-coverage downgrades the coverage-horizon gates to warnings: the
+overall coverageTo must be at least MIN_COVERAGE_DAYS (28) ahead of today and
+each required hub's own coverage at least MIN_HUB_COVERAGE_DAYS (14). A
+coverageFrom that moves backwards against the previous file only warns.
+
 When nothing but generatedAt would change, the file is left untouched so the
 workflow commits (and redeploys) only on real data changes.
 
@@ -48,7 +53,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from typing import Callable, Iterable
@@ -76,6 +81,8 @@ MAX_REJECT_RATIO = 0.05            # (rejected + orphan rows) / (accepted + reje
 MAX_SOURCE_ORPHAN_RATIO = 0.05     # a PDF with more orphans than this has a broken layout
 MAX_FAILED_SOURCES = 2             # international PDFs that may fail in one run...
 MAX_FAILED_FRACTION = 0.10         # ...as long as they are at most this share of all sources
+MIN_COVERAGE_DAYS = 28             # coverageTo must be at least this far past today
+MIN_HUB_COVERAGE_DAYS = 14         # ...and each required hub's coverageByHub "to" this far
 REQUIRED_HUBS = ("YUL", "YYZ", "YVR")   # hard-fail if any has 0 departures
 
 FALLBACK_HUBS = ("YYZ", "YUL", "YVR", "YYC", "YOW", "YHZ", "YEG", "YQB", "YWG", "YTZ")
@@ -688,9 +695,42 @@ def previous_route_count(path: str) -> int:
 # ---------------------------------------------------------------------------
 # Gates
 # ---------------------------------------------------------------------------
+def previous_coverage_from(path: str) -> str:
+    """coverageFrom of the previously generated file ('' if missing or not JSON)."""
+    text = _read(path)
+    try:
+        data = json.loads(text) if text else None
+    except ValueError:
+        return ""
+    value = data.get("coverageFrom") if isinstance(data, dict) else ""
+    return value if isinstance(value, str) else ""
+
+
+def check_coverage(*, routes: dict, hubs: Iterable[str], today: str, prev_from: str = "",
+                   allow_short: bool = False) -> tuple[list[str], list[str]]:
+    """Horizon gates: how far ahead the data reaches (today is 'YYYY-MM-DD')."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    cov = coverage(routes, hubs)
+    day = date.fromisoformat(today)
+    short: list[str] = []
+    if cov["to"] and cov["to"] < (day + timedelta(days=MIN_COVERAGE_DAYS)).isoformat():
+        short.append(f"coverageTo {cov['to']} is less than {MIN_COVERAGE_DAYS} days after {today}")
+    for hub in REQUIRED_HUBS:
+        to = cov["byHub"].get(hub, ("", ""))[1]
+        if to and to < (day + timedelta(days=MIN_HUB_COVERAGE_DAYS)).isoformat():
+            short.append(f"required hub {hub} coverage ends {to}, less than {MIN_HUB_COVERAGE_DAYS} days after {today}")
+    for msg in short:
+        (warnings if allow_short else errors).append(msg + (" (allowed by --allow-short-coverage)" if allow_short else ""))
+    if prev_from and cov["from"] and cov["from"] < prev_from:
+        warnings.append(f"coverageFrom moved backwards: {cov['from']} < previous {prev_from}")
+    return errors, warnings
+
+
 def check_gates(*, pdf_count: int, download_errors: list, routes: dict, prev_routes: int,
                 hubs: Iterable[str], accepted_rows: int, rejected_rows: int,
-                prev_records: int = 0, allow_drop: bool = False) -> tuple[list[str], list[str]]:
+                prev_records: int = 0, allow_drop: bool = False, today: str | None = None,
+                prev_coverage_from: str = "", allow_short: bool = False) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     if pdf_count == 0:
@@ -721,6 +761,11 @@ def check_gates(*, pdf_count: int, download_errors: list, routes: dict, prev_rou
         errors.append(f"too many rejected rows (incl. orphans): {rejected_rows}/{total}")
     elif rejected_rows:
         warnings.append(f"{rejected_rows} rejected row(s)")
+    if today:
+        cov_errors, cov_warnings = check_coverage(routes=routes, hubs=hubs, today=today,
+                                                  prev_from=prev_coverage_from, allow_short=allow_short)
+        errors += cov_errors
+        warnings += cov_warnings
     return errors, warnings
 
 
@@ -746,6 +791,7 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
     dry_run = "--dry-run" in argv
     include_domestic = "--skip-domestic" not in argv
     allow_drop = "--allow-route-drop" in argv
+    allow_short = "--allow-short-coverage" in argv
     if "--out" in argv:
         out_path = argv[argv.index("--out") + 1]
     out_path = out_path or DEFAULT_OUT
@@ -873,11 +919,13 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
             print(f"  REJECT {r['source']} p{r['page']} l{r['line']} ({r['reason']}): {r['text']}")
 
     prev = len(previous) if previous else previous_route_count(out_path)
+    prev_cov_from = previous_coverage_from(out_path)
     errors, warnings = check_gates(
         pdf_count=len(pdf_urls), download_errors=download_errors, routes=routes,
         prev_routes=prev, hubs=hubs, accepted_rows=accepted,
         rejected_rows=len(all_rejects) + len(all_orphans),
-        prev_records=prev_records, allow_drop=allow_drop)
+        prev_records=prev_records, allow_drop=allow_drop,
+        today=now().strftime("%Y-%m-%d"), prev_coverage_from=prev_cov_from, allow_short=allow_short)
     warnings = source_warnings + warnings
     if conflicts:
         warnings.append(f"{len(conflicts)} CONFLICT(s) logged")

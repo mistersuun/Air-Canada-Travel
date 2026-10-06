@@ -95,6 +95,15 @@ describe('Today', () => {
     expect(clean(el.textContent)).toBe('');
   });
 
+  it('shows the travel-day timeline as an ordered list, past rows dimmed', async () => {
+    const { el } = await render(TodayPage, AT_1805);
+    const items = [...el.querySelectorAll('[data-timeline] ol > li')];
+    expect(items.map(i => i.getAttribute('data-kind'))).toContain('depart');
+    expect(items.find(i => i.getAttribute('data-kind') === 'depart')?.hasAttribute('data-past')).toBe(true);
+    expect(items.find(i => i.getAttribute('data-kind') === 'arrive')?.hasAttribute('data-past')).toBe(false);
+    expect(clean(el.querySelector('[data-kind="arrive"]')?.textContent)).toContain('+6h vs Montréal');
+  });
+
   it('g4: time, status, countdown, note, three buttons, left to do and the backup', async () => {
     const { el, text } = await render(TodayPage, AT_1640);
     expect(text('.td__eyebrow')).toBe('Today · Thu Oct 8 · at YUL');

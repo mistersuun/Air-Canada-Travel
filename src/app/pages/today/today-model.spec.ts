@@ -117,7 +117,6 @@ describe('today model (Seville fixture)', () => {
     ];
     const first = todayView({ trip, legId: out.id, nowMs: AT_1640, notes: [], outcomes: [], connect: CONNECT, fmt: '24h' })!;
     expect(first.time).toBe('18:30');
-    expect(first.then).toBe('then AC810 YYZ 23:00');
     expect(first.title).toBe('Montréal → Lisbon');
     const rec: Outcome = {
       id: 'o1', flightNumber: 'AC489', origin: 'YUL', dest: 'YYZ', dateKey: '2026-10-08', kind: 'allBoarded',
@@ -126,7 +125,6 @@ describe('today model (Seville fixture)', () => {
     const second = todayView({ trip, legId: out.id, nowMs: AT_1640, notes: [], outcomes: [rec], connect: CONNECT, fmt: '24h' })!;
     expect(second.time).toBe('23:00');
     expect(second.eyebrow).toBe('Today · Thu Oct 8 · at YYZ');
-    expect(second.then).toBeNull();
     expect(second.backup).toBeNull();
   });
 

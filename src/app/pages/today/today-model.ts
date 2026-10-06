@@ -154,7 +154,6 @@ export interface TodayView {
   /** A return leg: recovery means the next way home (the Return tab), not the goal. */
   isReturn: boolean;
   sub: string;              // 'AC834 · A330-300 · leaves in 1h15'
-  then: string | null;      // one-stop: 'then AC824 YYZ 19:15'
   ref: FlightRef;           // the segment shown
   note: { time: string; text: string } | null;
   left: PrepItem[];
@@ -219,7 +218,6 @@ export function todayView(input: {
   const seg = currentSegment(trip, leg, input.outcomes);
   const ref = leg.refs[seg];
   const last = leg.refs[leg.refs.length - 1];
-  const next = leg.refs[seg + 1] ?? null;
   const final = isFinalStatus(leg.status);
   const departed = refDepUtc(ref) < nowMs;
 
@@ -249,7 +247,6 @@ export function todayView(input: {
     final,
     isReturn: leg.role === 'return',
     sub: subParts.join(' · '),
-    then: next ? `then ${next.flightNumber} ${next.origin} ${formatClock(next.depLocal, fmt)}` : null,
     ref,
     note,
     // Listing and check-in can't be done once the flight has left: the outcome question replaces them.

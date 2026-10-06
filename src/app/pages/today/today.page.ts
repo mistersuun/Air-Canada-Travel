@@ -15,6 +15,7 @@ import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component'
 import { recoverPath, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
 import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
+import { TodayTimelineComponent } from './today-timeline.component';
 import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
 /**
@@ -27,7 +28,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 @Component({
   selector: 'app-today-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent],
+  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -44,7 +45,6 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
             <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
-          @if (v.then) { <p class="td__sub tn">{{ v.then }}</p> }
           @if (v.note; as n) {
             <p class="td__note" data-note>Your note, {{ n.time }}: <b>{{ n.text }}</b></p>
           }
@@ -63,6 +63,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
         </section>
 
         <app-today-pass [tripId]="v.tripId" [legId]="v.legId" />
+        <app-today-timeline [tripId]="v.tripId" [legId]="v.legId" />
 
         @if (!v.final) {
           <div class="td__acts">

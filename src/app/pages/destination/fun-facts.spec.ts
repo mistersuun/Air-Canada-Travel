@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { toUtcMs } from '../../utils/time';
 import {
-  FactHub, FactPoint, dailyFact, dayNumber, daylightFact, daylightHours, distanceRankFact, extremeFact, timeDifferenceFact,
+  FactHub, FactPoint, dailyFact, dayNumber, daylightFact, daylightHours, distanceRankFact, extremeFact,
 } from './fun-facts';
 
 const YYZ: FactHub = { code: 'YYZ', lat: 43.68, lng: -79.62, tz: 'America/Toronto' };
@@ -14,21 +14,6 @@ const NRT = pt('NRT', 35.77, 140.39, 'Asia/Tokyo');
 const SET = [LHR, YVR, MIA, YFB, NRT];
 const JUN = Date.UTC(2026, 5, 21, 12);
 const DEC = Date.UTC(2026, 11, 21, 12);
-
-describe('timeDifferenceFact', () => {
-  it('says ahead, behind and same', () => {
-    expect(timeDifferenceFact(LHR, YYZ, 'Toronto', JUN)).toBe('5 hours ahead of Toronto');
-    expect(timeDifferenceFact(YVR, YYZ, 'Toronto', JUN)).toBe('3 hours behind Toronto');
-    expect(timeDifferenceFact(MIA, YYZ, 'Toronto', JUN)).toBe('Same time as Toronto');
-  });
-  it('handles half hours and singular', () => {
-    expect(timeDifferenceFact(pt('DEL', 28.5, 77.1, 'Asia/Kolkata'), YYZ, 'Toronto', JUN)).toBe('9h 30m ahead of Toronto');
-    expect(timeDifferenceFact(pt('X', 0, 0, 'America/Chicago'), YYZ, 'Toronto', JUN)).toBe('1 hour behind Toronto');
-  });
-  it('is null for the hub itself', () => {
-    expect(timeDifferenceFact({ ...YYZ }, YYZ, 'Toronto', JUN)).toBeNull();
-  });
-});
 
 describe('distanceRankFact', () => {
   it('ranks by distance from the hub', () => {
@@ -44,9 +29,9 @@ describe('distanceRankFact', () => {
     expect(facts.some(f => f?.startsWith('12th-'))).toBe(true);
     expect(facts.some(f => f?.startsWith('13th-'))).toBe(true);
   });
-  it('counts the destination even when the list omits it, and needs 3 airports', () => {
-    expect(distanceRankFact(NRT, YYZ, [LHR, MIA])).toBe('The longest nonstop from YYZ');
-    expect(distanceRankFact(NRT, YYZ, [LHR])).toBeNull();
+  it('is null when the destination is not a nonstop, or with fewer than 3', () => {
+    expect(distanceRankFact(NRT, YYZ, [LHR, MIA, YVR])).toBeNull();
+    expect(distanceRankFact(NRT, YYZ, [LHR, NRT])).toBeNull();
   });
 });
 
@@ -81,17 +66,18 @@ describe('extremeFact', () => {
     expect(extremeFact(MIA, YYZ, SET)).toBe('The southernmost destination from YYZ');
     expect(extremeFact(LHR, YYZ, SET)).toBeNull();
   });
-  it('needs 3 airports', () => {
+  it('is null when not a nonstop, or with fewer than 3', () => {
     expect(extremeFact(YFB, YYZ, [MIA])).toBeNull();
+    expect(extremeFact(YFB, YYZ, [LHR, MIA, YVR])).toBeNull();
   });
 });
 
 describe('dailyFact', () => {
   it('is stable within a day and varies across days', () => {
-    const a = dailyFact(LHR, YYZ, 'Toronto', SET, JUN);
-    expect(dailyFact(LHR, YYZ, 'Toronto', SET, JUN + 3 * 3_600_000)).toBe(a);
+    const a = dailyFact(LHR, YYZ, SET, JUN);
+    expect(dailyFact(LHR, YYZ, SET, JUN + 3 * 3_600_000)).toBe(a);
     const seen = new Set<string | null>();
-    for (let i = 0; i < 12; i++) seen.add(dailyFact(LHR, YYZ, 'Toronto', SET, JUN + i * 86_400_000));
+    for (let i = 0; i < 12; i++) seen.add(dailyFact(LHR, YYZ, SET, JUN + i * 86_400_000));
     expect(seen.size).toBeGreaterThan(1);
     expect(a).toBeTruthy();
   });
@@ -102,7 +88,7 @@ describe('dailyFact', () => {
     expect(dayNumber(before, 'America/Toronto')).toBe(dayNumber(toUtcMs('2026-06-21', '00:01', 'America/Toronto'), 'America/Toronto'));
   });
   it('returns null when nothing applies', () => {
-    expect(dailyFact({ ...YYZ }, YYZ, 'Toronto', [], DEC)).toBe(daylightFact(YYZ, DEC));
-    expect(dailyFact(pt('X', 80, 0, 'UTC'), { ...YYZ, code: 'X' }, 'X', [], DEC)).toBeNull();
+    expect(dailyFact({ ...YYZ }, YYZ, [], DEC)).toBe(daylightFact(YYZ, DEC));
+    expect(dailyFact(pt('X', 80, 0, 'UTC'), YYZ, [], DEC)).toBeNull();
   });
 });

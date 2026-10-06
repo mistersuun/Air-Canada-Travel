@@ -12,22 +12,10 @@ function ordinal(n: number): string {
   return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`;
 }
 
-/** '6 hours ahead of Montréal' / '3 hours behind Montréal' / 'Same time as Montréal'. */
-export function timeDifferenceFact(dest: FactPoint, hub: FactHub, hubLabel: string, now: number): string | null {
-  if (dest.code === hub.code) return null;
-  const diff = tzOffsetMin(dest.tz, now) - tzOffsetMin(hub.tz, now);
-  if (!diff) return `Same time as ${hubLabel}`;
-  const abs = Math.abs(diff);
-  const h = Math.floor(abs / 60);
-  const m = abs % 60;
-  const amount = h && m ? `${h}h ${m}m` : h ? `${h} ${h === 1 ? 'hour' : 'hours'}` : `${m} minutes`;
-  return `${amount} ${diff > 0 ? 'ahead of' : 'behind'} ${hubLabel}`;
-}
-
-/** '3rd-longest nonstop from YYZ' among `nonstops` (this one counted); null with fewer than 3 airports. */
+/** '3rd-longest nonstop from YYZ' among the hub's `nonstops`; null when the destination is not one of them or there are fewer than 3. */
 export function distanceRankFact(dest: FactPoint, hub: FactHub, nonstops: readonly FactPoint[]): string | null {
-  const all = nonstops.some(p => p.code === dest.code) ? nonstops : [...nonstops, dest];
-  if (all.length < 3) return null;
+  if (!nonstops.some(p => p.code === dest.code) || nonstops.length < 3) return null;
+  const all = nonstops;
   const km = (p: FactPoint) => greatCircleKm(hub, p);
   const sorted = [...all].sort((a, b) => km(b) - km(a) || a.code.localeCompare(b.code));
   const rank = sorted.findIndex(p => p.code === dest.code) + 1;
@@ -57,10 +45,10 @@ export function daylightFact(dest: FactPoint, now: number): string | null {
   return `About ${whole} ${whole === 1 ? 'hour' : 'hours'} of daylight today`;
 }
 
-/** 'The northernmost destination from YYZ' / 'The southernmost ...' (among `nonstops`, this one counted). */
+/** 'The northernmost destination from YYZ' / 'The southernmost ...' (among the hub's `nonstops`; null when the destination is not one of them). */
 export function extremeFact(dest: FactPoint, hub: FactHub, nonstops: readonly FactPoint[]): string | null {
-  const all = nonstops.some(p => p.code === dest.code) ? nonstops : [...nonstops, dest];
-  if (all.length < 3) return null;
+  if (!nonstops.some(p => p.code === dest.code) || nonstops.length < 3) return null;
+  const all = nonstops;
   if (all.every(p => p.code === dest.code || p.lat < dest.lat)) return `The northernmost destination from ${hub.code}`;
   if (all.every(p => p.code === dest.code || p.lat > dest.lat)) return `The southernmost destination from ${hub.code}`;
   return null;
@@ -73,10 +61,9 @@ export function dayNumber(now: number, tz: string): number {
 
 /** One fact per day: stable for a destination all day, different tomorrow. Null when none apply. */
 export function dailyFact(
-  dest: FactPoint, hub: FactHub, hubLabel: string, nonstops: readonly FactPoint[], now: number,
+  dest: FactPoint, hub: FactHub, nonstops: readonly FactPoint[], now: number,
 ): string | null {
   const facts = [
-    timeDifferenceFact(dest, hub, hubLabel, now),
     distanceRankFact(dest, hub, nonstops),
     daylightFact(dest, now),
     extremeFact(dest, hub, nonstops),

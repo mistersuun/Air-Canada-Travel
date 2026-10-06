@@ -91,7 +91,7 @@ export class OutcomePromptComponent {
       celebrate(ev?.currentTarget as Element | null);
       success();
     }
-    this.state.flash(cleared ? clearedMessage(p.ref.origin, p.ref.dest) : `${p.ref.flightNumber}: ${OUTCOME_LABEL[kind]} · saved`, {
+    this.state.flash(cleared ? clearedMessage(p.ref.origin, p.ref.dest, kind === 'someBoarded') : `${p.ref.flightNumber}: ${OUTCOME_LABEL[kind]} · saved`, {
       label: 'Undo',
       run: () => {
         if (saved) this.trips.removeOutcome(saved.id);

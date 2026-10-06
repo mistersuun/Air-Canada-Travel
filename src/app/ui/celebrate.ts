@@ -25,7 +25,7 @@ export function particleAt(p: Particle, t: number): { x: number; y: number } {
  */
 export function celebrate(from: Element | null | undefined): void {
   if (typeof document === 'undefined' || !from) return;
-  if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  if (typeof globalThis.matchMedia !== 'function' || globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const r = from.getBoundingClientRect();
   const ox = r.left + r.width / 2;
   const oy = r.top + r.height / 2;

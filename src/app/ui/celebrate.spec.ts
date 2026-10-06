@@ -37,6 +37,9 @@ describe('clearedMessage', () => {
   it('reads Cleared · route · distance', () => {
     expect(clearedMessage('YUL', 'LHR')).toMatch(/^Cleared · YUL → LHR · [\d,]+ km$/);
   });
+  it('says some of you when only some boarded', () => {
+    expect(clearedMessage('YUL', 'ZZZ', true)).toBe('Cleared · some of you · YUL → ZZZ');
+  });
   it('leaves the distance out for unknown airports', () => {
     expect(clearedMessage('YUL', 'ZZZ')).toBe('Cleared · YUL → ZZZ');
   });

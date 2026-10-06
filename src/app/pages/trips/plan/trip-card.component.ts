@@ -35,7 +35,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
           }
           <p class="ui-sub tn tc__dates">{{ dates() }}</p>
         </div>
-        <span class="ui-tag tc__cd" [class]="'ui-tag--' + cd().tone" data-countdown>{{ cd().text }}</span>
+        <span class="ui-tag tc__cd" [class]="'ui-tag--' + cd().tone" data-countdown [attr.title]="cdTitle()">{{ cd().text }}</span>
       </div>
 
       @if (compact()) {
@@ -100,7 +100,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     .tc__name a { color: inherit; }
     .tc__name a:hover { color: var(--blue); }
     .tc__dates { margin-top: 2px; }
-    .tc__cd { flex: 0 1 auto; max-width: 55%; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tc__cd { flex: none; margin-top: 2px; }
     .tc__chips { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tc__chip {
       display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px;
@@ -155,6 +155,7 @@ export class TripCardComponent {
   readonly partyPick = output<void>();
 
   protected readonly cd = computed(() => countdown(this.trip(), this.state.nowMs()));
+  protected readonly cdTitle = computed(() => (/sleeps$/.test(this.cd().text) ? `${this.cd().text} to ${this.trip().goal.name}` : this.cd().text));
   protected readonly dates = computed(() => tripDatesLabel(this.trip(), this.state.timeFormat()));
   protected readonly partyText = computed(() => partyLabel(this.trip().party));
   protected readonly rows = computed(() => legRows(this.trip(), this.state.timeFormat()));

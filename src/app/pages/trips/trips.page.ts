@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
+import { ComingUpBannerComponent } from '../../trips/ui/coming-up-banner.component';
 import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { destPath } from '../../ui/links';
@@ -25,11 +26,12 @@ export const STARRED_PREVIEW = 3;
 @Component({
   selector: 'app-trips-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, TripCardComponent, OutcomePromptComponent, DestRowComponent, TripIdeasComponent],
+  imports: [RouterLink, IconComponent, TripCardComponent, OutcomePromptComponent, ComingUpBannerComponent, DestRowComponent, TripIdeasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page tp">
       <h1 class="ui-h1 tp__ttl">Trips</h1>
+      <app-coming-up-banner />
 
       @if (trips.readOnly()) {
         <p class="note note--blue"><app-icon name="info" [size]="16" />

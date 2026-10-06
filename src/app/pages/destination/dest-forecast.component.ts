@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
 import { FORECAST_SOURCE_URL } from '../../recs/ui/forecast-line.component';
 import { NOW } from '../../state/app-state.service';
+import { airportTz } from '../../utils/airports';
 import { addDays, formatKey, todayKey } from '../../utils/time';
 import { forecastOn, weatherText, withinForecast, type DayForecast } from '../../recs/forecast';
 import { ForecastService } from '../../recs/forecast.service';
@@ -59,7 +60,7 @@ export class DestForecastComponent {
   readonly dateKey = input.required<string>();
   protected readonly source = FORECAST_SOURCE_URL;
 
-  private readonly inRange = computed(() => withinForecast(this.dateKey(), todayKey(undefined, this.now())));
+  private readonly inRange = computed(() => withinForecast(this.dateKey(), todayKey(airportTz(this.code()), this.now())));
 
   protected readonly days = computed<DayForecast[] | null>(() => {
     if (!this.inRange()) return null;
@@ -74,7 +75,7 @@ export class DestForecastComponent {
 
   constructor() {
     effect(() => {
-      if (this.inRange()) void this.forecast.ensure(this.code());
+      if (this.inRange()) { const c = this.code(); untracked(() => void this.forecast.ensure(c)); }
     });
   }
 

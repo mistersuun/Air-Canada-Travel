@@ -44,7 +44,7 @@ function seeded(withNote = true): MemoryStorage {
 const FORECAST_RAW = {
   daily: {
     time: ['2026-10-08', '2026-10-09'], temperature_2m_max: [24, 25], temperature_2m_min: [17, 18],
-    precipitation_probability_max: [80, 10], weathercode: [63, 1],
+    precipitation_probability_max: [80, 10], weather_code: [63, 1],
   },
 };
 let forecastFetch: ReturnType<typeof vi.fn<(url: string) => Promise<unknown>>>;

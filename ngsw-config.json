@@ -94,7 +94,7 @@
         "https://api.open-meteo.com/v1/forecast**"
       ],
       "cacheConfig": {
-        "maxSize": 40,
+        "maxSize": 100,
         "maxAge": "3h",
         "timeout": "3s",
         "strategy": "freshness"

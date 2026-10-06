@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, InjectionToken, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { HUBS } from '../data/destinations';
 import { AppStateService } from '../state/app-state.service';
 import { formatKm, nearestTo } from '../utils/geo';
@@ -11,8 +11,10 @@ export const GEOLOCATION = new InjectionToken<Pick<Geolocation, 'getCurrentPosit
   factory: () => (typeof navigator !== 'undefined' && navigator.geolocation) || null,
 });
 
-/** How long to wait for a position, and how old a cached one may be (ms). */
+/** How long to wait for a position (ms). */
 export const LOCATE_TIMEOUT_MS = 10_000;
+/** How old a position the browser already has may be (ms): a fix from the last ten minutes is fine for picking a hub. */
+export const LOCATE_MAX_AGE_MS = 10 * 60_000;
 
 /**
  * Home-airport picker: a glass pill ('YUL Montréal ▾') that opens a sheet
@@ -94,6 +96,20 @@ export class HubPickerComponent {
   protected readonly canLocate = !!this.geo;
   protected readonly locating = signal(false);
   protected readonly message = signal('');
+  /** Bumped when a choice is made, the sheet opens or closes, or the picker goes away: an older answer is then ignored. */
+  private request = 0;
+
+  constructor() {
+    effect(() => {
+      const isOpen = this.open();
+      untracked(() => {
+        this.request++;
+        this.locating.set(false);
+        if (isOpen) this.message.set('');
+      });
+    });
+    inject(DestroyRef).onDestroy(() => this.request++);
+  }
 
   protected readonly hubs = HUBS;
   protected readonly open = signal(false);
@@ -111,8 +127,10 @@ export class HubPickerComponent {
     if (!this.geo || this.locating()) return;
     this.locating.set(true);
     this.message.set('');
+    const mine = ++this.request;
     this.geo.getCurrentPosition(
       pos => {
+        if (mine !== this.request) return;
         this.locating.set(false);
         const near = nearestTo({ lat: pos.coords.latitude, lng: pos.coords.longitude }, HUBS);
         if (!near) return;
@@ -121,16 +139,19 @@ export class HubPickerComponent {
         this.state.flash(`Nearest hub: ${near.place.code} · ${formatKm(near.km)}`);
       },
       err => {
+        if (mine !== this.request) return;
         this.locating.set(false);
         this.message.set(err.code === 1 ? 'Location is off for this site, so pick a hub from the list.'
           : err.code === 3 ? 'Location took too long. Pick a hub from the list.'
           : 'Location is not available right now. Pick a hub from the list.');
       },
-      { enableHighAccuracy: false, timeout: LOCATE_TIMEOUT_MS, maximumAge: 10 * 60_000 },
+      { enableHighAccuracy: false, timeout: LOCATE_TIMEOUT_MS, maximumAge: LOCATE_MAX_AGE_MS },
     );
   }
 
   protected choose(code: string): void {
+    this.request++;
+    this.locating.set(false);
     this.open.set(false);
     if (code !== this.hub()) this.hubChange.emit(code);
   }

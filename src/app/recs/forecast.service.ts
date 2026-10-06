@@ -1,4 +1,4 @@
-import { Injectable, InjectionToken, inject, signal } from '@angular/core';
+import { Injectable, InjectionToken, inject, signal, untracked } from '@angular/core';
 import { NOW } from '../state/app-state.service';
 import { findDestination, findHub } from '../utils/airports';
 import { FORECAST_DAYS, parseForecast, type DayForecast } from './forecast';
@@ -9,11 +9,14 @@ const CACHE_MS = 3 * 60 * 60 * 1000;
 const RETRY_MS = 60 * 1000;
 const STORE_PREFIX = 'ac.forecast.v1.';
 
-/** The request for a destination: only its coordinates leave the device, never the traveller's. */
-export function forecastUrl(lat: number, lng: number): string {
+/** Places per request: Open-Meteo takes comma-separated coordinate lists and answers with an array. */
+export const BATCH_SIZE = 20;
+
+/** The request for destinations: only their coordinates leave the device, never the traveller's. */
+export function forecastUrl(places: readonly { lat: number; lng: number }[]): string {
   const q = new URLSearchParams({
-    latitude: lat.toFixed(2), longitude: lng.toFixed(2),
-    daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode',
+    latitude: places.map(p => p.lat.toFixed(2)).join(','), longitude: places.map(p => p.lng.toFixed(2)).join(','),
+    daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code',
     timezone: 'auto', forecast_days: String(FORECAST_DAYS),
   });
   return `${FORECAST_ORIGIN}/v1/forecast?${q}`;
@@ -73,13 +76,27 @@ export class ForecastService {
   private readonly pending = new Map<string, Promise<void>>();
   private readonly failedAt = new Map<string, number>();
   private readonly wanted = new Set<string>();
+  private readonly queue = new Map<string, { lat: number; lng: number; resolve: () => void }>();
+  private flushing = false;
   private waitingOnline = false;
 
   /** Forecast days by destination code (missing until loaded). */
   readonly days = this.store.asReadonly();
 
-  /** Loads (or refreshes after 3 h) the forecast for a destination or hub. Never rejects; no-op for unknown codes. */
+  /**
+   * Loads (or refreshes after 3 h) the forecast for a destination or hub. Calls in the same
+   * tick are batched into one request per 20 places. Never rejects; no-op for unknown codes.
+   */
   ensure(code: string): Promise<void> {
+    return untracked(() => this.request(code));
+  }
+
+  /** Several codes at once (one batched request per 20). */
+  ensureMany(codes: Iterable<string>): Promise<void> {
+    return Promise.all([...new Set(codes)].map(c => this.ensure(c))).then(() => undefined);
+  }
+
+  private request(code: string): Promise<void> {
     const at = this.now();
     const fresh = this.cached(code, at);
     if (fresh) {
@@ -97,10 +114,22 @@ export class ForecastService {
     }
     let p = this.pending.get(code);
     if (!p) {
-      p = this.load(code, place.lat, place.lng).finally(() => this.pending.delete(code));
+      p = new Promise<void>(resolve => this.queue.set(code, { lat: place.lat, lng: place.lng, resolve }))
+        .finally(() => this.pending.delete(code));
       this.pending.set(code, p);
+      if (!this.flushing) {
+        this.flushing = true;
+        queueMicrotask(() => this.flush());
+      }
     }
     return p;
+  }
+
+  private flush(): void {
+    this.flushing = false;
+    const items = [...this.queue.entries()];
+    this.queue.clear();
+    for (let i = 0; i < items.length; i += BATCH_SIZE) void this.load(items.slice(i, i + BATCH_SIZE));
   }
 
   private cached(code: string, at: number): Entry | null {
@@ -123,25 +152,33 @@ export class ForecastService {
     return null;
   }
 
-  private async load(code: string, lat: number, lng: number): Promise<void> {
-    let raw: unknown;
+  private async load(items: [string, { lat: number; lng: number; resolve: () => void }][]): Promise<void> {
     try {
-      raw = await this.fetcher(forecastUrl(lat, lng));
-    } catch {
-      this.failedAt.set(code, this.now());
-      this.retryWhenOnline();
-      return;
+      let raw: unknown;
+      try {
+        raw = await this.fetcher(forecastUrl(items.map(([, p]) => p)));
+      } catch {
+        for (const [code] of items) this.failedAt.set(code, this.now());
+        this.retryWhenOnline();
+        return;
+      }
+      // One place answers with an object, several with an array in request order.
+      const parts = Array.isArray(raw) ? raw : [raw];
+      items.forEach(([code], i) => {
+        const days = parseForecast(parts[i]);
+        if (!days.length) {
+          this.failedAt.set(code, this.now());
+          return;
+        }
+        this.failedAt.delete(code);
+        const entry = { at: this.now(), days };
+        this.memory.set(code, entry);
+        try { this.storage?.setItem(STORE_PREFIX + code, JSON.stringify(entry)); } catch { /* full or blocked */ }
+        this.store.update(s => ({ ...s, [code]: days }));
+      });
+    } finally {
+      for (const [, p] of items) p.resolve();
     }
-    const days = parseForecast(raw);
-    if (!days.length) {
-      this.failedAt.set(code, this.now());
-      return;
-    }
-    this.failedAt.delete(code);
-    const entry = { at: this.now(), days };
-    this.memory.set(code, entry);
-    try { this.storage?.setItem(STORE_PREFIX + code, JSON.stringify(entry)); } catch { /* full or blocked */ }
-    this.store.update(s => ({ ...s, [code]: days }));
   }
 
   private retryWhenOnline(): void {

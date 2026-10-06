@@ -31,7 +31,7 @@ export function parseForecast(raw: unknown): DayForecast[] {
   const time = daily['time'] as unknown[];
   const hi = nums(daily['temperature_2m_max']);
   const lo = nums(daily['temperature_2m_min']);
-  const code = nums(daily['weathercode'] ?? daily['weather_code']);
+  const code = nums(daily['weather_code'] ?? daily['weathercode']);
   const pct = nums(daily['precipitation_probability_max']);
   if (!hi || !lo || !code) return [];
   const out: DayForecast[] = [];
@@ -68,11 +68,12 @@ function kind(code: number): { text: string; wet?: boolean } {
   return { text: 'mixed' };
 }
 
-/** 'rain likely' (chance 60%+ or unknown), 'rain possible' (below), 'clear', 'partly cloudy'. */
+/** 'rain likely' (chance 60%+), 'rain possible' (below), plain 'rain' with no chance given; 'clear', 'partly cloudy'. */
 export function weatherText(code: number, precipPct: number | null = null): string {
   const k = kind(code);
   if (!k.wet) return k.text;
-  return `${k.text} ${precipPct !== null && precipPct < 60 ? 'possible' : 'likely'}`;
+  if (precipPct === null) return k.text;
+  return `${k.text} ${precipPct < 60 ? 'possible' : 'likely'}`;
 }
 
 /** '24° / 17° · rain likely'. */

@@ -175,4 +175,18 @@ describe('HubPickerComponent: nearest to me', () => {
     expect(el.querySelector('[data-nearest-msg]')!.textContent).toContain('pick a hub');
     expect(el.querySelector<HTMLButtonElement>('[data-nearest]')!.disabled).toBe(false);
   });
+
+  it('ignores a late position after the traveller picked a hub by hand', async () => {
+    let answer: ((p: GeolocationPosition) => void) | undefined;
+    const geo: Geo = { getCurrentPosition: ok => { answer = ok; } };
+    const { fixture, el, changes } = await setup(geo);
+    el.querySelector<HTMLButtonElement>('[data-nearest]')!.click();
+    await fixture.whenStable();
+    [...el.querySelectorAll<HTMLButtonElement>('.hub')].find(h => h.textContent?.includes('YVR'))!.click();
+    await fixture.whenStable();
+    answer!({ coords: { latitude: 45.5, longitude: -73.6 } } as GeolocationPosition);
+    await fixture.whenStable();
+    expect(changes).toEqual(['YVR']);
+    expect(TestBed.inject(AppStateService).notice()).toBeNull();
+  });
 });

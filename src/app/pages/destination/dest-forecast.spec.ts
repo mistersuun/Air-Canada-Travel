@@ -11,7 +11,7 @@ const DAYS = ['2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-1
 const RAW = {
   daily: {
     time: DAYS, temperature_2m_max: [24, 23, 22, 21, 20, 19], temperature_2m_min: [17, 16, 15, 14, 13, 12],
-    precipitation_probability_max: [80, 10, 10, 10, 10, 10], weathercode: [63, 1, 1, 2, 3, 0],
+    precipitation_probability_max: [80, 10, 10, 10, 10, 10], weather_code: [63, 1, 1, 2, 3, 0],
   },
 };
 
@@ -73,5 +73,20 @@ describe('ForecastLineComponent', () => {
     await vi.waitFor(() => expect(f).toHaveBeenCalled());
     await fx.whenStable();
     expect((fx.nativeElement as HTMLElement).textContent).toMatch(/Forecast · 24° \/ 17° · rain likely\s+Open-Meteo/);
+  });
+});
+
+describe('ForecastLineComponent in a link', () => {
+  it('plain: names Open-Meteo as text, not a nested anchor', async () => {
+    setup(async () => RAW);
+    const fx = TestBed.createComponent(ForecastLineComponent);
+    fx.componentRef.setInput('code', 'LIS');
+    fx.componentRef.setInput('dateKey', '2026-10-06');
+    fx.componentRef.setInput('plain', true);
+    await fx.whenStable();
+    await vi.waitFor(() => expect((fx.nativeElement as HTMLElement).textContent).toContain('Forecast'));
+    const el = fx.nativeElement as HTMLElement;
+    expect(el.querySelector('a')).toBeNull();
+    expect(el.textContent).toContain('· Open-Meteo');
   });
 });

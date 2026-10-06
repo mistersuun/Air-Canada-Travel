@@ -74,7 +74,7 @@ import {
             <app-dest-row [code]="r.o.code" [small]="r.o.code" [meta]="r.meta" [link]="r.link" [queryParams]="r.query">
               <span trailing class="wx">
                 @if (r.weather) { <span class="ui-tag ui-tag--neutral tn">{{ r.weather }}</span> }
-                <app-forecast-line [code]="r.o.code" [dateKey]="r.arrKey" />
+                <app-forecast-line [code]="r.o.code" [dateKey]="r.arrKey" [plain]="true" />
               </span>
             </app-dest-row>
           }

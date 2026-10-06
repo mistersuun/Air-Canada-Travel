@@ -34,13 +34,13 @@ describe('weather text', () => {
     expect(weatherText(0)).toBe('clear');
     expect(weatherText(2)).toBe('partly cloudy');
     expect(weatherText(45)).toBe('fog');
-    expect(weatherText(95)).toBe('thunderstorms likely');
-    expect(weatherText(73)).toBe('snow likely');
+    expect(weatherText(95)).toBe('thunderstorms');
+    expect(weatherText(73)).toBe('snow');
   });
   it('says likely from 60% and possible below', () => {
     expect(weatherText(61, 60)).toBe('rain likely');
     expect(weatherText(61, 59)).toBe('rain possible');
-    expect(weatherText(61, null)).toBe('rain likely');
+    expect(weatherText(61, null)).toBe('rain');
   });
   it('formats a day', () => {
     expect(forecastText({ dateKey: '2026-10-06', hiC: 24, loC: 17, precipPct: 80, code: 63 })).toBe('24° / 17° · rain likely');
@@ -61,12 +61,16 @@ describe('withinForecast', () => {
 
 describe('forecastUrl', () => {
   it('carries only the destination coordinates', () => {
-    const u = new URL(forecastUrl(38.774, -9.134));
+    const u = new URL(forecastUrl([{ lat: 38.774, lng: -9.134 }]));
     expect(u.origin).toBe('https://api.open-meteo.com');
     expect(u.searchParams.get('latitude')).toBe('38.77');
     expect(u.searchParams.get('longitude')).toBe('-9.13');
     expect(u.searchParams.get('timezone')).toBe('auto');
     expect(u.searchParams.get('forecast_days')).toBe('16');
+    expect(u.searchParams.get('daily')).toContain('weather_code');
+    const two = new URL(forecastUrl([{ lat: 38.774, lng: -9.134 }, { lat: 40.47, lng: -3.57 }]));
+    expect(two.searchParams.get('latitude')).toBe('38.77,40.47');
+    expect(two.searchParams.get('longitude')).toBe('-9.13,-3.57');
     expect([...u.searchParams.keys()].sort()).toEqual(['daily', 'forecast_days', 'latitude', 'longitude', 'timezone']);
   });
 });
@@ -95,6 +99,17 @@ describe('ForecastService', () => {
     advance(3 * 3600_000 + 1);
     await svc.ensure('LIS');
     expect(f).toHaveBeenCalledTimes(2);
+  });
+
+  it('batches codes asked in the same tick into one request and splits the array answer', async () => {
+    const f = vi.fn(async (_url: string) => [RAW, { daily: { ...RAW.daily, temperature_2m_max: [1, 2, 3, 4] } }]);
+    const { svc } = setup(f);
+    await svc.ensureMany(['LIS', 'MAD']);
+    expect(f).toHaveBeenCalledTimes(1);
+    const u = new URL(f.mock.calls[0][0]);
+    expect(u.searchParams.get('latitude')).toBe('38.77,40.47');
+    expect(svc.days()['LIS'][0].hiC).toBe(24);
+    expect(svc.days()['MAD'][0].hiC).toBe(1);
   });
 
   it('reads a fresh sessionStorage entry without fetching', async () => {

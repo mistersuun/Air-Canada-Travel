@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
 import { NOW } from '../../state/app-state.service';
+import { airportTz } from '../../utils/airports';
 import { todayKey } from '../../utils/time';
 import { forecastOn, forecastText, withinForecast } from '../forecast';
 import { ForecastService } from '../forecast.service';
@@ -19,7 +20,7 @@ export const FORECAST_SOURCE_URL = 'https://open-meteo.com/';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (text(); as t) {
-      <span class="fc tn" data-forecast>Forecast · {{ t }} <a class="fc__src" [href]="source" target="_blank" rel="noopener" aria-label="Forecast data from Open-Meteo">Open-Meteo</a></span>
+      <span class="fc tn" data-forecast>Forecast · {{ t }} @if (plain()) { · Open-Meteo } @else { <a class="fc__src" [href]="source" target="_blank" rel="noopener" aria-label="Forecast data from Open-Meteo">Open-Meteo</a> }</span>
     }
   `,
   styles: [`
@@ -34,9 +35,11 @@ export class ForecastLineComponent {
 
   readonly code = input.required<string>();
   readonly dateKey = input.required<string>();
+  /** Inside a link (a row that is itself an anchor): the source is text, not a nested link. */
+  readonly plain = input(false);
   protected readonly source = FORECAST_SOURCE_URL;
 
-  private readonly inRange = computed(() => withinForecast(this.dateKey(), todayKey(undefined, this.now())));
+  private readonly inRange = computed(() => withinForecast(this.dateKey(), todayKey(airportTz(this.code()), this.now())));
 
   protected readonly text = computed(() => {
     if (!this.inRange()) return null;
@@ -46,7 +49,7 @@ export class ForecastLineComponent {
 
   constructor() {
     effect(() => {
-      if (this.inRange()) void this.forecast.ensure(this.code());
+      if (this.inRange()) { const c = this.code(); untracked(() => void this.forecast.ensure(c)); }
     });
   }
 }

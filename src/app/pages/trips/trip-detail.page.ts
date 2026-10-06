@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
+import { recapPath } from '../../extras/links';
+import { returnBoarded } from '../../logbook/logbook';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
@@ -50,6 +52,12 @@ export const TRIP_TABS: SegOption[] = [
         @if (t.sharedFrom) {
           <p class="ui-sub td__ro">A copy of a shared plan. Changes stay on this device.</p>
         }
+        @if (recapReady()) {
+          <a class="td__recap" data-recap [routerLink]="recapLink(t.id)" [queryParams]="state.globalParams()">
+            <app-icon name="share" [size]="17" />
+            <span><b>Make a recap</b><span class="ui-sub">A picture of the trip to share. Counts only.</span></span>
+          </a>
+        }
         <app-trip-extras [trip]="t" />
         <app-seg stretch [options]="tabs" [value]="activeTab()" (valueChange)="setTab($event)" ariaLabel="Trip sections" />
         @switch (activeTab()) {
@@ -75,6 +83,13 @@ export const TRIP_TABS: SegOption[] = [
     .td__title { min-width: 0; text-align: center; }
     .td__title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .td__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
+    .td__recap {
+      display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; min-height: 44px;
+      background: color-mix(in srgb, var(--teal) 12%, transparent); color: var(--ink); text-decoration: none;
+    }
+    .td__recap app-icon { color: var(--teal); flex: none; }
+    .td__recap span { display: grid; gap: 1px; }
+    .td__recap b { font-size: 14.5px; font-weight: 650; }
     .td__ro { text-align: center; font-size: 12.5px; }
     @media (min-width: 720px) {
       .td { padding-top: 24px; }
@@ -109,6 +124,15 @@ export class TripDetailPage {
     const t = this.tab();
     return t === 'prep' || t === 'return' ? t : 'plan';
   });
+
+  /** True once the way home is boarded: then the trip can be recapped. */
+  protected readonly recapReady = computed(() => {
+    const t = this.trip();
+    return !!t && returnBoarded(t);
+  });
+  protected recapLink(id: string): string[] {
+    return recapPath(id);
+  }
 
   protected setTab(value: string | null | undefined): void {
     void this.router.navigate([], {

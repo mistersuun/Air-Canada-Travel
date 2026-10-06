@@ -39,3 +39,13 @@ export function tripSharePath(tripId: string): string[] {
 export function profilePath(): string[] {
   return ['/profile'];
 }
+
+/** Command array for `/trips/:id/recap`. */
+export function recapPath(tripId: string): string[] {
+  return ['/trips', tripId, 'recap'];
+}
+
+/** Command array for `/logbook`. */
+export function logbookPath(): string[] {
+  return ['/logbook'];
+}

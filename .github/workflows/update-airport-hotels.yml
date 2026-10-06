@@ -1,0 +1,61 @@
+name: Update Airport Hotels
+
+# Rebuilds public/data/airport-hotels.json (hotels within about 3 km of each hub
+# airport and ground-corridor gateway, from OpenStreetMap through Overpass, ODbL)
+# for the "Stuck tonight?" card. Hotels change slowly: quarterly is enough.
+# An airport whose query fails keeps its previous list; the app works without the file.
+
+on:
+  schedule:
+    # 3rd of Jan, Apr, Jul, Oct at 04:00 UTC
+    - cron: '0 4 3 1,4,7,10 *'
+  workflow_dispatch:
+
+concurrency:
+  group: update-airport-hotels
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Builder unit tests
+        run: |
+          pip install pytest==9.1.1
+          python -m pytest -q scripts/tests/test_build_airport_hotels.py
+
+      - name: Build airport-hotels.json
+        run: python3 scripts/build-airport-hotels.py
+
+      - name: Commit and push if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git diff --quiet -- public/data/airport-hotels.json && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data/airport-hotels.json
+          git commit -m "chore: update airport hotels from OpenStreetMap"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF}"
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Airport hotels update failed ($(date -u +%Y-%m-%d))" \
+            --body "The update-airport-hotels workflow failed and nothing was committed. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

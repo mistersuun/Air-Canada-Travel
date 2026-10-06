@@ -13,7 +13,7 @@ export class AppBadgeService {
   private last = -1;
 
   constructor() {
-    effect(() => this.apply(badgeCount(this.trips.trips(), this.trips.pendingOutcomes().length, this.state.nowMs())));
+    effect(() => this.apply(badgeCount(this.trips.readOnly() ? [] : this.trips.trips(), this.trips.pendingOutcomes().length, this.state.nowMs())));
   }
 
   apply(count: number, nav: BadgeNav | undefined = typeof navigator === 'undefined' ? undefined : (navigator as BadgeNav)): void {

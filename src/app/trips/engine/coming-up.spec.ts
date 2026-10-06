@@ -72,6 +72,28 @@ describe('comingUp', () => {
   });
 });
 
+describe('comingUp mid-trip', () => {
+  beforeEach(() => setScheduleSource(SEVILLE_ROUTES, SEVILLE_META));
+  afterEach(() => resetScheduleSource());
+
+  it('names the way home once the outbound is boarded, without a duplicate return reminder', () => {
+    const t = sevilleTrip();
+    t.legs[0].status = 'boarded';
+    const ret = t.legs.find(l => l.kind === 'flight' && l.role === 'return')!;
+    const dep = (ret as { refs: { dateKey: string }[] }).refs[0].dateKey;
+    const now = toUtcMs(dep, '09:00', 'Europe/Madrid') - 3 * 86_400_000;
+    const c = comingUp([t], log, now)!;
+    expect(c.text.startsWith('Home to ')).toBe(true);
+    expect(c.text).toContain('in 3 days');
+    expect(c.actions.filter(a => a.startsWith('List ')).length).toBeGreaterThan(0);
+    expect(c.actions).not.toContain('Return not listed');
+  });
+
+  it('skips a trip on its travel day', () => {
+    expect(comingUp([planned()], log, yul('2026-10-08', '09:00'))).toBeNull();
+  });
+});
+
 describe('badgeCount', () => {
   beforeEach(() => setScheduleSource(SEVILLE_ROUTES, SEVILLE_META));
   afterEach(() => resetScheduleSource());
@@ -91,5 +113,13 @@ describe('badgeCount', () => {
   it('is 0 when nothing waits, and ignores archived trips', () => {
     expect(badgeCount([sevilleTrip()], 0, yul('2026-10-06', '12:00'))).toBe(0);
     expect(badgeCount([{ ...planned(), archived: true }], 0, yul('2026-10-06', '12:00'))).toBe(0);
+  });
+
+  it('drops finished trips, departed changes and shared copies', () => {
+    const t = planned();
+    t.changes = [change()];
+    expect(badgeCount([t], 0, yul('2026-12-10', '12:00'))).toBe(0);
+    expect(badgeCount([t], 0, yul('2026-10-08', '19:30'))).toBe(0);
+    expect(badgeCount([{ ...t, sharedFrom: { at: '2026-10-01T00:00:00Z' } }], 0, yul('2026-10-06', '12:00'))).toBe(0);
   });
 });

@@ -21,7 +21,7 @@ import { emptyFlightLog } from '../model';
   host: { '[class.is-on]': '!!item()' },
   template: `
     @if (item(); as c) {
-      <a class="cu ui-glass" [routerLink]="path(c.tripId)" data-coming-up>
+      <a class="cu ui-glass" [routerLink]="path(c.tripId)" data-coming-up [attr.aria-label]="'Coming up: ' + c.text">
         <span class="cu__txt tn">{{ c.text }}</span>
         <app-icon class="cu__chev" name="chevron-right" [size]="18" />
       </a>

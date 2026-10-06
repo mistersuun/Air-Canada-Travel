@@ -21,6 +21,11 @@ export function hidesTopNav(path: string): boolean {
   return /^\/to\//.test(path);
 }
 
+/** Boarding-pass views (and the add flow): a held-up phone at the gate, where a reload prompt would be in the way. */
+export function isPassView(path: string): boolean {
+  return /^\/(trips\/[^/]+\/pass(?:es)?\/)/.test(path);
+}
+
 /** The shell paints the sky wash behind these pages; the others draw their own background. */
 export function hasSkywash(path: string): boolean {
   return path === '/' || path === '' || path.startsWith('/saved') || path.startsWith('/flight/')

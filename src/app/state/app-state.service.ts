@@ -4,13 +4,14 @@ import {
 import { PlatformLocation } from '@angular/common';
 import { NavigationEnd, NavigationStart, Params, Router } from '@angular/router';
 import { HUBS, Hub } from '../data/destinations';
-import { Coverage, getCoverage } from '../data/schedule-index';
+import { Coverage, getCoverage, loadSchedules } from '../data/schedule-index';
+import { loadRouteNetwork } from '../data/route-network';
 import { findDestination, findHub } from '../utils/airports';
 import { summarizeWeek } from '../utils/connections';
 import { EMPTY_FILTERS, Filters, RouteEntry, SortKey, activeFilterCount, computeRoutes, hubStats } from '../utils/routes';
-import { WEEKDAY_SHORT, addDays, dateKey, formatKey, isDateKey, todayKey, weekStartKey, weekdayIndex } from '../utils/time';
+import { WEEKDAY_SHORT, addDays, dateKey, diffDays, formatKey, isDateKey, todayKey, weekStartKey, weekdayIndex } from '../utils/time';
 import { getFlightsForWeek } from '../utils/week';
-import { STALE_AFTER_DAYS, freshnessAge } from '../ui/format';
+import { STALE_AFTER_DAYS, STALE_COVERAGE_DAYS } from '../ui/format';
 import { destPath } from '../ui/links';
 import { DEFAULT_HUB, PrefsService, isHubCode, isRegion } from './prefs.service';
 import { UrlState, parseUrlState } from './url-state';
@@ -75,8 +76,14 @@ export interface DataInfo {
   to: string | null;
   /** 'Updated Sep 30 · data to Sep 26, 2027'. */
   updatedLabel: string;
-  /** Age in days when the data is stale (≥ STALE_AFTER_DAYS), else null. */
-  staleDays: number | null;
+  /**
+   * Short tag text when the data is worth a warning, else null: the scrape is
+   * older than STALE_AFTER_DAYS, or the published dates end within
+   * STALE_COVERAGE_DAYS (or already ended).
+   */
+  staleTag: string | null;
+  /** Full sentence for the tag's tap/hover detail; '' when there is no tag. */
+  staleDetail: string;
 }
 
 /**
@@ -119,6 +126,11 @@ export class AppStateService {
 
   /** Epoch ms, refreshed every COUNTDOWN_TICK_MS while the document is visible. */
   readonly nowMs = signal(this.now());
+
+  // ── Data load ─────────────────────────────────────────────────────────────
+  /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. */
+  readonly dataLoad = signal<'ok' | 'failed'>('ok');
+  private retrying = false;
 
   // ── Shell UI state ────────────────────────────────────────────────────────
   readonly settingsOpen = signal(false);
@@ -226,19 +238,36 @@ export class AppStateService {
   readonly dataInfo = computed<DataInfo>(() => {
     const cov = this.coverage();
     const generatedAt = cov.generatedAt;
-    const age = generatedAt ? freshnessAge(generatedAt, this.todayKey()) : null;
     const parts: string[] = [];
-    if (generatedAt && age) {
-      const key = dateKey(new Date(Date.parse(generatedAt)));
-      parts.push(`Updated ${formatKey(key, { month: 'short', day: 'numeric' })}`);
+    const generatedMs = generatedAt ? Date.parse(generatedAt) : NaN;
+    if (!Number.isNaN(generatedMs)) {
+      parts.push(`Updated ${formatKey(dateKey(new Date(generatedMs)), { month: 'short', day: 'numeric' })}`);
     }
     if (cov.to) parts.push(`data to ${formatKey(cov.to, { month: 'short', day: 'numeric', year: 'numeric' })}`);
     else parts.push('No published schedules');
+    const today = this.todayKey();
+    const left = cov.to ? diffDays(today, cov.to) : null;
+    const ageDays = Number.isNaN(generatedMs) ? null : diffDays(dateKey(new Date(generatedMs)), today);
+    const short = { month: 'short', day: 'numeric' } as const;
+    let staleTag: string | null = null;
+    let staleDetail = '';
+    if (cov.to && left !== null && left < STALE_COVERAGE_DAYS) {
+      staleTag = left < 0 ? `No schedules after ${formatKey(cov.to, short)}` : `Schedules published to ${formatKey(cov.to, short)}`;
+      staleDetail = left < 0
+        ? `Published schedules ended ${formatKey(cov.to, short)}; later flights are not published, not cancelled.`
+        : `Published schedules end ${formatKey(cov.to, short)}, ${left} day${left === 1 ? '' : 's'} from today; later dates are not published yet.`;
+    } else if (ageDays !== null && ageDays > STALE_AFTER_DAYS) {
+      const upd = formatKey(dateKey(new Date(generatedMs)), short);
+      staleTag = `Schedules last updated ${upd}`;
+      staleDetail = `Schedules were last updated ${upd}, ${ageDays} days ago. Newer changes may be missing.`;
+    }
+    const updatedLabel = parts.join(' · ');
     return {
       generatedAt,
       to: cov.to,
-      updatedLabel: parts.join(' · '),
-      staleDays: age && age.days >= STALE_AFTER_DAYS ? age.days : null,
+      updatedLabel,
+      staleTag,
+      staleDetail,
     };
   });
 
@@ -305,6 +334,36 @@ export class AppStateService {
         clearInterval(tick);
         clearTimeout(this.noticeTimer);
       });
+      // Back online after a failed schedules load: try again without a tap.
+      const onOnline = () => { if (this.dataLoad() === 'failed') void this.retryDataLoad(); };
+      this.win.addEventListener('online', onOnline);
+      destroyRef.onDestroy(() => this.win?.removeEventListener('online', onOnline));
+    }
+  }
+
+  reloadPage(): void {
+    this.win?.location.reload();
+  }
+
+  /** Records the startup load (app initializer). */
+  reportDataLoad(ok: boolean): void {
+    this.dataLoad.set(ok ? 'ok' : 'failed');
+  }
+
+  /**
+   * Re-runs the schedules and route-network loads. On success the page
+   * reloads: most pages read the schedule index without a reactive
+   * dependency, so a reload is the one way they all pick the data up.
+   */
+  async retryDataLoad(): Promise<void> {
+    if (this.retrying) return;
+    this.retrying = true;
+    try {
+      const [ok] = await Promise.all([loadSchedules(), loadRouteNetwork()]);
+      this.reportDataLoad(ok);
+      if (ok) this.reloadPage();
+    } finally {
+      this.retrying = false;
     }
   }
 

@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
+import { Router } from '@angular/router';
+import { logbookPath } from '../../extras/links';
 import { HUBS } from '../../data/destinations';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
@@ -90,6 +92,9 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
         <app-settings-profile />
 
         <section class="grp">
+          <button type="button" class="row row--btn" data-logbook-row (click)="openLogbook()">
+            <span class="nm">Logbook</span><span class="chev" aria-hidden="true">›</span>
+          </button>
           <button type="button" class="row row--btn" (click)="openShortcuts()">
             <span class="nm">Keyboard shortcuts</span><span class="chev" aria-hidden="true">›</span>
           </button>
@@ -182,6 +187,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
   `],
 })
 export class SettingsComponent {
+  private readonly router = inject(Router);
   protected readonly prefs = inject(PrefsService);
   protected readonly state = inject(AppStateService);
   protected readonly photos = inject(PhotoService);
@@ -220,6 +226,11 @@ export class SettingsComponent {
 
   protected setOvernight(e: Event): void {
     this.prefs.update({ allowOvernight: (e.target as HTMLInputElement).checked });
+  }
+
+  protected openLogbook(): void {
+    this.state.closeSettings();
+    void this.router.navigate(logbookPath(), { queryParams: this.state.globalParams() });
   }
 
   protected openShortcuts(): void {

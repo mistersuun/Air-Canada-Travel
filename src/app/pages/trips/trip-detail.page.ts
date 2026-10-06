@@ -61,10 +61,11 @@ export const TRIP_TABS: SegOption[] = [
           <app-trip-menu [trip]="t" (closed)="menuOpen.set(false)" (deleted)="afterDelete()" />
         }
       } @else {
-        <div class="td__empty" data-empty>
-          <h1 class="ui-h2">Trip not found</h1>
-          <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">Open Trips</a>
-        </div>
+        <section class="ui-card empty" role="status" data-empty>
+          <h1 class="ui-h3">Trip not found</h1>
+          <p class="ui-sub">This link doesn't match a trip saved on this device.</p>
+          <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="tripsLink" [queryParams]="state.globalParams()">Back to Trips</a>
+        </section>
       }
     </div>
   `,
@@ -74,7 +75,6 @@ export const TRIP_TABS: SegOption[] = [
     .td__title { min-width: 0; text-align: center; }
     .td__title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .td__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
-    .td__empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding-top: 12px; }
     .td__ro { text-align: center; font-size: 12.5px; }
     @media (min-width: 720px) {
       .td { padding-top: 24px; }
@@ -84,7 +84,7 @@ export const TRIP_TABS: SegOption[] = [
 export class TripDetailPage {
   protected readonly trips = inject(TripsService);
   private readonly router = inject(Router);
-  private readonly state = inject(AppStateService);
+  protected readonly state = inject(AppStateService);
 
   constructor() {
     // Timetables for the onward train or bus (Estimated rows until it loads).

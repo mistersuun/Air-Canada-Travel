@@ -72,8 +72,10 @@ export class ShareTooLargeError extends Error {
   }
 }
 
-async function encodePayload(payload: SharePayload): Promise<string> {
+async function encodePayload(payload: SharePayload): Promise<string | null> {
   const json = new TextEncoder().encode(JSON.stringify(payload));
+  // The decoder rejects anything that inflates past MAX_JSON, so never emit it.
+  if (json.length > MAX_JSON) return null;
   if (hasCompression()) {
     try {
       return 'z' + toBase64Url(await pipe(json, new CompressionStream('deflate-raw' as CompressionFormat)));
@@ -101,7 +103,7 @@ export async function encodeTripShare(trip: Trip, notes: readonly LoadNote[] = [
   ];
   for (const p of attempts) {
     const out = await encodePayload(p);
-    if (out.length <= MAX_SHARE_PAYLOAD) return out;
+    if (out !== null && out.length <= MAX_SHARE_PAYLOAD) return out;
   }
   throw new ShareTooLargeError();
 }

@@ -14,7 +14,7 @@ import type { Itinerary } from '../utils/connections';
 import { AppStateService, NOW } from '../state/app-state.service';
 import { deadlineUtc } from './engine/homeby';
 import { changeKey, detectChanges, looksLikeBadData, refreshAircraft, scanTrip } from './engine/changes';
-import { refsFromItinerary, sameRefs, sortLegs } from './engine/legs';
+import { ESTIMATED_FLIGHT, refsFromItinerary, sameRefs, sortLegs } from './engine/legs';
 import { OutcomePrompt, pendingOutcomePrompts } from './engine/today';
 import { backupFilename, exportBackup, mergeBackup, parseBackup } from './export';
 import { newId } from './ids';
@@ -367,7 +367,8 @@ export class TripsService {
         const outside = findings.some(f => f.legId === l.id && f.kind === 'outsideCoverage');
         const keptNotFound = changes.some(c => c.legId === l.id && c.kind === 'notFound' && c.state === 'kept' && current.has(changeKey(c)));
         const anyLive = l.refs.some((_, i) => live.has(`${l.id}|${i}`));
-        const provenance = outside || keptNotFound ? 'unknown' as const : !anyLive ? 'scheduled' as const : l.provenance;
+        const estimated = l.refs.some(r => r.flightNumber === ESTIMATED_FLIGHT);
+        const provenance = outside || keptNotFound ? 'unknown' as const : !anyLive && !estimated ? 'scheduled' as const : l.provenance;
         return provenance === l.provenance ? l : { ...l, provenance };
       });
       const sameChanges = changes.length === t.changes.length && changes.every((c, i) => c === t.changes[i]);

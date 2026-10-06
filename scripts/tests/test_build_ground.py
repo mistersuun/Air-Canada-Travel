@@ -387,3 +387,9 @@ def test_committed_file_shape():
                 assert [m for m, _, _ in x[g]] == sorted(m for m, _, _ in x[g])
     for s in doc["sources"].values():
         assert s["licence"] and s["credit"] and s["url"]
+
+
+def test_unselected_feed_keeps_previous_corridors():
+    prev = {"sources": {"cp": {"name": "CP"}}, "corridors": {"K1": entry("cp", "2026-12-01")}}
+    doc = bg.assemble({"K3": entry("renfe", "2026-12-20")}, {"renfe": "2026-10-01"}, prev, set(bg.FEEDS) - {"renfe"}, TODAY)
+    assert set(doc["corridors"]) == {"K1", "K3"} and "cp" in doc["sources"]

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
@@ -29,7 +29,7 @@ export const TRIP_TABS: SegOption[] = [
 @Component({
   selector: 'app-trip-detail-page',
   standalone: true,
-  imports: [IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripExtrasComponent],
+  imports: [RouterLink, IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripExtrasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -60,6 +60,12 @@ export const TRIP_TABS: SegOption[] = [
         @if (menuOpen()) {
           <app-trip-menu [trip]="t" (closed)="menuOpen.set(false)" (deleted)="afterDelete()" />
         }
+      } @else {
+        <section class="ui-card empty" role="status" data-empty>
+          <h1 class="ui-h3">Trip not found</h1>
+          <p class="ui-sub">This link doesn't match a trip saved on this device.</p>
+          <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="tripsLink" [queryParams]="state.globalParams()">Back to Trips</a>
+        </section>
       }
     </div>
   `,
@@ -78,7 +84,7 @@ export const TRIP_TABS: SegOption[] = [
 export class TripDetailPage {
   protected readonly trips = inject(TripsService);
   private readonly router = inject(Router);
-  private readonly state = inject(AppStateService);
+  protected readonly state = inject(AppStateService);
 
   constructor() {
     // Timetables for the onward train or bus (Estimated rows until it loads).
@@ -111,6 +117,8 @@ export class TripDetailPage {
       replaceUrl: true,
     });
   }
+
+  protected readonly tripsLink = tripsPath();
 
   protected back(): void {
     this.state.goBack(tripsPath());

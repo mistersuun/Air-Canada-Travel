@@ -44,6 +44,8 @@ export async function compressPhoto(file: Blob): Promise<Blob> {
       const c = new OffscreenCanvas(w, h);
       const ctx = c.getContext('2d');
       if (!ctx) return file;
+      ctx.fillStyle = '#fff'; // transparent PNGs on white, as JPEG has no alpha
+      ctx.fillRect(0, 0, w, h);
       ctx.drawImage(bmp, 0, 0, w, h);
       out = await c.convertToBlob({ type: 'image/jpeg', quality: PHOTO_QUALITY });
     } else {
@@ -52,6 +54,8 @@ export async function compressPhoto(file: Blob): Promise<Blob> {
       c.height = h;
       const ctx = c.getContext('2d');
       if (!ctx) return file;
+      ctx.fillStyle = '#fff'; // transparent PNGs on white, as JPEG has no alpha
+      ctx.fillRect(0, 0, w, h);
       ctx.drawImage(bmp, 0, 0, w, h);
       out = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', PHOTO_QUALITY));
     }

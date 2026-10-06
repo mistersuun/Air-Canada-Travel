@@ -47,11 +47,14 @@ export class RecsService {
     afterNextRender(() => this.started.set(true));
   }
 
+  /** Coarse clock: the base recomputes at most every 15 minutes as flights depart. */
+  private readonly nowBucket = computed(() => Math.floor(this.state.nowMs() / 900_000));
+
   private readonly base = computed<Omit<RecInput, 'context'> & { version: number }>(() => ({
     profile: this.profiles.profile(),
     hub: this.state.hub(),
     todayKey: this.state.todayKey(),
-    nowMs: untracked(() => this.state.nowMs()),
+    nowMs: (this.nowBucket(), untracked(() => this.state.nowMs())),
     favourites: this.state.favourites(),
     outcomes: this.trips.outcomes(),
     activeGoalCodes: tripCodes(this.trips.activeTrips()),

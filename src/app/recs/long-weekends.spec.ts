@@ -5,6 +5,13 @@ import { EMPTY_PROFILE } from './profile';
 import { RECS_PROFILE } from './testing/recs-fixture';
 
 describe('longWeekends', () => {
+  it('gives every long weekend its own id when Christmas and Boxing Day collide (2033)', () => {
+    const lws = longWeekends('2033-12-01', 40, 'YYZ');
+    const ids = lws.map(l => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(lws.map(l => l.observedKey)).toEqual(['2033-12-26', '2033-12-27', '2034-01-02']);
+  });
+
   it('finds Thanksgiving 2026 from Oct 1 at YUL, and no Remembrance Day', () => {
     const lws = longWeekends('2026-10-01', 60, 'YUL');
     expect(lws.map(l => `${l.name} ${l.holiday.dateKey}`)).toEqual(['Thanksgiving 2026-10-12']);

@@ -125,10 +125,10 @@ export class BarcodeService {
     file: Blob, maxPages: number,
     decodePage: (img: ImageDataLike, page: number) => Promise<{ found: DecodedRead[]; rejected: DecodedRead | null }>,
   ): Promise<{ reads: DecodedRead[]; pageImages: Blob[] }> {
+    let rejected: DecodedRead | null = null;
     for (const scale of [2, 3]) {
       const reads: DecodedRead[] = [];
       const pageImages: Blob[] = [];
-      let rejected: DecodedRead | null = null;
       await forEachPdfPage(file, maxPages, scale, async ({ page, image, png }) => {
         const r = await decodePage(image, page);
         if (!r.found.length && r.rejected) rejected ??= r.rejected;

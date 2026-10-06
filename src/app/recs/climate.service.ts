@@ -6,14 +6,18 @@ import type { ClimateIndex } from './model';
 export const CLIMATE_URL = 'data/climate.json';
 
 /**
- * Fetches climate.json. Resolves null on an HTTP error or bad JSON (final);
- * rejects on a network error (offline: tried again later). Specs replace it.
+ * Fetches climate.json. Resolves null on a 4xx or bad JSON (final);
+ * rejects on a network error, a 5xx or offline (tried again later). Specs replace it.
  */
 export const CLIMATE_FETCH = new InjectionToken<() => Promise<unknown>>('CLIMATE_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
     const res = await fetch(CLIMATE_URL);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      if (res.status >= 500 || offline) throw new Error(`climate.json: HTTP ${res.status}`);
+      return null;
+    }
     try {
       return await res.json();
     } catch {
@@ -35,13 +39,16 @@ export class ClimateService {
   private readonly statusSig = signal<ClimateStatus>('idle');
   private readonly indexSig = signal<ClimateIndex | null>(null);
   private pending: Promise<void> | null = null;
+  private waitingOnline = false;
 
   readonly status = this.statusSig.asReadonly();
   readonly index = this.indexSig.asReadonly();
 
   /**
-   * Loads the file once. A missing or broken file is final ('missing'); a
-   * network error goes back to 'idle' so a later call tries again. Never rejects.
+   * Loads the file once. A missing or broken file (4xx, bad JSON) is final
+   * ('missing'). A network error, a 5xx or being offline goes back to 'idle':
+   * the next ensureLoaded() call retries, as does the browser coming back
+   * online. Never rejects.
    */
   ensureLoaded(): Promise<void> {
     if (this.statusSig() === 'ready' || this.statusSig() === 'missing') return Promise.resolve();
@@ -53,7 +60,13 @@ export class ClimateService {
       } catch {
         this.statusSig.set('idle');
         this.pending = null;
-        globalThis.addEventListener?.('online', () => void this.ensureLoaded(), { once: true });
+        if (!this.waitingOnline) {
+          this.waitingOnline = true;
+          globalThis.addEventListener?.('online', () => {
+            this.waitingOnline = false;
+            void this.ensureLoaded();
+          }, { once: true });
+        }
         return;
       }
       let idx: ClimateIndex | null = null;

@@ -447,6 +447,7 @@ export class PassViewPage {
     if (!p?.imageBlobId) return;
     const blob = await this.passes.image(p.id);
     if (!blob || this.destroyed || this.current()?.id !== p.id || this.mode() !== 'image') return;
+    this.revoke(); // a concurrent loadImage may have set a URL while this one awaited
     this.imageUrl.set(URL.createObjectURL(new Blob([blob], { type: safeMime(blob.type) })));
   }
 

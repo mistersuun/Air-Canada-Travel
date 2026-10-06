@@ -24,6 +24,19 @@ describe('Content-Security-Policy (netlify.toml)', () => {
     expect(policy).not.toMatch(/script-src[^;]*'unsafe-eval'/);
   });
 
+  it('lets the page reach the forecast API and nothing else off-site except fonts', () => {
+    const connect = /connect-src ([^;]+)/.exec(csp())![1].split(' ');
+    expect(connect).toContain('https://api.open-meteo.com');
+    expect(connect.filter(s => s.startsWith('https://')).sort()).toEqual([
+      'https://api.open-meteo.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com',
+    ]);
+  });
+
+  it('does not block geolocation (the nearest-hub button asks on tap)', () => {
+    const toml = read('netlify.toml');
+    expect(toml).not.toMatch(/geolocation=\(\)/);
+  });
+
   it('cannot be framed and loads no plugins', () => {
     const policy = csp();
     expect(policy).toContain("frame-ancestors 'none'");
@@ -55,5 +68,11 @@ describe('service worker (ngsw-config.json)', () => {
     const vendor = cfg.assetGroups.find(g => g.resources.files.some(f => f.includes('zxing')))!;
     expect(vendor.installMode).toBe('prefetch');
     expect(vendor.resources.files).toEqual(expect.arrayContaining(['/vendor/zxing/*.wasm', '/vendor/pdfjs/*.mjs']));
+  });
+
+  it('keeps the last forecast for offline: freshness strategy, short maxAge', () => {
+    const cfg = JSON.parse(read('ngsw-config.json')) as { dataGroups: { name: string; urls: string[]; cacheConfig: { strategy: string; maxAge: string; timeout: string } }[] };
+    const g = cfg.dataGroups.find(d => d.urls.some(u => u.startsWith('https://api.open-meteo.com/')))!;
+    expect(g.cacheConfig).toMatchObject({ strategy: 'freshness', maxAge: '3h', timeout: '3s' });
   });
 });

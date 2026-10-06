@@ -37,6 +37,16 @@ describe('sanitizePrefs', () => {
 });
 
 describe('PrefsService', () => {
+  it('adopts prefs written by another tab, ignoring other keys and bad values', () => {
+    const svc = setup(new MemoryStorage());
+    svc.onStorage({ key: PREFS_KEY, newValue: JSON.stringify({ favourites: ['LHR'] }), storageArea: null });
+    expect(svc.favourites()).toEqual(['LHR']);
+    svc.onStorage({ key: 'other', newValue: JSON.stringify({ favourites: ['ATH'] }), storageArea: null });
+    svc.onStorage({ key: PREFS_KEY, newValue: '{bad', storageArea: null });
+    svc.onStorage({ key: PREFS_KEY, newValue: null, storageArea: null });
+    expect(svc.favourites()).toEqual(['LHR']);
+  });
+
   afterEach(() => {
     document.documentElement.removeAttribute('data-theme');
   });

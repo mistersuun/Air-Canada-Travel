@@ -110,14 +110,15 @@ function median(xs: readonly number[]): number {
  * one-stops only when connections are on and the day has no nonstop at all.
  * Estimated legs never count (only Scheduled facts are shown).
  */
-export function dayItineraries(input: RecInput, from: string, to: string, day: string): Itinerary[] {
+export function dayItineraries(input: RecInput, from: string, to: string, day: string, includeDeparted = false): Itinerary[] {
   if (!isCovered(day, input.hub)) return [];
   const max = maxMinutes(input.profile);
   const fits = (it: Itinerary) => !it.estimated && (max === null || it.totalMin <= max);
+  const notDeparted = (it: Itinerary) => includeDeparted || it.departUtc > input.nowMs;
   const nonstops = flightsOn(from, to, day);
-  if (nonstops.length) return nonstops.map(directItinerary).filter(fits);
+  if (nonstops.length) return nonstops.map(directItinerary).filter(it => fits(it) && notDeparted(it));
   if (!input.showConnections) return [];
-  return allItineraries(from, to, day, input.connect).filter(it => it.legs.length > 1 && fits(it));
+  return allItineraries(from, to, day, input.connect).filter(it => it.legs.length > 1 && fits(it) && notDeparted(it));
 }
 
 function via(it: Itinerary): string {
@@ -164,7 +165,7 @@ function upcoming(input: RecInput, code: string, profileDaysOnly: boolean): Upco
     const day = addDays(input.todayKey, i);
     const iso = weekdayIndex(day) + 1;
     if (profileDaysOnly && input.profile.days.length && !input.profile.days.includes(iso)) continue;
-    its.push(...dayItineraries(input, input.hub, code, day));
+    its.push(...dayItineraries(input, input.hub, code, day, true));
   }
   return { count: its.length, its };
 }
@@ -226,9 +227,21 @@ export function pairable(out: Itinerary[], back: Itinerary[]): { out: Itinerary[
 
 /** Recommendations for one long weekend: the top 2, of different types where possible. */
 export function holidayRecs(input: RecInput, lw: LongWeekend): Recommendation[] {
-  const days = pickDays(lw, input.profile, input.todayKey);
-  if (!days) return [];
-  const { outKey, backKey } = days;
+  return holidayPlan(input, lw)?.recs ?? [];
+}
+
+/** The first acceptable out day, with its recs; today's out day moves on to the next when all its flights have left. */
+function holidayPlan(input: RecInput, lw: LongWeekend): { outKey: string; backKey: string; recs: Recommendation[] } | null {
+  for (let from = input.todayKey; ;) {
+    const days = pickDays(lw, input.profile, from);
+    if (!days) return null;
+    const recs = holidayRecsFor(input, lw, days.outKey, days.backKey);
+    if (recs.length || days.outKey > input.todayKey) return { ...days, recs };
+    from = addDays(days.outKey, 1);
+  }
+}
+
+function holidayRecsFor(input: RecInput, lw: LongWeekend, outKey: string, backKey: string): Recommendation[] {
   const p = input.profile;
   const fmt = input.fmt;
   const outDay = weekdayShort(outKey);
@@ -236,7 +249,7 @@ export function holidayRecs(input: RecInput, lw: LongWeekend): Recommendation[] 
   const hName = lw.holiday.name;
   const holidayText = p.length === 'day' || p.length === 'week'
     ? hName
-    : `Holiday ${WEEKDAY_LONG[weekdayIndex(lw.holiday.dateKey)]}`;
+    : `Holiday ${WEEKDAY_LONG[weekdayIndex(lw.observedKey)]}`;
 
   const recs: Recommendation[] = [];
   for (const d of CANDIDATES) {
@@ -322,9 +335,9 @@ export function seasonWindow(hub: string, code: string, todayKey: string): { las
   return { last: end, resume };
 }
 
-function lastFlightOnOrBefore(from: string, to: string, key: string, floorKey: string) {
+function lastFlightOnOrBefore(from: string, to: string, key: string, floorKey: string, nowMs = -Infinity) {
   for (let d = key; d >= floorKey; d = addDays(d, -1)) {
-    const f = flightsOn(from, to, d);
+    const f = flightsOn(from, to, d).filter(x => x.depUtc > nowMs);
     if (f.length) return f[f.length - 1];
   }
   return null;
@@ -347,7 +360,7 @@ export function seasonEndingRecs(input: RecInput): Recommendation[] {
     if (!d || d.type === 'Hub') continue;
     const w = seasonWindow(input.hub, code, input.todayKey);
     if (!w) continue;
-    const lastOut = lastFlightOnOrBefore(input.hub, code, w.last, input.todayKey);
+    const lastOut = lastFlightOnOrBefore(input.hub, code, w.last, input.todayKey, input.nowMs);
     if (!lastOut) continue;
     const last = lastOut.dateKey;
     if (last < input.todayKey || diffDays(input.todayKey, last) > SEASON_AHEAD_DAYS) continue;
@@ -464,7 +477,7 @@ export function onwardRecs(input: RecInput, exclude: ReadonlySet<string>): Recom
     let dep: string | null = null;
     for (let i = 0; i < NEXT_DAYS && !dep; i++) {
       const day = addDays(input.todayKey, i);
-      if (isCovered(day, input.hub) && flightsOn(input.hub, c.code, day).length) dep = day;
+      if (isCovered(day, input.hub) && flightsOn(input.hub, c.code, day).some(f => f.depUtc > input.nowMs)) dep = day;
     }
     if (!dep) continue;
     const gateway = findDestination(c.code)?.city ?? c.code;
@@ -552,9 +565,11 @@ export function recommend(input: RecInput): RecGroup[] {
   const used = new Set<string>();
   const groups: RecGroup[] = [];
   for (const lw of lws) {
-    const items = takeUnique(holidayRecs(input, lw), used, 2);
+    const plan = holidayPlan(input, lw);
+    if (!plan) continue;
+    const items = takeUnique(plan.recs, used, 2);
     if (!items.length) continue;
-    const { outKey, backKey } = pickDays(lw, input.profile, input.todayKey)!;
+    const { outKey, backKey } = plan;
     groups.push({
       id: lw.id,
       title: holidayGroupTitle(lw.name, input.todayKey, outKey),

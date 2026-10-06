@@ -100,7 +100,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     .tc__name a { color: inherit; }
     .tc__name a:hover { color: var(--blue); }
     .tc__dates { margin-top: 2px; }
-    .tc__cd { flex: none; margin-top: 2px; }
+    .tc__cd { flex: 0 1 auto; max-width: 55%; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tc__chips { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tc__chip {
       display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 999px;

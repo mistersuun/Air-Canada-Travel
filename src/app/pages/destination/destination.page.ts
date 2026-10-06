@@ -17,6 +17,9 @@ import { RouteMapComponent, type MapPoint } from '../../ui/route-map.component';
 import { DestPhotoComponent } from '../../ui/dest-photo.component';
 import { calendarPath, flightPath } from '../../ui/links';
 import { hubDisplayName, tzDiffLabel } from '../../ui/format';
+import { tap } from '../../ui/haptics';
+import { getDestinationCodes } from '../../data/schedule-index';
+import { dailyFact } from './fun-facts';
 import { currencyName } from './currency';
 import {
   HORIZON_DAYS, bestHub, destState, destSummary, nextConnectionDate, nextDeparture, placeLabel, timelineItems, upcoming,
@@ -77,7 +80,7 @@ const AC_URL = 'https://www.aircanada.com/';
           <button type="button" class="ui-circ" aria-label="Share" (click)="shareIt()">
             <app-icon name="share" [size]="18" />
           </button>
-          <button type="button" class="ui-circ star" [attr.aria-pressed]="isFav()"
+          <button type="button" class="ui-circ star" [class.pop]="popped()" (animationend)="popped.set(false)" [attr.aria-pressed]="isFav()"
                   [attr.aria-label]="isFav() ? 'Remove ' + city() + ' from Saved' : 'Save ' + city()"
                   (click)="toggleFav()">
             <app-icon name="star" [size]="18" [filled]="isFav()" />
@@ -256,6 +259,7 @@ const AC_URL = 'https://www.aircanada.com/';
             <div><span class="ic"><app-icon name="sun" [size]="16" /></span><span>Season</span><b>{{ s.season }}</b></div>
             <div><span class="ic"><app-icon name="plane" [size]="16" /></span><span>Aircraft</span><b>{{ s.aircraftShort || '—' }}</b></div>
           </div>
+          @if (fact(); as f) { <p class="ui-sub fact" data-fact><b>Did you know</b> · {{ f }}</p> }
         </section>
       </div>
 
@@ -288,6 +292,7 @@ const AC_URL = 'https://www.aircanada.com/';
       display: flex; justify-content: space-between;
     }
     .hero__acts { display: flex; gap: 8px; }
+    .star.pop { animation: ui-pop 240ms var(--ease-out); }
     .star[aria-pressed='true'] { color: #FFFFFF; background: var(--red); border-color: color-mix(in srgb, var(--red) 60%, #FFFFFF); }
     .credit {
       position: absolute; z-index: 2; right: 16px; bottom: 72px; max-width: calc(100% - 32px);
@@ -327,6 +332,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .map { display: block; height: 260px; border-radius: 16px; overflow: hidden; background: var(--sea); }
     .dist { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 0; font-size: 13px; }
     .ess__h { margin-bottom: 12px; }
+    .fact { margin: 12px 0 0; }
     .ui-ess .ic { color: var(--blue); }
     .m-actions { display: grid; gap: 10px; margin-top: 24px; }
 
@@ -606,6 +612,15 @@ export class DestinationPage {
     const abbr = zoneAbbr(d.tz, d.iso2, now);
     return [tzDiffLabel(d.tz, this.state.hubInfo().tz, now), abbr].filter(Boolean).join(' · ');
   });
+  /** One "Did you know" line, stable for the day. */
+  protected readonly fact = computed(() => {
+    const d = this.dest();
+    if (!d) return null;
+    const hub = this.state.hubInfo();
+    const nonstops = getDestinationCodes(hub.code).map(c => findDestination(c)).filter((x): x is NonNullable<typeof x> => !!x);
+    return dailyFact(d, hub, hubDisplayName(hub.code), nonstops, this.state.nowMs());
+  });
+  protected readonly popped = signal(false);
   protected readonly currency = computed(() => currencyName(this.dest()?.iso2));
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -630,6 +645,8 @@ export class DestinationPage {
     const city = this.city();
     const was = this.isFav();
     this.state.toggleFavourite(code);
+    tap();
+    if (!was) this.popped.set(true);
     if (was) {
       this.state.flash(`Removed ${city}`, {
         label: 'Undo',

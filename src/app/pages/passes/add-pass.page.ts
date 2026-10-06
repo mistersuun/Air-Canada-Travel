@@ -1,3 +1,4 @@
+import { success } from '../../ui/haptics';
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, afterNextRender, computed, effect, inject, input, signal, untracked, viewChild,
 } from '@angular/core';
@@ -509,6 +510,7 @@ export class AddPassPage {
     const hint = this.hintLeg();
     const choices: Record<string, DraftChoice | null> = {};
     for (const d of drafts) choices[d.key] = initialChoice(d, hint);
+    success();
     this.decoded.set({ drafts, images, source, file });
     this.choices.set(choices);
     // Multi-leg barcodes: legs that matched are ticked; with a single draft it is always included.

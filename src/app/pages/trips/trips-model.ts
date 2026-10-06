@@ -24,7 +24,7 @@ import type { IconName } from '../../components/shared/icons.component';
 
 /** How soon the trip starts, as a tag. */
 export interface Countdown {
-  text: string;              // 'In 7 days', 'Tomorrow', 'Today', 'Under way', 'Done'
+  text: string;              // '3 sleeps to Lisbon', 'In 32 days', 'Tomorrow', 'Today', 'Under way', 'Done'
   tone: 'blue' | 'teal' | 'neutral';
 }
 
@@ -85,7 +85,7 @@ function tripStartUtc(trip: Trip): number {
   return deadlineUtc({ dateKey: trip.outboundDate, hhmm: '00:00' }, trip.fromHub);
 }
 
-/** 'In 7 days', 'Tomorrow', 'Today', 'Under way' (after the first departure), 'Done' (after the deadline). */
+/** '3 sleeps to Lisbon' (2 to 7 days), 'In 32 days', 'Tomorrow', 'Today', 'Under way' (after the first departure), 'Done' (after the deadline). */
 export function countdown(trip: Trip, nowMs: number): Countdown {
   const deadline = deadlineUtc(trip.homeBy, trip.homeAirport);
   if (nowMs > deadline) return { text: 'Done', tone: 'neutral' };
@@ -94,6 +94,10 @@ export function countdown(trip: Trip, nowMs: number): Countdown {
   const d = diffDays(today, trip.outboundDate);
   if (d <= 0) return { text: 'Today', tone: 'blue' };
   if (d === 1) return { text: 'Tomorrow', tone: 'blue' };
+  if (d <= 7) {
+    const where = trip.goal?.name?.trim();
+    return { text: `${d} sleeps${where ? ` to ${where}` : ''}`, tone: 'blue' };
+  }
   return { text: `In ${d} days`, tone: 'blue' };
 }
 

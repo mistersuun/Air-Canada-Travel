@@ -120,7 +120,7 @@ describe('Today', () => {
     expect(el.querySelector('[data-final]')?.textContent).toContain('AC834 marked Boarded');
     expect(el.querySelector('[data-boarded]')).toBeNull();
     const notice = state.notice()!;
-    expect(notice.message).toBe('AC834 marked Boarded');
+    expect(notice.message).toBe('Cleared · YUL → MAD · 5,552 km');
     notice.action!();
     await stable();
     expect(legStatus(SEVILLE_IDS.outbound)).toBe('listed');

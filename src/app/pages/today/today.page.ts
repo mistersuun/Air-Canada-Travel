@@ -1,3 +1,6 @@
+import { celebrate } from '../../ui/celebrate';
+import { success } from '../../ui/haptics';
+import { clearedMessage } from '../../trips/cleared';
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, inject, input, signal } from '@angular/core';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { Router, RouterLink } from '@angular/router';
@@ -63,7 +66,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
         @if (!v.final) {
           <div class="td__acts">
-            <button type="button" class="td__big ui-btn ui-btn--dark" data-boarded (click)="boarded()">
+            <button type="button" class="td__big ui-btn ui-btn--dark" data-boarded (click)="boarded($event)">
               <app-icon name="check" [size]="18" [strokeWidth]="2.4" />I boarded
             </button>
             <button type="button" class="td__big td__miss ui-btn" data-not-boarded (click)="notBoarded()">
@@ -237,7 +240,7 @@ export class TodayPage {
   }
 
   /** Records "Everyone boarded" for this segment (sets the leg Boarded), with Undo. */
-  protected boarded(): void {
+  protected boarded(ev?: Event): void {
     const v = this.view();
     const trip = v && this.trips.trip(v.tripId);
     if (!v || !trip) return;
@@ -250,7 +253,9 @@ export class TodayPage {
     });
     const key = instanceKey(ref);
     const rec = this.trips.outcomes().find(o => o.tripId === trip.id && instanceKey(o) === key);
-    this.state.flash(`${ref.flightNumber} marked Boarded`, {
+    celebrate(ev?.currentTarget as Element | null);
+    success();
+    this.state.flash(clearedMessage(ref.origin, ref.dest), {
       label: 'Undo',
       run: () => {
         if (rec) this.trips.removeOutcome(rec.id);

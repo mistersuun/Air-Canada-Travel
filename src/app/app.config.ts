@@ -41,7 +41,12 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
-      withNavigationErrorHandler(e => { reloadOnChunkError(e.error, inject(DOCUMENT).defaultView); }),
+      withNavigationErrorHandler(e => {
+        const state = inject(AppStateService);
+        if (reloadOnChunkError(e.error, inject(DOCUMENT).defaultView, e.url) === 'blocked') {
+          state.flash("Couldn't open this page — check your connection.");
+        }
+      }),
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
       withViewTransitions({
         skipInitialTransition: true,

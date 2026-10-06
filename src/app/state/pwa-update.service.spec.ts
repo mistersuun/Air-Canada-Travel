@@ -38,12 +38,21 @@ describe('PwaUpdateService', () => {
     expect(pwa.ready()).toBe(false);
   });
 
+  it('dismissBroken clears only the repair prompt', () => {
+    const { pwa, versionUpdates, unrecoverable } = setup();
+    versionUpdates.next({ type: 'VERSION_READY', currentVersion: { hash: 'a' }, latestVersion: { hash: 'b' } });
+    unrecoverable.next({ type: 'UNRECOVERABLE_STATE', reason: 'corrupt' });
+    pwa.dismissBroken();
+    expect(pwa.broken()).toBe(false);
+    expect(pwa.ready()).toBe(true);
+  });
+
   it('marks the worker broken on an unrecoverable state', () => {
     const { pwa, unrecoverable } = setup();
     expect(pwa.broken()).toBe(false);
     unrecoverable.next({ type: 'UNRECOVERABLE_STATE', reason: 'corrupt' });
     expect(pwa.broken()).toBe(true);
-    pwa.dismiss();
+    pwa.dismissBroken();
     expect(pwa.broken()).toBe(false);
   });
 });
@@ -52,8 +61,8 @@ describe('chunk-load recovery', () => {
   afterEach(() => sessionStorage.clear());
 
   function fakeWin() {
-    const reload = vi.fn();
-    return { win: { sessionStorage, location: { reload } } as unknown as Window, reload };
+    const assign = vi.fn();
+    return { win: { sessionStorage, location: { assign } } as unknown as Window, assign };
   }
 
   it('recognises failed dynamic imports', () => {
@@ -63,21 +72,25 @@ describe('chunk-load recovery', () => {
     expect(isChunkLoadError(null)).toBe(false);
   });
 
-  it('reloads once, then leaves the error alone until a navigation succeeds', () => {
-    const { win, reload } = fakeWin();
+  it('loads the target once, blocks a second failure for it, and clears on its success', () => {
+    const { win, assign } = fakeWin();
     const err = new TypeError('Failed to fetch dynamically imported module');
-    expect(reloadOnChunkError(err, win)).toBe(true);
-    expect(sessionStorage.getItem(CHUNK_RELOAD_KEY)).toBe('1');
-    expect(reloadOnChunkError(err, win)).toBe(false);
-    expect(reload).toHaveBeenCalledTimes(1);
-    clearChunkReloadFlag(win);
-    expect(reloadOnChunkError(err, win)).toBe(true);
-    expect(reload).toHaveBeenCalledTimes(2);
+    expect(reloadOnChunkError(err, win, '/trips/t1')).toBe('reloaded');
+    expect(assign).toHaveBeenCalledWith('/trips/t1');
+    expect(sessionStorage.getItem(CHUNK_RELOAD_KEY)).toBe('/trips/t1');
+    expect(reloadOnChunkError(err, win, '/trips/t1')).toBe('blocked');
+    expect(assign).toHaveBeenCalledTimes(1);
+    // A navigation that ends elsewhere does not clear the guard.
+    clearChunkReloadFlag(win, '/saved');
+    expect(reloadOnChunkError(err, win, '/trips/t1')).toBe('blocked');
+    clearChunkReloadFlag(win, '/trips/t1');
+    expect(reloadOnChunkError(err, win, '/trips/t1')).toBe('reloaded');
+    expect(assign).toHaveBeenCalledTimes(2);
   });
 
   it('does not reload for other errors', () => {
-    const { win, reload } = fakeWin();
-    expect(reloadOnChunkError(new Error('nope'), win)).toBe(false);
-    expect(reload).not.toHaveBeenCalled();
+    const { win, assign } = fakeWin();
+    expect(reloadOnChunkError(new Error('nope'), win, '/x')).toBe('ignored');
+    expect(assign).not.toHaveBeenCalled();
   });
 });

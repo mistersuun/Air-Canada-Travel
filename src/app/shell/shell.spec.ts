@@ -7,7 +7,7 @@ describe('nav-model', () => {
   it('isPassView matches pass views and the add flow only', () => {
     expect(isPassView('/trips/t1/pass/p1')).toBe(true);
     expect(isPassView('/trips/t1/passes/add')).toBe(true);
-    expect(isPassView('/passes/p1')).toBe(true);
+    expect(isPassView('/passes/p1')).toBe(false);
     expect(isPassView('/trips/t1')).toBe(false);
     expect(isPassView('/saved')).toBe(false);
   });

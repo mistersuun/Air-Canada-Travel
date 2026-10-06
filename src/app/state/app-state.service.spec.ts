@@ -409,44 +409,45 @@ describe('AppStateService', () => {
       expect(state.nowMs()).toBe(clock.now);
     });
 
-    it('dataInfo describes the coverage and flags data whose published dates run out', () => {
+    it('dataInfo describes the coverage and flags an old scrape or running-out coverage', () => {
       const { state, clock } = setup();
+      const at = (iso: string) => { clock.now = new Date(`${iso}T12:00:00`).getTime(); state.refreshToday(); };
       const info = state.dataInfo();
       expect(info.to).toBe('2027-03-31');
-      expect(info.updatedLabel).toContain('data to Mar 31, 2027');
       expect(info.updatedLabel).toBe('Updated Sep 28 · data to Mar 31, 2027');
-      // An old scrape is not stale while the coverage reaches well past today.
-      clock.now = new Date('2027-01-20T12:00:00').getTime();
-      state.refreshToday();
-      expect(state.dataInfo().staleDays).toBeNull();
-      expect(state.dataInfo().staleDetail).toBe('');
-      // 21 days left is fine; 20 is not.
-      clock.now = new Date('2027-03-10T12:00:00').getTime();
-      state.refreshToday();
-      expect(state.dataInfo().staleDays).toBeNull();
-      clock.now = new Date('2027-03-11T12:00:00').getTime();
-      state.refreshToday();
-      expect(state.dataInfo().staleDays).toBe(20);
-      expect(state.dataInfo().staleDetail).toContain('end in 20 days');
-      // Past the last date: 0, not negative.
-      clock.now = new Date('2027-04-10T12:00:00').getTime();
-      state.refreshToday();
-      expect(state.dataInfo().staleDays).toBe(0);
+      expect(info.staleTag).toBeNull();
+      expect(info.staleDetail).toBe('');
+      // Scrape 45 days old is fine; 46 flags it, while coverage is still long.
+      at('2026-11-12');
+      expect(state.dataInfo().staleTag).toBeNull();
+      at('2026-11-13');
+      expect(state.dataInfo().staleTag).toBe('Schedules last updated Sep 28');
+      expect(state.dataInfo().staleDetail).toContain('46 days ago');
+      // Coverage: 21 days left is not flagged for coverage (the old scrape still is), 20 is.
+      at('2027-03-10');
+      expect(state.dataInfo().staleTag).toBe('Schedules last updated Sep 28');
+      at('2027-03-11');
+      expect(state.dataInfo().staleTag).toBe('Schedules published to Mar 31');
+      expect(state.dataInfo().staleDetail).toContain('20 days from today');
+      // Last day is still "published to"; past it, "No schedules after".
+      at('2027-03-31');
+      expect(state.dataInfo().staleTag).toBe('Schedules published to Mar 31');
+      at('2027-04-01');
+      expect(state.dataInfo().staleTag).toBe('No schedules after Mar 31');
     });
 
-    it('dataLoad starts ok; a retry that succeeds clears a failure and bumps dataVersion', async () => {
+    it('dataLoad starts ok; a retry that succeeds clears a failure and reloads the page', async () => {
       const { state } = setup();
       expect(state.dataLoad()).toBe('ok');
       state.reportDataLoad(false);
       expect(state.dataLoad()).toBe('failed');
       const file = JSON.parse(readFileSync(`${process.cwd()}/public/data/schedules.json`, 'utf8'));
-      const fetchMock = vi.fn(async () => new Response(JSON.stringify(file)));
-      vi.stubGlobal('fetch', fetchMock);
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(file))));
+      const reload = vi.spyOn(state, 'reloadPage').mockImplementation(() => undefined);
       try {
-        const v = state.dataVersion();
         await state.retryDataLoad();
         expect(state.dataLoad()).toBe('ok');
-        expect(state.dataVersion()).toBe(v + 1);
+        expect(reload).toHaveBeenCalledTimes(1);
       } finally {
         vi.unstubAllGlobals();
         setScheduleSource(FIXTURE_ROUTES, FIXTURE_META);
@@ -459,9 +460,11 @@ describe('AppStateService', () => {
       const fetchMock = vi.fn(async () => new Response('', { status: 503 }));
       vi.stubGlobal('fetch', fetchMock);
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const reload = vi.spyOn(state, 'reloadPage').mockImplementation(() => undefined);
       try {
         await state.retryDataLoad();
         expect(state.dataLoad()).toBe('failed');
+        expect(reload).not.toHaveBeenCalled();
         const before = fetchMock.mock.calls.length;
         window.dispatchEvent(new Event('online'));
         await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));

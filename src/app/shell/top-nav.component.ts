@@ -49,9 +49,9 @@ export const NAV_LINKS: readonly NavLink[] = [
       </div>
       <div class="tn-right">
         @if (state.dataInfo(); as info) {
-          @if (info.staleDays !== null) {
+          @if (info.staleTag !== null) {
             <button type="button" class="ui-tag ui-tag--amber" [attr.title]="info.staleDetail"
-                    (click)="state.flash(info.staleDetail)">Data ends in {{ info.staleDays === 1 ? '1 day' : info.staleDays + ' days' }}</button>
+                    (click)="state.flash(info.staleDetail)">{{ info.staleTag }}</button>
           } @else {
             <span class="ui-sub tn data">{{ info.updatedLabel }}</span>
           }

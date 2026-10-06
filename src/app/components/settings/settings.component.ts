@@ -96,9 +96,9 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
           <div class="info">
             <span class="nm">Schedules</span>
             <span class="hint tn">{{ state.dataInfo().updatedLabel }}</span>
-            @if (state.dataInfo().staleDays !== null) {
+            @if (state.dataInfo().staleTag !== null) {
               <button type="button" class="ui-tag ui-tag--amber" [attr.title]="state.dataInfo().staleDetail"
-                      (click)="state.flash(state.dataInfo().staleDetail)">Data ends in {{ state.dataInfo().staleDays === 1 ? '1 day' : state.dataInfo().staleDays + ' days' }}</button>
+                      (click)="state.flash(state.dataInfo().staleDetail)">{{ state.dataInfo().staleTag }}</button>
             }
           </div>
         </section>

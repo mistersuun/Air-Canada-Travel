@@ -70,6 +70,9 @@ export function stopsLabel(it: Itinerary): string {
 
 // ── From the week strip ──────────────────────────────────────────────────────
 
+/** Schedules scraped more than this many days ago are flagged. */
+export const STALE_AFTER_DAYS = 45;
+
 /**
  * Schedules whose last published date is fewer than this many days away are
  * flagged. Age since the scrape is no signal (it only moves when the data

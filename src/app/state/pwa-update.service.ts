@@ -25,7 +25,7 @@ export class PwaUpdateService {
 
   constructor() {
     const nav = this.router.events.subscribe(e => {
-      if (e instanceof NavigationEnd) clearChunkReloadFlag(this.doc.defaultView);
+      if (e instanceof NavigationEnd) clearChunkReloadFlag(this.doc.defaultView, e.urlAfterRedirects);
     });
     inject(DestroyRef).onDestroy(() => nav.unsubscribe());
     if (!this.sw?.isEnabled) return;
@@ -52,6 +52,9 @@ export class PwaUpdateService {
 
   dismiss(): void {
     this.ready.set(false);
+  }
+
+  dismissBroken(): void {
     this.broken.set(false);
   }
 }
@@ -66,24 +69,28 @@ export function isChunkLoadError(err: unknown): boolean {
 }
 
 /**
- * Router navigation-error handler: a chunk-load failure reloads the page once
- * (the reload fetches the current index and chunk names). The sessionStorage
- * flag stops a loop when the chunk is genuinely unreachable; it clears after
- * a successful navigation. Returns true when it reloaded.
+ * Router navigation-error handler: a chunk-load failure loads the target URL
+ * afresh once (a full load fetches the current index and chunk names; reload()
+ * would reload the page the user is still on). The sessionStorage flag holds
+ * that URL and stops a loop when the chunk is genuinely unreachable: a second
+ * failure for the same URL is 'blocked'. It clears when a navigation to that
+ * URL ends successfully.
  */
-export function reloadOnChunkError(err: unknown, win: Window | null): boolean {
-  if (!win || !isChunkLoadError(err)) return false;
+export function reloadOnChunkError(err: unknown, win: Window | null, url: string): 'reloaded' | 'blocked' | 'ignored' {
+  if (!win || !isChunkLoadError(err)) return 'ignored';
   try {
-    if (win.sessionStorage.getItem(CHUNK_RELOAD_KEY)) return false;
-    win.sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
+    if (win.sessionStorage.getItem(CHUNK_RELOAD_KEY) === url) return 'blocked';
+    win.sessionStorage.setItem(CHUNK_RELOAD_KEY, url);
   } catch {
-    return false; // no storage: cannot guard against a loop, so do not reload
+    return 'blocked'; // no storage: cannot guard against a loop, so do not reload
   }
-  win.location.reload();
-  return true;
+  win.location.assign(url);
+  return 'reloaded';
 }
 
-/** Clears the one-reload guard after a navigation succeeds. */
-export function clearChunkReloadFlag(win: Window | null): void {
-  try { win?.sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch { /* ignore */ }
+/** Clears the one-reload guard once a navigation to the flagged URL succeeds. */
+export function clearChunkReloadFlag(win: Window | null, url: string): void {
+  try {
+    if (win?.sessionStorage.getItem(CHUNK_RELOAD_KEY) === url) win.sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+  } catch { /* ignore */ }
 }

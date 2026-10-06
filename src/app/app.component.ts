@@ -88,7 +88,7 @@ export class AppComponent {
         message: 'The app needs to reload to repair itself',
         actionLabel: 'Reload',
         onAction: () => this.pwa.reload(),
-        onDismiss: () => this.pwa.dismiss(),
+        onDismiss: () => this.pwa.dismissBroken(),
       };
     }
     // Never interrupt a boarding pass with a reload prompt; it shows once the user leaves.

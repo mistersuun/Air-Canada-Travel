@@ -287,7 +287,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     await settle();
     el.querySelector<HTMLButtonElement>('app-top-nav button.ui-tag')!.click();
     await settle();
-    expect(el.querySelector('app-toast')?.textContent).toContain('Published schedules end in');
+    expect(el.querySelector('app-toast')?.textContent).toContain('Published schedules end');
   });
 
   it('notice actions run from the toast', async () => {

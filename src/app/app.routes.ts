@@ -110,6 +110,17 @@ export const routes: Routes = [
     title: 'Share trip · Routes',
   },
   {
+    path: 'trips/:id/recap',
+    canActivate: [knownTrip],
+    loadComponent: () => import('./pages/share/recap.page').then(m => m.RecapPage),
+    title: 'Trip recap · Routes',
+  },
+  {
+    path: 'logbook',
+    loadComponent: () => import('./pages/logbook/logbook.page').then(m => m.LogbookPage),
+    title: 'Logbook · Routes',
+  },
+  {
     path: 'profile',
     loadComponent: () => import('./pages/profile/profile.page').then(m => m.ProfilePage),
     title: 'Travel profile · Routes',

@@ -135,6 +135,12 @@ function registerAirports(n: RouteNetwork): void {
   ));
 }
 
+/** A regional airport from the network file (name, ISO country code, position), or null. */
+export function networkAirport(code: string): { name: string; iso2: string; lat: number; lng: number } | null {
+  const a = current.airports[code];
+  return a ? { name: a[0], iso2: a[1], lat: a[3], lng: a[4] } : null;
+}
+
 /** Installs a route network file as the published data. */
 export function installRouteNetwork(file: RouteNetworkFile): void {
   baseline = decodeRouteNetwork(file);

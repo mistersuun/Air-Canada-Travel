@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { logbookPath } from '../../extras/links';
 import { IconComponent } from '../../components/shared/icons.component';
 import type { TravelProfile, TripLength, TripStyle } from '../../recs/model';
 import { MAX_USUAL_ITEMS, TRIP_STYLES, USUAL_SUGGESTIONS } from '../../recs/profile';
@@ -135,6 +137,10 @@ export const DEFAULT_MAX_HOURS = 7;
       <p class="note"><app-icon name="lock" [size]="16" />
         <span>Stays on this phone. Used only to pick suggestions. Not in share links.</span></p>
 
+      <button type="button" class="lb" data-logbook (click)="openLogbook()">
+        <span>Your logbook</span><span aria-hidden="true">›</span>
+      </button>
+
       <div class="reset">
         @if (confirming()) {
           <span class="reset__q">Reset your travel profile?</span>
@@ -232,6 +238,10 @@ export const DEFAULT_MAX_HOURS = 7;
       background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--blue-ink);
     }
     .note app-icon { color: var(--blue); flex: none; margin-top: 1px; }
+    .lb {
+      display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; margin-top: 10px;
+      font-size: 13.5px; font-weight: 600; color: var(--blue-ink); cursor: pointer;
+    }
     .reset { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; min-height: 44px; }
     .reset__b { color: var(--red-ink); min-height: 44px; }
     .reset__q { font-size: 13.5px; color: var(--ink-2); width: 100%; text-align: center; }
@@ -244,6 +254,7 @@ export const DEFAULT_MAX_HOURS = 7;
 export class ProfilePage {
   protected readonly profile = inject(ProfileService);
   private readonly state = inject(AppStateService);
+  private readonly router = inject(Router);
 
   protected readonly styles = TRIP_STYLES;
   protected readonly lengthOptions = LENGTH_OPTIONS;
@@ -311,6 +322,10 @@ export class ProfilePage {
     this.profile.reset();
     this.confirming.set(false);
     this.state.flash('Travel profile reset');
+  }
+
+  protected openLogbook(): void {
+    void this.router.navigate(logbookPath(), { queryParams: this.state.globalParams() });
   }
 
   protected back(): void {

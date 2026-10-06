@@ -24,6 +24,7 @@ import {
   seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
 import { CityIndexService } from '../../places/city-index.service';
+import { SurpriseSheetComponent } from './surprise-sheet.component';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
 import { ComingUpBannerComponent } from '../../trips/ui/coming-up-banner.component';
@@ -59,6 +60,7 @@ interface ListRow {
   imports: [
     RouterLink, IconComponent, HubPickerComponent, SegComponent, WeekStripComponent, PhotoCardComponent, DestRowComponent,
     WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent, ComingUpBannerComponent, ForYouComponent,
+    SurpriseSheetComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -98,7 +100,10 @@ interface ListRow {
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
                           [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
-          <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder ›</a>
+          <div class="xrow">
+            <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder ›</a>
+            <app-surprise-sheet [entries]="results()" [timeFormat]="state.timeFormat()" />
+          </div>
         </div>
         @if (wide()) {
           <app-week-card [hub]="state.hub()" [range]="range()" [stats]="state.stats()" [entries]="state.allRoutes()"
@@ -213,7 +218,8 @@ interface ListRow {
   `,
   styles: [`
     :host { display: block; }
-    .wkend { display: inline-block; margin-top: 12px; }
+    .xrow { display: flex; align-items: center; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+    .wkend { display: inline-block; }
     .hero { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; margin-top: 40px; align-items: start; }
     .hero__main { min-width: 0; }
     .greet { font-size: 15px; }

@@ -1,96 +1,130 @@
 import { describe, expect, it } from 'vitest';
 import {
-  displayIdent, inboundIdToFetch, makeLimiter, normalizeFlight, normalizeInbound, pickFlight, queryWindow, validateDate, validateIdent,
+  budgetKey, cacheSeconds, dailyLimit, displayIdent, inboundIdToFetch, makeBudget, makeLimiter, normalizeFlight, normalizeInbound, pickFlight,
+  queryWindow, validateDep, validateIdent, validateOrigin,
 } from './flight-status';
 
 const NOW = Date.parse('2026-10-06T15:00:00Z');
+const H = 3_600_000;
 
-describe('validateIdent', () => {
+describe('validateIdent (Air Canada only)', () => {
   it('maps AC to ACA and upper-cases', () => {
     expect(validateIdent('AC834')).toBe('ACA834');
     expect(validateIdent('ac834')).toBe('ACA834');
     expect(validateIdent('ACA834')).toBe('ACA834');
-    expect(validateIdent('QK8900')).toBe('QK8900');
   });
-  it('rejects anything else', () => {
-    for (const bad of [null, '', 'A834', 'AC', 'AC12345', 'AC83 4', 'AC834/../x', '834', 'AC834?x=1', 12]) expect(validateIdent(bad)).toBeNull();
-  });
-});
-
-describe('validateDate', () => {
-  it('accepts -1..+2 days only', () => {
-    expect(validateDate('2026-10-05', NOW)).toBe('2026-10-05');
-    expect(validateDate('2026-10-08', NOW)).toBe('2026-10-08');
-    expect(validateDate('2026-10-04', NOW)).toBeNull();
-    expect(validateDate('2026-10-09', NOW)).toBeNull();
-  });
-  it('rejects malformed and impossible dates', () => {
-    for (const bad of [null, '2026-1-6', '2026-02-30', '20261006', '2026-10-06T00:00', 5]) expect(validateDate(bad, NOW)).toBeNull();
+  it('rejects other airlines and malformed idents', () => {
+    for (const bad of [null, '', 'QK8900', 'DL1', 'AA100', 'A834', 'AC', 'AC12345', 'AC83 4', 'AC834/../x', '834', 'AC834?x=1', 12]) expect(validateIdent(bad)).toBeNull();
   });
 });
 
-describe('queryWindow', () => {
-  it('covers any airport time zone for the date', () => {
-    expect(queryWindow('2026-10-06')).toEqual({ start: '2026-10-05T20:00:00Z', end: '2026-10-07T10:00:00Z' });
+describe('validateOrigin', () => {
+  it('takes a 3-letter code', () => {
+    expect(validateOrigin('yvr')).toBe('YVR');
+    for (const bad of [null, 'CYVR', 'YV', 'Y1R', '', 5]) expect(validateOrigin(bad)).toBeNull();
   });
 });
 
-const flight = {
+describe('validateDep', () => {
+  it('accepts a minute-precision UTC time within now-14h..now+38h', () => {
+    expect(validateDep('2026-10-07T06:45Z', NOW)).toBe(Date.parse('2026-10-07T06:45:00Z'));
+    expect(validateDep('2026-10-06T01:00Z', NOW)).not.toBeNull();
+    expect(validateDep('2026-10-05T00:59Z', NOW)).toBeNull();
+    expect(validateDep('2026-10-08T05:01Z', NOW)).toBeNull();
+    expect(validateDep('2026-10-08T04:59Z', NOW)).not.toBeNull();
+  });
+  it('rejects other shapes and impossible times', () => {
+    for (const bad of [null, '2026-10-07', '2026-10-07T06:45:00Z', '2026-10-07T06:45', '2026-10-07T25:00Z', '2026-02-30T06:45Z', 5]) expect(validateDep(bad, NOW)).toBeNull();
+  });
+});
+
+describe('queryWindow / cacheSeconds', () => {
+  it('is dep +/- 3h', () => {
+    expect(queryWindow(Date.parse('2026-10-07T06:45:00Z'))).toEqual({ start: '2026-10-07T03:45:00Z', end: '2026-10-07T09:45:00Z' });
+  });
+  it('caches 30 min until 6h out, then 5 min', () => {
+    expect(cacheSeconds(NOW + 7 * H, NOW)).toBe(1800);
+    expect(cacheSeconds(NOW + 6 * H, NOW)).toBe(300);
+    expect(cacheSeconds(NOW - H, NOW)).toBe(300);
+  });
+});
+
+const flight = (over: Record<string, unknown> = {}) => ({
   ident: 'ACA834', ident_iata: 'AC834', fa_flight_id: 'ACA834-1', status: 'Scheduled / Delayed', cancelled: false, diverted: false,
-  scheduled_out: '2026-10-06T21:55:00Z', estimated_out: '2026-10-06T22:35:00Z', actual_out: null,
-  scheduled_in: '2026-10-07T06:30:00Z', estimated_in: '2026-10-07T07:10:00Z', actual_in: null,
+  origin: { code: 'CYVR', code_icao: 'CYVR', code_iata: 'YVR' },
+  scheduled_out: '2026-10-07T06:45:00Z', estimated_out: '2026-10-07T07:25:00Z', actual_out: null,
+  scheduled_in: '2026-10-07T14:30:00Z', estimated_in: '2026-10-07T15:10:00Z', actual_in: null,
   gate_origin: 'D32', terminal_origin: '1', gate_destination: null, terminal_destination: 'T4',
-  inbound_fa_flight_id: 'ACA811-9', aircraft_type: 'A333', registration: 'C-GXYZ',
-};
+  inbound_fa_flight_id: 'ACA811-9', aircraft_type: 'A333', registration: 'C-GXYZ', ...over,
+});
+
+describe('pickFlight', () => {
+  it('YVR 23:45 PDT (06:45Z next UTC day) picks that leg, not the previous night', () => {
+    const prev = flight({ fa_flight_id: 'prev', scheduled_out: '2026-10-06T06:45:00Z' });
+    const day = flight({ fa_flight_id: 'day' });
+    expect(pickFlight({ flights: [prev, day] }, 'YVR', Date.parse('2026-10-07T06:45:00Z'))?.['fa_flight_id']).toBe('day');
+    expect(pickFlight({ flights: [prev] }, 'YVR', Date.parse('2026-10-07T06:45:00Z'))).toBeNull();
+  });
+  it('NRT 10:00 JST (01:00Z) picks the right day', () => {
+    const o = { code_iata: 'NRT' };
+    const a = flight({ fa_flight_id: 'a', origin: o, scheduled_out: '2026-10-06T01:00:00Z' });
+    const b = flight({ fa_flight_id: 'b', origin: o, scheduled_out: '2026-10-07T01:00:00Z' });
+    expect(pickFlight({ flights: [a, b] }, 'NRT', Date.parse('2026-10-07T01:00:00Z'))?.['fa_flight_id']).toBe('b');
+  });
+  it('two legs of one flight number: the origin decides', () => {
+    const l1 = flight({ fa_flight_id: 'yul', origin: { code_iata: 'YUL' }, scheduled_out: '2026-10-06T12:00:00Z' });
+    const l2 = flight({ fa_flight_id: 'yyz', origin: { code_iata: 'YYZ' }, scheduled_out: '2026-10-06T13:30:00Z' });
+    const body = { flights: [l1, l2] };
+    expect(pickFlight(body, 'YYZ', Date.parse('2026-10-06T13:30:00Z'))?.['fa_flight_id']).toBe('yyz');
+    expect(pickFlight(body, 'YUL', Date.parse('2026-10-06T12:00:00Z'))?.['fa_flight_id']).toBe('yul');
+    expect(pickFlight(body, 'YOW', Date.parse('2026-10-06T12:00:00Z'))).toBeNull();
+  });
+  it('is null when nothing is within 3h, and for malformed bodies', () => {
+    expect(pickFlight({ flights: [flight()] }, 'YVR', Date.parse('2026-10-07T10:00:00Z'))).toBeNull();
+    for (const b of [null, {}, { flights: [3, null] }, 'x']) expect(pickFlight(b, 'YVR', NOW)).toBeNull();
+  });
+  it('falls back to origin.code when there is no code_iata', () => {
+    expect(pickFlight({ flights: [flight({ origin: { code: 'YVR' } })] }, 'YVR', Date.parse('2026-10-07T06:45:00Z'))).not.toBeNull();
+  });
+});
 
 describe('normalizeFlight', () => {
   it('produces the minimal shape', () => {
-    const out = normalizeFlight(flight, { ident: 'ACA834', date: '2026-10-06' }, null, NOW);
+    const out = normalizeFlight(flight(), { ident: 'ACA834' }, null, NOW);
     expect(out).toEqual({
-      ident: 'AC834', date: '2026-10-06', status: 'Scheduled / Delayed', cancelled: false, diverted: false,
-      dep: { scheduled: '2026-10-06T21:55:00Z', estimated: '2026-10-06T22:35:00Z', actual: null, gate: 'D32', terminal: '1' },
-      arr: { scheduled: '2026-10-07T06:30:00Z', estimated: '2026-10-07T07:10:00Z', actual: null, gate: null, terminal: 'T4' },
+      ident: 'AC834', status: 'Scheduled / Delayed', cancelled: false, diverted: false,
+      dep: { scheduled: '2026-10-07T06:45:00Z', estimated: '2026-10-07T07:25:00Z', actual: null, gate: 'D32', terminal: '1' },
+      arr: { scheduled: '2026-10-07T14:30:00Z', estimated: '2026-10-07T15:10:00Z', actual: null, gate: null, terminal: 'T4' },
       inbound: null, aircraft: 'A333', fetchedAt: '2026-10-06T15:00:00.000Z', source: 'FlightAware',
     });
     expect(JSON.stringify(out)).not.toContain('registration');
   });
   it('is defensive about missing, null and malformed fields', () => {
-    const out = normalizeFlight({ scheduled_out: 'garbage', cancelled: 'yes', gate_origin: 5, status: null }, { ident: 'ACA1', date: '2026-10-06' }, null, NOW);
+    const out = normalizeFlight({ scheduled_out: 'garbage', cancelled: 'yes', gate_origin: 5, status: null }, { ident: 'ACA1' }, null, NOW);
     expect(out.dep).toEqual({ scheduled: null, estimated: null, actual: null, gate: null, terminal: null });
     expect(out.cancelled).toBe(false);
     expect(out.status).toBe('');
     expect(out.aircraft).toBeNull();
   });
   it('falls back to runway times and keeps cancelled', () => {
-    const out = normalizeFlight({ cancelled: true, scheduled_off: '2026-10-06T22:05:00Z' }, { ident: 'ACA1', date: '2026-10-06' }, null, NOW);
+    const out = normalizeFlight({ cancelled: true, scheduled_off: '2026-10-06T22:05:00Z' }, { ident: 'ACA1' }, null, NOW);
     expect(out.cancelled).toBe(true);
     expect(out.dep.scheduled).toBe('2026-10-06T22:05:00Z');
   });
 });
 
-describe('pickFlight', () => {
-  it('returns null for empty or malformed bodies', () => {
-    for (const b of [null, {}, { flights: [3, null] }, 'x']) expect(pickFlight(b, '2026-10-06')).toBeNull();
-    expect(pickFlight({ flights: [] }, '2026-10-06')).toBeNull();
-    expect(pickFlight(null, '2026-10-06')).toBeNull();
-  });
-  it('chooses the departure nearest the date, not the neighbouring day', () => {
-    const prev = { id: 'prev', scheduled_out: '2026-10-05T21:55:00Z' };
-    const day = { id: 'day', scheduled_out: '2026-10-06T21:55:00Z' };
-    expect(pickFlight({ flights: [prev, day] }, '2026-10-06')?.['id']).toBe('day');
-  });
-});
-
 describe('normalizeInbound / inboundIdToFetch', () => {
-  it('reads landed time and display ident', () => {
-    expect(normalizeInbound({ flights: [{ ident: 'ACA811', actual_in: '2026-10-06T17:52:00Z' }] }))
-      .toEqual({ ident: 'AC811', landed: '2026-10-06T17:52:00Z', estimatedIn: null });
+  it('landed is actual_on, else actual_in', () => {
+    expect(normalizeInbound({ flights: [{ ident: 'ACA811', actual_on: '2026-10-06T17:50:00Z', actual_in: '2026-10-06T17:52:00Z' }] }))
+      .toEqual({ ident: 'AC811', landed: '2026-10-06T17:50:00Z', estimatedIn: null });
+    expect(normalizeInbound({ flights: [{ ident: 'ACA811', actual_in: '2026-10-06T17:52:00Z' }] })?.landed).toBe('2026-10-06T17:52:00Z');
     expect(normalizeInbound({ flights: [] })).toBeNull();
   });
   it('only asks for the inbound within 6h of departure', () => {
-    expect(inboundIdToFetch(flight, Date.parse('2026-10-06T18:00:00Z'))).toBe('ACA811-9');
-    expect(inboundIdToFetch(flight, Date.parse('2026-10-06T10:00:00Z'))).toBeNull();
-    expect(inboundIdToFetch({ ...flight, inbound_fa_flight_id: '../x' }, Date.parse('2026-10-06T18:00:00Z'))).toBeNull();
+    const f = flight({ scheduled_out: '2026-10-06T21:55:00Z', estimated_out: null });
+    expect(inboundIdToFetch(f, Date.parse('2026-10-06T18:00:00Z'))).toBe('ACA811-9');
+    expect(inboundIdToFetch(f, Date.parse('2026-10-06T10:00:00Z'))).toBeNull();
+    expect(inboundIdToFetch({ ...f, inbound_fa_flight_id: '../x' }, Date.parse('2026-10-06T18:00:00Z'))).toBeNull();
   });
   it('displayIdent', () => expect(displayIdent('ACA7')).toBe('AC7'));
 });
@@ -100,5 +134,26 @@ describe('makeLimiter', () => {
     const allow = makeLimiter(2, 1000);
     expect([allow('a', 0), allow('a', 1), allow('a', 2), allow('b', 2)]).toEqual([true, true, false, true]);
     expect(allow('a', 1001)).toBe(true);
+  });
+});
+
+describe('daily budget', () => {
+  const memory = () => {
+    const m = new Map<string, string>();
+    return { m, get: async (k: string) => m.get(k) ?? null, set: async (k: string, v: string) => { m.set(k, v); } };
+  };
+  it('keys by UTC date and parses the limit with a default of 40', () => {
+    expect(budgetKey(NOW)).toBe('calls-2026-10-06');
+    expect([dailyLimit(undefined), dailyLimit('15'), dailyLimit('x'), dailyLimit(''), dailyLimit('-3'), dailyLimit('0')]).toEqual([40, 15, 40, 40, 40, 0]);
+  });
+  it('spends up to the limit, then refuses; a new UTC day starts again', async () => {
+    const store = memory();
+    const spend = makeBudget(store, 3);
+    expect([await spend(NOW), await spend(NOW), await spend(NOW), await spend(NOW)]).toEqual([true, true, true, false]);
+    expect(await spend(NOW + 24 * H)).toBe(true);
+  });
+  it('fails closed when the store throws', async () => {
+    const spend = makeBudget({ get: async () => { throw new Error('down'); }, set: async () => {} }, 10);
+    expect(await spend(NOW)).toBe(false);
   });
 });

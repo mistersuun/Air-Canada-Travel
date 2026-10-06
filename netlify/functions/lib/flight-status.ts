@@ -15,7 +15,6 @@ export interface StatusEnd {
 
 export interface FlightStatus {
   ident: string;
-  date: string;
   status: string;
   cancelled: boolean;
   diverted: boolean;
@@ -27,37 +26,73 @@ export interface FlightStatus {
   source: 'FlightAware';
 }
 
-const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 
-/** 'AC834' / 'ACA834' / 'ac834' form; returns the ICAO ident ('ACA834') or null. */
+/** Air Canada only ('AC834' / 'ACA834', any case); returns the ICAO ident ('ACA834') or null. Anything else is refused so the key cannot be spent on other airlines. */
 export function validateIdent(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
-  const m = /^([A-Z]{2,3})(\d{1,4})$/.exec(raw.trim().toUpperCase());
-  if (!m) return null;
-  return `${m[1] === 'AC' ? 'ACA' : m[1]}${m[2]}`;
+  const m = /^(ACA|AC)(\d{1,4})$/.exec(raw.trim().toUpperCase());
+  return m ? `ACA${m[2]}` : null;
 }
 
-/** A real 'YYYY-MM-DD' within -1..+2 days of `nowMs` (UTC calendar; the wide range absorbs time zones). */
-export function validateDate(raw: unknown, nowMs: number): string | null {
-  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  const ms = Date.parse(`${raw}T00:00:00Z`);
-  if (!Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 10) !== raw) return null;
-  const today = Math.floor(nowMs / DAY_MS) * DAY_MS;
-  const diff = Math.round((ms - today) / DAY_MS);
-  return diff >= -1 && diff <= 2 ? raw : null;
+/** A 3-letter IATA airport code ('YVR'), or null. */
+export function validateOrigin(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(s) ? s : null;
+}
+
+/** Scheduled departure as 'YYYY-MM-DDTHH:MMZ' (UTC, minute precision) within now-14h..now+38h; returns epoch ms or null. */
+export function validateDep(raw: unknown, nowMs: number): number | null {
+  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(raw)) return null;
+  const ms = Date.parse(raw);
+  if (!Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 16) + 'Z' !== raw) return null;
+  const d = ms - nowMs;
+  return d >= -14 * HOUR_MS && d <= 38 * HOUR_MS ? ms : null;
 }
 
 const isoZ = (ms: number): string => new Date(ms).toISOString().replace('.000Z', 'Z');
 
+/** The AeroAPI start/end (UTC): 3 hours either side of the scheduled departure the client named. */
+export function queryWindow(depMs: number): { start: string; end: string } {
+  return { start: isoZ(depMs - 3 * HOUR_MS), end: isoZ(depMs + 3 * HOUR_MS) };
+}
+
+/** CDN lifetime in seconds: half an hour while the departure is more than 6h away, 5 minutes within 6h. */
+export function cacheSeconds(depMs: number, nowMs: number): number {
+  return depMs - nowMs > 6 * HOUR_MS ? 1800 : 300;
+}
+
+/** Key of the per-day AeroAPI call counter (UTC date). */
+export function budgetKey(nowMs: number): string {
+  return `calls-${new Date(nowMs).toISOString().slice(0, 10)}`;
+}
+
+/** AEROAPI_DAILY_LIMIT, default 40; junk falls back to the default. */
+export function dailyLimit(raw: string | undefined): number {
+  const n = Number(raw);
+  return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 40;
+}
+
 /**
- * The AeroAPI start/end (UTC) for a local departure date. The origin's time
- * zone is unknown to the server (privacy: it only sees ident + date), so the
- * window is wide enough for any airport.
+ * Daily AeroAPI call budget over a tiny key/value store (Netlify Blobs in
+ * production). Best effort, not atomic: two simultaneous misses can both read
+ * the same count, which over-spends by at most a few calls. A store failure
+ * refuses the call (fails closed).
  */
-export function queryWindow(date: string): { start: string; end: string } {
-  const d0 = Date.parse(`${date}T00:00:00Z`);
-  return { start: isoZ(d0 - 4 * HOUR_MS), end: isoZ(d0 + DAY_MS + 10 * HOUR_MS) };
+export function makeBudget(store: { get(key: string): Promise<string | null>; set(key: string, value: string): Promise<unknown> }, limit: number) {
+  return async (nowMs: number, calls = 1): Promise<boolean> => {
+    try {
+      const key = budgetKey(nowMs);
+      const used = Number((await store.get(key)) ?? '0');
+      const n = Number.isFinite(used) ? used : 0;
+      if (n + calls > limit) return false;
+      await store.set(key, String(n + calls));
+      return true;
+    } catch {
+      return false;
+    }
+  };
 }
 
 type Rec = Record<string, unknown>;
@@ -68,17 +103,27 @@ const iso = (v: unknown): string | null => {
   return s && Number.isFinite(Date.parse(s)) ? s : null;
 };
 
-/** Of the flights returned for the window, the one departing nearest the middle of the date's UTC span. Skips malformed entries. */
-export function pickFlight(body: unknown, date: string): Rec | null {
+/** The airport an AeroAPI flight leaves from, as a 3-letter code when it has one. */
+function originCode(f: Rec): string[] {
+  const o = isRec(f['origin']) ? f['origin'] : {};
+  return [str(o['code_iata'], 4), str(o['code'], 4), str(o['code_icao'], 4)].filter((c): c is string => !!c);
+}
+
+/**
+ * Of the flights returned for the window, the one that leaves `origin` and
+ * whose scheduled departure is nearest `depMs`, within 3 hours. A flight number
+ * can fly two legs a day (or the same time on two days) so origin and time both
+ * decide. Skips malformed entries; null when nothing matches.
+ */
+export function pickFlight(body: unknown, origin: string, depMs: number): Rec | null {
   const list = isRec(body) && Array.isArray(body['flights']) ? body['flights'] : [];
-  const centre = Date.parse(`${date}T00:00:00Z`) + 14 * HOUR_MS;
   let best: Rec | null = null;
   let bestD = Infinity;
   for (const f of list) {
-    if (!isRec(f)) continue;
+    if (!isRec(f) || !originCode(f).includes(origin)) continue;
     const t = Date.parse(str(f['scheduled_out']) ?? str(f['scheduled_off']) ?? '');
-    const d = Number.isFinite(t) ? Math.abs(t - centre) : Infinity;
-    if (!best || d < bestD) { best = f; bestD = d; }
+    const d = Math.abs(t - depMs);
+    if (Number.isFinite(d) && d <= 3 * HOUR_MS && d < bestD) { best = f; bestD = d; }
   }
   return best;
 }
@@ -102,13 +147,12 @@ export function displayIdent(icao: string): string {
 
 export function normalizeFlight(
   f: Rec,
-  req: { ident: string; date: string },
+  req: { ident: string },
   inbound: FlightStatus['inbound'],
   nowMs: number,
 ): FlightStatus {
   return {
     ident: displayIdent(req.ident),
-    date: req.date,
     status: str(f['status'], 40) ?? '',
     cancelled: f['cancelled'] === true,
     diverted: f['diverted'] === true,
@@ -129,8 +173,8 @@ export function normalizeInbound(body: unknown): FlightStatus['inbound'] {
   if (!ident) return null;
   return {
     ident: displayIdent(ident),
-    landed: iso(first['actual_in']) ?? iso(first['actual_on']),
-    estimatedIn: iso(first['estimated_in']) ?? iso(first['estimated_on']),
+    landed: iso(first['actual_on']) ?? iso(first['actual_in']),
+    estimatedIn: iso(first['estimated_on']) ?? iso(first['estimated_in']),
   };
 }
 

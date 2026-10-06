@@ -48,8 +48,9 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
             <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
-          <app-live-status [flightNumber]="v.ref.flightNumber" [origin]="v.ref.origin" [dateKey]="v.ref.dateKey" [depUtc]="depUtc(v.ref)"
-                           [recoverLink]="recoverLink(v.tripId, v.isReturn)" [recoverParams]="{ at: v.ref.origin, leg: v.legId }" />
+          <app-live-status [flightNumber]="v.ref.flightNumber" [origin]="v.ref.origin" [depUtc]="depUtc(v.ref)"
+                           [recoverLink]="recoverLink(v.tripId, v.isReturn)" [recoverParams]="v.isReturn ? undefined : { at: v.ref.origin, leg: v.legId }"
+                           [recoverLabel]="v.isReturn ? 'See ways home' : 'What can I still reach?'" />
           @if (v.note; as n) {
             <p class="td__note" data-note>Your note, {{ n.time }}: <b>{{ n.text }}</b></p>
           }
@@ -240,9 +241,9 @@ export class TodayPage {
 
   protected depUtc = refDepUtc;
 
-  /** Recover page for a cancelled flight; a return leg has no Recover (its way home is the Return tab). */
-  protected recoverLink(tripId: string, isReturn: boolean): string[] | null {
-    return isReturn ? ['/trips', tripId] : recoverPath(tripId);
+  /** Recover page for a cancelled flight; a return leg goes to the Return tab, like "What can I still reach?" does. */
+  protected recoverLink(tripId: string, isReturn: boolean): string | string[] {
+    return isReturn ? tripUrl(tripId, 'return') : recoverPath(tripId);
   }
 
   protected statusLabel(s: LegStatus): string {

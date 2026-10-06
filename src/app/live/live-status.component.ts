@@ -3,16 +3,19 @@ import { RouterLink } from '@angular/router';
 import { AppStateService } from '../state/app-state.service';
 import { PrefsService } from '../state/prefs.service';
 import { FlightStatusService } from './flight-status.service';
-import { POLL_MS, inStatusWindow, statusLine } from './flight-status';
+import { VISIBLE_MIN_AGE_MS, WINDOW_AFTER_MS, WINDOW_BEFORE_MS, pollDelay, shouldPoll, statusLine } from './flight-status';
 
 /**
  * One quiet line of live status under a flight: "Estimated 14:25 (+40) · Gate
  * D32 · Inbound AC811 landed 13:52", then the source and age. Cancelled shows
- * in red with a link to Recover (when `recoverLink` is given). Renders nothing
- * outside the -12h..+36h window, with no result, or when the result is more
- * than 10 minutes old. Polls every 5 minutes while the tab is visible.
+ * in red with a link to where to go next (when `recoverLink` is given).
+ * Renders nothing outside the window (-12h .. +`leadMs` of departure, 36h by
+ * default), with no result, or when the result is more than 10 minutes old.
+ * Polls every 30 minutes until 6h before departure and every 5 minutes after,
+ * while the tab is visible; stops once the flight left over 30 minutes ago or
+ * arrived. The server only sees the flight number, origin and departure minute.
  *
- *   <app-live-status flightNumber="AC834" origin="YUL" dateKey="2026-10-06" [depUtc]="ms" />
+ *   <app-live-status flightNumber="AC834" origin="YUL" [depUtc]="ms" />
  */
 @Component({
   selector: 'app-live-status',
@@ -23,7 +26,7 @@ import { POLL_MS, inStatusWindow, statusLine } from './flight-status';
     @if (line(); as l) {
       <p class="ls" [class.ls--bad]="l.cancelled" data-live-status>
         <b class="tn">{{ l.text }}</b>
-        @if (l.cancelled && recoverLink(); as r) { <a class="ui-link" [routerLink]="r" [queryParams]="recoverParams()">What can I still reach?</a> }
+        @if (l.cancelled && recoverLink(); as r) { <a class="ui-link" [routerLink]="r" [queryParams]="recoverParams()">{{ recoverLabel() }}</a> }
         <small>{{ l.source }}</small>
       </p>
     } @else if (unavailable()) {
@@ -45,15 +48,22 @@ export class LiveStatusComponent {
   private readonly prefs = inject(PrefsService);
 
   readonly flightNumber = input.required<string>();
+  /** Departure airport (IATA). */
   readonly origin = input.required<string>();
-  /** Local departure date at the origin. */
-  readonly dateKey = input.required<string>();
+  /** Scheduled departure, epoch ms. */
   readonly depUtc = input.required<number>();
-  readonly recoverLink = input<string[] | null>(null);
+  /** How far before departure to start asking, in ms (the flight page uses 6h). */
+  readonly leadMs = input<number>(WINDOW_AFTER_MS);
+  readonly recoverLink = input<string | string[] | null>(null);
   readonly recoverParams = input<Record<string, string> | undefined>(undefined);
+  readonly recoverLabel = input('What can I still reach?');
 
-  private readonly active = computed(() => inStatusWindow(this.depUtc(), this.state.nowMs()));
-  private readonly entry = computed(() => this.svc.entry(this.flightNumber(), this.dateKey()));
+  private readonly active = computed(() => {
+    if (!/^AC\d{1,4}$/.test(this.flightNumber())) return false; // the endpoint serves Air Canada only
+    const d = this.depUtc() - this.state.nowMs();
+    return d >= -WINDOW_BEFORE_MS && d <= Math.min(this.leadMs(), WINDOW_AFTER_MS);
+  });
+  private readonly entry = computed(() => this.svc.entry(this.flightNumber(), this.origin(), this.depUtc()));
 
   protected readonly line = computed(() => {
     const d = this.active() ? this.svc.fresh(this.entry(), this.state.nowMs()) : null;
@@ -66,18 +76,27 @@ export class LiveStatusComponent {
   });
 
   constructor() {
-    // Fetch when the flight (or window membership) changes, then every 5 minutes while visible.
+    // Ask when the flight (or window membership) changes, then on a timer while visible.
     effect(onCleanup => {
       if (!this.active()) return;
       const ident = this.flightNumber();
-      const date = this.dateKey();
-      const tick = () => {
-        if (document.visibilityState === 'visible') void untracked(() => this.svc.refresh(ident, date));
+      const origin = this.origin();
+      const dep = this.depUtc();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const visible = () => document.visibilityState === 'visible';
+      const go = (minAge: number) => {
+        if (!visible()) return;
+        const data = untracked(() => this.svc.entry(ident, origin, dep)?.data ?? null);
+        if (shouldPoll(data, this.state.nowMs())) void untracked(() => this.svc.refresh(ident, origin, dep, minAge));
       };
-      tick();
-      const id = setInterval(tick, POLL_MS);
-      document.addEventListener('visibilitychange', tick);
-      onCleanup(() => { clearInterval(id); document.removeEventListener('visibilitychange', tick); });
+      const loop = () => {
+        go(0);
+        timer = setTimeout(loop, pollDelay(dep, this.state.nowMs()));
+      };
+      loop();
+      const onVis = () => go(VISIBLE_MIN_AGE_MS);
+      document.addEventListener('visibilitychange', onVis);
+      onCleanup(() => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVis); });
     });
   }
 }

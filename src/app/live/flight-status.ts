@@ -12,7 +12,6 @@ export interface StatusEnd { scheduled: string | null; estimated: string | null;
 /** Mirrors netlify/functions/lib/flight-status.ts (the app does not import from the functions folder). */
 export interface FlightStatus {
   ident: string;
-  date: string;
   status: string;
   cancelled: boolean;
   diverted: boolean;
@@ -28,7 +27,32 @@ export const STATUS_ENDPOINT = '/.netlify/functions/flight-status';
 /** Only flights departing within this window of now are asked about. */
 export const WINDOW_BEFORE_MS = 12 * 60 * MINUTE_MS;
 export const WINDOW_AFTER_MS = 36 * 60 * MINUTE_MS;
-export const POLL_MS = 5 * MINUTE_MS;
+/** Poll every 5 minutes within 6h of departure, every 30 minutes before that (the server's CDN lifetime matches). */
+export const POLL_NEAR_MS = 5 * MINUTE_MS;
+export const POLL_FAR_MS = 30 * MINUTE_MS;
+export const NEAR_MS = 6 * 60 * MINUTE_MS;
+/** A visibility change refreshes only when the last success is older than this. */
+export const VISIBLE_MIN_AGE_MS = 2 * MINUTE_MS;
+/** Stop asking once the flight left this long ago. */
+export const STOP_AFTER_DEP_MS = 30 * MINUTE_MS;
+
+export function pollDelay(depUtc: number, nowMs: number): number {
+  const ahead = depUtc - nowMs;
+  if (ahead <= NEAR_MS) return POLL_NEAR_MS;
+  return Math.min(POLL_FAR_MS, ahead - NEAR_MS + 1000); // do not sleep through the 6h mark
+}
+
+/** False once the result shows it departed more than 30 minutes ago, or arrived. */
+export function shouldPoll(s: FlightStatus | null, nowMs: number): boolean {
+  if (!s) return true;
+  if (s.arr.actual) return false;
+  return !(s.dep.actual && nowMs - Date.parse(s.dep.actual) > STOP_AFTER_DEP_MS);
+}
+
+/** The scheduled departure as the endpoint wants it: 'YYYY-MM-DDTHH:MMZ'. */
+export function depIso(depUtc: number): string {
+  return new Date(depUtc).toISOString().slice(0, 16) + 'Z';
+}
 /** A cached result older than this is not shown. */
 export const MAX_AGE_MS = 10 * MINUTE_MS;
 
@@ -37,8 +61,8 @@ export function inStatusWindow(depUtc: number, nowMs: number): boolean {
   return d >= -WINDOW_BEFORE_MS && d <= WINDOW_AFTER_MS;
 }
 
-export function statusKey(ident: string, dateKey: string): string {
-  return `${ident}|${dateKey}`;
+export function statusKey(ident: string, origin: string, depUtc: number): string {
+  return `${ident}|${origin}|${depIso(depUtc)}`;
 }
 
 /** Narrow an untrusted JSON body to a FlightStatus, or null. */
@@ -61,7 +85,7 @@ export function parseStatus(v: unknown): FlightStatus | null {
     inbound = { ident: r['ident'] as string, landed: typeof r['landed'] === 'string' ? r['landed'] : null, estimatedIn: typeof r['estimatedIn'] === 'string' ? r['estimatedIn'] : null };
   }
   return {
-    ident: o['ident'], date: typeof o['date'] === 'string' ? o['date'] : '', status: typeof o['status'] === 'string' ? o['status'] : '',
+    ident: o['ident'], status: typeof o['status'] === 'string' ? o['status'] : '',
     cancelled: o['cancelled'] === true, diverted: o['diverted'] === true, dep, arr, inbound,
     aircraft: typeof o['aircraft'] === 'string' ? o['aircraft'] : null, fetchedAt: o['fetchedAt'], source: 'FlightAware',
   };

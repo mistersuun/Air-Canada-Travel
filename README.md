@@ -38,14 +38,22 @@ open http://localhost:4200
 
 ## Live flight status (optional)
 
-On the day of travel, Today and the flight page can show live status (estimated time, gate, inbound aircraft, cancelled) from FlightAware AeroAPI. It is off until you set a key; without one the app behaves exactly as before.
+On the day of travel, Today and the flight page can show live status (estimated time, gate, inbound aircraft, cancelled) from FlightAware AeroAPI. It is off until you set a key; without one the function answers 503 and the app shows nothing extra.
 
-1. Create an AeroAPI **Personal** key at <https://www.flightaware.com/aeroapi/portal> (the free tier includes about $5 of usage per month; each flight query is billed per call, and the inbound-aircraft lookup is one more call).
-2. In Netlify: Site settings > Environment variables > add `AEROAPI_KEY` (mark it secret, scope: Functions), then redeploy.
+1. Create an AeroAPI **Personal** key at <https://www.flightaware.com/aeroapi/portal>. The free tier includes about $5 of usage a month, and every AeroAPI query is billed per call (the inbound-aircraft lookup is a second call).
+2. In Netlify: Site settings > Environment variables > add `AEROAPI_KEY` (secret, scope: Functions). Optionally add `AEROAPI_DAILY_LIMIT` (default `40` AeroAPI calls per UTC day, counted in Netlify Blobs; `0` turns the feature off). Redeploy.
 
-How it works: `netlify/functions/flight-status.mts` receives only a flight ident and a date, calls AeroAPI with the key (never exposed to the browser) and returns a small normalised JSON. Responses are cached on Netlify's CDN for 5 minutes (`s-maxage=300`), so many people watching AC834 cost one AeroAPI query per 5 minutes, not one each. The app asks only about flights within -12 h..+36 h of departure, polls every 5 minutes while Today is visible, keeps the last result in sessionStorage and never caches the endpoint in the service worker. The function limits each IP to 30 requests a minute (best effort). It never contacts Air Canada.
+How it works: `netlify/functions/flight-status.mts` receives only an Air Canada flight number, the origin airport and the scheduled departure minute (never anything else), queries AeroAPI for +/- 3 hours around that departure, keeps the flight that leaves that airport nearest that time, and returns a small normalised JSON. It never contacts Air Canada.
 
-Locally, `netlify dev` serves the function; `ng serve` and the e2e static server do not, and the app hides the status line quietly when the endpoint is missing.
+Cost controls, in the order a request meets them:
+- Netlify's CDN caches each answer (varied on ident, origin and dep): 30 minutes while departure is more than 6 hours away, 5 minutes within 6 hours, 1 minute for upstream errors. Many people watching AC834 cost one query per window, not one each.
+- Only cache misses reach the function. Each IP gets about 10 of those per 10 minutes (429 after), and cross-site requests are refused.
+- A global daily budget of `AEROAPI_DAILY_LIMIT` upstream calls (default 40). Past it the function answers `503 {error:'budget'}` until the next UTC day; the app backs off quietly. The counter is read-then-write, so concurrent misses can over-spend by a call or two; if Blobs is unavailable the function refuses rather than spends.
+- The app asks only about flights within 12 h before to 36 h after departure (the flight page: within 6 h), polls every 30 minutes until 6 hours before departure and every 5 minutes after, only while the tab is visible, and stops 30 minutes after departure or on arrival. The endpoint is never cached by the service worker.
+
+Fields to verify on the first live call (the AeroAPI docs were not reachable when this was written, so parsing follows the documented v4 names defensively): `origin.code_iata`, `scheduled_out` / `estimated_out` / `actual_out`, `scheduled_in` / `estimated_in` / `actual_in`, `gate_origin` / `gate_destination`, `terminal_origin` / `terminal_destination`, `inbound_fa_flight_id` (fetched with `ident_type=fa_flight_id`), `actual_on` / `actual_in` on the inbound leg, `aircraft_type`, `cancelled`, `diverted`, and `ident_type=designator` for `ACA###`.
+
+Locally, `netlify dev` serves the function (and a local Blobs store); `ng serve` and the e2e static server do not, and the app hides the status line quietly when the endpoint is missing.
 
 ## Tech Stack
 

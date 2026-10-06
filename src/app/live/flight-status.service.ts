@@ -1,6 +1,6 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { AppStateService } from '../state/app-state.service';
-import { MAX_AGE_MS, STATUS_ENDPOINT, parseStatus, statusKey, type FlightStatus } from './flight-status';
+import { MAX_AGE_MS, STATUS_ENDPOINT, depIso, parseStatus, statusKey, type FlightStatus } from './flight-status';
 
 /** How the endpoint is called; specs replace it. Resolves to the HTTP status and parsed JSON (null when not JSON). */
 export const STATUS_FETCH = new InjectionToken<(url: string) => Promise<{ status: number; body: unknown }>>('STATUS_FETCH', {
@@ -36,25 +36,30 @@ export class FlightStatusService {
   /** After a 503/429/404 do not ask again for this long (per key). */
   private readonly backoff = new Map<string, number>();
 
-  entry(ident: string, dateKey: string): StatusEntry | null {
-    return this.entries()[statusKey(ident, dateKey)] ?? null;
+  private readonly lastOk = new Map<string, number>();
+
+  entry(ident: string, origin: string, depUtc: number): StatusEntry | null {
+    return this.entries()[statusKey(ident, origin, depUtc)] ?? null;
   }
 
-  async refresh(ident: string, dateKey: string): Promise<void> {
-    const key = statusKey(ident, dateKey);
+  /** `minAgeMs`: skip when the last success is more recent than this (visibility refreshes). */
+  async refresh(ident: string, origin: string, depUtc: number, minAgeMs = 0): Promise<void> {
+    const key = statusKey(ident, origin, depUtc);
     const now = this.state.nowMs();
     if (this.inflight.has(key) || (this.backoff.get(key) ?? 0) > now) return;
+    if (minAgeMs && now - (this.lastOk.get(key) ?? -Infinity) < minAgeMs) return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) { this.mark(key); return; }
     this.inflight.add(key);
     try {
-      const url = `${STATUS_ENDPOINT}?ident=${encodeURIComponent(ident)}&date=${encodeURIComponent(dateKey)}`;
+      const url = `${STATUS_ENDPOINT}?ident=${encodeURIComponent(ident)}&origin=${encodeURIComponent(origin)}&dep=${encodeURIComponent(depIso(depUtc))}`;
       const { status, body } = await this.fetcher(url);
       const parsed = status === 200 ? parseStatus(body) : null;
       if (parsed) {
         this.backoff.delete(key);
+        this.lastOk.set(key, now);
         this.set(key, { data: parsed, failed: false });
       } else {
-        if (status === 503 || status === 404 || status === 429) this.backoff.set(key, now + 15 * 60_000);
+        if (status === 400 || status === 403 || status === 503 || status === 502 || status === 404 || status === 429) this.backoff.set(key, now + 15 * 60_000);
         this.mark(key);
       }
     } catch {

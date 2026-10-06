@@ -99,7 +99,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
           } @else if (ticket(); as t) {
             <app-ticket [model]="t" [label]="ticketLabel()" />
             @if (liveLeg(); as l) {
-              <app-live-status [flightNumber]="l.flightNumber" [origin]="l.origin" [dateKey]="l.dateKey" [depUtc]="l.depUtc" />
+              <app-live-status [flightNumber]="l.flightNumber" [origin]="l.origin" [depUtc]="l.depUtc" [leadMs]="sixHours" />
             }
             @if (clock(); as c) {
               <p class="cd tn" [class.cd--live]="c.live"><app-icon name="clock" [size]="15" />{{ c.text }}</p>
@@ -313,10 +313,11 @@ export class FlightPage {
   });
 
   /** The first flight of the shown itinerary, for live status (the component only acts within -12h..+36h of departure). */
+  protected readonly sixHours = 6 * 3_600_000;
   protected readonly liveLeg = computed(() => {
     const it = this.current();
     const leg = it?.legs[0];
-    return it && leg?.flightNumber ? { flightNumber: leg.flightNumber,origin: it.origin, dateKey: it.dateKey, depUtc: it.departUtc } : null;
+    return it && leg?.flightNumber ? { flightNumber: leg.flightNumber,origin: it.origin, depUtc: it.departUtc } : null;
   });
 
   protected readonly ticketLabel = computed(() => {

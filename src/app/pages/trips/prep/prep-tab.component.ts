@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, signal } f
 import { Router } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { buildPrepChecklist, tripEssentials } from '../../../places/prep';
+import { ReferenceService } from '../../../reference/reference.service';
 import { ClimateService } from '../../../recs/climate.service';
 import { MAX_USUAL_ITEMS } from '../../../recs/profile';
 import { ProfileService } from '../../../recs/profile.service';
@@ -121,16 +122,18 @@ export class PrepTabComponent {
   private readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly climate = inject(ClimateService);
+  private readonly reference = inject(ReferenceService);
   private readonly profile = inject(ProfileService);
 
   readonly trip = input.required<Trip>();
 
   constructor() {
     void this.climate.ensureLoaded();
+    void this.reference.ensureLoaded();
   }
 
   protected readonly draft = signal('');
-  protected readonly items = computed(() => buildPrepChecklist(this.trip(), this.climate.index()));
+  protected readonly items = computed(() => buildPrepChecklist(this.trip(), this.climate.index(), { advisories: this.reference.advisories(), holidays: this.reference.holidays() }));
   protected readonly rows = computed(() => this.items().map(prepRow));
   protected readonly count = computed(() => doneLabel(this.items()));
   protected readonly ess = computed(() => {

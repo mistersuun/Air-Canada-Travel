@@ -26,6 +26,7 @@ import {
 import { CityIndexService } from '../../places/city-index.service';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
+import { ComingUpBannerComponent } from '../../trips/ui/coming-up-banner.component';
 import { TodayBannerComponent } from '../today/today-banner.component';
 import { ForYouComponent } from '../../recs/ui/for-you.component';
 
@@ -57,12 +58,13 @@ interface ListRow {
   standalone: true,
   imports: [
     RouterLink, IconComponent, HubPickerComponent, SegComponent, WeekStripComponent, PhotoCardComponent, DestRowComponent,
-    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent, ForYouComponent,
+    WeekCardComponent, ResultsListComponent, FilterSheetComponent, FilterChipsComponent, TodayBannerComponent, ComingUpBannerComponent, ForYouComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page home">
       <app-today-banner />
+      <app-coming-up-banner />
       <div class="hero">
         <div class="hero__main">
           @if (narrow()) {

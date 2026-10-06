@@ -30,6 +30,7 @@ import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
 import { DestClimateComponent } from './dest-climate.component';
 import { DestForecastComponent } from './dest-forecast.component';
+import { EventsCardComponent } from '../../events/events-card.component';
 import { DestReferenceComponent } from '../../reference/dest-reference.component';
 import { historyFor, recordAria, recordTag, type HistoryCounts } from '../../trips/engine/track-record';
 import { TripsService } from '../../trips/trips.service';
@@ -71,7 +72,7 @@ const AC_URL = 'https://www.aircanada.com/';
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
     MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent,
-    DestReferenceComponent,
+    DestReferenceComponent, EventsCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -269,6 +270,7 @@ const AC_URL = 'https://www.aircanada.com/';
           <app-dest-reference [iso2]="dest()?.iso2" [todayKey]="climateDay()" />
           <app-dest-climate [code]="code()" [dateKey]="climateDay()" />
           <app-dest-forecast [code]="code()" [dateKey]="climateDay()" />
+          <app-events-card [code]="code()" [from]="eventsFrom()" [to]="eventsTo()" />
           @if (fact(); as f) { <p class="ui-sub fact" data-fact><b>Did you know</b> · {{ f }}</p> }
         </section>
       </div>
@@ -641,6 +643,9 @@ export class DestinationPage {
     const nonstops = getDestinationCodes(hub.code).map(c => findHub(c) ?? findDestination(c)).filter((x): x is NonNullable<typeof x> => !!x);
     return dailyFact(d, hub, nonstops, this.state.nowMs());
   });
+  /** "What's on": the shown day and 3 days either side (the card clamps to what the server accepts). */
+  protected readonly eventsFrom = computed(() => addDays(this.climateDay(), -3));
+  protected readonly eventsTo = computed(() => addDays(this.climateDay(), 3));
   /** The day the weather is for: the picked day, else today at the destination. */
   protected readonly climateDay = computed(() => {
     const tz = this.dest()?.tz;

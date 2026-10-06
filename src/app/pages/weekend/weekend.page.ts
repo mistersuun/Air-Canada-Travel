@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { EventsCardComponent } from '../../events/events-card.component';
 import { RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { ClimateService } from '../../recs/climate.service';
@@ -20,7 +21,7 @@ import {
 @Component({
   selector: 'app-weekend-page',
   standalone: true,
-  imports: [RouterLink, DestRowComponent, ForecastLineComponent],
+  imports: [RouterLink, DestRowComponent, ForecastLineComponent, EventsCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page wk">
@@ -77,6 +78,13 @@ import {
                 <app-forecast-line [code]="r.o.code" [dateKey]="r.arrKey" [plain]="true" />
               </span>
             </app-dest-row>
+            <div class="evt">
+              <button type="button" class="ui-link evt__b" [attr.aria-expanded]="events() === r.o.code" [attr.aria-controls]="'evt-' + r.o.code"
+                      attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on</button>
+              <div [id]="'evt-' + r.o.code">
+                @if (events() === r.o.code) { <app-events-card verbose [code]="r.o.code" [from]="r.arrKey" [to]="r.o.retKey" /> }
+              </div>
+            </div>
           }
         </div>
         @if (rows().length > shown().length) {
@@ -106,6 +114,8 @@ import {
     .sum { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
     .list { padding: 4px 14px; margin-top: 12px; }
     .note { padding: 18px; margin-top: 12px; font-size: 14px; color: var(--ink-2); }
+    .evt { padding: 0 0 8px 56px; }
+    .evt__b { font-size: 13px; padding: 2px 0; }
     .more { margin-top: 10px; padding: 6px 4px; }
     .foot { margin-top: 12px; padding: 0 4px; }
     @media (min-width: 720px) {
@@ -124,6 +134,8 @@ export class WeekendPage {
   /** Set when Custom is first chosen, from the window then shown (hub-local). */
   protected readonly custom = signal<WeekendWindow | null>(null);
   protected readonly all = signal(false);
+  /** The destination whose "What's on" is open; events are fetched only for it, on tap. */
+  protected readonly events = signal<string | null>(null);
 
   /** Today at the hub: flight dates are hub-local, so the device's date can be a day off. */
   private readonly hubToday = computed(() => todayKey(airportTz(this.state.hub()), this.state.nowMs()));
@@ -168,6 +180,14 @@ export class WeekendPage {
     if (p === 'custom' && !this.custom()) this.custom.set(this.window());
     this.preset.set(p);
     this.all.set(false);
+  }
+
+  protected cityOf(code: string): string {
+    return findDestination(code)?.city ?? code;
+  }
+
+  protected toggleEvents(code: string): void {
+    this.events.update(c => (c === code ? null : code));
   }
 
   protected edit(field: keyof WeekendWindow, value: string): void {

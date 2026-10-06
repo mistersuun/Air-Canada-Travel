@@ -55,6 +55,17 @@ Fields to verify on the first live call (the AeroAPI docs were not reachable whe
 
 Locally, `netlify dev` serves the function (and a local Blobs store); `ng serve` and the e2e static server do not, and the app hides the status line quietly when the endpoint is missing.
 
+## What's on (optional)
+
+The destination page, the weekend finder and a trip's Prep tab can list events near a destination for the dates in question ("Sat Oct 10 · 20:00 · Coldplay · Estádio da Luz"), from the Ticketmaster Discovery API v2. Each links to Ticketmaster and the card says "Events from Ticketmaster". No prices and no affiliate parameters (the app is non-commercial; Ticketmaster's terms also forbid deriving revenue). It is off until you set a key; without one the function answers 503 and the app shows nothing.
+
+1. Get a free key at <https://developer.ticketmaster.com/> (create an account, then "My Apps"). The free tier allows 5000 calls per day and 5 requests per second.
+2. In Netlify: Site settings > Environment variables > add `TICKETMASTER_KEY` (secret, scope: Functions). Optionally add `TICKETMASTER_DAILY_LIMIT` (default `500` upstream calls per UTC day, counted in Netlify Blobs; `0` turns the feature off). Redeploy.
+
+How it works: `netlify/functions/events.mts` takes `?code=<IATA>&from=YYYY-MM-DD&to=YYYY-MM-DD` (a code the app knows; at most 7 days; the app asks for Monday to Sunday weeks, so `from` may be up to 6 days back if `to` is today or later, and `from` at most 121 days ahead), maps the code to city-centre coordinates from `netlify/functions/lib/places.json`, searches within 40 km (`locale=*`, `source=ticketmaster`, `size=200`, `sort=relevance,desc`), drops cancelled and postponed events, keeps the 10 most relevant inside the dates and returns them sorted by date. Airports far from their city (NRT, CDG, MXP...) use the centre coordinates in `netlify/functions/lib/place-centres.json`. After changing `src/app/data/destinations.ts` or that file run `node --experimental-strip-types scripts/gen-places.mjs` (a spec fails when the JSON is stale).
+
+Limits and cost controls: the CDN caches each answer for 6 hours (`Netlify-Vary` on code, from and to); only misses reach the function; each IP gets about 10 misses per 10 minutes; cross-site requests are refused; a global daily budget applies. The app asks only when a view is shown (the weekend finder only after tapping "What's on" on a row), and stays silent on any failure. The response fields (`_embedded.events[].name`, `url`, `dates.start.localDate` / `localTime`, `dates.status.code`, `_embedded.venues[0].name`, `classifications[0].segment.name`) follow the documented v2 names; the docs were not reachable when this was written, so verify them on the first live call.
+
 ## Tech Stack
 
 - Angular 17 (standalone components)

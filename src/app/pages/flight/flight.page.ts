@@ -26,6 +26,7 @@ import {
   type Pick,
 } from './flight-model';
 import { historyFor, recordLine } from '../../trips/engine/track-record';
+import { LiveStatusComponent } from '../../live/live-status.component';
 import { FactsCardComponent } from './facts-card.component';
 import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
@@ -63,7 +64,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
-    FactsCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent,
+    FactsCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -97,6 +98,9 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             </div>
           } @else if (ticket(); as t) {
             <app-ticket [model]="t" [label]="ticketLabel()" />
+            @if (liveLeg(); as l) {
+              <app-live-status [flightNumber]="l.flightNumber" [origin]="l.origin" [depUtc]="l.depUtc" [leadMs]="sixHours" />
+            }
             @if (clock(); as c) {
               <p class="cd tn" [class.cd--live]="c.live"><app-icon name="clock" [size]="15" />{{ c.text }}</p>
             }
@@ -306,6 +310,14 @@ export class FlightPage {
   protected readonly ticket = computed(() => {
     const it = this.current();
     return it ? ticketModel(it, this.state.timeFormat(), this.state.connect().minConnect ?? 60) : null;
+  });
+
+  /** The first flight of the shown itinerary, for live status (the component only acts within -12h..+36h of departure). */
+  protected readonly sixHours = 6 * 3_600_000;
+  protected readonly liveLeg = computed(() => {
+    const it = this.current();
+    const leg = it?.legs[0];
+    return it && leg?.flightNumber ? { flightNumber: leg.flightNumber,origin: it.origin, depUtc: it.departUtc } : null;
   });
 
   protected readonly ticketLabel = computed(() => {

@@ -50,6 +50,8 @@ function handle(req, res) {
     res.writeHead(400).end('Bad request');
     return;
   }
+  // Netlify Functions are not served here: a plain 404, like any host without functions.
+  if (path.startsWith('/.netlify/functions/')) { res.writeHead(404).end('Not found'); return; }
   let file = normalize(join(dist, path));
   if (file !== dist && !file.startsWith(dist + sep)) { res.writeHead(403).end(); return; }
   if (!existsSync(file) || statSync(file).isDirectory()) {

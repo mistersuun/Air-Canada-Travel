@@ -79,8 +79,11 @@ import {
               </span>
             </app-dest-row>
             <div class="evt">
-              <button type="button" class="ui-link evt__b" [attr.aria-expanded]="events() === r.o.code" (click)="toggleEvents(r.o.code)">What's on</button>
-              @if (events() === r.o.code) { <app-events-card [code]="r.o.code" [from]="r.arrKey" [to]="r.o.retKey" /> }
+              <button type="button" class="ui-link evt__b" [attr.aria-expanded]="events() === r.o.code" [attr.aria-controls]="'evt-' + r.o.code"
+                      attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on</button>
+              <div [id]="'evt-' + r.o.code">
+                @if (events() === r.o.code) { <app-events-card verbose [code]="r.o.code" [from]="r.arrKey" [to]="r.o.retKey" /> }
+              </div>
             </div>
           }
         </div>
@@ -177,6 +180,10 @@ export class WeekendPage {
     if (p === 'custom' && !this.custom()) this.custom.set(this.window());
     this.preset.set(p);
     this.all.set(false);
+  }
+
+  protected cityOf(code: string): string {
+    return findDestination(code)?.city ?? code;
   }
 
   protected toggleEvents(code: string): void {

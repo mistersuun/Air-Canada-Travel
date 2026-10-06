@@ -7,7 +7,7 @@ export const HORIZON_DAYS = 120;
 export const RADIUS_KM = 40;
 const DAY_MS = 86_400_000;
 
-export interface EventItem { name: string; url: string; date: string; time: string | null; venue: string; segment: string }
+export interface EventItem { name: string; url: string; date: string; time: string | null; venue: string; segment: string; rescheduled?: true }
 export interface EventsResult { events: EventItem[]; source: 'Ticketmaster'; fetchedAt: string }
 
 const PLACES = places as Record<string, { lat: number; lng: number }>;
@@ -30,8 +30,9 @@ function keyMs(raw: unknown): number | null {
 }
 
 /**
- * from/to are YYYY-MM-DD, from <= to, at most 7 days inclusive, from not before
- * yesterday (UTC slack for time zones) and to within the next 120 days.
+ * from/to are YYYY-MM-DD, from <= to, at most 7 days inclusive. The client asks for
+ * Monday to Sunday weeks, so `from` may be up to 6 days in the past as long as `to` is
+ * today or later (1 day of time-zone slack); `from` is at most 121 days ahead.
  */
 export function validateWindow(from: unknown, to: unknown, nowMs: number): { from: string; to: string } | null {
   const f = keyMs(from);
@@ -39,7 +40,7 @@ export function validateWindow(from: unknown, to: unknown, nowMs: number): { fro
   if (f === null || t === null || t < f) return null;
   if ((t - f) / DAY_MS > MAX_WINDOW_DAYS - 1) return null;
   const today = Date.parse(new Date(nowMs).toISOString().slice(0, 10) + 'T00:00:00Z');
-  if (f < today - DAY_MS || t > today + HORIZON_DAYS * DAY_MS) return null;
+  if (t < today - DAY_MS || f < today - 6 * DAY_MS || f > today + (HORIZON_DAYS + 1) * DAY_MS) return null;
   return { from: from as string, to: to as string };
 }
 
@@ -56,8 +57,10 @@ export function buildUrl(code: string, w: { from: string; to: string }, apikey: 
     unit: 'km',
     startDateTime: isoZ(keyMs(w.from)! - DAY_MS),
     endDateTime: isoZ(keyMs(w.to)! + 2 * DAY_MS - 1000),
-    size: '40',
-    sort: 'date,asc',
+    locale: '*',
+    source: 'ticketmaster',
+    size: '200',
+    sort: 'relevance,desc',
   });
   return `https://app.ticketmaster.com/discovery/v2/events.json?${q.toString()}`;
 }
@@ -66,13 +69,22 @@ type Rec = Record<string, unknown>;
 const rec = (v: unknown): Rec | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Rec) : null);
 const str = (v: unknown, max = 200): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
-/** Only https links to ticketmaster domains are passed on (never an arbitrary URL from the upstream). */
+/** Ticketmaster's own sites. Mirrored in src/app/events/events.ts. */
+export const TICKETMASTER_HOSTS = [
+  'ticketmaster.com', 'ticketmaster.ca', 'ticketmaster.com.mx', 'ticketmaster.co.uk', 'ticketmaster.ie', 'ticketmaster.de',
+  'ticketmaster.es', 'ticketmaster.fr', 'ticketmaster.nl', 'ticketmaster.be', 'ticketmaster.at', 'ticketmaster.ch',
+  'ticketmaster.dk', 'ticketmaster.fi', 'ticketmaster.no', 'ticketmaster.se', 'ticketmaster.pt', 'ticketmaster.pl',
+  'ticketmaster.cz', 'ticketmaster.ae', 'ticketmaster.com.au', 'ticketmaster.co.nz', 'ticketmaster.com.br', 'ticketmaster.cl',
+  'ticketmaster.co.za', 'ticketmaster.sg', 'ticketmaster.hk', 'ticketmaster.com.tr',
+] as const;
+
+/** Only https links to the Ticketmaster allowlist are passed on (never an arbitrary URL from the upstream). */
 export function safeTicketmasterUrl(raw: unknown): string | null {
   const s = str(raw, 1000);
   if (!s) return null;
   try {
     const u = new URL(s);
-    return u.protocol === 'https:' && /(^|\.)ticketmaster\.[a-z]{2,3}(\.[a-z]{2})?$/.test(u.hostname) ? u.toString() : null;
+    return u.protocol === 'https:' && TICKETMASTER_HOSTS.some(h => u.hostname === h || u.hostname.endsWith(`.${h}`)) ? u.toString() : null;
   } catch { return null; }
 }
 
@@ -91,7 +103,8 @@ export function normalizeEvents(body: unknown, w: { from: string; to: string }, 
     const start = rec(dates?.['start']);
     const date = str(start?.['localDate'], 10);
     if (!name || !url || !date || keyMs(date) === null || date < w.from || date > w.to) continue;
-    if (str(rec(dates?.['status'])?.['code'])?.toLowerCase() === 'cancelled') continue;
+    const status = str(rec(dates?.['status'])?.['code'])?.toLowerCase();
+    if (status === 'cancelled' || status === 'canceled' || status === 'postponed') continue;
     const t = str(start?.['localTime'], 8);
     const time = t && /^\d{2}:\d{2}(:\d{2})?$/.test(t) ? t.slice(0, 5) : null;
     const venues = rec(r['_embedded'])?.['venues'];
@@ -101,10 +114,12 @@ export function normalizeEvents(body: unknown, w: { from: string; to: string }, 
     const dup = `${name.toLowerCase()}|${date}|${venue.toLowerCase()}`;
     if (seen.has(dup)) continue;
     seen.add(dup);
-    out.push({ name, url, date, time, venue, segment });
+    out.push({ name, url, date, time, venue, segment, ...(status === 'rescheduled' ? { rescheduled: true as const } : {}) });
   }
-  out.sort((a, b) => (a.date + (a.time ?? '99')).localeCompare(b.date + (b.time ?? '99')));
-  return { events: out.slice(0, MAX_EVENTS), source: 'Ticketmaster', fetchedAt: new Date(nowMs).toISOString() };
+  // The upstream order is relevance: keep the top 10, then show them by date.
+  const top = out.slice(0, MAX_EVENTS);
+  top.sort((a, b) => (a.date + (a.time ?? '99')).localeCompare(b.date + (b.time ?? '99')));
+  return { events: top, source: 'Ticketmaster', fetchedAt: new Date(nowMs).toISOString() };
 }
 
 /** TICKETMASTER_DAILY_LIMIT, default 500; junk falls back to the default. */

@@ -1,14 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, computed, effect, inject, input, untracked } from '@angular/core';
 import { AppStateService } from '../state/app-state.service';
 import { airportTz } from '../utils/airports';
 import { todayKey } from '../utils/time';
-import { TICKETMASTER_URL, clampWindow, eventLine, rangeLabel, type EventItem } from './events';
+import { MAX_EVENTS, TICKETMASTER_URL, eventLine, weekBuckets, weekLabel, type EventItem } from './events';
 import { EventsService } from './events.service';
 
+let nextId = 0;
+
 /**
- * "What's on" for a destination and a date range (clamped to what the server accepts: 7 days, the
- * next 120). It asks when it is created or its inputs change, so callers that must not fetch in
- * bulk create it only on demand. Renders nothing without events (unavailable is not an error).
+ * "What's on" for a destination and a date range, as the one or two Monday to Sunday weeks the
+ * range overlaps (the server accepts those, and the CDN shares them between people). It asks when
+ * it is created or its inputs change, so callers that must not fetch in bulk create it only on
+ * demand. By default it renders nothing without events (unavailable is not an error); `verbose`
+ * (set where the person asked) shows "Looking…" and "No events listed".
  */
 @Component({
   selector: 'app-events-card',
@@ -16,15 +20,19 @@ import { EventsService } from './events.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (events().length) {
-      <section class="ev" data-events>
-        <p class="ev__t"><b>What's on</b> · {{ range() }}</p>
+      <section class="ev" data-events [attr.aria-labelledby]="hid">
+        <p class="ev__t" [id]="hid"><b>What's on</b> · {{ label() }}</p>
         <ul class="ev__l">
           @for (e of events(); track e.url) {
-            <li><a [href]="e.url" target="_blank" rel="noopener" class="ev__a">{{ line(e) }}</a></li>
+            <li><a [href]="e.url" target="_blank" rel="noopener" class="ev__a">{{ line(e) }}<span class="ui-visually-hidden"> (opens in a new tab)</span></a></li>
           }
         </ul>
-        <p class="ev__c ui-sub">Events from <a [href]="tm" target="_blank" rel="noopener">Ticketmaster</a>. Prices and availability are on their site.</p>
+        <p class="ev__c ui-sub">Events from <a [href]="tm" target="_blank" rel="noopener">Ticketmaster<span class="ui-visually-hidden"> (opens in a new tab)</span></a>. Prices and availability are on their site.</p>
       </section>
+    } @else if (verbose() && state() === 'loading') {
+      <p class="ev__n ui-sub" role="status" data-events-status>Looking…</p>
+    } @else if (verbose() && state() === 'empty') {
+      <p class="ev__n ui-sub" role="status" data-events-status>No events listed</p>
     }
   `,
   styles: [`
@@ -37,41 +45,38 @@ import { EventsService } from './events.service';
     .ev__a { font-size: 14px; color: var(--blue); overflow-wrap: anywhere; }
     .ev__c { margin: 0; font-size: 11.5px; }
     .ev__c a { color: var(--blue); }
+    .ev__n { margin: 8px 0 0; font-size: 13px; }
   `],
 })
 export class EventsCardComponent {
   private readonly svc = inject(EventsService);
-  private readonly state = inject(AppStateService);
+  private readonly appState = inject(AppStateService);
 
   readonly code = input.required<string>();
   /** First and last day (date keys). */
   readonly from = input.required<string>();
   readonly to = input.required<string>();
+  readonly verbose = input(false, { transform: booleanAttribute });
 
+  protected readonly hid = `ev-h-${nextId++}`;
   protected readonly tm = TICKETMASTER_URL;
 
-  private readonly window = computed(() => {
-    const today = todayKey(airportTz(this.code()), this.state.nowMs());
-    return clampWindow(this.from(), this.to(), today);
-  });
-  protected readonly events = computed(() => {
-    const w = this.window();
-    return w ? (this.svc.result(this.code(), w)?.events ?? []) : [];
-  });
-  protected readonly range = computed(() => {
-    const w = this.window();
-    return w ? rangeLabel(w) : '';
-  });
+  private readonly buckets = computed(() => weekBuckets(this.from(), this.to(), todayKey(airportTz(this.code()), this.appState.nowMs())));
+  protected readonly label = computed(() => weekLabel(this.buckets()));
+  private readonly results = computed(() => this.buckets().map(w => this.svc.result(this.code(), w)));
+  protected readonly events = computed<EventItem[]>(() =>
+    this.results().flatMap(r => r?.events ?? []).sort((a, b) => (a.date + (a.time ?? '99')).localeCompare(b.date + (b.time ?? '99'))).slice(0, MAX_EVENTS));
+  protected readonly state = computed<'loading' | 'empty'>(() => (this.results().some(r => r === undefined) ? 'loading' : 'empty'));
 
   constructor() {
     effect(() => {
-      const w = this.window();
+      const ws = this.buckets();
       const code = this.code();
-      if (w) untracked(() => void this.svc.load(code, w));
+      untracked(() => { for (const w of ws) void this.svc.load(code, w); });
     });
   }
 
   protected line(e: EventItem): string {
-    return eventLine(e, this.state.timeFormat());
+    return eventLine(e, this.appState.timeFormat());
   }
 }

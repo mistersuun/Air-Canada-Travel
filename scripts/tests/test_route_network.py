@@ -381,3 +381,31 @@ def test_committed_file_shape():
         assert set(v[0]) <= set("AXR") and v[1] in (0, 1) and len(v) == 5
     for code, a in d["airports"].items():
         ZoneInfo(a[2])
+
+
+def test_past_end_with_future_resume_is_kept():
+    R = rn.Row
+    rows = {"YHZ": [R("A", "Bay", True, ends="2026-09-01", resumes="2026-12-01")]}
+    out = rn.merge_routes(rows, {"Bay": "MBJ"}, HUBS, TODAY)
+    assert out["YHZ-MBJ"] == ["A", 1, None, None, "2026-12-01"]
+
+
+def test_http_get_retries_connection_errors():
+    import http.client
+    calls = []
+
+    class Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b"ok"
+
+    def opener(req, timeout):
+        calls.append(1)
+        if len(calls) == 1:
+            raise ConnectionResetError("reset")
+        if len(calls) == 2:
+            raise http.client.IncompleteRead(b"x")
+        return Resp()
+
+    assert rn.http_get("https://example.org", opener, sleep=lambda s: None) == b"ok"
+    assert len(calls) == 3

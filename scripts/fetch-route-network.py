@@ -41,6 +41,7 @@ left untouched.
 from __future__ import annotations
 
 import csv
+import http.client
 import io
 import json
 import math
@@ -141,7 +142,7 @@ def http_get(url: str, opener=urllib.request.urlopen, sleep=time.sleep, timeout:
             last = e
             if e.code != 429 and e.code < 500:
                 raise
-        except (urllib.error.URLError, TimeoutError) as e:
+        except (OSError, http.client.HTTPException) as e:  # URLError, resets, IncompleteRead
             last = e
     raise RuntimeError(f"GET failed after {len(BACKOFF_S) + 1} attempts: {url}: {last}")
 
@@ -458,11 +459,11 @@ def merge_routes(hub_rows: dict[str, list[Row]], codes: dict[str, str | None], h
             code = codes.get(r.title)
             if not code or code == hub:
                 continue
-            if r.ends and r.ends < t:
-                continue  # ended
+            if r.ends and r.ends < t and not (r.resumes and r.resumes >= t):
+                continue  # ended (and not resuming)
             row = Row(r.brand, r.title, r.seasonal,
                       r.begins if r.begins and r.begins >= t else None,
-                      r.ends,
+                      r.ends if r.ends and r.ends >= t else None,  # a past end is superseded by the resume
                       r.resumes if r.resumes and r.resumes >= t else None)
             f = facts.setdefault(route_key(hub, code, hubs), Fact())
             f.brands.add(r.brand)

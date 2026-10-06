@@ -3,7 +3,7 @@ import { PlatformLocation } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { GROUP_ID_RE, type GroupLink, parseGroupFragment } from '../../group/group-crypto';
-import { type GroupDoc, MAX_MEETUP, MAX_NAME, MAX_PLAN_LABEL, memberList, planLabelSuggestions } from '../../group/group-doc';
+import { type GroupDoc, MAX_MEETUP, MAX_NAME, MAX_PLAN_LABEL, groupIsFull, memberList, planLabelSuggestions } from '../../group/group-doc';
 import { GroupService, POLL_MS, type GroupFailure } from '../../group/group.service';
 import { shareOrCopy } from '../../group/share-link';
 import { AppStateService } from '../../state/app-state.service';
@@ -19,7 +19,9 @@ const MESSAGES: Record<GroupFailure, string> = {
   invalid: 'This link could not be opened.',
   forbidden: 'This link is view only, so it cannot change the plan.',
   'too-large': 'This plan is too large to share as a group.',
+  budget: 'Group sharing is unavailable right now.',
 };
+const FULL = 'This group is full.';
 
 /**
  * A group trip (/g/:id#k=<key>[&w=<token>]). The plan and every member's status
@@ -83,7 +85,7 @@ const MESSAGES: Record<GroupFailure, string> = {
               <label class="gp__f"><span class="ui-label">Arrival (your time zone)</span>
                 <input type="datetime-local" data-arrival [value]="arrival()" (input)="arrival.set($any($event.target).value)" /></label>
               <label class="gp__f"><span class="ui-label">Meet-up point</span>
-                <input type="text" [maxLength]="maxMeet" autocomplete="off" placeholder="Gate B12 coffee shop" data-meetup-input [value]="meet()" (input)="meet.set($any($event.target).value)" /></label>
+                <input type="text" [maxLength]="maxMeet" autocomplete="off" placeholder="Gate B12 coffee shop" data-meetup-input [value]="meet()" (input)="editMeet($any($event.target).value)" /></label>
               <button type="button" class="ui-btn" data-save-status [disabled]="busy() || !name().trim()" (click)="saveStatus()">Update status</button>
             </section>
           } @else {
@@ -173,6 +175,8 @@ export class GroupPage {
   private expiresAt: string | null = null;
   private memberId = '';
   private loadedOnce = false;
+  /** True once the meet-up field was edited since the last sync: only then is it written back. */
+  private meetDirty = false;
   private lastPlan = '';
 
   protected readonly canWrite = computed(() => this.view() === 'ready' && !!this.link?.write);
@@ -188,6 +192,8 @@ export class GroupPage {
     const fromUrl = parseGroupFragment(id, fragment);
     // A link in the URL wins; otherwise this device's copy of an earlier visit.
     this.link = fromUrl ?? (rec ? this.groups.linkOf(rec) : null);
+    // The key is now in memory (and on this device): take it out of the address bar and history.
+    if (fromUrl) { try { history.replaceState(history.state, '', location.pathname + location.search); } catch { /* not critical */ } }
     if (!this.link) {
       this.view.set('invalid');
       return;
@@ -210,6 +216,8 @@ export class GroupPage {
     this.view.set(this.loadedOnce ? this.view() : 'loading');
     const r = await this.groups.load(this.link);
     if (!r.ok) {
+      // Offline right now: keep the link on this device, since the address bar no longer has it.
+      if (r.reason === 'unavailable') this.remember();
       this.view.set(r.reason === 'gone' ? 'gone' : r.reason === 'invalid' ? 'invalid' : 'unavailable');
       return;
     }
@@ -218,7 +226,6 @@ export class GroupPage {
       this.loadedOnce = true;
       const mine = r.doc.members[this.memberId];
       if (mine) { this.name.set(mine.name); this.label.set(mine.planLabel); this.arrival.set(toLocalInput(mine.arrival)); }
-      this.meet.set(r.doc.meetup?.text ?? '');
       this.remember();
     }
     this.view.set('ready');
@@ -228,7 +235,7 @@ export class GroupPage {
   private async poll(): Promise<void> {
     if (!this.link || this.busy()) return;
     const r = await this.groups.load(this.link);
-    if (r.ok && r.version !== this.version) await this.apply(r.doc, r.version, r.expiresAt);
+    if (r.ok && r.version > this.version) await this.apply(r.doc, r.version, r.expiresAt);
     else if (!r.ok && r.reason === 'gone') this.view.set('gone');
   }
 
@@ -236,6 +243,8 @@ export class GroupPage {
     this.doc.set(doc);
     this.version = version;
     this.expiresAt = expiresAt;
+    // What others set shows up unless I am in the middle of editing it.
+    if (!this.meetDirty) this.meet.set(doc.meetup?.text ?? '');
     if (doc.plan !== this.lastPlan) {
       this.lastPlan = doc.plan;
       this.preview.set(await this.groups.previewOf(doc));
@@ -247,13 +256,17 @@ export class GroupPage {
     const old = this.groups.recordFor(this.link.id);
     this.groups.remember({
       id: this.link.id, key: this.link.key, write: this.link.write ?? old?.write ?? null, memberId: this.memberId,
-      name: this.name().trim().slice(0, MAX_NAME), owner: this.owner(), tripId: old?.tripId ?? null,
+      name: this.name().trim().slice(0, MAX_NAME), owner: this.owner(), tripId: old?.tripId ?? null, expiresAt: this.expiresAt ?? old?.expiresAt ?? null,
     });
   }
 
   protected async saveStatus(): Promise<void> {
     const d = this.doc();
     if (!this.link || !d || !this.name().trim()) return;
+    if (groupIsFull(d, this.memberId)) {
+      this.note.set(FULL);
+      return;
+    }
     this.busy.set(true);
     try {
       const now = Date.now();
@@ -261,18 +274,24 @@ export class GroupPage {
         name: this.name().trim().slice(0, MAX_NAME), planLabel: this.label().trim().slice(0, MAX_PLAN_LABEL), arrival: fromLocalInput(this.arrival()),
       }, now);
       const meet = this.meet().trim().slice(0, MAX_MEETUP);
-      if (meet !== (d.meetup?.text ?? '')) next = { ...next, meetup: { text: meet, updatedAt: new Date(now).toISOString() } };
+      if (this.meetDirty && meet !== (d.meetup?.text ?? '')) next = { ...next, meetup: { text: meet, updatedAt: new Date(now).toISOString() } };
       const r = await this.groups.save(this.link, next, this.version);
       if (!r.ok) {
         this.note.set(MESSAGES[r.reason]);
         return;
       }
+      this.meetDirty = false;
       await this.apply(r.doc, r.version, this.expiresAt);
       this.remember();
       this.note.set('Status updated');
     } finally {
       this.busy.set(false);
     }
+  }
+
+  protected editMeet(v: string): void {
+    this.meetDirty = true;
+    this.meet.set(v);
   }
 
   protected async copyLink(viewOnly: boolean): Promise<void> {

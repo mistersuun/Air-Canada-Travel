@@ -1,16 +1,16 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import type { LoadNote, SharedTripPreview, Trip } from '../trips/model';
+import type { SharedTripPreview, Trip } from '../trips/model';
 import { decodeTripShare, encodeTripShare } from '../trips/share-codec';
 import { TripsService } from '../trips/trips.service';
 import {
   type GroupLink, buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newMemberId, newWriteToken,
 } from './group-crypto';
-import { type GroupDoc, type MemberStatus, groupExpiry, mergeGroupDocs, parseGroupDoc, serializeGroupDoc } from './group-doc';
+import { type GroupDoc, type MemberStatus, capMembers, forGroup, groupExpiry, mergeGroupDocs, parseGroupDoc, serializeGroupDoc } from './group-doc';
 
 export const GROUP_ENDPOINT = '/.netlify/functions/group';
 const STORAGE_KEY = 'ac.groups.v1';
-const MAX_CIPHERTEXT = 64 * 1024;
+const MAX_CIPHERTEXT = 96 * 1024;
 export const POLL_MS = 120_000;
 
 /** What this device remembers about a group (the link's fragment is dropped by the router). */
@@ -23,9 +23,11 @@ export interface GroupRecord {
   /** True when this device created the group ("Stop sharing" is offered). */
   owner: boolean;
   tripId: string | null;
+  /** When the server will delete it (ISO), so expired entries can be dropped from this device. */
+  expiresAt: string | null;
 }
 
-export type GroupFailure = 'unavailable' | 'gone' | 'invalid' | 'forbidden' | 'too-large';
+export type GroupFailure = 'unavailable' | 'gone' | 'invalid' | 'forbidden' | 'too-large' | 'budget';
 export type LoadResult = { ok: true; doc: GroupDoc; version: number; expiresAt: string | null } | { ok: false; reason: GroupFailure };
 export type SaveResult = { ok: true; doc: GroupDoc; version: number } | { ok: false; reason: GroupFailure };
 
@@ -41,6 +43,8 @@ export class GroupService {
   private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
 
+  /** Highest version seen per group this session: an older answer (a stale cache or replay) is ignored. */
+  private readonly seen = new Map<string, number>();
   private readonly records = signal<Record<string, GroupRecord>>(this.readRecords());
   readonly all = this.records.asReadonly();
 
@@ -96,6 +100,7 @@ export class GroupService {
   }
 
   private fail(r: Reply): GroupFailure {
+    if (r.status === 503 && r.json?.['error'] === 'budget') return 'budget';
     if (r.status === 404 || r.status === 410) return 'gone';
     if (r.status === 403) return 'forbidden';
     if (r.status === 413) return 'too-large';
@@ -104,12 +109,19 @@ export class GroupService {
 
   async load(link: GroupLink): Promise<LoadResult> {
     const r = await this.call('GET', link.id, null);
-    if (r.status !== 200 || !r.json) return { ok: false, reason: this.fail(r) };
+    if (r.status !== 200 || !r.json) {
+      const reason = this.fail(r);
+      // The group is gone for good (stopped or expired): forget it here so a trip can start a new one.
+      if (reason === 'gone') this.forget(link.id);
+      return { ok: false, reason };
+    }
     const j = r.json;
     if (typeof j['ciphertext'] !== 'string' || typeof j['iv'] !== 'string' || typeof j['version'] !== 'number') return { ok: false, reason: 'unavailable' };
-    const text = await decryptText({ ciphertext: j['ciphertext'], iv: j['iv'] }, link.key);
+    if (j['version'] < (this.seen.get(link.id) ?? 0)) return { ok: false, reason: 'unavailable' };
+    const text = await decryptText({ ciphertext: j['ciphertext'], iv: j['iv'] }, link.key, link.id);
     const doc = text === null ? null : parseGroupDoc(text);
     if (!doc) return { ok: false, reason: 'invalid' };
+    this.seen.set(link.id, j['version']);
     return { ok: true, doc, version: j['version'], expiresAt: typeof j['expiresAt'] === 'string' ? j['expiresAt'] : null };
   }
 
@@ -122,10 +134,14 @@ export class GroupService {
     let mine = doc;
     let base = version;
     for (let attempt = 0; attempt < 4; attempt++) {
-      const sealed = await encryptText(serializeGroupDoc(mine), link.key);
+      mine = { ...mine, members: capMembers(mine.members) };
+      const sealed = await encryptText(serializeGroupDoc(mine), link.key, link.id);
       if (sealed.ciphertext.length > MAX_CIPHERTEXT) return { ok: false, reason: 'too-large' };
       const r = await this.call('PUT', link.id, link.write, { ...sealed, baseVersion: base, ...(expiresAt ? { expiresAt } : {}) });
-      if (r.status === 200 && r.json && typeof r.json['version'] === 'number') return { ok: true, doc: mine, version: r.json['version'] };
+      if (r.status === 200 && r.json && typeof r.json['version'] === 'number') {
+        this.seen.set(link.id, r.json['version']);
+        return { ok: true, doc: mine, version: r.json['version'] };
+      }
       if (r.status !== 409) return { ok: false, reason: this.fail(r) };
       const remote = await this.load(link);
       if (!remote.ok) return remote;
@@ -146,22 +162,34 @@ export class GroupService {
 
   /** Starts a group from a trip on this device. The key and token are made here and never leave except in the link. */
   async create(trip: Trip, nickname: string, nowMs: number = Date.now()): Promise<{ ok: true; record: GroupRecord } | { ok: false; reason: GroupFailure }> {
-    const notes: LoadNote[] = [];
-    let plan: string;
-    try {
-      plan = await encodeTripShare(trip, notes, nowMs);
-    } catch {
-      return { ok: false, reason: 'too-large' };
-    }
+    // Only the plan itself: free-text notes are blanked and load notes are left out.
+    const shared = forGroup(trip);
     const at = new Date(nowMs).toISOString();
     const memberId = newMemberId();
     const name = nickname.trim().slice(0, 24) || 'Me';
-    const record: GroupRecord = { id: newGroupId(), key: await generateGroupKey(), write: newWriteToken(), memberId, name, owner: true, tripId: trip.id };
-    const doc: GroupDoc = { s: 1, plan, planAt: at, members: { [memberId]: { name, planLabel: '', arrival: null, updatedAt: at } }, meetup: null };
-    const saved = await this.save(this.linkOf(record), doc, 0, groupExpiry(trip, nowMs));
-    if (!saved.ok) return saved;
-    this.remember(record);
-    return { ok: true, record };
+    const record: GroupRecord = { id: newGroupId(), key: await generateGroupKey(), write: newWriteToken(), memberId, name, owner: true, tripId: trip.id, expiresAt: null };
+    // A big trip that does not fit is retried without its backups.
+    const variants: Trip[] = [shared, { ...shared, legs: shared.legs.map(l => (l.kind === 'flight' ? { ...l, alternates: [] } : l)) }];
+    const expiresAt = groupExpiry(trip, nowMs);
+    let last: GroupFailure = 'too-large';
+    for (const v of variants) {
+      let plan: string;
+      try {
+        plan = await encodeTripShare(v, [], nowMs);
+      } catch {
+        continue;
+      }
+      const doc: GroupDoc = { s: 1, plan, planAt: at, members: { [memberId]: { name, planLabel: '', arrival: null, updatedAt: at } }, meetup: null };
+      const saved = await this.save(this.linkOf(record), doc, 0, expiresAt);
+      if (saved.ok) {
+        const rec = { ...record, expiresAt };
+        this.remember(rec);
+        return { ok: true, record: rec };
+      }
+      last = saved.reason;
+      if (last !== 'too-large') break;
+    }
+    return { ok: false, reason: last };
   }
 
   // ── Open ────────────────────────────────────────────────────────────────
@@ -189,7 +217,10 @@ export class GroupService {
       const out: Record<string, GroupRecord> = {};
       for (const [id, r] of Object.entries(raw)) {
         if (r && r.id === id && typeof r.key === 'string' && typeof r.memberId === 'string' && typeof r.name === 'string') {
-          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, tripId: typeof r.tripId === 'string' ? r.tripId : null };
+          const expiresAt = typeof r.expiresAt === 'string' && Number.isFinite(Date.parse(r.expiresAt)) ? r.expiresAt : null;
+          // The server deletes it at expiry: drop the entry (and its key) from this device too.
+          if (expiresAt && Date.parse(expiresAt) <= Date.now()) continue;
+          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, tripId: typeof r.tripId === 'string' ? r.tripId : null, expiresAt };
         }
       }
       return out;

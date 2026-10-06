@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DAY_MS, MAX_CIPHERTEXT, computeExpiry, deleteGroup, getGroup, hashToken, parsePutBody, putGroup, sweepGroups, validId, validToken, type GroupStore,
+  DAY_MS, MAX_CIPHERTEXT, computeExpiry, deleteGroup, getGroup, groupDailyCreates, hashToken, parsePutBody, putGroup, sweepGroups, validId, validToken, type GroupStore,
 } from './group';
 
 const NOW = Date.parse('2026-10-06T15:00:00Z');
@@ -35,7 +35,7 @@ describe('validation', () => {
     expect(validToken(TOKEN)).toBe(true);
     for (const bad of [null, 'short', 'x'.repeat(65), 'a b'.repeat(10)]) expect(validToken(bad)).toBe(false);
   });
-  it('body: ciphertext <= 64 KB, 16-char iv, integer baseVersion', () => {
+  it('body: ciphertext <= 96 KB, 16-char iv, integer baseVersion', () => {
     expect(parsePutBody({ ciphertext: 'c'.repeat(MAX_CIPHERTEXT), iv: 'i'.repeat(16), baseVersion: 0 })).not.toBeNull();
     for (const bad of [
       null, [], {}, { ciphertext: 'c'.repeat(MAX_CIPHERTEXT + 1), iv: 'i'.repeat(16), baseVersion: 0 },
@@ -49,6 +49,12 @@ describe('validation', () => {
     expect(Date.parse(computeExpiry(new Date(NOW + 400 * DAY_MS).toISOString(), NOW))).toBe(NOW + 90 * DAY_MS);
     expect(Date.parse(computeExpiry(new Date(NOW - DAY_MS).toISOString(), NOW))).toBe(NOW + DAY_MS);
     expect(Date.parse(computeExpiry(new Date(NOW + 10 * DAY_MS).toISOString(), NOW))).toBe(NOW + 10 * DAY_MS);
+  });
+});
+
+describe('groupDailyCreates', () => {
+  it('defaults to 50 and parses GROUP_DAILY_CREATES', () => {
+    expect([groupDailyCreates(undefined), groupDailyCreates('10'), groupDailyCreates('0'), groupDailyCreates('x'), groupDailyCreates('-1'), groupDailyCreates('')]).toEqual([50, 10, 0, 50, 50, 50]);
   });
 });
 

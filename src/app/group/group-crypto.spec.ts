@@ -3,25 +3,33 @@ import {
   buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newWriteToken, parseGroupFragment, viewOnlyLink,
 } from './group-crypto';
 
+const ID = 'AAAAAAAAAAAAAAAAAAAAAA';
+
 describe('group crypto', () => {
   it('round-trips text, with a fresh IV each time', async () => {
     const key = await generateGroupKey();
     expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    const a = await encryptText('plan: AC834 ✈ Ana', key);
-    const b = await encryptText('plan: AC834 ✈ Ana', key);
+    const a = await encryptText('plan: AC834 ✈ Ana', key, ID);
+    const b = await encryptText('plan: AC834 ✈ Ana', key, ID);
     expect(a.iv).not.toBe(b.iv);
     expect(a.ciphertext).not.toBe(b.ciphertext);
     expect(a.ciphertext).not.toContain('AC834');
-    expect(await decryptText(a, key)).toBe('plan: AC834 ✈ Ana');
+    expect(await decryptText(a, key, ID)).toBe('plan: AC834 ✈ Ana');
   });
   it('fails (null) with the wrong key or tampered data', async () => {
     const key = await generateGroupKey();
-    const sealed = await encryptText('secret', key);
-    expect(await decryptText(sealed, await generateGroupKey())).toBeNull();
+    const sealed = await encryptText('secret', key, ID);
+    expect(await decryptText(sealed, await generateGroupKey(), ID)).toBeNull();
     const flipped = { ...sealed, ciphertext: (sealed.ciphertext[0] === 'A' ? 'B' : 'A') + sealed.ciphertext.slice(1) };
-    expect(await decryptText(flipped, key)).toBeNull();
-    expect(await decryptText({ ciphertext: '!!', iv: '??' }, key)).toBeNull();
-    expect(await decryptText(sealed, 'short')).toBeNull();
+    expect(await decryptText(flipped, key, ID)).toBeNull();
+    expect(await decryptText({ ciphertext: '!!', iv: '??' }, key, ID)).toBeNull();
+    expect(await decryptText(sealed, 'short', ID)).toBeNull();
+  });
+  it('is bound to its group id: the same ciphertext does not open under another id', async () => {
+    const key = await generateGroupKey();
+    const sealed = await encryptText('secret', key, ID);
+    expect(await decryptText(sealed, key, ID)).toBe('secret');
+    expect(await decryptText(sealed, key, 'BBBBBBBBBBBBBBBBBBBBBB')).toBeNull();
   });
   it('ids are 128-bit and tokens 256-bit url-safe strings, all different', () => {
     const ids = new Set([newGroupId(), newGroupId(), newGroupId()]);

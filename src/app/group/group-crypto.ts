@@ -27,18 +27,21 @@ function importKey(keyB64: string): Promise<CryptoKey> {
 
 export interface Sealed { ciphertext: string; iv: string }
 
-/** Encrypts text with a fresh 96-bit IV (never reused). */
-export async function encryptText(plain: string, keyB64: string): Promise<Sealed> {
+/** Authenticated (not secret) context binding a ciphertext to its group, so it cannot be replayed into another group. */
+const aad = (id: string): BufferSource => new TextEncoder().encode(`ac-group:v1:${id}`) as BufferSource;
+
+/** Encrypts text with a fresh 96-bit IV (never reused); `id` is bound as additional data. */
+export async function encryptText(plain: string, keyB64: string, id: string): Promise<Sealed> {
   const iv = rnd(12);
-  const ct = await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource }, await importKey(keyB64), new TextEncoder().encode(plain));
+  const ct = await globalThis.crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource, additionalData: aad(id) }, await importKey(keyB64), new TextEncoder().encode(plain));
   return { ciphertext: toBase64Url(new Uint8Array(ct)), iv: toBase64Url(iv) };
 }
 
 /** Decrypts; null when the key is wrong or the data was altered (GCM authenticates). Never throws. */
-export async function decryptText(sealed: Sealed, keyB64: string): Promise<string | null> {
+export async function decryptText(sealed: Sealed, keyB64: string, id: string): Promise<string | null> {
   try {
     const pt = await globalThis.crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromBase64Url(sealed.iv) as BufferSource }, await importKey(keyB64), fromBase64Url(sealed.ciphertext) as BufferSource);
+      { name: 'AES-GCM', iv: fromBase64Url(sealed.iv) as BufferSource, additionalData: aad(id) }, await importKey(keyB64), fromBase64Url(sealed.ciphertext) as BufferSource);
     return new TextDecoder().decode(pt);
   } catch {
     return null;

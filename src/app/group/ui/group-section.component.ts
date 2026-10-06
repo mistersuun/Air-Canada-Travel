@@ -18,6 +18,7 @@ import { shareOrCopy } from '../share-link';
       <div>
         <h3 class="ui-h3">Group trip</h3>
         <p class="ui-sub">One link for your travel companions: the plan plus who is on which flight. End-to-end encrypted, no accounts.</p>
+        <p class="ui-sub gt__warn" data-group-shared>Shared: your flights, backups, times and the nicknames and statuses members add. Not shared: your notes on legs, "If we split up", load notes, prep checklist and boarding passes.</p>
       </div>
       @if (rec(); as r) {
         <p class="ui-sub gt__warn" data-group-warning>Anyone with this link can see and update the plan. Keep it to your travel companions. Don't share pass or listing details.</p>
@@ -74,7 +75,9 @@ export class GroupSectionComponent {
     try {
       const r = await this.groups.create(this.trip(), this.nick());
       if (!r.ok) {
-        this.problem.set(r.reason === 'too-large' ? 'This trip is too large to share as a group.' : 'Group sharing needs the online service. Try again when you are connected.');
+        this.problem.set(r.reason === 'too-large' ? 'This trip is too large to share as a group.'
+          : r.reason === 'budget' ? 'Group sharing is unavailable right now.'
+          : 'Group sharing needs the online service. Try again when you are connected.');
         return;
       }
       this.state.flash('Group link ready');

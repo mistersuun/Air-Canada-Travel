@@ -1,8 +1,10 @@
 /**
- * The decrypted group document: the existing trip share payload (already
- * stripped of notes-to-self, PNR-like fields and usual items by share-codec)
- * plus a small status map per member and a meet-up point. Deliberately no
- * standby list position, no PNR and no loads.
+ * The decrypted group document: the trip share payload (share-codec drops the
+ * prep state, pending changes, offline/calendar marks and "usual" items; the
+ * trip has no PNR or standby list position field) plus a small status map per
+ * member and a meet-up point. Free text a person wrote to themselves is
+ * blanked by `forGroup` before encoding: every leg's note and "If we split
+ * up". Load notes are not included either.
  */
 import type { Trip } from '../trips/model';
 
@@ -53,7 +55,7 @@ export function parseGroupDoc(text: string): GroupDoc | null {
     const planAt = isoOrNull(raw['planAt']) ?? new Date(0).toISOString();
     const members: Record<string, MemberStatus> = {};
     if (isRec(raw['members'])) {
-      for (const [id, m] of Object.entries(raw['members']).slice(0, MAX_MEMBERS)) {
+      for (const [id, m] of Object.entries(raw['members'])) {
         const ms = MEMBER_ID_RE.test(id) ? sanitizeMember(m) : null;
         if (ms) members[id] = ms;
       }
@@ -64,13 +66,28 @@ export function parseGroupDoc(text: string): GroupDoc | null {
       const t = clean(raw['meetup']['text'], MAX_MEETUP);
       if (at) meetup = { text: t, updatedAt: at };
     }
-    return { s: 1, plan: raw['plan'], planAt, members, meetup };
+    return { s: 1, plan: raw['plan'], planAt, members: capMembers(members), meetup };
   } catch {
     return null;
   }
 }
 
 export const serializeGroupDoc = (d: GroupDoc): string => JSON.stringify(d);
+
+/** Keeps the MAX_MEMBERS most recently updated entries (stalest evicted). */
+export function capMembers(members: Record<string, MemberStatus>): Record<string, MemberStatus> {
+  const e = Object.entries(members);
+  if (e.length <= MAX_MEMBERS) return members;
+  return Object.fromEntries(e.sort((a, b) => Date.parse(b[1].updatedAt) - Date.parse(a[1].updatedAt)).slice(0, MAX_MEMBERS));
+}
+
+/** True when `memberId` would be a new member of a doc that already has MAX_MEMBERS. */
+export const groupIsFull = (doc: GroupDoc, memberId: string): boolean => !(memberId in doc.members) && Object.keys(doc.members).length >= MAX_MEMBERS;
+
+/** The trip as shared with a group: every leg's free-text note and the split note are blanked. */
+export function forGroup(trip: Trip): Trip {
+  return { ...trip, party: { ...trip.party, splitNote: '' }, legs: trip.legs.map(l => ({ ...l, note: '' })) };
+}
 
 const newer = (a: string, b: string): boolean => Date.parse(a) > Date.parse(b);
 
@@ -85,7 +102,7 @@ export function mergeGroupDocs(local: GroupDoc, remote: GroupDoc): GroupDoc {
     const r = members[id];
     if (!r || newer(m.updatedAt, r.updatedAt)) members[id] = m;
   }
-  const limited = Object.fromEntries(Object.entries(members).slice(0, MAX_MEMBERS));
+  const limited = capMembers(members);
   const useLocalPlan = newer(local.planAt, remote.planAt);
   let meetup = remote.meetup;
   if (local.meetup && (!meetup || newer(local.meetup.updatedAt, meetup.updatedAt))) meetup = local.meetup;

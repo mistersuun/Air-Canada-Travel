@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SEVILLE_TRIPS_FILE } from '../trips/testing/seville-fixture';
-import { type GroupDoc, groupExpiry, memberList, mergeGroupDocs, parseGroupDoc, planLabelSuggestions, serializeGroupDoc, tripLastDate } from './group-doc';
+import { type GroupDoc, MAX_MEMBERS, capMembers, forGroup, groupExpiry, groupIsFull, memberList, mergeGroupDocs, parseGroupDoc, planLabelSuggestions, serializeGroupDoc, tripLastDate } from './group-doc';
 
 const T = (n: number) => new Date(Date.parse('2026-10-06T12:00:00Z') + n * 60_000).toISOString();
 const doc = (over: Partial<GroupDoc> = {}): GroupDoc => ({ s: 1, plan: 'zabc', planAt: T(0), members: {}, meetup: null, ...over });
@@ -65,5 +65,26 @@ describe('trip helpers', () => {
   });
   it('suggests "On <flight>" labels', () => {
     expect(planLabelSuggestions(trip).every(s => /^(On |Plan B: )[A-Z0-9]+/.test(s))).toBe(true);
+  });
+});
+
+describe('member cap and sharing', () => {
+  const many = (n: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`member${String(i).padStart(3, '0')}`, m(`M${i}`, i)]));
+  it('keeps the 30 most recently updated, in parse and merge', () => {
+    expect(Object.keys(capMembers(many(35)))).toHaveLength(MAX_MEMBERS);
+    expect(capMembers(many(35))['member000']).toBeUndefined();
+    expect(Object.keys(parseGroupDoc(serializeGroupDoc(doc({ members: many(40) })))!.members)).toHaveLength(MAX_MEMBERS);
+    expect(Object.keys(mergeGroupDocs(doc({ members: many(20) }), doc({ members: { ...many(20), extra01: m('X', 99), extra02: m('Y', 98), extra03: m('Z', 97), extra04: m('W', 96), extra05: m('V', 95), extra06: m('U', 94), extra07: m('T', 93), extra08: m('S', 92), extra09: m('R', 91), extra10: m('Q', 90), extra11: m('P', 89) } })).members)).toHaveLength(MAX_MEMBERS);
+  });
+  it('refuses a new member of a full group but not an existing one', () => {
+    const full = doc({ members: many(MAX_MEMBERS) });
+    expect(groupIsFull(full, 'newcomer1')).toBe(true);
+    expect(groupIsFull(full, 'member000')).toBe(false);
+    expect(groupIsFull(doc({ members: many(3) }), 'newcomer1')).toBe(false);
+  });
+  it('forGroup blanks leg notes and the split note', () => {
+    const t = forGroup({ ...trip, party: { ...trip.party, splitNote: 'x' }, legs: trip.legs.map(l => ({ ...l, note: 'private' })) });
+    expect(t.party.splitNote).toBe('');
+    expect(t.legs.every(l => l.note === '')).toBe(true);
   });
 });

@@ -3,13 +3,17 @@
 // sha256 of the write token. No accounts, no logging of bodies or headers.
 //   GET    ?id=            -> {ciphertext, iv, version, updatedAt, expiresAt}   (404 / 410)
 //   PUT    ?id=  X-Group-Write  {ciphertext, iv, baseVersion, expiresAt?}      (409 on conflict)
+//   (creating a group also spends from the GROUP_DAILY_CREATES budget: 503 {error:'budget'})
 //   DELETE ?id=  X-Group-Write                                                  ("Stop sharing")
 import { getStore } from '@netlify/blobs';
-import { makeLimiter } from './lib/flight-status.ts';
-import { MAX_CIPHERTEXT, deleteGroup, getGroup, parsePutBody, putGroup, validId, validToken, type GroupStore } from './lib/group.ts';
+import { makeBudget, makeLimiter } from './lib/flight-status.ts';
+import { MAX_CIPHERTEXT, deleteGroup, groupDailyCreates, getGroup, parsePutBody, putGroup, validId, validToken, type GroupStore } from './lib/group.ts';
 
 // Writes only (create, update, delete): 30 per IP per 10 minutes.
 const allowWrite = makeLimiter(30, 10 * 60_000);
+
+// Reads: a looser per-IP limit (several companions can share one network; the app polls every 2 minutes).
+const allowRead = makeLimiter(300, 10 * 60_000);
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -28,7 +32,9 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
   const now = Date.now();
 
   let token = '';
-  if (method !== 'GET') {
+  if (method === 'GET') {
+    if (!allowRead(context.ip || 'unknown', now)) return json({ error: 'rate-limited' }, 429);
+  } else {
     const t = req.headers.get('x-group-write');
     if (!validToken(t)) return json({ error: 'forbidden' }, 403);
     token = t;
@@ -59,6 +65,16 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
     try { raw = JSON.parse(text); } catch { return json({ error: 'bad-request' }, 400); }
     const body = parsePutBody(raw);
     if (!body) return json({ error: 'bad-request' }, 400);
+    // New groups spend from a global daily budget (conditional Blobs writes, fails closed).
+    if (body.baseVersion === 0) {
+      let spend: (nowMs: number) => Promise<boolean>;
+      try {
+        spend = makeBudget(getStore({ name: 'groups-budget', consistency: 'strong' }), groupDailyCreates(process.env['GROUP_DAILY_CREATES']));
+      } catch {
+        return json({ error: 'budget' }, 503);
+      }
+      if (!(await spend(now))) return json({ error: 'budget' }, 503);
+    }
     const r = await putGroup(store, id, token, body, now);
     return json(r.body, r.status);
   } catch (e) {

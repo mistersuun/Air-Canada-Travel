@@ -166,4 +166,69 @@ describe('GroupService (client against the real server logic)', () => {
     expect(svc.recordFor(created.record.id)).toBeNull();
     expect(parseGroupDoc('{}')).toBeNull();
   });
+
+  it('forgets a group the server says is gone, so the trip can start a new one', async () => {
+    const created = await svc.create(trip, 'Ana', NOW_MS);
+    if (!created.ok) throw new Error('create failed');
+    store.m.clear();
+    expect(await svc.load(svc.linkOf(created.record))).toEqual({ ok: false, reason: 'gone' });
+    expect(svc.recordFor(created.record.id)).toBeNull();
+    expect(svc.forTrip(trip.id)).toBeNull();
+  });
+
+  it('blanks leg notes and the split note before sharing', async () => {
+    const noted = { ...trip, party: { ...trip.party, splitNote: 'my secret split' }, legs: trip.legs.map(l => ({ ...l, note: 'my private leg note' })) };
+    const created = await svc.create(noted, 'Ana', NOW_MS);
+    if (!created.ok) throw new Error('create failed');
+    const opened = await svc.load(svc.linkOf(created.record));
+    if (!opened.ok) throw new Error('load failed');
+    const p = (await svc.previewOf(opened.doc))!;
+    expect(p.trip.party.splitNote).toBe('');
+    expect(p.trip.legs.every(l => l.note === '')).toBe(true);
+    expect(JSON.stringify(opened.doc)).not.toContain('private leg note');
+  });
+
+  it('ignores an older version than one already seen, and a ciphertext replayed from another group', async () => {
+    const a = await svc.create(trip, 'Ana', NOW_MS);
+    const b = await svc.create(trip, 'Ben', NOW_MS);
+    if (!a.ok || !b.ok) throw new Error('create failed');
+    const linkA = svc.linkOf(a.record);
+    const first = await svc.load(linkA);
+    if (!first.ok) throw new Error('load failed');
+    const snapshot = store.m.get(a.record.id)!.v;
+    await svc.save(linkA, svc.withMember(first.doc, 'zzzzzz1', { name: 'Zed' }, NOW_MS + 1000), first.version);
+    store.m.set(a.record.id, { v: snapshot, e: 99 });
+    expect(await svc.load(linkA)).toEqual({ ok: false, reason: 'unavailable' });
+    // Group B's blob under A's id (same key would be needed too): authentication fails.
+    store.m.set(a.record.id, { v: JSON.stringify({ ...JSON.parse(store.m.get(b.record.id)!.v), version: 9 }), e: 100 });
+    expect(await svc.load({ ...linkA, key: b.record.key })).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  it('a member cap of 30: the stalest are evicted on save', async () => {
+    const created = await svc.create(trip, 'Ana', NOW_MS);
+    if (!created.ok) throw new Error('create failed');
+    const link = svc.linkOf(created.record);
+    let cur = await svc.load(link);
+    if (!cur.ok) throw new Error('load failed');
+    let doc = cur.doc;
+    for (let i = 0; i < 31; i++) doc = svc.withMember(doc, `member${String(i).padStart(3, '0')}`, { name: `M${i}` }, NOW_MS + (i + 1) * 1000);
+    const saved = await svc.save(link, doc, cur.version);
+    expect(saved.ok && Object.keys(saved.doc.members)).toHaveLength(30);
+    expect(saved.ok && saved.doc.members['member000']).toBeUndefined();
+    expect(saved.ok && saved.doc.members['member030']).toBeDefined();
+  });
+
+  it('shows "budget" when the daily create budget is spent', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'budget' }), { status: 503, headers: { 'Content-Type': 'application/json' } })));
+    expect(await svc.create(trip, 'Ana', NOW_MS)).toEqual({ ok: false, reason: 'budget' });
+  });
+
+  it('drops expired entries from this device', () => {
+    localStorage.setItem('ac.groups.v1', JSON.stringify({
+      AAAAAAAAAAAAAAAAAAAAAA: { id: 'AAAAAAAAAAAAAAAAAAAAAA', key: 'k', write: null, memberId: 'm', name: 'n', owner: false, tripId: null, expiresAt: '2020-01-01T00:00:00Z' },
+      BBBBBBBBBBBBBBBBBBBBBB: { id: 'BBBBBBBBBBBBBBBBBBBBBB', key: 'k', write: null, memberId: 'm', name: 'n', owner: false, tripId: null, expiresAt: '2999-01-01T00:00:00Z' },
+    }));
+    const fresh = TestBed.runInInjectionContext(() => new GroupService());
+    expect(Object.keys(fresh.all())).toEqual(['BBBBBBBBBBBBBBBBBBBBBB']);
+  });
 });

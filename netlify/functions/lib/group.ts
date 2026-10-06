@@ -3,10 +3,16 @@
 // fragment and never reaches this code; the write token is stored only as sha256(token).
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-export const MAX_CIPHERTEXT = 64 * 1024;
+export const MAX_CIPHERTEXT = 96 * 1024;
 export const DAY_MS = 86_400_000;
 export const DEFAULT_TTL_DAYS = 30;
 export const MAX_TTL_DAYS = 90;
+
+/** GROUP_DAILY_CREATES, default 50 new groups per UTC day (global); junk falls back to the default. */
+export function groupDailyCreates(raw: string | undefined): number {
+  const n = Number(raw);
+  return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 50;
+}
 
 /** The slice of a Netlify Blobs store the group endpoint needs. */
 export interface GroupStore {

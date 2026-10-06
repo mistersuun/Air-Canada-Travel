@@ -115,6 +115,11 @@ export const routes: Routes = [
     title: 'Travel profile · Routes',
   },
   {
+    path: 'weekend',
+    loadComponent: () => import('./pages/weekend/weekend.page').then(m => m.WeekendPage),
+    title: 'Weekend finder · Routes',
+  },
+  {
     path: 'today',
     loadComponent: () => import('./pages/today/today.page').then(m => m.TodayPage),
     title: 'Today · Routes',

@@ -98,6 +98,7 @@ interface ListRow {
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
                           [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
+          <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder ›</a>
         </div>
         @if (wide()) {
           <app-week-card [hub]="state.hub()" [range]="range()" [stats]="state.stats()" [entries]="state.allRoutes()"
@@ -212,6 +213,7 @@ interface ListRow {
   `,
   styles: [`
     :host { display: block; }
+    .wkend { display: inline-block; margin-top: 12px; }
     .hero { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; margin-top: 40px; align-items: start; }
     .hero__main { min-width: 0; }
     .greet { font-size: 15px; }

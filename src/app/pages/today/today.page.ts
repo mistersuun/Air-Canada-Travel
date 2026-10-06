@@ -18,6 +18,7 @@ import { type TodayTarget, resolveToday, statusForTick, todayView } from './toda
 import { TodayTimelineComponent } from './today-timeline.component';
 import { TodayInAirComponent } from './in-air.component';
 import { LiveStatusComponent } from '../../live/live-status.component';
+import { recoverTarget } from '../../live/flight-status';
 import { refDepUtc } from '../../trips/engine/legs';
 import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
@@ -49,8 +50,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
           </div>
           <p class="td__sub tn">{{ v.sub }}</p>
           <app-live-status [flightNumber]="v.ref.flightNumber" [origin]="v.ref.origin" [depUtc]="depUtc(v.ref)"
-                           [recoverLink]="recoverLink(v.tripId, v.isReturn)" [recoverParams]="v.isReturn ? undefined : { at: v.ref.origin, leg: v.legId }"
-                           [recoverLabel]="v.isReturn ? 'See ways home' : 'What can I still reach?'" />
+                           [recoverLink]="live(v).link" [recoverParams]="live(v).params" [recoverLabel]="live(v).label" />
           @if (v.note; as n) {
             <p class="td__note" data-note>Your note, {{ n.time }}: <b>{{ n.text }}</b></p>
           }
@@ -241,9 +241,9 @@ export class TodayPage {
 
   protected depUtc = refDepUtc;
 
-  /** Recover page for a cancelled flight; a return leg goes to the Return tab, like "What can I still reach?" does. */
-  protected recoverLink(tripId: string, isReturn: boolean): string | string[] {
-    return isReturn ? tripUrl(tripId, 'return') : recoverPath(tripId);
+  /** Where "Cancelled" points: Recover, or the Return tab for a return leg. */
+  protected live(v: { tripId: string; legId: string; isReturn: boolean; ref: { origin: string } }) {
+    return recoverTarget(v.tripId, v.isReturn, v.ref.origin, v.legId);
   }
 
   protected statusLabel(s: LegStatus): string {

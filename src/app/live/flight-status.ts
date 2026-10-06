@@ -6,6 +6,7 @@
 import { formatClock, utcToLocal, MINUTE_MS } from '../utils/time';
 import type { TimeFormat } from '../state/prefs.service';
 import { airportTz } from '../utils/airports';
+import { recoverPath, tripPath, tripQuery } from '../ui/links';
 
 export interface StatusEnd { scheduled: string | null; estimated: string | null; actual: string | null; gate: string | null; terminal: string | null }
 
@@ -53,8 +54,10 @@ export function shouldPoll(s: FlightStatus | null, nowMs: number): boolean {
 export function depIso(depUtc: number): string {
   return new Date(depUtc).toISOString().slice(0, 16) + 'Z';
 }
-/** A cached result older than this is not shown. */
-export const MAX_AGE_MS = 10 * MINUTE_MS;
+/** A result older than this is not shown: 10 minutes within 6h of departure, 40 when polling every 30 (CDN lifetime plus a poll). */
+export function maxAgeMs(depUtc: number, nowMs: number): number {
+  return depUtc - nowMs > NEAR_MS ? 40 * MINUTE_MS : 10 * MINUTE_MS;
+}
 
 export function inStatusWindow(depUtc: number, nowMs: number): boolean {
   const d = depUtc - nowMs;
@@ -133,4 +136,12 @@ export function statusLine(s: FlightStatus, origin: string, nowMs: number, fmt: 
     else if (s.inbound.estimatedIn) parts.push(`Inbound ${s.inbound.ident} estimated in ${clock(s.inbound.estimatedIn, tz, fmt)}`);
   }
   return { cancelled: false, text: parts.join(' · '), source };
+}
+
+/** Where a cancelled flight sends the traveller: Recover, or the Return tab for a return leg (router command + query). */
+export function recoverTarget(tripId: string, isReturn: boolean, origin: string, legId: string):
+  { link: string[]; params: Record<string, string>; label: string } {
+  return isReturn
+    ? { link: tripPath(tripId), params: tripQuery('return'), label: 'See ways home' }
+    : { link: recoverPath(tripId), params: { at: origin, leg: legId }, label: 'What can I still reach?' };
 }

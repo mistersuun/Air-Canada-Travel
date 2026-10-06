@@ -1,6 +1,6 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { AppStateService } from '../state/app-state.service';
-import { MAX_AGE_MS, STATUS_ENDPOINT, depIso, parseStatus, statusKey, type FlightStatus } from './flight-status';
+import { STATUS_ENDPOINT, maxAgeMs, depIso, parseStatus, statusKey, type FlightStatus } from './flight-status';
 
 /** How the endpoint is called; specs replace it. Resolves to the HTTP status and parsed JSON (null when not JSON). */
 export const STATUS_FETCH = new InjectionToken<(url: string) => Promise<{ status: number; body: unknown }>>('STATUS_FETCH', {
@@ -69,9 +69,9 @@ export class FlightStatusService {
     }
   }
 
-  /** The entry's data unless it is older than MAX_AGE_MS. */
-  fresh(e: StatusEntry | null, nowMs: number): FlightStatus | null {
-    return e?.data && nowMs - Date.parse(e.data.fetchedAt) <= MAX_AGE_MS ? e.data : null;
+  /** The entry's data unless it is older than maxAgeMs() for this departure. */
+  fresh(e: StatusEntry | null, nowMs: number, depUtc: number): FlightStatus | null {
+    return e?.data && nowMs - Date.parse(e.data.fetchedAt) <= maxAgeMs(depUtc, nowMs) ? e.data : null;
   }
 
   private mark(key: string): void {

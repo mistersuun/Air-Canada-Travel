@@ -6,7 +6,7 @@
 // Spend control (AeroAPI bills per call): Air Canada idents only; the CDN
 // answers repeats (Netlify-Vary on ident|origin|dep, 5 to 30 minute TTL); each
 // IP gets ~10 cache misses per 10 minutes; and a global daily call budget
-// (AEROAPI_DAILY_LIMIT, default 40) is counted in Netlify Blobs.
+// (AEROAPI_DAILY_LIMIT, default 40) is counted in Netlify Blobs with conditional writes.
 import { getStore } from '@netlify/blobs';
 import {
   cacheSeconds, dailyLimit, inboundIdToFetch, makeBudget, makeLimiter, normalizeFlight, normalizeInbound, pickFlight, queryWindow,
@@ -22,7 +22,7 @@ function json(body: unknown, status: number, cdn: string | null, browser = NO_ST
   const headers: Record<string, string> = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': browser };
   if (cdn) {
     headers['Netlify-CDN-Cache-Control'] = cdn;
-    if (status === 200 || status === 404) headers['Netlify-Vary'] = VARY;
+    headers['Netlify-Vary'] = VARY;
   }
   return new Response(JSON.stringify(body), { status, headers });
 }
@@ -52,7 +52,7 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
 
   let spend: (nowMs: number, calls?: number) => Promise<boolean>;
   try {
-    spend = makeBudget(getStore('aeroapi-budget'), dailyLimit(process.env['AEROAPI_DAILY_LIMIT']));
+    spend = makeBudget(getStore({ name: 'aeroapi-budget', consistency: 'strong' }), dailyLimit(process.env['AEROAPI_DAILY_LIMIT']));
   } catch {
     return json({ error: 'budget' }, 503, null);
   }

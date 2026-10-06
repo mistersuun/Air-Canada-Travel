@@ -54,7 +54,7 @@ export class LiveStatusComponent {
   readonly depUtc = input.required<number>();
   /** How far before departure to start asking, in ms (the flight page uses 6h). */
   readonly leadMs = input<number>(WINDOW_AFTER_MS);
-  readonly recoverLink = input<string | string[] | null>(null);
+  readonly recoverLink = input<string[] | null>(null);
   readonly recoverParams = input<Record<string, string> | undefined>(undefined);
   readonly recoverLabel = input('What can I still reach?');
 
@@ -66,7 +66,7 @@ export class LiveStatusComponent {
   private readonly entry = computed(() => this.svc.entry(this.flightNumber(), this.origin(), this.depUtc()));
 
   protected readonly line = computed(() => {
-    const d = this.active() ? this.svc.fresh(this.entry(), this.state.nowMs()) : null;
+    const d = this.active() ? this.svc.fresh(this.entry(), this.state.nowMs(), this.depUtc()) : null;
     return d ? statusLine(d, this.origin(), this.state.nowMs(), this.prefs.timeFormat()) : null;
   });
   /** Only when a result was shown before and the latest refresh failed. */
@@ -76,27 +76,29 @@ export class LiveStatusComponent {
   });
 
   constructor() {
-    // Ask when the flight (or window membership) changes, then on a timer while visible.
+    // Ask when the flight (or window membership) changes, then on a timer while visible. Only
+    // active()/the inputs are tracked: the loop itself must not re-run the effect on every clock tick.
     effect(onCleanup => {
       if (!this.active()) return;
       const ident = this.flightNumber();
       const origin = this.origin();
       const dep = this.depUtc();
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const visible = () => document.visibilityState === 'visible';
-      const go = (minAge: number) => {
-        if (!visible()) return;
-        const data = untracked(() => this.svc.entry(ident, origin, dep)?.data ?? null);
-        if (shouldPoll(data, this.state.nowMs())) void untracked(() => this.svc.refresh(ident, origin, dep, minAge));
-      };
-      const loop = () => {
-        go(0);
-        timer = setTimeout(loop, pollDelay(dep, this.state.nowMs()));
-      };
-      loop();
-      const onVis = () => go(VISIBLE_MIN_AGE_MS);
-      document.addEventListener('visibilitychange', onVis);
-      onCleanup(() => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVis); });
+      untracked(() => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const go = (minAge: number) => {
+          if (document.visibilityState !== 'visible') return;
+          const data = this.svc.entry(ident, origin, dep)?.data ?? null;
+          if (shouldPoll(data, this.state.nowMs())) void this.svc.refresh(ident, origin, dep, minAge);
+        };
+        const loop = () => {
+          go(0);
+          timer = setTimeout(loop, pollDelay(dep, this.state.nowMs()));
+        };
+        loop();
+        const onVis = () => go(VISIBLE_MIN_AGE_MS);
+        document.addEventListener('visibilitychange', onVis);
+        onCleanup(() => { clearTimeout(timer); document.removeEventListener('visibilitychange', onVis); });
+      });
     });
   }
 }

@@ -58,9 +58,15 @@ export function queryWindow(depMs: number): { start: string; end: string } {
   return { start: isoZ(depMs - 3 * HOUR_MS), end: isoZ(depMs + 3 * HOUR_MS) };
 }
 
-/** CDN lifetime in seconds: half an hour while the departure is more than 6h away, 5 minutes within 6h. */
+/**
+ * CDN lifetime in seconds: 5 minutes within 6h of departure; before that up to
+ * 30 minutes, but never long enough to still be served once the 6h mark passes
+ * (the client polls faster from there on).
+ */
 export function cacheSeconds(depMs: number, nowMs: number): number {
-  return depMs - nowMs > 6 * HOUR_MS ? 1800 : 300;
+  const ahead = depMs - nowMs;
+  if (ahead <= 6 * HOUR_MS) return 300;
+  return Math.min(1800, Math.max(300, Math.floor((ahead - 6 * HOUR_MS) / 1000)));
 }
 
 /** Key of the per-day AeroAPI call counter (UTC date). */
@@ -74,21 +80,34 @@ export function dailyLimit(raw: string | undefined): number {
   return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 40;
 }
 
+/** The slice of a Netlify Blobs store the budget needs (conditional writes on an ETag). */
+export interface CounterStore {
+  getWithMetadata(key: string): Promise<{ data: string; etag?: string } | null>;
+  set(key: string, value: string, options: { onlyIfNew: true } | { onlyIfMatch: string }): Promise<{ modified: boolean }>;
+}
+
 /**
- * Daily AeroAPI call budget over a tiny key/value store (Netlify Blobs in
- * production). Best effort, not atomic: two simultaneous misses can both read
- * the same count, which over-spends by at most a few calls. A store failure
- * refuses the call (fails closed).
+ * Daily AeroAPI call budget over a key/value store (Netlify Blobs, strong
+ * consistency, in production). Race-free: every write is conditional (create
+ * only if new, or update only if the ETag read is still current) and retried a
+ * few times, so concurrent misses cannot over-spend. A store failure or lost
+ * race refuses the call (fails closed).
  */
-export function makeBudget(store: { get(key: string): Promise<string | null>; set(key: string, value: string): Promise<unknown> }, limit: number) {
+export function makeBudget(store: CounterStore, limit: number) {
   return async (nowMs: number, calls = 1): Promise<boolean> => {
     try {
       const key = budgetKey(nowMs);
-      const used = Number((await store.get(key)) ?? '0');
-      const n = Number.isFinite(used) ? used : 0;
-      if (n + calls > limit) return false;
-      await store.set(key, String(n + calls));
-      return true;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const cur = await store.getWithMetadata(key);
+        const used = cur ? Number(cur.data) : 0;
+        const n = Number.isFinite(used) ? used : 0;
+        if (n + calls > limit) return false;
+        const r = cur
+          ? await store.set(key, String(n + calls), { onlyIfMatch: cur.etag ?? '' })
+          : await store.set(key, String(calls), { onlyIfNew: true });
+        if (r.modified) return true;
+      }
+      return false;
     } catch {
       return false;
     }

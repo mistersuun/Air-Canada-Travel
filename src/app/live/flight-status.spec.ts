@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 import { FlightStatusService, STATUS_FETCH } from './flight-status.service';
-import { agoLabel, depIso, inStatusWindow, parseStatus, pollDelay, shouldPoll, statusLine, type FlightStatus } from './flight-status';
+import { agoLabel, depIso, inStatusWindow, maxAgeMs, parseStatus, pollDelay, recoverTarget, shouldPoll, statusLine, type FlightStatus } from './flight-status';
 
 const H = 3_600_000;
 const NOW = Date.parse('2026-10-06T18:00:00Z');
@@ -64,6 +64,17 @@ describe('polling', () => {
     await svc.refresh('AC834', 'YUL', DEP);
     await svc.refresh('AC834', 'YUL', DEP, 2 * 60_000);
     expect(calls.length).toBe(1);
+  });
+});
+
+describe('freshness and recover target', () => {
+  it('shows results up to 40 min old when polling every 30, 10 min within 6h', () => {
+    expect(maxAgeMs(NOW + 20 * H, NOW)).toBe(40 * 60_000);
+    expect(maxAgeMs(NOW + 5 * H, NOW)).toBe(10 * 60_000);
+  });
+  it('a return leg points at the trip with ?tab=return (command + query, not an encoded string)', () => {
+    expect(recoverTarget('abc', true, 'YUL', 'L1')).toEqual({ link: ['/trips', 'abc'], params: { tab: 'return' }, label: 'See ways home' });
+    expect(recoverTarget('abc', false, 'YUL', 'L1')).toMatchObject({ link: ['/trips', 'abc', 'recover'], params: { at: 'YUL', leg: 'L1' } });
   });
 });
 

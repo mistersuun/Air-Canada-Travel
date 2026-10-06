@@ -42,8 +42,10 @@ describe('queryWindow / cacheSeconds', () => {
   it('is dep +/- 3h', () => {
     expect(queryWindow(Date.parse('2026-10-07T06:45:00Z'))).toEqual({ start: '2026-10-07T03:45:00Z', end: '2026-10-07T09:45:00Z' });
   });
-  it('caches 30 min until 6h out, then 5 min', () => {
-    expect(cacheSeconds(NOW + 7 * H, NOW)).toBe(1800);
+  it('caches up to 30 min, never past the 6h mark, and 5 min within 6h', () => {
+    expect(cacheSeconds(NOW + 12 * H, NOW)).toBe(1800);
+    expect(cacheSeconds(NOW + 6.2 * H, NOW)).toBe(720);
+    expect(cacheSeconds(NOW + 6 * H + 60_000, NOW)).toBe(300);
     expect(cacheSeconds(NOW + 6 * H, NOW)).toBe(300);
     expect(cacheSeconds(NOW - H, NOW)).toBe(300);
   });
@@ -138,22 +140,42 @@ describe('makeLimiter', () => {
 });
 
 describe('daily budget', () => {
+  /** In-memory store with ETag semantics; awaits make concurrent callers interleave. */
   const memory = () => {
-    const m = new Map<string, string>();
-    return { m, get: async (k: string) => m.get(k) ?? null, set: async (k: string, v: string) => { m.set(k, v); } };
+    const m = new Map<string, { v: string; e: number }>();
+    let seq = 0;
+    return {
+      m,
+      getWithMetadata: async (k: string) => { await Promise.resolve(); const x = m.get(k); return x ? { data: x.v, etag: String(x.e) } : null; },
+      set: async (k: string, v: string, o: { onlyIfNew?: true; onlyIfMatch?: string }) => {
+        await Promise.resolve();
+        const x = m.get(k);
+        if (o.onlyIfNew && x) return { modified: false };
+        if (o.onlyIfMatch !== undefined && (!x || String(x.e) !== o.onlyIfMatch)) return { modified: false };
+        m.set(k, { v, e: ++seq });
+        return { modified: true };
+      },
+    };
   };
   it('keys by UTC date and parses the limit with a default of 40', () => {
     expect(budgetKey(NOW)).toBe('calls-2026-10-06');
     expect([dailyLimit(undefined), dailyLimit('15'), dailyLimit('x'), dailyLimit(''), dailyLimit('-3'), dailyLimit('0')]).toEqual([40, 15, 40, 40, 40, 0]);
   });
   it('spends up to the limit, then refuses; a new UTC day starts again', async () => {
-    const store = memory();
-    const spend = makeBudget(store, 3);
+    const spend = makeBudget(memory(), 3);
     expect([await spend(NOW), await spend(NOW), await spend(NOW), await spend(NOW)]).toEqual([true, true, true, false]);
     expect(await spend(NOW + 24 * H)).toBe(true);
   });
+  it('is race-free: concurrent callers never exceed the limit and the counter matches the grants', async () => {
+    const store = memory();
+    const spend = makeBudget(store, 3);
+    const results = await Promise.all([spend(NOW), spend(NOW), spend(NOW), spend(NOW), spend(NOW)]);
+    const granted = results.filter(Boolean).length;
+    expect(granted).toBeLessThanOrEqual(3);
+    expect(Number(store.m.get(budgetKey(NOW))!.v)).toBe(granted);
+  });
   it('fails closed when the store throws', async () => {
-    const spend = makeBudget({ get: async () => { throw new Error('down'); }, set: async () => {} }, 10);
+    const spend = makeBudget({ getWithMetadata: async () => { throw new Error('down'); }, set: async () => ({ modified: true }) }, 10);
     expect(await spend(NOW)).toBe(false);
   });
 });

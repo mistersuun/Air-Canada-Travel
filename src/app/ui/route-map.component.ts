@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, booleanAttribute, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, input, linkedSignal,
   output, signal,
 } from '@angular/core';
-import { GeoProjection, geoNaturalEarth1, geoPath } from 'd3-geo';
+import { GeoProjection, geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { findDestination, findHub } from '../utils/airports';
 import { GeoService } from '../state/geo.service';
 
@@ -63,7 +63,16 @@ export const DRAG_PX = 4;
             <path class="arc" [class.arc--connect]="p.kind === 'connect'" [attr.d]="p.arc" />
           }
         }
-        @if (hotPoint(); as p) { <path class="arc hot" [attr.d]="p.arc" /> }
+        @for (p of hotList(); track p.code) {
+          <path class="arc hot" [attr.d]="p.arc" pathLength="1" />
+          @if (glide() && p.arc) {
+            <g class="plane" opacity="0">
+              <path class="plane__p" transform="translate(-6 -6) scale(.5) rotate(90 12 12)" d="M21.5 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13.5 19v-5.5l8 2.5Z" />
+              <animateMotion [attr.path]="p.arc" dur="1.6s" begin="0.7s" rotate="auto" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines=".4 0 .6 1" />
+              <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.8;1" dur="1.6s" begin="0.7s" fill="freeze" />
+            </g>
+          }
+        }
       }
       @for (p of drawn(); track p.code) {
         <circle class="dotp" [class.dotp--connect]="p.kind === 'connect'" [class.hot]="p.hot"
@@ -74,6 +83,12 @@ export const DRAG_PX = 4;
       }
       @for (l of labelled(); track l.code) {
         <text class="mlab" [attr.x]="l.x + 7" [attr.y]="l.y - 6">{{ l.text }}</text>
+      }
+      @if (marker(); as m) {
+        <g class="plane" [attr.transform]="'translate(' + m.x + ' ' + m.y + ') rotate(' + m.angle + ')'" data-progress-plane>
+          <circle r="9" class="plane__halo" />
+          <path class="plane__p" transform="translate(-7 -7) scale(.58) rotate(90 12 12)" d="M21.5 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13.5 19v-5.5l8 2.5Z" />
+        </g>
       }
       @if (hubXY(); as o) {
         @if (pulse()) { <circle class="pulse" [attr.cx]="o[0]" [attr.cy]="o[1]" r="9" /> }
@@ -90,7 +105,11 @@ export const DRAG_PX = 4;
     .land { fill: var(--land); stroke: var(--surface); stroke-width: .7; }
     .arc { fill: none; stroke: var(--blue); stroke-width: 1; opacity: .45; }
     .arc--connect { stroke: var(--amber); stroke-dasharray: 3 3; }
-    .arc.hot { stroke: var(--red); stroke-width: 2.2; opacity: 1; }
+    .arc.hot { stroke: var(--red); stroke-width: 2.2; opacity: 1; stroke-dasharray: 1; animation: map-draw 700ms var(--ease-out) both; }
+    .plane__p { fill: var(--ink); stroke: var(--surface); stroke-width: 1.2; paint-order: stroke; }
+    .plane__halo { fill: var(--surface); opacity: .85; }
+    .plane { pointer-events: none; }
+    @keyframes map-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
     .dotp { fill: var(--surface); stroke: var(--blue); stroke-width: 1.4; }
     .dotp--connect { stroke: var(--amber); }
     .dotp.hot { stroke: var(--red); }
@@ -101,7 +120,7 @@ export const DRAG_PX = 4;
       fill: var(--blue); opacity: .25; pointer-events: none;
       animation: ui-pulse 2s ease-out infinite; transform-box: fill-box; transform-origin: center;
     }
-    @media (prefers-reduced-motion: reduce) { .pulse { animation: none; opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .arc.hot { animation: none; stroke-dashoffset: 0; } .pulse { animation: none; opacity: 0; } }
   `],
 })
 export class RouteMapComponent {
@@ -120,6 +139,8 @@ export class RouteMapComponent {
   readonly arcs = input(true, { transform: booleanAttribute });
   readonly pulse = input(true, { transform: booleanAttribute });
   readonly interactive = input(false, { transform: booleanAttribute });
+  /** 0..1 along the great circle from the hub to the highlighted destination: shows a static plane there (an estimate). */
+  readonly progress = input<number | null>(null);
 
   readonly pointClick = output<string>();
   readonly pointHover = output<string | null>();
@@ -198,6 +219,33 @@ export class RouteMapComponent {
   });
 
   protected readonly hotPoint = computed(() => this.drawn().find(d => d.hot) ?? null);
+
+  /** The hot arc as a one-item list tracked by code: re-created (and so re-animated) only when the destination changes. */
+  protected readonly hotList = computed(() => {
+    const p = this.hotPoint();
+    return p ? [p] : [];
+  });
+
+  /** The one-shot plane glide. SMIL ignores the CSS reduced-motion override, so it is not rendered then or when a progress marker is shown instead. */
+  protected readonly glide = computed(() => this.progress() === null && !prefersReducedMotion());
+
+  /** The progress plane: screen position and heading along the projected great circle. */
+  protected readonly marker = computed(() => {
+    const t = this.progress();
+    const hot = this.highlight();
+    if (t === null || !hot) return null;
+    const dest = this.points().find(p => p.code === hot) ?? findDestination(hot) ?? findHub(hot);
+    if (!dest) return null;
+    const p = this.projection();
+    const at = geoInterpolate(this.hubLngLat(), [dest.lng, dest.lat]);
+    const k = Math.min(1, Math.max(0, t));
+    const xy = p(at(k));
+    const a = p(at(Math.max(0, k - 0.01)));
+    const b = p(at(Math.min(1, k + 0.01)));
+    if (!xy || !a || !b) return null;
+    const angle = Math.round(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI);
+    return { x: round(xy[0]), y: round(xy[1]), angle };
+  });
 
   protected readonly labelled = computed(() => {
     const want = new Set(this.labels());
@@ -315,6 +363,14 @@ export class RouteMapComponent {
     if (!this.interactive()) return;
     e.preventDefault();
     this.zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15);
+  }
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
   }
 }
 

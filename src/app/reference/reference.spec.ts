@@ -197,6 +197,8 @@ describe('committed data (when present)', () => {
     const path = `${process.cwd()}/public/data/${name}.json`;
     if (!existsSync(path)) return;
     const raw = JSON.parse(readFileSync(path, 'utf8'));
+    // A placeholder (committed before the first weekly update) has no date and must decode to nothing shown.
+    if (raw.generatedAt === null || raw.date === null) return;
     const dec = { advisories: decodeAdvisories, fx: decodeFx, holidays: decodeHolidays }[name](raw);
     expect(dec).not.toBeNull();
   });

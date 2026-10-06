@@ -1,0 +1,93 @@
+name: Update Reference Data
+
+# Rebuilds the small on-device reference files from open sources:
+#   public/data/advisories.json  Government of Canada travel advice levels
+#   public/data/fx.json          ECB reference rates via Frankfurter (CAD base)
+#   public/data/holidays.json    public holidays (Nager.Date), this year and next
+# Weekly is enough: the app shows each source's own date, and a missing or
+# stale file only hides the line it feeds.
+
+on:
+  schedule:
+    # Mondays at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: update-reference-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # npm ci install scripts must not be able to read the write token.
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Builder unit tests
+        run: |
+          pip install pytest==9.1.1
+          python -m pytest -q scripts/tests/test_reference_data.py
+
+      - name: Build advisories.json
+        # Refuses to write under 80% of destination countries.
+        run: python3 scripts/build-advisories.py
+
+      - name: Build fx.json
+        run: python3 scripts/build-fx.py
+
+      - name: Build holidays.json
+        run: python3 scripts/build-holidays.py
+
+      - name: Diff summary
+        run: |
+          git add -N public/data/advisories.json public/data/fx.json public/data/holidays.json
+          {
+            echo '### reference data diff'
+            echo '```'
+            git diff --stat -- public/data/advisories.json public/data/fx.json public/data/holidays.json || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: App tests and build
+        run: |
+          npm ci
+          npx vitest run
+          npx ng build
+
+      - name: Commit and push if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git diff --quiet -- public/data/advisories.json public/data/fx.json public/data/holidays.json && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data/advisories.json public/data/fx.json public/data/holidays.json
+          git commit -m "chore: update advisories, exchange rates and holidays"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF}"
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Reference data update failed ($(date -u +%Y-%m-%d))" \
+            --body "The update-reference-data workflow failed and nothing was committed. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

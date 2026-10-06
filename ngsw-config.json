@@ -26,7 +26,10 @@
           "/data/route-network.json",
           "/data/land-110m.json",
           "/data/ground.json",
-          "/data/climate.json"
+          "/data/climate.json",
+          "/data/advisories.json",
+          "/data/fx.json",
+          "/data/holidays.json"
         ]
       }
     },

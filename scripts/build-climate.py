@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Builds public/data/climate.json: typical monthly weather (normals) for every
-Air Canada destination, shown in the app as "Typical, not a forecast".
+Air Canada destination and hub, shown in the app as "Typical, not a forecast".
 
 Source: Open-Meteo Historical Weather API (https://open-meteo.com), ERA5
 reanalysis, CC BY 4.0. Contains modified Copernicus Climate Change Service
@@ -98,6 +98,36 @@ def parse_destinations(ts: str) -> list[dict]:
         out.append({"code": code, "lat": float(fields["lat"].group(1)),
                     "lng": float(fields["lng"].group(1)), "type": typ})
     return out
+
+
+_HUB_ENTRY = re.compile(r"\{[^{}]*?code:\s*'([A-Z]{3})'[^{}]*?\}")
+
+
+def parse_hubs(ts: str) -> list[dict]:
+    """[{code, lat, lng, type: 'Hub'}] from the HUBS list of destinations.ts (YUL, YYZ, YVR, ...)."""
+    start = ts.find("export const HUBS")
+    if start < 0:
+        return []
+    end = ts.find("];", start)
+    body = ts[start:end if end > 0 else len(ts)]
+    out: list[dict] = []
+    seen: set[str] = set()
+    for m in _HUB_ENTRY.finditer(body):
+        block = m.group(0)
+        lat, lng = _FIELD["lat"].search(block), _FIELD["lng"].search(block)
+        code = m.group(1)
+        if not (lat and lng) or code in seen:
+            continue
+        seen.add(code)
+        out.append({"code": code, "lat": float(lat.group(1)), "lng": float(lng.group(1)), "type": "Hub"})
+    return out
+
+
+def parse_locations(ts: str) -> list[dict]:
+    """Destinations plus hubs (hubs are needed for the "Escape the cold" comparison)."""
+    dests = parse_destinations(ts)
+    codes = {d["code"] for d in dests}
+    return dests + [h for h in parse_hubs(ts) if h["code"] not in codes]
 
 
 # ── Requests and cache ──────────────────────────────────────────────────────
@@ -273,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--offline", action="store_true", help="cache only: no requests, write what is complete")
     args = ap.parse_args(argv)
 
-    dests = order_first(parse_destinations(DESTINATIONS_TS.read_text(encoding="utf-8")), args.first)
+    dests = order_first(parse_locations(DESTINATIONS_TS.read_text(encoding="utf-8")), args.first)
     all_codes = {d["code"] for d in dests}
     total = len(dests)
     if args.limit:

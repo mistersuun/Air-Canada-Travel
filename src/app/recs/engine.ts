@@ -11,7 +11,7 @@
  * that no string helper ever renders. Party size only prefers days with more
  * departures; it never guesses seats.
  */
-import { DESTINATIONS, Destination } from '../data/destinations';
+import { DESTINATIONS, Destination, HUBS } from '../data/destinations';
 import { getCoverage, getSchedulesForRoute, isCovered } from '../data/schedule-index';
 import { CORRIDORS } from '../places/corridors';
 import type { TimeFormat } from '../state/prefs.service';
@@ -495,6 +495,88 @@ export function onwardRecs(input: RecInput, exclude: ReadonlySet<string>): Recom
   return [];
 }
 
+// ── Kind: weather ("Escape the cold" / "Cooler escapes") ───────────────────
+
+/** Weather recs: look-ahead for the nonstop (days), and how many to show. */
+export const WEATHER_AHEAD_DAYS = 10;
+export const WEATHER_MAX = 2;
+/** Hub typical high below this (°C) is "cold"; destinations must reach WARM_MIN_C. */
+export const COLD_BELOW_C = 8;
+export const WARM_MIN_C = 24;
+/** Hub typical high at or above this is "hot"; destinations must stay at or under COOL_MAX_C. */
+export const HOT_FROM_C = 26;
+export const COOL_MAX_C = 22;
+
+export type WeatherSeason = 'cold' | 'hot';
+
+/** Calendar month (1..12) of an instant in a time zone. */
+function monthIn(tz: string | undefined, nowMs: number, fallbackKey: string): number {
+  try {
+    const m = Number(new Intl.DateTimeFormat('en-CA', { timeZone: tz, month: 'numeric' }).format(new Date(nowMs)));
+    if (m >= 1 && m <= 12) return m;
+  } catch { /* fall through */ }
+  return Number(fallbackKey.slice(5, 7));
+}
+
+function hubMonth(input: RecInput): number {
+  return monthIn(HUBS.find(h => h.code === input.hub)?.tz, input.nowMs, input.todayKey);
+}
+
+/** Which variant applies for the hub this month, or null (no hub climate, or a mild month). */
+export function weatherSeason(input: RecInput): WeatherSeason | null {
+  const home = climateFor(input.climate, input.hub, hubMonth(input));
+  if (!home) return null;
+  return home.tmaxC < COLD_BELOW_C ? 'cold' : home.tmaxC >= HOT_FROM_C ? 'hot' : null;
+}
+
+export function weatherGroupTitle(season: WeatherSeason): string {
+  return season === 'cold' ? 'Escape the cold' : 'Cooler escapes';
+}
+
+/**
+ * Nonstop destinations with a flight in the next 10 days whose typical high
+ * is far from the hub's (24° or more from a cold hub, 22° or less from a hot
+ * one), by biggest difference, then soonest flight. Typical normals, never a forecast.
+ */
+export function weatherRecs(input: RecInput): Recommendation[] {
+  const season = weatherSeason(input);
+  if (!season) return [];
+  const home = climateFor(input.climate, input.hub, hubMonth(input))!;
+  const max = maxMinutes(input.profile);
+  const recs: Recommendation[] = [];
+  for (const d of CANDIDATES) {
+    const id = recId('weather', d.code, null);
+    if (input.profile.dismissed.includes(id)) continue;
+    let next: { dateKey: string; at: number } | null = null;
+    for (let i = 0; i < WEATHER_AHEAD_DAYS && !next; i++) {
+      const day = addDays(input.todayKey, i);
+      if (!isCovered(day, input.hub)) continue;
+      const f = flightsOn(input.hub, d.code, day).find(x => x.depUtc > input.nowMs && (max === null || directItinerary(x).totalMin <= max));
+      if (f) next = { dateKey: day, at: f.depUtc };
+    }
+    if (!next) continue;
+    // The destination's normals for the month of the flight (it can fall in next month).
+    const there = climateFor(input.climate, d.code, Number(next.dateKey.slice(5, 7)));
+    if (!there) continue;
+    if (season === 'cold' ? there.tmaxC < WARM_MIN_C : there.tmaxC > COOL_MAX_C) continue;
+    const delta = there.tmaxC - home.tmaxC;
+    recs.push({
+      id, kind: 'weather', code: d.code, placeId: null, title: d.city,
+      out: null, back: null,
+      lines: [
+        { text: `Trade ${home.tmaxC}° for ${there.tmaxC}°`, label: 'typical' },
+        { text: `Nonstop ${weekdayShort(next.dateKey)}`, label: 'scheduled' },
+      ],
+      weather: null,   // the highs are already in the first line
+      reason: [{ kind: 'schedule', text: season === 'cold' ? 'Warmer than home this month' : 'Cooler than home this month' }],
+      link: { path: flightPath(d.code, next.dateKey), query: {} },
+      deltaC: delta,
+      rank: Math.abs(delta) * 1000 - next.at / 3_600_000,
+    });
+  }
+  return recs.sort(byRank).slice(0, WEATHER_MAX);
+}
+
 // ── Text ────────────────────────────────────────────────────────────────────
 
 /**
@@ -579,6 +661,11 @@ export function recommend(input: RecInput): RecGroup[] {
   }
   const season = takeUnique(seasonEndingRecs(input), used, 2);
   if (season.length) groups.push({ id: 'season', title: 'Season ends soon', aside: null, items: season });
+  const wx = weatherSeason(input);
+  if (wx) {
+    const items = takeUnique(weatherRecs(input), used, WEATHER_MAX);
+    if (items.length) groups.push({ id: 'weather', title: weatherGroupTitle(wx), aside: null, items });
+  }
   if (!empty) {
     const more = takeUnique([...logRecs(input), ...styleRecs(input, used), ...onwardRecs(input, used)], used, 3);
     if (more.length) groups.push({ id: 'more', title: 'More for you', aside: null, items: more });

@@ -121,7 +121,7 @@ export const DRAG_PX = 4;
       fill: var(--blue); opacity: .25; pointer-events: none;
       animation: ui-pulse 2s ease-out infinite; transform-box: fill-box; transform-origin: center;
     }
-    @media (prefers-reduced-motion: reduce) { .arc.hot { animation: none; stroke-dashoffset: 0; } .plane--glide { display: none; } .pulse { animation: none; opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .arc.hot.arc--draw { animation: none; stroke-dashoffset: 0; } .plane--glide { display: none; } .pulse { animation: none; opacity: 0; } }
   `],
 })
 export class RouteMapComponent {
@@ -140,9 +140,9 @@ export class RouteMapComponent {
   readonly arcs = input(true, { transform: booleanAttribute });
   readonly pulse = input(true, { transform: booleanAttribute });
   readonly interactive = input(false, { transform: booleanAttribute });
-  /** 0..1 along the great circle from the hub to the highlighted destination: shows a static plane there (an estimate). */
   /** Animate the hot arc draw-in and plane glide; pass false while flicking through many destinations. */
   readonly animate = input(true, { transform: booleanAttribute });
+  /** 0..1 along the great circle from the hub to the highlighted destination: shows a static plane there (an estimate). */
   readonly progress = input<number | null>(null);
 
   readonly pointClick = output<string>();

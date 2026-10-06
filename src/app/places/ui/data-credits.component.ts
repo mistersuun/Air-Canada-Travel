@@ -25,6 +25,9 @@ import { formatKey, isDateKey } from '../../utils/time';
         <li data-route-list>
           <b>Route list</b>&ngsp;<a href="https://en.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a> airport articles ("Airlines and destinations", Wikipedia contributors), <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener license">CC BY-SA 4.0</a>, with airport details from <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a> (public domain). Says a route is flown, not when; check times on aircanada.com.@if (routeListChecked) {&ngsp;Checked {{ routeListChecked }}.}
         </li>
+        <li data-hotels-credit>
+          <b>Airport hotels</b>&ngsp;Hotel names and places near airports (the "Stuck tonight?" list) are from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener license">ODbL 1.0</a>. No prices or availability.
+        </li>
         <li>
           <b>Onward travel</b>&ngsp;Train and bus times come from operators' open timetables where we have them (see Timetable credits), otherwise they are our estimates. Not bookings. Check before you go.
         </li>

@@ -17,6 +17,13 @@ Opt-in (--include), pending a licence or size decision:
   cp         CP Comboios de Portugal   no licence stated  (LIS-Porto)
   trenitalia Trenitalia (community GTFS of the official NeTEx)  (FCO-Naples, MXP-Turin, VCE-Florence)
   swiss      opentransportdata.swiss   free, cite source  (ZRH-Basel; 289 MB, about 5 min)
+  via        VIA Rail Canada           Open Government Licence - Canada 2.0 (YUL-Quebec City, YUL-Ottawa)
+  maritime   Maritime Bus (Trillium)    no licence stated
+                                       (YHZ-Moncton, YHZ-Charlottetown)
+FlixBus (feed "flix") also carries the MAD-Valencia and MUC-Salzburg coach corridors. Corridors marked
+"provisional" in CORRIDORS pin stops by name ("name:" exact, "name~:" substring, case-insensitive) because
+their ids could not be checked against the feed when they were added: when no stop matches, the corridor is
+skipped with a warning (never a failure) and the app keeps its Estimated row.
 
 Because SNCF and Flix data are ODbL, ground.json is a derived database and is
 published under ODbL 1.0; the other licences are met by the attribution kept
@@ -142,6 +149,18 @@ FEEDS: dict[str, dict] = {
         "licence": "CC BY 4.0", "licenceUrl": CC_BY,
         "credit": "Trenitalia via Italy's National Access Point, GTFS by C. Desouche", "optional": True,
     },
+    "via": {
+        "name": "VIA Rail", "url": "https://www.viarail.ca/sites/all/files/gtfs/viarail.zip",
+        "page": "https://www.viarail.ca/en/developer-resources",
+        "licence": "Open Government Licence \u2013 Canada 2.0", "licenceUrl": "https://open.canada.ca/en/open-government-licence-canada",
+        "credit": "Contains information licensed under the Open Government Licence \u2013 Canada (VIA Rail Canada)", "optional": True,
+    },
+    "maritime": {
+        "name": "Maritime Bus", "url": "https://data.trilliumtransit.com/gtfs/maritimebus-ca/maritimebus-ca.zip",
+        "page": "https://mobilitydatabase.org/feeds/gtfs/mdb-2417",
+        "licence": "No licence stated", "licenceUrl": "",
+        "credit": "Maritime Bus (via the Mobility Database)", "optional": True,
+    },
     "swiss": {
         "name": "SBB", "url": "https://data.opentransportdata.swiss/de/dataset/timetable-2026-gtfs2020/permalink",
         "page": "https://opentransportdata.swiss/", "licence": "opentransportdata.swiss terms of use",
@@ -223,6 +242,35 @@ CORRIDORS: list[dict] = [
      "b": {"stops": ["IT::StopPlace:otherTRENITALIA:830006421"], "name": "Firenze Santa Maria Novella",
            "tz": "Europe/Rome"},
      "note": _ITALO},
+    {"key": "YUL-6325494", "feed": "via", "mode": "train", "op": "VIA Rail", "product": "name:VIA Rail", "provisional": True,
+     "a": {"stops": ["name:Montréal", "name:Montreal"], "name": "Montréal Central Station", "tz": "America/Toronto"},
+     "b": {"stops": ["name:Québec", "name:Quebec"], "name": "Québec (Gare du Palais)", "tz": "America/Toronto"},
+     "note": "VIA Rail trains only. Orleans Express and other coaches also run this route."},
+    {"key": "YUL-6094817", "feed": "via", "mode": "train", "op": "VIA Rail", "product": "name:VIA Rail", "provisional": True,
+     "a": {"stops": ["name:Montréal", "name:Montreal", "name:Dorval"], "name": "Montréal Central Station",
+           "tz": "America/Toronto"},
+     "b": {"stops": ["name:Ottawa"], "name": "Ottawa", "tz": "America/Toronto"},
+     "note": "VIA Rail trains only. Coaches also run this route."},
+    {"key": "YHZ-6076211", "feed": "maritime", "mode": "bus", "op": "Maritime Bus", "product": "name:Maritime Bus",
+     "provisional": True,
+     "a": {"stops": ["name~:Halifax Airport", "name~:Stanfield"], "name": "Halifax Stanfield Airport",
+           "tz": "America/Halifax"},
+     "b": {"stops": ["name~:Moncton"], "name": "Moncton", "tz": "America/Moncton"},
+     "note": "Maritime Bus only."},
+    {"key": "YHZ-5920288", "feed": "maritime", "mode": "bus", "op": "Maritime Bus", "product": "name:Maritime Bus",
+     "provisional": True,
+     "a": {"stops": ["name~:Halifax Airport", "name~:Stanfield"], "name": "Halifax Stanfield Airport",
+           "tz": "America/Halifax"},
+     "b": {"stops": ["name~:Charlottetown"], "name": "Charlottetown", "tz": "America/Halifax"},
+     "note": "Maritime Bus only."},
+    {"key": "MAD-2509954", "feed": "flix", "mode": "bus", "op": "FlixBus", "product": "name:FlixBus", "provisional": True,
+     "a": {"stops": ["name~:Madrid Airport", "name~:Madrid Barajas"], "name": "Madrid Airport", "tz": "Europe/Madrid"},
+     "b": {"stops": ["name~:Valencia"], "name": "Valencia", "tz": "Europe/Madrid"},
+     "note": "FlixBus only. ALSA and trains also run this route."},
+    {"key": "MUC-2766824", "feed": "flix", "mode": "bus", "op": "FlixBus", "product": "name:FlixBus", "provisional": True,
+     "a": {"stops": ["name~:Munich Airport", "name~:München Flughafen"], "name": "Munich Airport", "tz": "Europe/Berlin"},
+     "b": {"stops": ["name~:Salzburg"], "name": "Salzburg", "tz": "Europe/Vienna"},
+     "note": "FlixBus only. Trains also run this route."},
     {"key": "ZRH-2661604", "feed": "swiss", "mode": "train", "op": "SBB", "product": "short",
      "a": {"stops": ["Parentch:1:sloid:3016"], "name": "Zürich Flughafen", "tz": "Europe/Zurich"},
      "b": {"stops": ["Parentch:1:sloid:10"], "name": "Basel SBB", "tz": "Europe/Zurich"},
@@ -283,12 +331,30 @@ def ymd(s: str) -> date:
     return date(int(s[0:4]), int(s[4:6]), int(s[6:8]))
 
 
-def resolve_stops(stops: dict[str, str], pinned: list[str], where: str) -> set[str]:
-    """Pinned ids plus their child stops (parent_station). stops: id -> parent_station."""
-    missing = [s for s in pinned if s not in stops]
-    if missing:
+def resolve_stops(stops: dict[str, str], pinned: list[str], where: str,
+                  names: dict[str, str] | None = None, lenient: bool = False) -> set[str]:
+    """Pinned ids plus their child stops (parent_station). stops: id -> parent_station.
+    A pin 'name:X' matches stop_name == X, 'name~:X' stop_name containing X (case-insensitive,
+    needs `names`: id -> stop_name). With `lenient` (provisional corridors) pins that match nothing
+    are skipped as long as one matches; otherwise a pin with no match raises PinnedStopMissing."""
+    want: set[str] = set()
+    missing: list[str] = []
+    for pin in pinned:
+        if pin.startswith(("name:", "name~:")):
+            sub = pin.startswith("name~:")
+            needle = pin.split(":", 1)[1].casefold()
+            hit = {sid for sid, nm in (names or {}).items()
+                   if (needle in nm.casefold() if sub else nm.casefold() == needle)}
+            if hit:
+                want |= hit
+            else:
+                missing.append(pin)
+        elif pin in stops:
+            want.add(pin)
+        else:
+            missing.append(pin)
+    if missing and not (lenient and want):
         raise PinnedStopMissing(f"{where}: pinned stop(s) not in the feed: {', '.join(missing)}")
-    want = set(pinned)
     return want | {s for s, parent in stops.items() if parent in want}
 
 
@@ -324,11 +390,26 @@ def service_dates(cal: dict[str, tuple], extra: dict[str, list[tuple[date, str]]
 def load_feed(z: zipfile.ZipFile, corridors: list[dict], lo: date, hi: date) -> dict[str, dict[str, list]]:
     """For every corridor of one feed, both directions: {key: {'out': runs, 'back': runs}} where a run is
     (local departure datetime, ride minutes, product). Reads only what it needs; never shapes.txt."""
-    stops = {sid: parent for sid, parent in rows(z, "stops.txt", ("stop_id", "parent_station"))}
+    stops: dict[str, str] = {}
+    names: dict[str, str] = {}
+    for sid, parent, nm in rows(z, "stops.txt", ("stop_id", "parent_station", "stop_name")):
+        stops[sid] = parent
+        names[sid] = nm
     sets: dict[str, tuple[set[str], set[str]]] = {}
-    for c in corridors:
-        sets[c["key"]] = (resolve_stops(stops, c["a"]["stops"], f"{c['key']} ({c['a']['name']})"),
-                          resolve_stops(stops, c["b"]["stops"], f"{c['key']} ({c['b']['name']})"))
+    skipped: list[str] = []
+    for c in list(corridors):
+        lenient = bool(c.get("provisional"))
+        try:
+            sets[c["key"]] = (resolve_stops(stops, c["a"]["stops"], f"{c['key']} ({c['a']['name']})", names, lenient),
+                              resolve_stops(stops, c["b"]["stops"], f"{c['key']} ({c['b']['name']})", names, lenient))
+        except PinnedStopMissing as e:
+            if not lenient:
+                raise
+            print(f"  warning: provisional corridor skipped: {e}", file=sys.stderr)
+            skipped.append(c["key"])
+    corridors = [c for c in corridors if c["key"] not in skipped]
+    if not corridors:
+        return {k: {"out": [], "back": []} for k in skipped}
     every = set().union(*(a | b for a, b in sets.values()))
 
     agencies = {aid: (name, tz) for aid, name, tz in rows(z, "agency.txt", ("agency_id", "agency_name", "agency_timezone"))}
@@ -360,7 +441,7 @@ def load_feed(z: zipfile.ZipFile, corridors: list[dict], lo: date, hi: date) -> 
         a, d = parse_secs(arr), parse_secs(dep)
         calls.setdefault(tid, []).append((int(seq), sid, a if a is not None else d, d if d is not None else a, pu, do))
     if not calls:
-        return {c["key"]: {"out": [], "back": []} for c in corridors}
+        return {c["key"]: {"out": [], "back": []} for c in corridors + [{"key": k} for k in skipped]}
 
     trips = {tid: (svc, rid) for tid, svc, rid in rows(z, "trips.txt", ("trip_id", "service_id", "route_id")) if tid in calls}
 
@@ -428,6 +509,8 @@ def load_feed(z: zipfile.ZipFile, corridors: list[dict], lo: date, hi: date) -> 
                         dep = (base + timedelta(seconds=off)).astimezone(local_tz)
                         res[direction].append((dep, ride, product))
         out[c["key"]] = res
+    for k in skipped:
+        out[k] = {"out": [], "back": []}
     return out
 
 
@@ -773,8 +856,20 @@ def main(argv: list[str] | None = None) -> int:
         if not path:
             failed.add(fid)
             continue
-        with zipfile.ZipFile(path) as z:
-            runs = load_feed(z, corridors, lo, hi)  # PinnedStopMissing propagates: fail loudly
+        tolerant = bool(FEEDS[fid].get("optional")) or all(c.get("provisional") for c in corridors)
+        try:
+            with zipfile.ZipFile(path) as z:
+                runs = load_feed(z, corridors, lo, hi)  # PinnedStopMissing propagates for required feeds: fail loudly
+        except PinnedStopMissing:
+            raise
+        except (KeyError, zipfile.BadZipFile, ValueError, UnicodeDecodeError, csv.Error, OSError) as e:
+            if not tolerant:
+                raise
+            # A broken download must not take the other feeds down: keep this feed's previous corridors.
+            print(f"::warning title=Ground feed skipped::{fid}: {type(e).__name__}: {e}")
+            failed.add(fid)
+            path.unlink(missing_ok=True)
+            continue
         fetched[fid] = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).date().isoformat()
         for c in corridors:
             entry = build_corridor(c, runs[c["key"]], today)

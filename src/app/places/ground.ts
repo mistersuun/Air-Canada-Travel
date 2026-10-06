@@ -354,7 +354,7 @@ function byTimetable(readyUtc: number, dir: TimetableDir, gatewayTz: string): Go
   };
 }
 
-function rome2rioName(end: LegEnd): string {
+export function rome2rioName(end: LegEnd): string {
   const name = end.code && isAirport(end) ? `${end.name} ${end.code} Airport` : end.name;
   return encodeURIComponent(name.trim().replace(/\s+/g, '-'));
 }

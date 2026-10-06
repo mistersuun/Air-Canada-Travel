@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { OtherWaysComponent } from '../../places/ui/other-ways.component';
+import { StuckTonightComponent } from '../../places/ui/stuck-tonight.component';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
@@ -23,7 +25,7 @@ import { type RecoverRow, recoverView } from './today-model';
 @Component({
   selector: 'app-recover-page',
   standalone: true,
-  imports: [NgTemplateOutlet, RouterLink, IconComponent, DestPhotoComponent],
+  imports: [NgTemplateOutlet, RouterLink, IconComponent, DestPhotoComponent, OtherWaysComponent, StuckTonightComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare rc">
@@ -54,6 +56,10 @@ import { type RecoverRow, recoverView } from './today-model';
           <p class="ui-card rc__none">Nothing else found tonight from {{ v.at }} in our schedule data.</p>
         }
 
+        @if (v.stuckTonight && v.stay; as s) {
+          <app-stuck-tonight [code]="s.code" [airportName]="s.airportName" [checkIn]="s.checkIn" />
+        }
+
         <h2 class="ui-h3 rc__h">Tomorrow</h2>
         @if (v.tomorrow.length) {
           <div class="ui-card rc__list" data-group="tomorrow">
@@ -81,6 +87,9 @@ import { type RecoverRow, recoverView } from './today-model';
               @if (n.returnBroken) { <a class="ui-link" [routerLink]="tripLink(v.tripId)" [queryParams]="returnQuery">Open Return</a> }
             </span>
           </div>
+        }
+        @if (v.ways; as w) {
+          <app-other-ways [from]="w.from" [to]="w.to" [dateKey]="w.dateKey" [land]="w.land" [toAirport]="w.toAirport" />
         }
         <p class="rc__foot">Times are Scheduled; onward trips are Estimated. Listing stays your own step.</p>
 

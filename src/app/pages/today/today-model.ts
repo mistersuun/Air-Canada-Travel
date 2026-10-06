@@ -15,7 +15,8 @@ import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock,
 import { MISS_GAP_MIN, departuresHome } from '../../trips/engine/homeby';
 import { hm, supOffset } from '../../ui/format';
 import type { TimeFormat } from '../../state/prefs.service';
-import { airportEnd, arrivalAtGoal, groundEstimate, type GroundEstimate } from '../../places/ground';
+import { airportEnd, arrivalAtGoal, groundEstimate, placeEnd, type GroundEstimate } from '../../places/ground';
+import { tonightCheckIn } from '../../places/stay-links';
 import { legPrepItems, type PrepItem } from '../../places/prep';
 import { partOfDay } from '../reach/reach-model';
 import { shortAircraftName } from '../../trips/engine/facts';
@@ -23,7 +24,7 @@ import { legStartUtc, refArrUtc, refDepUtc } from '../../trips/engine/legs';
 import { type ReachableOption, legDepartureKey, leavesGoalArea, missOneOutbound, stillReachable } from '../../trips/engine/recover';
 import { activeTravelDay, placeName } from '../../trips/engine/today';
 import {
-  type FlightLeg, type FlightRef, type LegStatus, type LoadNote, type Outcome, type Trip, type TripLeg,
+  type FlightLeg, type FlightRef, type LegEnd, type LegStatus, type LoadNote, type Outcome, type Trip, type TripLeg,
   LEG_STATUS_LABEL, instanceKey, isFinalStatus,
 } from '../../trips/model';
 
@@ -288,6 +289,20 @@ export interface RecoverView {
   tomorrow: RecoverRow[];
   tomorrowMore: RecoverRow[];
   note: { text: string; returnBroken: boolean } | null;
+  /** True when nothing usable is left tonight: the "Stuck tonight?" card shows. */
+  stuckTonight: boolean;
+  /** Where the traveller is and the goal, as leg ends for the "Other ways there" links (null when `at` is not a known airport). */
+  ways: {
+    from: LegEnd; to: LegEnd;
+    /** Local date at `from`. */
+    dateKey: string;
+    /** A ground route exists from `from` to the goal (bus and train sites are worth showing). */
+    land: boolean;
+    /** The goal's own AC airport, for the Kiwi.com flight search. */
+    toAirport?: string;
+  } | null;
+  /** Tonight's hotel check-in date (local at `at`) and the airport's display name. */
+  stay: { code: string; airportName: string; checkIn: string } | null;
 }
 
 /** The outbound leg being recovered: ?leg= when it is a flight leg, else the last outbound flight leg from `at`. */
@@ -472,5 +487,24 @@ export function recoverView(input: {
     tomorrow,
     tomorrowMore,
     note: recoverNote(trip, leg, firstTonight, firstTomorrow),
+    ...recoverExtras(trip, at, nowMs, !tonight.some(r => r.usable)),
+  };
+}
+
+/** The "Stuck tonight?" card shows from this local time (until 05:00): earlier, tomorrow's flights are still the plan. */
+const STUCK_FROM = '17:00';
+
+/** Everything the recover page needs for "Other ways there" and "Stuck tonight?". */
+function recoverExtras(trip: Trip, at: string, nowMs: number, stuck: boolean):
+  Pick<RecoverView, 'stuckTonight' | 'ways' | 'stay'> {
+  const from = airportEnd(at);
+  if (!from) return { stuckTonight: false, ways: null, stay: null };
+  const local = utcToLocal(nowMs, airportTz(at));
+  const to = placeEnd(trip.goal);
+  const land = groundEstimate(from, trip.goal).mode !== 'unknown';
+  return {
+    stuckTonight: stuck && (local.hhmm >= STUCK_FROM || local.hhmm < '05:00'),
+    ways: { from, to, dateKey: local.dateKey, land, toAirport: trip.goal.acCode },
+    stay: { code: at, airportName: from.name, checkIn: tonightCheckIn(local.dateKey, local.hhmm) },
   };
 }

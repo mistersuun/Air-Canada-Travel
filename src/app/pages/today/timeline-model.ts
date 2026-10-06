@@ -33,6 +33,8 @@ export interface TimelineRow {
   atUtc: number | null;
   /** A layover that is tight, long or impossible (see isLayoverAlert). */
   alert: boolean;
+  /** Arrival rows: where and on which local day, for the forecast line. */
+  forecast?: { code: string; dateKey: string };
 }
 
 export type TimelineRowView = TimelineRow & { past: boolean };
@@ -184,6 +186,7 @@ export function travelTimeline(input: { trip: Trip; leg: TripLeg | undefined; fm
       id: `arr:${i}`, kind: 'arrive', time: formatClock(ref.arrLocal, fmt),
       title: `Arrives ${placeName(ref.dest)} (${ref.dest})`,
       detail: [nextDay, `${ref.dest} time`, diff].filter(Boolean).join(' · '), atUtc: arrUtc,
+      forecast: { code: ref.dest, dateKey: ref.arrDateKey },
     }));
     const next = leg.refs[i + 1];
     if (next) {

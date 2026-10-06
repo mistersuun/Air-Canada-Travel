@@ -121,11 +121,14 @@ describe('ClimateCreditComponent', () => {
     expect([...el.querySelectorAll('a')].every(a => a.target === '_blank' && a.rel.includes('noopener'))).toBe(true);
   });
 
-  it('renders nothing when the climate file is missing', async () => {
+  it('drops the typical-weather credit, keeps the forecast one, when the climate file is missing', async () => {
     TestBed.configureTestingModule({ providers: [{ provide: CLIMATE_FETCH, useValue: async () => null }] });
     await TestBed.inject(ClimateService).ensureLoaded();
     const f = TestBed.createComponent(ClimateCreditComponent);
     f.detectChanges();
-    expect((f.nativeElement as HTMLElement).querySelector('details')).toBeNull();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.textContent).not.toContain('Typical weather');
+    // The forecast credit does not depend on the normals.
+    expect(el.querySelector('[data-forecast-credit]')?.textContent).toContain('CC BY 4.0');
   });
 });

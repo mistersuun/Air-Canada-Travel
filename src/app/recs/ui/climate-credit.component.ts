@@ -4,7 +4,7 @@ import { ClimateService } from '../climate.service';
 /**
  * Settings "Weather credits" (extras spec §5.6): the Open-Meteo CC BY 4.0 and
  * Copernicus ERA5 attribution for the typical-weather normals. Styled like
- * "Data credits" next to it. Renders nothing when climate.json is missing.
+ * "Data credits" next to it. The forecast credit always shows.
  * It never triggers the climate download itself.
  */
 @Component({
@@ -12,14 +12,17 @@ import { ClimateService } from '../climate.service';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (show()) {
-      <details class="grp credits">
+    <details class="grp credits">
         <summary class="row"><span class="nm">Weather credits</span><span class="chev" aria-hidden="true">›</span></summary>
+        <p class="cr" data-forecast-credit>
+          <b>Forecast</b>&ngsp;<a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> weather forecast API, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">CC BY 4.0</a>. Shown for dates within 16 days; only the destination's coordinates are sent.
+        </p>
+        @if (typical()) {
         <p class="cr">
           <b>Typical weather</b>&ngsp;<a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> historical weather (ERA5 reanalysis, Copernicus), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">CC BY 4.0</a>. Averaged for 2021–2025 from the middle two weeks of each month. Typical, not a forecast.
         </p>
+        }
       </details>
-    }
   `,
   styles: [`
     :host { display: block; }
@@ -38,5 +41,6 @@ import { ClimateService } from '../climate.service';
 })
 export class ClimateCreditComponent {
   private readonly climate = inject(ClimateService);
-  readonly show = computed(() => this.climate.status() !== 'missing');
+  /** The forecast credit is always due; the typical-weather one follows its file. */
+  readonly typical = computed(() => this.climate.status() !== 'missing');
 }

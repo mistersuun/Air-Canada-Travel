@@ -225,6 +225,26 @@ describe('recover model (YUL at 18:05 Thu Oct 8, AC834 not boarded)', () => {
     expect(v.legNote).toBe('AC834 Listed');
   });
 
+  it('offers other-ways links and no stuck card while something usable is left tonight', () => {
+    const v = recoverView({ trip: notBoarded(sevilleTrip()), at: 'YUL', legId: SEVILLE_IDS.outbound, nowMs: AT_1805, connect: CONNECT, fmt: '24h' });
+    expect(v.stuckTonight).toBe(false);
+    expect(v.ways).toMatchObject({ dateKey: '2026-10-08', land: false });
+    expect(v.ways?.from.code).toBe('YUL');
+    expect(v.ways?.to.name).toBe('Seville');
+    expect(v.stay).toEqual({ code: 'YUL', airportName: 'Montréal', checkIn: '2026-10-08' });
+  });
+
+  it('is stuck tonight when no usable option is left, with tonight\'s check-in date', () => {
+    const late = toUtcMs('2026-10-08', '23:50', 'America/Toronto');
+    const v = recoverView({ trip: notBoarded(sevilleTrip()), at: 'YUL', legId: SEVILLE_IDS.outbound, nowMs: late, connect: CONNECT, fmt: '24h' });
+    expect(v.tonight.some(r => r.usable)).toBe(false);
+    expect(v.stuckTonight).toBe(true);
+    expect(v.stay?.checkIn).toBe('2026-10-08');
+    const small = toUtcMs('2026-10-09', '02:10', 'America/Toronto');
+    const w = recoverView({ trip: notBoarded(sevilleTrip()), at: 'YUL', legId: SEVILLE_IDS.outbound, nowMs: small, connect: CONNECT, fmt: '24h' });
+    expect(w.stay?.checkIn).toBe('2026-10-08');
+  });
+
   it('says plainly when the return no longer fits', () => {
     const t = notBoarded(sevilleTrip());
     const ret = t.legs.find(l => l.id === SEVILLE_IDS.ret)!;

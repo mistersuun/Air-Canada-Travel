@@ -30,6 +30,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # npm ci install scripts must not be able to read the write token.
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -77,13 +80,15 @@ jobs:
           npx ng build
 
       - name: Commit and push if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git diff --quiet -- public/data/ground.json && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/ground.json
           git commit -m "chore: update ground timetables from open GTFS feeds"
-          git push
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF}"
 
       - name: Open an issue on failure
         if: failure()

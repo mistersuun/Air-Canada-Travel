@@ -260,7 +260,7 @@ export function todayView(input: {
 
 /** The leg status a "Left to do" tick (or untick) sets; null when the item is not a status item. */
 export function statusForTick(item: PrepItem, current: LegStatus): LegStatus | null {
-  if (item.id.startsWith('list:')) return item.done ? 'planned' : current === 'planned' ? 'listed' : current;
+  if (item.id.startsWith('list:')) return item.done ? (current === 'listed' ? 'planned' : null) : current === 'planned' ? 'listed' : null;
   if (item.id.startsWith('checkin:')) return item.done ? 'listed' : 'checkedIn';
   return null;
 }

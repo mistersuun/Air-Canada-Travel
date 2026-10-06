@@ -514,11 +514,14 @@ export class FlightPage {
       this.addTo(list[0]);
       return;
     }
+    // Same return date the Return panel shows: an explicit ?ret= on/after arrival, else nights from arrival.
+    const ret = this.ret();
+    const homeDate = ret && isDateKey(ret) && ret >= it.arrDateKey ? ret : addDays(it.arrDateKey, this.nightCount());
     const trip = this.trips.create({
       goal: placeFromDestination(this.dest()),
       fromHub: this.hub(),
       outboundDate: it.dateKey,
-      homeBy: { dateKey: addDays(it.dateKey, this.nightCount()), hhmm: '22:00' },
+      homeBy: { dateKey: homeDate, hhmm: '22:00' },
     });
     this.trips.addFlightLeg(trip.id, it, 'outbound');
     void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() });

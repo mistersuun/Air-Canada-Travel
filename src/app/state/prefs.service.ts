@@ -158,6 +158,19 @@ export class PrefsService {
 
   constructor() {
     effect(() => applyTheme(this.doc, this.theme()));
+    // Another tab saved: adopt its prefs, so this tab never writes back a stale copy.
+    this.doc.defaultView?.addEventListener('storage', e => this.onStorage(e));
+  }
+
+  /** Adopts the prefs another tab wrote. */
+  onStorage(e: Pick<StorageEvent, 'key' | 'newValue' | 'storageArea'>): void {
+    if (e.key !== PREFS_KEY || e.newValue === null) return;
+    if (this.storage && e.storageArea && e.storageArea !== this.storage) return;
+    try {
+      this.state.set(sanitizePrefs(JSON.parse(e.newValue)));
+    } catch {
+      // Unreadable value: keep the current prefs.
+    }
   }
 
   update(patch: Partial<Prefs>): void {

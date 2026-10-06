@@ -299,7 +299,7 @@ export class AppStateService {
 
     if (this.win) {
       const tick = setInterval(() => {
-        if (this.doc.visibilityState !== 'hidden') this.nowMs.set(this.now());
+        if (this.doc.visibilityState !== 'hidden') this.refreshToday();
       }, COUNTDOWN_TICK_MS);
       destroyRef.onDestroy(() => {
         clearInterval(tick);

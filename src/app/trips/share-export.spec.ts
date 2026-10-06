@@ -58,6 +58,14 @@ describe('share links', () => {
     await expect(encodeTripShare(huge, [], NOW)).rejects.toBeInstanceOf(ShareTooLargeError);
   });
 
+  it('skips an attempt whose JSON is over what the decoder accepts, even when it compresses small', async () => {
+    const notes = [{ ...NOTE, id: 'big', text: 'a'.repeat(450_000) }];
+    const payload = await encodeTripShare(SEVILLE_TRIP, notes, NOW);
+    const back = (await decodeTripShare(payload))!;
+    expect(back).not.toBeNull();
+    expect(back.notes).toEqual([]);
+  });
+
   it('returns null for garbage, never throws', async () => {
     for (const bad of ['', 'x', 'zzzz', 'j!!!', 'jAAAA', 'qabc', 'j' + btoa('{"s":1,"trip":{}}'), 'z' + 'A'.repeat(70_000)]) {
       expect(await decodeTripShare(bad)).toBeNull();

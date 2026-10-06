@@ -51,13 +51,12 @@ export function holidayAppliesAt(h: Holiday, hub: string): boolean {
 
 const MON = 0, TUE = 1, THU = 3, FRI = 4;
 
-/** Saturday and Sunday holidays move to the next weekday not already taken. */
+/** Saturday and Sunday holidays move to the next weekday; any holiday shifts past days already taken. */
 function observedDay(dateKey: string, taken: ReadonlySet<string>): string {
   let d = dateKey;
   const wd = weekdayIndex(d);
   if (wd === 5) d = addDays(d, 2);
   else if (wd === 6) d = addDays(d, 1);
-  else return d;
   while (taken.has(d)) d = addDays(d, 1);
   return d;
 }

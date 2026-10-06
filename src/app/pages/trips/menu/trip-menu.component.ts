@@ -51,7 +51,7 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
               <span class="ui-visually-hidden">Not available offline</span>
             </li>
           </ul>
-          <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost tm__save" data-save-offline (click)="saveOffline()">
+          <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost tm__save" data-save-offline [disabled]="saving()" (click)="saveOffline()">
             <app-icon name="download" [size]="16" /> {{ trip().offlineSavedAt ? 'Save again' : 'Save for offline' }}
           </button>
           @if (reportText()) { <p class="ui-sub tm__fine" data-offline-report>{{ reportText() }}</p> }
@@ -126,6 +126,8 @@ export class TripMenuComponent {
   readonly deleted = output<void>();
 
   protected readonly busy = signal(false);
+  /** True while "Save for offline" is fetching. */
+  protected readonly saving = signal(false);
   /** True when the schedules file is in the service worker cache (or the worker is off and the data is loaded). */
   protected readonly cached = signal<boolean | null>(null);
 
@@ -171,7 +173,14 @@ export class TripMenuComponent {
     let results: OfflineItemResult[] | null = null;
     const win = this.doc.defaultView;
     if (this.sw?.isEnabled && win) {
-      results = await warmOffline(offlineItems(this.trip(), c => this.photos.has(c)), u => win.fetch(u));
+      this.saving.set(true);
+      try {
+        const signal = () => (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(15000) } : {});
+        results = await warmOffline(offlineItems(this.trip(), c => this.photos.has(c), c => this.photos.hasHero(c)),
+          u => win.fetch(u, signal()));
+      } finally {
+        this.saving.set(false);
+      }
     }
     await this.checkCache();
     if (results) {

@@ -702,7 +702,9 @@ def previous_coverage_from(path: str) -> str:
         data = json.loads(text) if text else None
     except ValueError:
         return ""
-    value = data.get("coverageFrom") if isinstance(data, dict) else ""
+    if not isinstance(data, dict):
+        return ""
+    value = (data.get("meta") or {}).get("coverageFrom") or data.get("coverageFrom")
     return value if isinstance(value, str) else ""
 
 
@@ -723,7 +725,8 @@ def check_coverage(*, routes: dict, hubs: Iterable[str], today: str, prev_from: 
     for msg in short:
         (warnings if allow_short else errors).append(msg + (" (allowed by --allow-short-coverage)" if allow_short else ""))
     if prev_from and cov["from"] and cov["from"] < prev_from:
-        warnings.append(f"coverageFrom moved backwards: {cov['from']} < previous {prev_from}")
+        warnings.append(f"coverageFrom moved backwards: {cov['from']} < previous {prev_from} "
+                        "(can be legitimate when routes are carried forward from failed sources)")
     return errors, warnings
 
 

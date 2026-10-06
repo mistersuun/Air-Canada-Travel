@@ -32,14 +32,16 @@ export function tripDestCode(trip: Trip): string | null {
  * What "Save for offline" warms for a trip. Ground timetables only when the
  * trip has ground legs; photos only when the destination has one in the manifest.
  */
-export function offlineItems(trip: Trip, hasPhoto: (code: string) => boolean): OfflineItem[] {
+export function offlineItems(trip: Trip, hasPhoto: (code: string) => boolean, hasHero: (code: string) => boolean = () => false): OfflineItem[] {
   const items: OfflineItem[] = [{ id: 'schedules', label: 'Schedules', urls: [SCHEDULES_URL] }];
   if (trip.legs.some(l => l.kind === 'ground')) items.push({ id: 'ground', label: 'Trains', urls: [GROUND_URL] });
   items.push({ id: 'cities', label: 'City info', urls: [CITIES_URL] });
   items.push({ id: 'climate', label: 'Weather', urls: [CLIMATE_URL] });
   const code = tripDestCode(trip);
   if (code && hasPhoto(code)) {
-    items.push({ id: 'photos', label: 'Photos', urls: [`${PHOTO_BASE}${code}-400.webp`, `${PHOTO_BASE}${code}.webp`] });
+    const urls = [`${PHOTO_BASE}${code}-400.webp`, `${PHOTO_BASE}${code}.webp`];
+    if (hasHero(code)) urls.push(`${PHOTO_BASE}${code}-1920.webp`);
+    items.push({ id: 'photos', label: 'Photos', urls });
   }
   return items;
 }

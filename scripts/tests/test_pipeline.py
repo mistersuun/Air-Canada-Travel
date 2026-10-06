@@ -250,8 +250,10 @@ def test_gate_coverage_from_moving_back_only_warns(fs, monkeypatch):
 
 def test_previous_coverage_from(fs, tmp_path):
     p = tmp_path / "s.json"
-    p.write_text(json.dumps({"coverageFrom": "2026-10-01", "routes": {}}))
+    p.write_text(json.dumps({"meta": {"coverageFrom": "2026-10-01"}, "routes": {}}))
     assert fs.previous_coverage_from(str(p)) == "2026-10-01"
+    p.write_text(json.dumps({"coverageFrom": "2026-09-01", "routes": {}}))  # top-level fallback
+    assert fs.previous_coverage_from(str(p)) == "2026-09-01"
     p.write_text("not json")
     assert fs.previous_coverage_from(str(p)) == ""
     assert fs.previous_coverage_from(str(tmp_path / "missing.json")) == ""

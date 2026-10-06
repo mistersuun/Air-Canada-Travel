@@ -24,6 +24,11 @@ describe('offline save', () => {
       .toEqual(['img/dest/LIS-400.webp', 'img/dest/LIS.webp']);
   });
 
+  it('adds the hero image when the manifest has one', () => {
+    const urls = offlineItems(trip([outbound]), () => true, () => true).find(i => i.id === 'photos')!.urls;
+    expect(urls).toContain('img/dest/LIS-1920.webp');
+  });
+
   it('an item is ok only when every url answered ok; failures and throws are per item', async () => {
     const items = offlineItems(trip([outbound, ground]), () => true);
     const results = await warmOffline(items, async u => {

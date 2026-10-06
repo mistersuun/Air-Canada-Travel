@@ -63,6 +63,9 @@ export function dismissWithUndo(profile: ProfileService, state: AppStateService,
             }
           }</span>
         }
+        @if (r.kind === 'weather' && r.deltaC !== undefined) {
+          <span class="dl tn" data-delta>{{ delta(r.deltaC) }}</span>
+        }
         @if (r.weather; as w) {
           <span class="wx tn" data-weather><app-icon name="thermo" [size]="14" />{{ typical(w) }}
             <span class="ui-tag ui-tag--neutral tg" aria-label="Typical, not a forecast">Typical</span></span>
@@ -92,6 +95,7 @@ export function dismissWithUndo(profile: ProfileService, state: AppStateService,
     .wx { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 12px; color: var(--ink-2); margin-top: 2px; }
     .wx app-icon { color: var(--amber); }
     .wx .tg { margin-left: 2px; }
+    .dl { justify-self: start; font-size: 11.5px; font-weight: 650; color: var(--ink-2); background: var(--fill); border-radius: var(--radius-tag); padding: 1px 7px; margin-top: 2px; }
     .chev { color: var(--ink-3); flex: none; }
     .x {
       width: 44px; height: 44px; margin: 0 -12px 0 0; flex: none; display: grid; place-items: center;
@@ -109,6 +113,8 @@ export class RecRowComponent {
 
   protected readonly tagged = tagged;
   protected readonly typical = typicalText;
+  /** '+26° vs home' (a true minus sign for cooler). */
+  protected delta(c: number): string { return `${c >= 0 ? '+' : '\u2212'}${Math.abs(c)}° vs home`; }
   protected readonly query = computed(() => ({ ...this.state.globalParams(), ...this.rec().link.query }));
 }
 

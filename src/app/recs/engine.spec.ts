@@ -3,7 +3,7 @@ import { resetScheduleSource, setScheduleSource } from '../data/schedule-index';
 import type { Outcome, OutcomeKind } from '../trips/model';
 import { decodeClimate } from './climate';
 import {
-  RecInput, dayItineraries, holidayRecs, pairable, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
+  RecInput, weatherRecs, dayItineraries, holidayRecs, pairable, holidayGroupAside, holidayGroupTitle, logRecs, onwardRecs, recommend, seasonEndingRecs,
   scheduleLine, seasonWindow, shortDuration, styleRecs, whyText,
 } from './engine';
 import { longWeekends } from './long-weekends';
@@ -321,5 +321,55 @@ describe('holiday recs never suggest the past, and pair out and back', () => {
     const none = pairable([it(12, 15)], [it(9, 11)]);
     expect(none.out).toEqual([]);
     expect(none.back).toEqual([]);
+  });
+});
+
+describe('weather recs: Escape the cold / Cooler escapes', () => {
+  const flat = (tmax: number) => ({ tmax: Array(12).fill(tmax), tmin: Array(12).fill(tmax - 8), precip: Array(12).fill(50), wet: Array(12).fill(5) });
+  const climate = (home: number | null, there: Record<string, number>) => decodeClimate({
+    ...CLIMATE_FIXTURE,
+    codes: { ...(home === null ? {} : { YUL: flat(home) }), ...Object.fromEntries(Object.entries(there).map(([k, v]) => [k, flat(v)])) },
+  });
+  // Explore dedupes against the holiday card (FLL is already there), so kind-level checks use weatherRecs.
+  const weatherOf = (over: Partial<RecInput>) => { const items = weatherRecs(input(over)); return items.length ? { items } : undefined; };
+
+  it('cold hub: warm nonstops by warmth delta, with the Trade line and delta', () => {
+    const g = weatherOf({ climate: climate(3, { FLL: 29, CUN: 31, LIS: 20 }) })!;
+    const group = recommend(input({ climate: climate(3, { FLL: 29, CUN: 31, LIS: 20 }) })).find(x => x.id === 'weather')!;
+    expect(group.title).toBe('Escape the cold');
+    expect(group.items.map(r => r.code)).toEqual(['CUN']);   // FLL already shown in the holiday card
+    expect(g.items.map(r => r.code)).toEqual(['CUN', 'FLL']);
+    const [cun, fll] = g.items;
+    expect(cun.kind).toBe('weather');
+    expect(cun.deltaC).toBe(28);
+    expect(fll.deltaC).toBe(26);
+    expect(fll.lines[0].text).toMatch(/^Trade 3° for 29° · nonstop (Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
+    expect(fll.weather?.tmaxC).toBe(29);
+  });
+
+  it('hot hub: cooler destinations only', () => {
+    const g = weatherOf({ climate: climate(30, { FLL: 31, LIS: 20, OPO: 18, CUN: 32 }) })!;
+    expect(recommend(input({ climate: climate(30, { FLL: 31, LIS: 20, OPO: 18, CUN: 32 }) })).find(x => x.id === 'weather')!.title).toBe('Cooler escapes');
+    expect(g.items.map(r => r.code)).toEqual(['OPO', 'LIS']);
+    expect(g.items[0].deltaC).toBe(-12);
+  });
+
+  it('mild hub month or no hub climate: nothing', () => {
+    expect(weatherOf({ climate: climate(15, { FLL: 29 }) })).toBeUndefined();
+    expect(weatherOf({ climate: climate(null, { FLL: 29, CUN: 31 }) })).toBeUndefined();
+    expect(weatherOf({ climate: null })).toBeUndefined();
+  });
+
+  it('respects dismissals and flights that already left', () => {
+    const c = climate(3, { FLL: 29, CUN: 31 });
+    const dismissed = { ...RECS_PROFILE, dismissed: ['weather:CUN:'] };
+    expect(weatherOf({ climate: c, profile: dismissed })!.items.map(r => r.code)).toEqual(['FLL']);
+    const later = input({ climate: c, nowMs: Date.parse('2028-01-10T12:00:00Z'), todayKey: '2028-01-10' });
+    expect(weatherRecs(later)).toEqual([]);
+  });
+
+  it('is not part of the Trips ideas', () => {
+    const g = recommend(input({ climate: climate(3, { FLL: 29 }), context: 'trips' }));
+    expect(allRecs(g).some(r => r.kind === 'weather')).toBe(false);
   });
 });

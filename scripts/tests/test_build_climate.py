@@ -51,6 +51,27 @@ def test_parses_every_destination_and_skips_hubs():
     assert lis["type"] == "City" and abs(lis["lat"] - 38.77) < 0.01
 
 
+def test_hubs_are_parsed_and_included_in_the_locations():
+    ts = (ROOT / "src/app/data/destinations.ts").read_text(encoding="utf-8")
+    hubs = {h["code"]: h for h in bc.parse_hubs(ts)}
+    assert {"YUL", "YYZ", "YVR", "YYC", "YOW", "YHZ", "YEG", "YQB", "YWG", "YTZ"} <= set(hubs)
+    assert abs(hubs["YUL"]["lat"] - 45.47) < 0.01 and abs(hubs["YVR"]["lng"] + 123.18) < 0.01
+    locs = bc.parse_locations(ts)
+    codes = [d["code"] for d in locs]
+    assert len(codes) == len(set(codes))
+    assert {"YUL", "YYZ", "YVR", "LIS"} <= set(codes)
+
+
+def test_parse_hubs_reads_only_the_hubs_list():
+    ts = ("export const DESTINATIONS: Destination[] = [\n"
+          "  { city: 'A', code: 'AAA', lat: 1.5, lng: -2, type: 'Sun' },\n];\n"
+          "export const HUBS: Hub[] = [\n"
+          "  { name: 'H', lat: 45.5, lng: -73.7, code: 'HHH', tz: 'America/Toronto' },\n];")
+    assert bc.parse_hubs(ts) == [{"code": "HHH", "lat": 45.5, "lng": -73.7, "type": "Hub"}]
+    assert [d["code"] for d in bc.parse_locations(ts)] == ["AAA", "HHH"]
+    assert bc.parse_hubs("export const DESTINATIONS = []") == []
+
+
 def test_parse_ignores_hub_typed_entries():
     ts = ("export const DESTINATIONS: Destination[] = [\n"
           "  { city: 'A', code: 'AAA', lat: 1.5, lng: -2, type: 'Sun' },\n"
@@ -184,6 +205,7 @@ def test_partial_run_merges_into_the_existing_file(tmp_path, monkeypatch):
     out = tmp_path / "climate.json"
     old = {"OLD": {"m": 1}, "LIS": {"m": "stale"}}
     bc.write_file(out, bc.build_file(old, 5))
+    monkeypatch.setattr(bc, "parse_hubs", lambda text: [])
     monkeypatch.setattr(bc, "parse_destinations", lambda text: [DEST, {**DEST, "code": "OLD"}])
     monkeypatch.setattr(bc, "run", lambda *a, **k: ({"LIS": {"m": "new"}}, True))
     assert bc.main(["--out", str(out), "--cache", str(tmp_path / "c")]) == 0

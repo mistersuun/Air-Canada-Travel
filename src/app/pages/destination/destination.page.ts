@@ -17,7 +17,7 @@ import { SegComponent, type SegOption } from '../../ui/seg.component';
 import { RouteMapComponent, type MapPoint } from '../../ui/route-map.component';
 import { DestPhotoComponent } from '../../ui/dest-photo.component';
 import { calendarPath, flightPath } from '../../ui/links';
-import { hubDisplayName, prettyFlight, tzDiffLabel } from '../../ui/format';
+import { hubDisplayName, itinKey, prettyFlight, tzDiffLabel } from '../../ui/format';
 import { tap } from '../../ui/haptics';
 import { getDestinationCodes } from '../../data/schedule-index';
 import { dailyFact } from './fun-facts';
@@ -29,7 +29,7 @@ import {
 import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
 import { DestClimateComponent } from './dest-climate.component';
-import { historyFor, recordTag } from '../../trips/engine/track-record';
+import { historyFor, recordAria, recordTag, type HistoryCounts } from '../../trips/engine/track-record';
 import { TripsService } from '../../trips/trips.service';
 import { DestHomeByComponent } from './dest-home-by.component';
 import { DestTripActionsComponent } from './dest-trip-actions.component';
@@ -636,20 +636,36 @@ export class DestinationPage {
     const nonstops = getDestinationCodes(hub.code).map(c => findHub(c) ?? findDestination(c)).filter((x): x is NonNullable<typeof x> => !!x);
     return dailyFact(d, hub, nonstops, this.state.nowMs());
   });
-  /** The day the weather is for: the picked day, else today at the departure airport. */
-  protected readonly climateDay = computed(() => this.state.selectedDateKey() ?? this.outToday());
-  /** 'you: 3/4' per flight number in the departures, only where you have tried it. Counts only. */
+  /** The day the weather is for: the picked day, else today at the destination. */
+  protected readonly climateDay = computed(() => {
+    const tz = this.dest()?.tz;
+    return this.state.selectedDateKey() ?? (tz ? todayKey(tz, this.state.nowMs()) : this.outToday());
+  });
+  /**
+   * 'you: 3/4' tags for the departures, keyed by row: only the first row of each
+   * flight number (and route) carries it, and only where you have tried it.
+   * Rows with several legs prefix each tag with its flight number. Counts only.
+   */
   protected readonly records = computed(() => {
-    const out: Record<string, string> = {};
+    const out: Record<string, { text: string; aria: string }[]> = {};
     const outcomes = this.trips.outcomes();
     if (!outcomes.length) return out;
+    const seen = new Set<string>();
+    const cache = new Map<string, HistoryCounts>();
     for (const t of this.outItems()) {
+      const tags: { text: string; aria: string }[] = [];
       for (const l of t.it.legs) {
         const n = prettyFlight(l.flightNumber);
-        if (!n || out[n]) continue;
-        const tag = recordTag(historyFor({ outcomes }, { flightNumber: n }).overall);
-        if (tag) out[n] = tag;
+        if (!n || l.estimated) continue;
+        const k = `${n}|${l.origin}|${l.dest}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        let c = cache.get(k);
+        if (!c) cache.set(k, c = historyFor({ outcomes }, { flightNumber: n, route: { origin: l.origin, dest: l.dest } }).overall);
+        const tag = recordTag(c);
+        if (tag) tags.push({ text: t.it.legs.length > 1 ? `${n} ${tag}` : tag, aria: `${n}. ${recordAria(c)}` });
       }
+      if (tags.length) out[itinKey(t.it)] = tags;
     }
     return out;
   });

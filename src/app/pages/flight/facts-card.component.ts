@@ -32,10 +32,10 @@ import { factsView } from './flight-model';
       } @else {
         <p class="fc__unk" data-unknown>Unknown · not published yet</p>
       }
-      @if (record(); as r) {
+      @for (r of records(); track $index; let first = $first) {
         <p class="fc__rec" data-record>
-          <span><b>Your record</b> · {{ r }}</span>
-          <app-provenance-tag value="saved" />
+          <span>@if (first) { <b>Your record</b> · }{{ r }}</span>
+          @if (first) { <app-provenance-tag value="saved" /> }
         </p>
       }
       @if (view().holiday; as h) {
@@ -68,8 +68,8 @@ export class FactsCardComponent {
   readonly dest = input.required<string>();
   readonly dateKey = input.required<string>();
   readonly timeFormat = input<TimeFormat>('24h');
-  /** Your own track record line for the shown flight (counts only), or null. */
-  readonly record = input<string | null>(null);
+  /** Your own track record lines for the shown flight's legs (counts only). */
+  readonly records = input<readonly string[]>([]);
 
   protected readonly view = computed(() =>
     factsView(scheduleFacts(this.origin(), this.dest(), this.dateKey()), holidayNote(this.dateKey()), this.timeFormat()));

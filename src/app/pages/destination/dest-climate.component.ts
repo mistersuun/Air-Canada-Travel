@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { ClimateService } from '../../recs/climate.service';
-import { MONTH_SHORT, climateFor } from '../../recs/climate';
+import { MONTH_SHORT, climateFor, wetDaysText } from '../../recs/climate';
 import type { ClimateMonth } from '../../recs/model';
 import { ClimateCreditComponent } from '../../recs/ui/climate-credit.component';
 
@@ -27,14 +27,15 @@ export function climateHighlights(months: readonly ClimateMonth[]): { warmest: S
   template: `
     @if (view(); as v) {
       <div class="cl" data-climate>
-        <p class="cl__t tn"><b>Typical in {{ v.name }}</b> · {{ v.cur.tmaxC }}° / {{ v.cur.tminC }}° · {{ v.cur.wetDays }} wet days</p>
+        <p class="cl__t tn"><b>Typical in {{ v.name }}</b> · {{ v.cur.tmaxC }}° / {{ v.cur.tminC }}° · {{ wet(v.cur.wetDays) }}</p>
         <ol class="cl__s" aria-label="Typical monthly highs and wet days">
           @for (m of v.months; track m.month) {
-            <li class="m" [class.is-cur]="m.month === v.cur.month" [attr.aria-label]="label(m)">
-              <span class="m__hi tn">{{ m.tmaxC }}°</span>
-              <span class="m__bar" [class.is-warm]="v.warmest.has(m.month)" [style.height.px]="h(m.tmaxC, v)"></span>
-              <span class="m__wet tn" [class.is-dry]="v.driest.has(m.month)">{{ m.wetDays }}</span>
-              <span class="m__n">{{ short(m.month) }}</span>
+            <li class="m" [class.is-cur]="m.month === v.cur.month" [attr.aria-current]="m.month === v.cur.month ? 'date' : null">
+              <span class="ui-visually-hidden">{{ label(m, v) }}</span>
+              <span class="m__hi tn" aria-hidden="true">{{ m.tmaxC }}°</span>
+              <span class="m__bar" aria-hidden="true" [class.is-warm]="v.warmest.has(m.month)" [style.height.px]="h(m.tmaxC, v)"></span>
+              <span class="m__wet tn" aria-hidden="true" [class.is-dry]="v.driest.has(m.month)">{{ m.wetDays }}</span>
+              <span class="m__n" aria-hidden="true">{{ short(m.month) }}</span>
             </li>
           }
         </ol>
@@ -66,7 +67,7 @@ export class DestClimateComponent {
   private readonly climate = inject(ClimateService);
 
   readonly code = input.required<string>();
-  /** The day the page is looking at (a date key), or null for this month. */
+  /** The day the weather is for (a date key); the page passes the picked day, else today at the destination. */
   readonly dateKey = input.required<string>();
 
   constructor() {
@@ -88,8 +89,17 @@ export class DestClimateComponent {
     return MONTH_SHORT[m - 1].charAt(0);
   }
 
-  protected label(m: ClimateMonth): string {
-    return `${MONTH_SHORT[m.month - 1]}: typical high ${m.tmaxC}°, ${m.wetDays} wet days`;
+  protected wet(n: number): string {
+    return wetDaysText(n);
+  }
+
+  protected label(m: ClimateMonth, v: { cur: ClimateMonth; warmest: Set<number>; driest: Set<number> }): string {
+    const tags = [
+      v.warmest.has(m.month) ? 'warmest' : '',
+      v.driest.has(m.month) ? 'driest' : '',
+      m.month === v.cur.month ? 'current month' : '',
+    ].filter(Boolean);
+    return [`${MONTH_SHORT[m.month - 1]}: typical high ${m.tmaxC}°`, wetDaysText(m.wetDays), ...tags].join(', ');
   }
 
   /** Bar height 8..40px, scaled between the coolest and warmest month. */

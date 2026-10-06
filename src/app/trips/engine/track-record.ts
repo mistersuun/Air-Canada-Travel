@@ -2,15 +2,15 @@
  * Your own track record, from the outcomes you saved on this device. Counts
  * only: never a percentage, never odds. Pure.
  */
-import type { Outcome } from '../model';
+import { instanceKey, type Outcome } from '../model';
 import { weekdayIndex } from '../../utils/time';
 
 export interface HistoryCounts {
   /** Outcomes other than "Didn't try". */
   tried: number;
-  /** Everyone boarded. */
+  /** Everyone or some of the party boarded (includes `partial`). */
   boarded: number;
-  /** Some of the party boarded. */
+  /** Of those, only some of the party boarded. */
   partial: number;
 }
 
@@ -35,27 +35,36 @@ function add(c: HistoryCounts, o: Outcome): void {
   if (o.kind === 'didntTry') return;
   c.tried++;
   if (o.kind === 'allBoarded') c.boarded++;
-  else if (o.kind === 'someBoarded') c.partial++;
+  else if (o.kind === 'someBoarded') { c.boarded++; c.partial++; }
 }
 
-/** Counts of your own saved outcomes for a flight number and/or route, overall and on the same weekday. */
+/**
+ * Counts of your own saved outcomes for a flight number and/or route, overall
+ * and on the same weekday. One outcome per flight instance (the latest saved).
+ */
 export function historyFor(log: { outcomes: readonly Outcome[] }, q: HistoryQuery): History {
   const num = q.flightNumber ? norm(q.flightNumber) : null;
   const dow = q.dateKey ? weekdayIndex(q.dateKey) : null;
-  const overall = empty();
-  const sameWeekday = empty();
+  const latest = new Map<string, Outcome>();
   for (const o of log.outcomes) {
     if (num && norm(o.flightNumber) !== num) continue;
     if (q.route && (o.origin !== q.route.origin || o.dest !== q.route.dest)) continue;
+    const k = instanceKey(o);
+    const prev = latest.get(k);
+    if (!prev || o.recordedAt >= prev.recordedAt) latest.set(k, o);
+  }
+  const overall = empty();
+  const sameWeekday = empty();
+  for (const o of latest.values()) {
     add(overall, o);
     if (dow !== null && weekdayIndex(o.dateKey) === dow) add(sameWeekday, o);
   }
   return { overall, sameWeekday };
 }
 
-/** 'tried 4, boarded 3' (+ ', some boarded 1' when any). Counts only. */
+/** 'tried 4, boarded 3' (+ ' (1 some of us)' when any). Counts only. */
 export function historyText(c: HistoryCounts): string {
-  return `tried ${c.tried}, boarded ${c.boarded}${c.partial ? `, some boarded ${c.partial}` : ''}`;
+  return `tried ${c.tried}, boarded ${c.boarded}${c.partial ? ` (${c.partial} some of us)` : ''}`;
 }
 
 const WEEKDAY_PLURAL = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'] as const;
@@ -72,4 +81,9 @@ export function recordLine(h: History, flightNumber: string, dateKey: string): s
 /** 'you: 3/4' (boarded of tried) for a destination departures row, or null when tried is 0. */
 export function recordTag(c: HistoryCounts): string | null {
   return c.tried ? `you: ${c.boarded}/${c.tried}` : null;
+}
+
+/** 'Your record: boarded 3 of 4' for assistive tech. */
+export function recordAria(c: HistoryCounts): string {
+  return `Your record: boarded ${c.boarded} of ${c.tried}`;
 }

@@ -79,14 +79,27 @@ export function typicalForMonths(
   index: ClimateIndex | null | undefined,
   code: string | null | undefined,
   months: readonly number[],
-): { text: string; hi: number; lo: number; wet: number; advice: string[] } | null {
+): { text: string; advice: string[] } | null {
   const rows = months.map(m => climateFor(index, code, m)).filter((c): c is ClimateMonth => !!c);
   if (!rows.length) return null;
-  const avg = (f: (c: ClimateMonth) => number) => Math.round(rows.reduce((s, c) => s + f(c), 0) / rows.length);
-  const hi = avg(c => c.tmaxC), lo = avg(c => c.tminC), wet = avg(c => c.wetDays);
+  const range = (f: (c: ClimateMonth) => number): [number, number] => {
+    const v = rows.map(f);
+    return [Math.min(...v), Math.max(...v)];
+  };
+  const [hiMin, hiMax] = range(c => c.tmaxC);
+  const [loMin, loMax] = range(c => c.tminC);
+  const [wetMin, wetMax] = range(c => c.wetDays);
+  const deg = (a: number, b: number) => (a === b ? `${a}°` : `${a}\u2013${b}°`);
   const advice: string[] = [];
-  if (wet >= WET_DAYS_RAIN) advice.push('a rain layer');
-  if (lo < COLD_BELOW_C) advice.push('warm layers');
-  if (hi >= HOT_FROM_C) advice.push('for the heat');
-  return { text: `Typical ${hi}° / ${lo}°, ${wet} wet days`, hi, lo, wet, advice };
+  if (wetMax >= WET_DAYS_RAIN) advice.push('a rain layer');
+  if (loMin < COLD_BELOW_C) advice.push('warm layers');
+  if (hiMax >= HOT_FROM_C) advice.push('for the heat');
+  return { text: `Typical ${deg(hiMin, hiMax)} / ${deg(loMin, loMax)}, ${wetDaysText(wetMin, wetMax)}`, advice };
+}
+
+/** 'no wet days', '1 wet day', '9 wet days', '9\u201314 wet days'. */
+export function wetDaysText(min: number, max: number = min): string {
+  if (max === 0) return 'no wet days';
+  if (min === max) return `${min} wet ${min === 1 ? 'day' : 'days'}`;
+  return `${min}\u2013${max} wet days`;
 }

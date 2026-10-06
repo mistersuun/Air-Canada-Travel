@@ -132,7 +132,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
           }
 
           <div class="adds">
-            <app-facts-card [origin]="hub()" [dest]="dest()" [dateKey]="dateKey()" [timeFormat]="state.timeFormat()" [record]="record()" />
+            <app-facts-card [origin]="hub()" [dest]="dest()" [dateKey]="dateKey()" [timeFormat]="state.timeFormat()" [records]="records()" />
             @if (noteFlights().length) {
               <app-load-notes [flights]="noteFlights()" [selected]="noteKey()" [partySize]="partySize()" [timeFormat]="state.timeFormat()" />
             }
@@ -381,10 +381,19 @@ export class FlightPage {
     const it = this.current();
     return it?.legs[0]?.flightNumber ? instanceKey(refFromInstance(it.legs[0])) : null;
   });
-  /** Your own saved outcomes for the shown flight number: counts only. */
-  protected readonly record = computed(() => {
-    const fn = prettyFlight(this.current()?.legs[0]?.flightNumber);
-    return fn ? recordLine(historyFor({ outcomes: this.trips.outcomes() }, { flightNumber: fn, dateKey: this.dateKey() }), fn, this.dateKey()) : null;
+  /** Your own saved outcomes, one line per leg of the shown itinerary that you have tried (same number and route). Counts only. */
+  protected readonly records = computed(() => {
+    const outcomes = this.trips.outcomes();
+    const out: string[] = [];
+    if (!outcomes.length) return out;
+    for (const l of this.current()?.legs ?? []) {
+      const fn = prettyFlight(l.flightNumber);
+      if (!fn || l.estimated) continue;
+      const h = historyFor({ outcomes }, { flightNumber: fn, route: { origin: l.origin, dest: l.dest }, dateKey: l.dateKey });
+      const line = recordLine(h, fn, l.dateKey);
+      if (line) out.push(line);
+    }
+    return out;
   });
   protected readonly coveringTrips = computed(() => tripsCovering(this.trips.activeTrips(), this.dateKey()));
   /** Trips on these dates that the shown flight connects to (goes to the trip's side, or comes home from it). */

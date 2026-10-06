@@ -203,9 +203,19 @@ function groundItem(leg: GroundLeg): PrepItem {
   };
 }
 
+/** The goal's AC code, else where the last flight leg lands. */
+function weatherCode(trip: Trip): string | null {
+  if (trip.goal.acCode) return trip.goal.acCode;
+  for (let i = trip.legs.length - 1; i >= 0; i--) {
+    const leg = trip.legs[i];
+    if (leg.kind === 'flight' && leg.refs.length) return leg.refs[leg.refs.length - 1].dest;
+  }
+  return null;
+}
+
 /** 'Typical 8° / 2°, 14 wet days — pack a rain layer' for the trip's months; nothing without normals. Not critical. */
 export function weatherItems(trip: Trip, climate: ClimateIndex | null | undefined): PrepItem[] {
-  const t = typicalForMonths(climate, trip.goal.acCode, monthsBetween(trip.outboundDate, trip.homeBy.dateKey));
+  const t = typicalForMonths(climate, weatherCode(trip), monthsBetween(trip.outboundDate, trip.homeBy.dateKey));
   if (!t) return [];
   const id = 'weather:typical';
   return [{

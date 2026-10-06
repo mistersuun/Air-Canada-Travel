@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, booleanAttribute, inject, input, ou
 import { RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { flightPath } from '../../ui/links';
-import { itinKey, prettyFlight } from '../../ui/format';
+import { itinKey } from '../../ui/format';
 import type { TimelineItem } from './dest-model';
 
 /**
@@ -25,13 +25,13 @@ import type { TimelineItem } from './dest-model';
                  [routerLink]="path(t)" [queryParams]="state.globalParams()">
                 <div class="d">{{ t.dateLabel }}</div>
                 <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you>{{ r }}</span> }</div>
+                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
               </a>
             } @else {
               <div class="ui-tl__it" [class.ui-tl__it--now]="first">
                 <div class="d">{{ t.dateLabel }}</div>
                 <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you>{{ r }}</span> }</div>
+                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
               </div>
             }
           </li>
@@ -59,8 +59,8 @@ export class DestTimelineComponent {
   readonly linked = input(false, { transform: booleanAttribute });
   readonly more = input(false, { transform: booleanAttribute });
   readonly label = input<string>('');
-  /** 'you: 3/4' per flight number (your own saved outcomes), shown beside the row. */
-  readonly records = input<Readonly<Record<string, string>>>({});
+  /** 'you: 3/4' tags (your own saved outcomes) per row, keyed by itinKey. */
+  readonly records = input<Readonly<Record<string, readonly { text: string; aria: string }[]>>>({});
 
   readonly showMore = output<void>();
 
@@ -68,9 +68,8 @@ export class DestTimelineComponent {
     return itinKey(t.it);
   }
 
-  protected tags(t: TimelineItem): string[] {
-    const r = this.records();
-    return t.it.legs.map(l => r[prettyFlight(l.flightNumber)]).filter((x): x is string => !!x);
+  protected tags(t: TimelineItem): readonly { text: string; aria: string }[] {
+    return this.records()[itinKey(t.it)] ?? [];
   }
 
   protected path(t: TimelineItem): string[] {

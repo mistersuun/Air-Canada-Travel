@@ -45,7 +45,7 @@ describe('TripsPage', () => {
     expect(text('h1')).toBe('Trips');
     expect(text('.tc__name')).toBe('Seville');
     expect(text('.tc__dates')).toBe('Thu Oct 8 → home by Tue Oct 13, 22:00');
-    expect(text('[data-countdown]')).toBe('In 7 days');
+    expect(text('[data-countdown]')).toBe('7 sleeps');
     expect(all('.tc__chip')).toEqual(['2 travellers · stay together', 'From YUL']);
     expect(all('.tl__top app-leg-status-tag, .tl__top app-provenance-tag')).toEqual(['Listed', 'Estimated', 'Saved by you', 'Planned']);
     expect(all('.tl__m')[0]).toBe('17:55 → 06:50⁺¹ · 2 backups · Scheduled');
@@ -101,6 +101,6 @@ describe('TripsPage', () => {
     expect(cards[1].textContent).toContain('No legs yet');
     expect(el.querySelector('[data-past] summary')!.textContent).toContain('Past trips');
     expect(el.querySelectorAll('[data-past] app-trip-card')).toHaveLength(1);
-    expect(all('[data-countdown]')).toEqual(['In 7 days', 'In 32 days', 'Done']);
+    expect(all('[data-countdown]')).toEqual(['7 sleeps', 'In 32 days', 'Done']);
   });
 });

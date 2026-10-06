@@ -4,6 +4,9 @@ import { formatKey } from '../../utils/time';
 import type { OutcomePrompt } from '../engine/today';
 import { OUTCOME_LABEL, OutcomeKind, instanceKey } from '../model';
 import { TripsService } from '../trips.service';
+import { celebrate } from '../../ui/celebrate';
+import { success } from '../../ui/haptics';
+import { clearedMessage } from '../cleared';
 
 export interface OutcomeChoice { kind: OutcomeKind; label: string; primary: boolean }
 
@@ -42,7 +45,7 @@ export function outcomeHeading(p: OutcomePrompt): string {
       <div class="op__g" [class.op__g--3]="choices().length === 3">
         @for (c of choices(); track c.kind) {
           <button type="button" class="ui-btn op__b" [class.ui-btn--dark]="c.primary" [class.ui-btn--ghost]="!c.primary"
-                  [attr.data-kind]="c.kind" (click)="record(c.kind)">{{ c.label }}</button>
+                  [attr.data-kind]="c.kind" (click)="record(c.kind, $event)">{{ c.label }}</button>
         }
       </div>
       <button type="button" class="ui-link op__skip" data-skip (click)="skip()">Skip this flight</button>
@@ -72,7 +75,7 @@ export class OutcomePromptComponent {
   protected readonly choices = computed(() => outcomeChoices(this.prompt().partySize));
   protected readonly hid = computed(() => `op-${this.prompt().key.replace(/[^A-Za-z0-9-]/g, '-')}`);
 
-  protected record(kind: OutcomeKind): void {
+  protected record(kind: OutcomeKind, ev?: Event): void {
     const p = this.prompt();
     const trip = p.tripId ? this.trips.trip(p.tripId) : null;
     const leg = trip?.legs.find(l => l.id === p.legId) ?? null;
@@ -83,7 +86,12 @@ export class OutcomePromptComponent {
     });
     const key = instanceKey(p.ref);
     const saved = this.trips.outcomes().find(o => instanceKey(o) === key && o.tripId === p.tripId);
-    this.state.flash(`${p.ref.flightNumber}: ${OUTCOME_LABEL[kind]} · saved`, {
+    const cleared = kind === 'allBoarded' || kind === 'someBoarded';
+    if (cleared) {
+      celebrate(ev?.currentTarget as Element | null);
+      success();
+    }
+    this.state.flash(cleared ? clearedMessage(p.ref.origin, p.ref.dest, kind === 'someBoarded') : `${p.ref.flightNumber}: ${OUTCOME_LABEL[kind]} · saved`, {
       label: 'Undo',
       run: () => {
         if (saved) this.trips.removeOutcome(saved.id);

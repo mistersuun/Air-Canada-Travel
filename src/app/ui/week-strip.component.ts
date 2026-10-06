@@ -1,3 +1,4 @@
+import { tap } from './haptics';
 import {
   ChangeDetectionStrategy, booleanAttribute, Component, DOCUMENT, ElementRef, computed, inject, input, output, viewChild,
 } from '@angular/core';
@@ -213,6 +214,7 @@ export class WeekStripComponent {
   }
 
   protected onDay(key: string): void {
+    tap();
     this.selectDay.emit(this.selectedDateKey() === key ? null : key);
   }
 

@@ -35,7 +35,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
           }
           <p class="ui-sub tn tc__dates">{{ dates() }}</p>
         </div>
-        <span class="ui-tag tc__cd" [class]="'ui-tag--' + cd().tone" data-countdown>{{ cd().text }}</span>
+        <span class="ui-tag tc__cd" [class]="'ui-tag--' + cd().tone" data-countdown [attr.title]="cdTitle()">{{ cd().text }}</span>
       </div>
 
       @if (compact()) {
@@ -155,6 +155,7 @@ export class TripCardComponent {
   readonly partyPick = output<void>();
 
   protected readonly cd = computed(() => countdown(this.trip(), this.state.nowMs()));
+  protected readonly cdTitle = computed(() => (/sleeps$/.test(this.cd().text) ? `${this.cd().text} to ${this.trip().goal.name}` : this.cd().text));
   protected readonly dates = computed(() => tripDatesLabel(this.trip(), this.state.timeFormat()));
   protected readonly partyText = computed(() => partyLabel(this.trip().party));
   protected readonly rows = computed(() => legRows(this.trip(), this.state.timeFormat()));

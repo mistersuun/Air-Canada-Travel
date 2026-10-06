@@ -95,7 +95,11 @@ export async function getGroup(store: GroupStore, id: string, nowMs: number): Pr
  * Optimistic concurrency: the write is conditional on the ETag read here, so a
  * concurrent writer makes this one fail with 409 and the client re-fetches and merges.
  */
-export async function putGroup(store: GroupStore, id: string, token: string, body: PutBody, nowMs: number): Promise<Result> {
+export async function putGroup(
+  store: GroupStore, id: string, token: string, body: PutBody, nowMs: number,
+  /** Called only for a genuine create, after every check passed and right before the write: true to proceed, false = budget spent, 'rate-limited' = this caller made too many. */
+  spend?: () => Promise<boolean | 'rate-limited'>,
+): Promise<Result> {
   const cur = await store.getWithMetadata(id);
   const existing = cur ? parseRecord(cur.data) : null;
   if (cur && existing && isExpired(existing, nowMs)) {
@@ -106,6 +110,11 @@ export async function putGroup(store: GroupStore, id: string, token: string, bod
   if (!cur || !existing) {
     if (cur) return res(409, { error: 'conflict' });
     if (body.baseVersion !== 0) return res(404, { error: 'not-found' });
+    if (spend) {
+      const ok = await spend();
+      if (ok === 'rate-limited') return res(429, { error: 'rate-limited' });
+      if (!ok) return res(503, { error: 'budget' });
+    }
     const rec: GroupRecord = {
       ciphertext: body.ciphertext, iv: body.iv, version: 1, updatedAt: at,
       expiresAt: computeExpiry(body.expiresAt, nowMs), writeHash: hashToken(token),

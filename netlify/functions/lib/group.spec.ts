@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { makeLimiter } from './flight-status';
 import {
   DAY_MS, MAX_CIPHERTEXT, computeExpiry, deleteGroup, getGroup, groupDailyCreates, hashToken, parsePutBody, putGroup, sweepGroups, validId, validToken, type GroupStore,
 } from './group';
@@ -140,5 +141,44 @@ describe('expiry and deletion', () => {
     await s.set('junk', 'not json', { onlyIfNew: true });
     expect(await sweepGroups(s, NOW + 5 * DAY_MS)).toBe(2);
     expect([...s.m.keys()]).toEqual([A]);
+  });
+});
+
+describe('create budget (spend callback)', () => {
+  it('is charged once per genuine create, after validation, and not for existing ids', async () => {
+    const s = memory();
+    let spent = 0;
+    const spend = async () => { spent++; return true as const; };
+    await putGroup(s, ID, TOKEN, body(), NOW, spend);
+    expect(spent).toBe(1);
+    // baseVersion 0 against an existing id: conflict, no charge.
+    expect((await putGroup(s, ID, TOKEN, body(), NOW, spend)).status).toBe(409);
+    // updates and wrong-token attempts: no charge.
+    await putGroup(s, ID, TOKEN, body({ baseVersion: 1 }), NOW, spend);
+    await putGroup(s, ID, 'wrongwrongwrongwrongwrong', body({ baseVersion: 2 }), NOW, spend);
+    // nonzero base for an unknown id: 404, no charge.
+    expect((await putGroup(s, 'BBBBBBBBBBBBBBBBBBBBBB', TOKEN, body({ baseVersion: 4 }), NOW, spend)).status).toBe(404);
+    expect(spent).toBe(1);
+  });
+  it('an oversized body is rejected by validation, so nothing is spent (a retry is charged once)', async () => {
+    let spent = 0;
+    const spend = async () => { spent++; return true as const; };
+    expect(parsePutBody({ ciphertext: 'c'.repeat(MAX_CIPHERTEXT + 1), iv: 'i'.repeat(16), baseVersion: 0 })).toBeNull();
+    const s = memory();
+    await putGroup(s, ID, TOKEN, body(), NOW, spend);
+    expect(spent).toBe(1);
+  });
+  it('over budget is 503 and nothing is stored; a rate-limited caller gets 429', async () => {
+    const s = memory();
+    expect(await putGroup(s, ID, TOKEN, body(), NOW, async () => false)).toMatchObject({ status: 503, body: { error: 'budget' } });
+    expect(s.m.size).toBe(0);
+    expect((await putGroup(s, ID, TOKEN, body(), NOW, async () => 'rate-limited')).status).toBe(429);
+    expect(s.m.size).toBe(0);
+  });
+  it('the per-IP create limiter (5 per hour) stops a sixth', () => {
+    const allow = makeLimiter(5, 60 * 60_000);
+    expect([1, 2, 3, 4, 5, 6].map(() => allow('1.2.3.4', NOW))).toEqual([true, true, true, true, true, false]);
+    expect(allow('5.6.7.8', NOW)).toBe(true);
+    expect(allow('1.2.3.4', NOW + 61 * 60_000)).toBe(true);
   });
 });

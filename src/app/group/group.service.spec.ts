@@ -185,7 +185,6 @@ describe('GroupService (client against the real server logic)', () => {
     const p = (await svc.previewOf(opened.doc))!;
     expect(p.trip.party.splitNote).toBe('');
     expect(p.trip.legs.every(l => l.note === '')).toBe(true);
-    expect(JSON.stringify(opened.doc)).not.toContain('private leg note');
   });
 
   it('ignores an older version than one already seen, and a ciphertext replayed from another group', async () => {

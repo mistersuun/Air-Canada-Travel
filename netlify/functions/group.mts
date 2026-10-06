@@ -12,6 +12,9 @@ import { MAX_CIPHERTEXT, deleteGroup, groupDailyCreates, getGroup, parsePutBody,
 // Writes only (create, update, delete): 30 per IP per 10 minutes.
 const allowWrite = makeLimiter(30, 10 * 60_000);
 
+// New groups: 5 per IP per hour, so one address cannot use up the global daily budget.
+const allowCreate = makeLimiter(5, 60 * 60_000);
+
 // Reads: a looser per-IP limit (several companions can share one network; the app polls every 2 minutes).
 const allowRead = makeLimiter(300, 10 * 60_000);
 
@@ -65,17 +68,16 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
     try { raw = JSON.parse(text); } catch { return json({ error: 'bad-request' }, 400); }
     const body = parsePutBody(raw);
     if (!body) return json({ error: 'bad-request' }, 400);
-    // New groups spend from a global daily budget (conditional Blobs writes, fails closed).
-    if (body.baseVersion === 0) {
-      let spend: (nowMs: number) => Promise<boolean>;
+    // Only a genuine create spends: 5 per IP per hour, then the global daily budget (see putGroup).
+    const spend = async (): Promise<boolean | 'rate-limited'> => {
+      if (!allowCreate(context.ip || 'unknown', now)) return 'rate-limited';
       try {
-        spend = makeBudget(getStore({ name: 'groups-budget', consistency: 'strong' }), groupDailyCreates(process.env['GROUP_DAILY_CREATES']));
+        return await makeBudget(getStore({ name: 'groups-budget', consistency: 'strong' }), groupDailyCreates(process.env['GROUP_DAILY_CREATES']))(now);
       } catch {
-        return json({ error: 'budget' }, 503);
+        return false;
       }
-      if (!(await spend(now))) return json({ error: 'budget' }, 503);
-    }
-    const r = await putGroup(store, id, token, body, now);
+    };
+    const r = await putGroup(store, id, token, body, now, spend);
     return json(r.body, r.status);
   } catch (e) {
     console.error('group failure:', e instanceof Error ? e.name : 'unknown');

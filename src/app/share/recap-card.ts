@@ -11,7 +11,7 @@
  */
 import { PHOTO_BASE } from '../state/photo.service';
 import { type TripRecap, recapLine, standbyRecordLine, tripRecap } from '../logbook/logbook';
-import type { Trip } from '../trips/model';
+import type { Outcome, Trip } from '../trips/model';
 import { formatKey } from '../utils/time';
 import {
   type AnyCanvas, CARD, CARD_MIN_H, CARD_WIDTH, type CardBlock, type Ctx, FONT, INNER, type Measure, PAD,
@@ -20,10 +20,13 @@ import {
 
 export const RECAP_PHOTO_H = 640;
 const FOOT_H = 60;
+const NO_PHOTO_MIN_H = 640;
 const LINE_MAX = 60;
 const LINE_MIN = 34;
 
 export interface RecapOptions {
+  /** The flight log's outcomes, so the counts agree with the logbook. */
+  outcomes?: readonly Outcome[];
   /** Draw the dashed route arc (off by default). */
   arc: boolean;
   /** Add "Boarded X of Y tries" (off by default). */
@@ -64,6 +67,14 @@ function fit(text: string, font: (px: number) => string, max: number, min: numbe
 
 export const recapLineFont = (px: number) => `700 ${px}px Inter, system-ui, -apple-system, 'Segoe UI', sans-serif`;
 
+/** Cuts text to `max` px with a trailing '…' (a title still too long at the smallest size). */
+export function ellipsizeText(text: string, font: string, max: number, measure: Measure): string {
+  if (measure(text, font) <= max) return text;
+  let t = text;
+  while (t.length > 1 && measure(`${t}…`, font) > max) t = t.slice(0, -1);
+  return `${t.trimEnd()}…`;
+}
+
 /** Where everything goes, in px of the 1080-wide image. */
 export function recapLayout(head: RecapHead): RecapLayout {
   const measure = head.measure ?? approxMeasure;
@@ -76,7 +87,7 @@ export function recapLayout(head: RecapHead): RecapLayout {
   blocks.push({ kind: 'eyebrow', y, text: 'TRIP RECAP' });
   y += 52;
   const size = fit(head.title, FONT.title, 112, 64, measure);
-  blocks.push({ kind: 'title', y, text: head.title, size });
+  blocks.push({ kind: 'title', y, text: ellipsizeText(head.title, FONT.title(size), INNER, measure), size });
   y += size + 14;
   blocks.push({ kind: 'dates', y, text: head.dates });
   y += 64;
@@ -91,7 +102,7 @@ export function recapLayout(head: RecapHead): RecapLayout {
     blocks.push({ kind: 'record', y, text: head.record });
     y += 56;
   }
-  const height = Math.max(CARD_MIN_H, y + 48 + FOOT_H + PAD);
+  const height = Math.max(head.photo ? CARD_MIN_H : NO_PHOTO_MIN_H, y + 48 + FOOT_H + PAD);
   blocks.push({ kind: 'footer', y: height - PAD - FOOT_H, mark: 'Routes', fine: 'Made on this phone' });
   return { width: CARD_WIDTH, height, blocks };
 }
@@ -105,7 +116,7 @@ export function recapDates(trip: Trip): string {
   return first === last ? f(first) : `${f(first)} – ${f(last)}`;
 }
 
-export function recapHead(trip: Trip, opts: RecapOptions, hasPhoto: boolean, measure?: Measure, recap: TripRecap = tripRecap(trip)): RecapHead {
+export function recapHead(trip: Trip, opts: RecapOptions, hasPhoto: boolean, measure?: Measure, recap: TripRecap = tripRecap(trip, opts.outcomes)): RecapHead {
   return {
     title: trip.goal.name,
     dates: recapDates(trip),

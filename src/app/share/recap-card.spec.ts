@@ -34,10 +34,10 @@ describe('recapDates', () => {
 describe('recapLayout', () => {
   const head = () => recapHead(done(), DEFAULT_RECAP_OPTIONS, false, undefined, undefined);
 
-  it('is 1080 wide and at least 1080 tall, blocks in order, footer last', () => {
+  it('is 1080 wide, blocks in order, footer last', () => {
     const l = recapLayout(head());
     expect(l.width).toBe(1080);
-    expect(l.height).toBeGreaterThanOrEqual(CARD_MIN_H);
+    expect(l.height).toBeGreaterThanOrEqual(640);
     expect(l.blocks.map(b => b.kind)).toEqual(['eyebrow', 'title', 'dates', 'line', 'footer']);
     const ys = l.blocks.map(b => b.y);
     expect([...ys].sort((a, b) => a - b)).toEqual(ys);
@@ -75,6 +75,23 @@ describe('recapLayout', () => {
     const l = recapLayout(recapHead(t, DEFAULT_RECAP_OPTIONS, false));
     const title = l.blocks.find(b => b.kind === 'title')!;
     expect(title.kind === 'title' && title.size).toBeLessThan(112);
+  });
+});
+
+describe('recap layout details', () => {
+  it('ellipsizes a title that cannot fit even at the smallest size', () => {
+    const t = done();
+    t.goal = { ...t.goal, name: 'Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch and a great many more words' };
+    const title = recapLayout(recapHead(t, DEFAULT_RECAP_OPTIONS, false)).blocks.find(b => b.kind === 'title')!;
+    expect(title.kind === 'title' && title.text.endsWith('…')).toBe(true);
+  });
+  it('has no tall empty band without a photo', () => {
+    const none = recapLayout(recapHead(done(), DEFAULT_RECAP_OPTIONS, false));
+    expect(none.height).toBeLessThan(CARD_MIN_H);
+    const foot = none.blocks.at(-1)!;
+    const last = none.blocks.at(-2)!;
+    expect(foot.y - last.y).toBeLessThan(300);
+    expect(recapLayout(recapHead(done(), DEFAULT_RECAP_OPTIONS, true)).height).toBeGreaterThanOrEqual(CARD_MIN_H);
   });
 });
 

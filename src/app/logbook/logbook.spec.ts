@@ -117,6 +117,35 @@ describe('boardedFlights', () => {
   });
 });
 
+describe('outcomes versus legs', () => {
+  const stop1 = ref('AC1', 'YUL', 'YYZ', '2026-10-09');
+  const stop2 = ref('AC2', 'YYZ', 'LHR', '2026-10-09');
+
+  it('skips a boarded outcome the leg contradicts (last segment of a not-boarded leg)', () => {
+    const t = tripWith([{ refs: [stop1, stop2], status: 'notBoarded' }]);
+    expect(boardedFlights({ outcomes: [outcome(stop2, 'allBoarded', t.id)] }, [t])).toEqual([]);
+    expect(boardedFlights({ outcomes: [outcome(stop2, 'allBoarded', null)] }, [t])).toEqual([]);
+  });
+  it('keeps a boarded first segment of that leg', () => {
+    const t = tripWith([{ refs: [stop1, stop2], status: 'notBoarded' }]);
+    expect(boardedFlights({ outcomes: [outcome(stop1, 'allBoarded', t.id)] }, [t]).map(f => f.flightNumber)).toEqual(['AC1']);
+  });
+  it('keeps the outcome when the leg is still open or belongs to another trip', () => {
+    const open = tripWith([{ refs: [stop1, stop2], status: 'checkedIn' }]);
+    expect(boardedFlights({ outcomes: [outcome(stop2, 'allBoarded', open.id)] }, [open])).toHaveLength(1);
+    const t = tripWith([{ refs: [stop1, stop2], status: 'notBoarded' }]);
+    expect(boardedFlights({ outcomes: [outcome(stop2, 'allBoarded', 'other')] }, [t])).toHaveLength(1);
+  });
+  it('the recap folds in the trip own outcomes so it agrees with the logbook', () => {
+    const t = tripWith([{ refs: [stop1], status: 'boarded' }]);
+    const extra = outcome(stop2, 'allBoarded', t.id);
+    expect(tripRecap(t).flights).toBe(1);
+    expect(tripRecap(t, [extra]).flights).toBe(2);
+    expect(tripRecap(t, [outcome(stop2, 'allBoarded', 'other')]).flights).toBe(1);
+    expect(tripRecap(t, [extra]).flights).toBe(logbookStats({ outcomes: [extra] }, [t]).flights);
+  });
+});
+
 describe('logbookStats', () => {
   it('is all zero for a new traveller', () => {
     const s = logbookStats({ outcomes: [] }, []);

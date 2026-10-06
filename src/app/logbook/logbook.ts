@@ -10,7 +10,7 @@
  */
 import { networkAirport } from '../data/route-network';
 import { countryName } from '../places/place';
-import { FlightLeg, FlightLog, FlightRef, Trip, instanceKey } from '../trips/model';
+import { FlightLeg, FlightLog, FlightRef, Outcome, Trip, instanceKey, isFinalStatus } from '../trips/model';
 import { aircraftName } from '../utils/aircraft';
 import { findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
@@ -113,6 +113,7 @@ export function boardedFlights(
     if (o.kind !== 'allBoarded' && o.kind !== 'someBoarded') continue;
     const k = instanceKey(o);
     if (byKey.has(k)) continue;
+    if (contradictedByLeg(o, trips)) continue;
     const d = resolve?.(o) ?? null;
     byKey.set(k, {
       key: k, flightNumber: o.flightNumber, origin: o.origin, dest: o.dest, dateKey: o.dateKey,
@@ -121,6 +122,25 @@ export function boardedFlights(
     });
   }
   return [...byKey.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey) || a.key.localeCompare(b.key));
+}
+
+/**
+ * True when a trip leg says this outcome's flight was not boarded: the leg
+ * (same trip, or any trip when the outcome has none) ended notBoarded /
+ * didntTry / abandoned and the flight is the leg's last segment. A boarded
+ * first segment of a one-stop leg is kept.
+ */
+function contradictedByLeg(o: Outcome, trips: readonly Trip[] | null | undefined): boolean {
+  const k = instanceKey(o);
+  for (const t of trips ?? []) {
+    if (o.tripId && t.id !== o.tripId) continue;
+    for (const l of t.legs) {
+      if (l.kind !== 'flight' || l.status === 'boarded' || !isFinalStatus(l.status)) continue;
+      const last = l.refs[l.refs.length - 1];
+      if (last && instanceKey(last) === k) return true;
+    }
+  }
+  return false;
 }
 
 export interface RouteCount { a: string; b: string; count: number }
@@ -218,8 +238,10 @@ export interface TripRecap {
 }
 
 /** Counts for the recap card; booking codes and passes never enter. */
-export function tripRecap(trip: Trip): TripRecap {
-  const s = statsOf(tripBoardedFlights(trip));
+export function tripRecap(trip: Trip, outcomes: readonly Outcome[] = []): TripRecap {
+  // Same flights the logbook counts: the trip's boarded legs plus its own recorded outcomes.
+  const own = outcomes.filter(o => o.tripId === trip.id);
+  const s = statsOf(boardedFlights({ outcomes: own }, [trip]));
   const flightLegs = trip.legs.filter((l): l is FlightLeg => l.kind === 'flight');
   const boarded = flightLegs.filter(l => l.status === 'boarded').length;
   const notBoarded = flightLegs.filter(l => l.status === 'notBoarded').length;

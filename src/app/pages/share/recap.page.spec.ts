@@ -62,9 +62,10 @@ describe('RecapPage', () => {
   it('draws the card with the arc and standby record off, and says what is never added', async () => {
     const { el, renderer, stable } = await render(trip('boarded'));
     await vi.waitFor(async () => { await stable(); expect(el.querySelector('[data-preview] img')).toBeTruthy(); });
-    expect(renderer.mock.calls[0][1]).toEqual({ arc: false, standbyRecord: false });
+    expect(renderer.mock.calls[0][1]).toMatchObject({ arc: false, standbyRecord: false });
     expect((el.querySelector('[data-record]') as HTMLInputElement).checked).toBe(false);
     expect((el.querySelector('[data-arc]') as HTMLInputElement).checked).toBe(false);
+    expect((el.querySelector('[data-preview] img') as HTMLImageElement).alt).toMatch(/^Trip recap\. 2 flights · /);
     expect(clean(el.querySelector('[data-never]')?.textContent)).toContain('Booking codes');
   });
 
@@ -76,6 +77,6 @@ describe('RecapPage', () => {
     sw.checked = true;
     sw.dispatchEvent(new Event('change'));
     await stable();
-    await vi.waitFor(() => expect(renderer.mock.calls.at(-1)![1]).toEqual({ arc: false, standbyRecord: true }));
+    await vi.waitFor(() => expect(renderer.mock.calls.at(-1)![1]).toMatchObject({ arc: false, standbyRecord: true }));
   });
 });

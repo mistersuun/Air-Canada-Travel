@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, computed, effect, inject, input, signal, untracked,
 } from '@angular/core';
 import { IconComponent } from '../../components/shared/icons.component';
-import { returnBoarded, tripRecap } from '../../logbook/logbook';
+import { recapLine, returnBoarded, tripRecap } from '../../logbook/logbook';
 import {
   DEFAULT_RECAP_OPTIONS, type RecapOptions, loadDestPhoto, recapFilename, renderRecapCard,
 } from '../../share/recap-card';
@@ -54,7 +54,7 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
         } @else {
           <div class="rp__card" [class.is-busy]="!url()" data-preview>
             @if (url(); as src) {
-              <img [src]="src" alt="Trip recap" width="1080" [attr.height]="height()">
+              <img [src]="src" [alt]="alt()" width="1080" [attr.height]="height()">
             } @else if (failed()) {
               <p class="rp__fail" role="status">The image couldn't be drawn on this browser.</p>
             } @else {
@@ -160,14 +160,20 @@ export class RecapPage {
   });
   private readonly summary = computed(() => {
     const t = this.trip();
-    return t ? tripRecap(t) : null;
+    return t ? tripRecap(t, this.trips.outcomes()) : null;
   });
   protected readonly hasTries = computed(() => (this.summary()?.tries ?? 0) > 0);
   protected readonly recordText = computed(() => {
     const s = this.summary();
     return s ? `Boarded ${s.boarded} of ${s.tries} ${s.tries === 1 ? 'try' : 'tries'}` : '';
   });
-  readonly opts = computed<RecapOptions>(() => ({ arc: this.arc(), standbyRecord: this.record() && this.hasTries() }));
+  readonly opts = computed<RecapOptions>(() => ({
+    arc: this.arc(), standbyRecord: this.record() && this.hasTries(), outcomes: this.trips.outcomes(),
+  }));
+  protected readonly alt = computed(() => {
+    const s = this.summary();
+    return s ? `Trip recap. ${recapLine(s)}` : 'Trip recap';
+  });
 
   protected readonly blob = signal<Blob | null>(null);
   protected readonly url = signal<string | null>(null);

@@ -138,7 +138,7 @@ import { formatKey } from '../../utils/time';
     .facts { margin-top: 10px; padding: 4px 16px; }
     .fact { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hair); }
     .fact:last-child { border-bottom: 0; }
-    .fact--col { display: grid; gap: 6px; }
+    .fact--col { display: grid; gap: 6px; justify-content: stretch; }
     .fact__k { font-size: 13.5px; color: var(--ink-2); }
     .fact__v { font-size: 14.5px; font-weight: 650; text-align: right; }
     .air { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14.5px; font-weight: 600; }

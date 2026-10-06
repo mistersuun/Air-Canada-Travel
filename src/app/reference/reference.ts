@@ -7,7 +7,7 @@
  */
 import { addDays, diffDays, formatKey } from '../utils/time';
 
-export interface Advisory { level: 0 | 1 | 2 | 3; text: string; updated: string | null; url: string }
+export interface Advisory { level: 0 | 1 | 2 | 3; text: string; updated: string | null; url: string; regional: boolean }
 export interface Holiday { date: string; name: string; localName: string; global: boolean }
 export interface FxTable { date: string; source: string; rates: ReadonlyMap<string, number> }
 
@@ -31,6 +31,7 @@ export function decodeAdvisories(raw: unknown): AdvisoryIndex | null {
       text: c['text'],
       updated: typeof c['updated'] === 'string' && KEY.test(c['updated']) ? c['updated'] : null,
       url: c['url'],
+      regional: c['regional'] === true,
     });
   }
   return out.size ? out : null;
@@ -91,9 +92,14 @@ export function fxLine(code: string | null, fx: FxTable | null): { text: string;
   return { text: pair, source: `ECB, ${shortDate(fx.date, fx.date)}` };
 }
 
-/** Whether a level is shown quietly (normal precautions) or as a notice. */
+/** Whether a level is shown quietly: normal precautions and no regional advisory. */
 export function advisoryQuiet(a: Advisory): boolean {
-  return a.level === 0;
+  return a.level === 0 && !a.regional;
+}
+
+/** Stable key for a holiday (same-date holidays differ by name). */
+export function holidayKey(h: Holiday): string {
+  return `${h.date}-${h.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 }
 
 /** 'updated Sep 30' or ''. */
@@ -119,11 +125,9 @@ export function holidayName(h: Holiday): string {
   return h.localName && h.localName !== h.name ? `${h.name} (${h.localName})` : h.name;
 }
 
-/** 'Public holiday · banks and many shops may be closed', with the regional note when it is not nationwide. */
+/** 'Public holiday', or 'Public holiday in some regions' when it is not nationwide. */
 export function holidayNote(h: Holiday): string {
-  return h.global
-    ? 'Public holiday · banks and many shops may be closed'
-    : 'Public holiday in some regions · banks and many shops there may be closed';
+  return h.global ? 'Public holiday' : 'Public holiday in some regions';
 }
 
 /** Days from today to the holiday (for the aria text). */

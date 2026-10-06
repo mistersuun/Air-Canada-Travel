@@ -12,8 +12,9 @@ https://data.international.gc.ca/travel-voyage/index-alpha-eng.json
 Structure read (the feed's documented shape; the build sandbox could not reach
 it, so tests use a fixture of that shape):
   {"metadata": {...}, "data": {"<ISO2>": {"country-iso": "ES", "advisory-state": 0-3,
-     "eng": {"name", "url-slug", "advisory-text", "date-published": {"date": "YYYY-MM-DD ..."}}}}}
-Levels: 0 Take normal security precautions, 1 Exercise a high degree of caution,
+     "has-regional-advisory", "date-published": {"timestamp", "date": "YYYY-MM-DD HH:MM:SS", "asp": ISO},
+     "eng": {"name", "url-slug", "advisory-text"}}}}}
+Levels: 0 Exercise normal security precautions, 1 Exercise a high degree of caution,
 2 Avoid non-essential travel, 3 Avoid all travel. The feed's own advisory-text
 is kept verbatim; when it is missing the standard wording for the level is used.
 A country with no usable level is left out (the app shows nothing for it).
@@ -42,7 +43,7 @@ FALLBACK_URL = "https://travel.gc.ca/travelling/advisories"
 SOURCE = "Government of Canada, Travel Advice and Advisories (travel.gc.ca)"
 OUT_DEFAULT = rd.ROOT / "public" / "data" / "advisories.json"
 LEVEL_TEXT = {
-    0: "Take normal security precautions",
+    0: "Exercise normal security precautions",
     1: "Exercise a high degree of caution",
     2: "Avoid non-essential travel",
     3: "Avoid all travel",
@@ -65,17 +66,20 @@ def _level(entry: dict) -> int | None:
     return n if 0 <= n <= 3 else None
 
 
-def _date(eng: dict) -> str | None:
-    pub = eng.get("date-published")
-    s = pub.get("date") if isinstance(pub, dict) else pub
-    m = re.match(r"(\d{4}-\d{2}-\d{2})", s) if isinstance(s, str) else None
-    if not m:
-        return None
-    try:
-        dt.date.fromisoformat(m.group(1))
-    except ValueError:
-        return None
-    return m.group(1)
+def _date(entry: dict) -> str | None:
+    """YYYY-MM-DD from entry["date-published"] ({date: "YYYY-MM-DD HH:MM:SS", asp: ISO, timestamp})."""
+    pub = entry.get("date-published")
+    cands = [pub.get("date"), pub.get("asp")] if isinstance(pub, dict) else [pub]
+    for s in cands:
+        m = re.match(r"(\d{4}-\d{2}-\d{2})", s) if isinstance(s, str) else None
+        if not m:
+            continue
+        try:
+            dt.date.fromisoformat(m.group(1))
+        except ValueError:
+            continue
+        return m.group(1)
+    return None
 
 
 def parse_country(entry: object) -> dict | None:
@@ -90,10 +94,11 @@ def parse_country(entry: object) -> dict | None:
     slug = eng.get("url-slug")
     url = PAGE_URL + slug if isinstance(slug, str) and re.fullmatch(r"[a-z0-9\-]+", slug) else FALLBACK_URL
     out: dict = {"level": level, "text": text}
-    updated = _date(eng)
+    updated = _date(entry)
     if updated:
         out["updated"] = updated
     out["url"] = url
+    out["regional"] = entry.get("has-regional-advisory") in (True, 1, "1", "true")
     return out
 
 

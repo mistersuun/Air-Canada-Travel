@@ -11,7 +11,7 @@ days, about 16:00 CET). Currencies the ECB does not publish are simply absent.
 Output: {"date": "YYYY-MM-DD", "source": "...", "base": "CAD", "rates": {"EUR": 0.66, ...}}
 
 Gate: refuses to write when the answer has no date, is not based on CAD, or
-holds rates for fewer than half of the currencies asked for. A failed run
+holds fewer than 15 of the destination currencies. A failed run
 leaves the existing file untouched.
 
 Usage: python3 scripts/build-fx.py [--out PATH]
@@ -31,7 +31,7 @@ API = "https://api.frankfurter.dev/v1/latest"
 SOURCE = "European Central Bank reference rates via Frankfurter"
 OUT_DEFAULT = rd.ROOT / "public" / "data" / "fx.json"
 BASE = "CAD"
-MIN_SHARE = 0.5
+MIN_RATES = 15  # of the destination currencies; the ECB set covers about 30
 
 
 def wanted_currencies(table: dict[str, str], countries: list[str]) -> list[str]:
@@ -39,11 +39,11 @@ def wanted_currencies(table: dict[str, str], countries: list[str]) -> list[str]:
     return sorted({table[c] for c in countries if c in table} - {BASE})
 
 
-def request_url(codes: list[str]) -> str:
-    return f"{API}?base={BASE}&symbols={','.join(codes)}"
+def request_url() -> str:
+    return f"{API}?base={BASE}"
 
 
-def build(answer: object, codes: list[str]) -> dict:
+def build(answer: object, codes: list[str], min_rates: int = MIN_RATES) -> dict:
     if not isinstance(answer, dict) or answer.get("base") != BASE:
         raise ValueError("unexpected answer (not a CAD-based rate table)")
     try:
@@ -57,7 +57,7 @@ def build(answer: object, codes: list[str]) -> dict:
             v = raw.get(code)
             if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
                 rates[code] = float(f"{v:.6g}")
-    if not codes or len(rates) < len(codes) * MIN_SHARE:
+    if len(rates) < min_rates:
         raise ValueError(f"only {len(rates)}/{len(codes)} currencies in the answer; not writing")
     return {"date": date.isoformat(), "source": SOURCE, "base": BASE, "rates": rates}
 
@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     codes = wanted_currencies(rd.currency_table(), rd.destination_countries())
     try:
-        out = build(rd.get_json(request_url(codes)), codes)
+        out = build(rd.get_json(request_url()), codes)
     except (ValueError, rd.Final, RuntimeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

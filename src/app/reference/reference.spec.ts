@@ -12,7 +12,7 @@ import { DestReferenceComponent } from './dest-reference.component';
 const ADV = {
   generatedAt: '2026-10-05T06:00:00Z', source: 'GC',
   countries: {
-    ES: { level: 0, text: 'Take normal security precautions', updated: '2026-09-30', url: 'https://travel.gc.ca/destinations/spain' },
+    ES: { level: 0, text: 'Exercise normal security precautions', updated: '2026-09-30', url: 'https://travel.gc.ca/destinations/spain' },
     MX: { level: 1, text: 'Exercise a high degree of caution', updated: '2026-09-30', url: 'https://travel.gc.ca/destinations/mexico' },
     HT: { level: 3, text: 'Avoid all travel', url: 'https://travel.gc.ca/destinations/haiti' },
     BAD: { level: 9, text: 'x', url: 'https://travel.gc.ca/x' },
@@ -92,7 +92,7 @@ describe('Trip Prep reference items', () => {
     const items = referenceItems(sevilleTrip(), ref);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
-      id: 'holiday:ES:2026-10-12', critical: false, detail: 'Banks and many shops may be closed', link: null,
+      id: 'holiday:ES:2026-10-12-national-day', critical: false, detail: 'Public holiday', link: null,
     });
     expect(items[0].title).toContain('Oct 12');
   });
@@ -105,6 +105,18 @@ describe('Trip Prep reference items', () => {
       link: { url: 'https://travel.gc.ca/destinations/spain' },
     });
     expect(a.title).toBe('Government of Canada advice for Spain: Avoid non-essential travel');
+  });
+  it('adds a level 0 country only when a regional advisory is in effect, and skips regional holidays', () => {
+    const adv = decodeAdvisories({ countries: { ES: { level: 0, text: 'Exercise normal security precautions', url: 'https://travel.gc.ca/destinations/spain', regional: true } } });
+    const [a] = referenceItems(sevilleTrip(), { advisories: adv });
+    expect(a.title).toContain('regional advisories in effect');
+    const hol = decodeHolidays({ countries: { ES: [
+      { date: '2026-10-12', name: 'A', localName: 'A', global: true },
+      { date: '2026-10-12', name: 'B', localName: 'B', global: true },
+      { date: '2026-10-11', name: 'C', localName: 'C', global: false },
+    ] } });
+    const ids = referenceItems(sevilleTrip(), { holidays: hol }).map(i => i.id);
+    expect(ids).toEqual(['holiday:ES:2026-10-12-a', 'holiday:ES:2026-10-12-b']);
   });
   it('adds nothing without data, and the checklist only grows by those items', () => {
     expect(referenceItems(sevilleTrip(), null)).toEqual([]);

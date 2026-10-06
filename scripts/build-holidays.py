@@ -7,6 +7,7 @@ for this year and next, shown on the destination page and in Trip Prep as
 Source: Nager.Date v3 (https://date.nager.at, open source, free)
   GET /api/v3/PublicHolidays/{year}/{ISO2}
   -> [{"date", "localName", "name", "countryCode", "global", ...}]
+Only rows whose "types" include "Public" are kept.
 "global" false means the holiday applies only in some regions of the country.
 Countries Nager does not cover (204 or 404) are simply absent.
 
@@ -50,6 +51,8 @@ def parse_rows(raw: object, year: int) -> list[dict]:
             continue
         if d.year != year or not isinstance(name, str) or not name.strip():
             continue
+        if "Public" not in (r.get("types") if isinstance(r.get("types"), list) else []):
+            continue  # Bank, Optional, Observance etc. are not public holidays
         local = r.get("localName")
         out.append({"date": d.isoformat(), "name": name.strip(),
                     "localName": local.strip() if isinstance(local, str) and local.strip() else name.strip(),

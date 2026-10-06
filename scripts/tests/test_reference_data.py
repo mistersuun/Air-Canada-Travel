@@ -118,11 +118,14 @@ def feed(entries):
     return {"metadata": {}, "data": entries}
 
 
-def entry(state, text=None, slug="portugal", date="2026-09-30 14:02:11"):
-    eng = {"name": "x", "url-slug": slug, "date-published": {"asp": "x", "date": date}}
+def entry(state, text=None, slug="portugal", date="2026-09-30 14:02:11", regional=0):
+    eng = {"name": "x", "url-slug": slug}
     if text:
         eng["advisory-text"] = text
-    return {"advisory-state": state, "eng": eng}
+    e = {"country-iso": "XX", "advisory-state": state, "has-regional-advisory": regional, "eng": eng}
+    if date is not None:
+        e["date-published"] = {"timestamp": 1, "date": date, "asp": "2026-09-30T14:02:11-04:00"}
+    return e
 
 
 def test_advisory_build():
@@ -135,9 +138,17 @@ def test_advisory_build():
     out = adv.build(f, ["JP", "MX", "PT"], NOW)
     assert out["generatedAt"] == "2026-10-06T12:00:00Z"
     assert out["countries"]["MX"] == {"level": 1, "text": "Exercise a high degree of caution",
-                                       "updated": "2026-09-30", "url": "https://travel.gc.ca/destinations/mexico"}
+                                       "updated": "2026-09-30", "url": "https://travel.gc.ca/destinations/mexico", "regional": False}
     assert out["countries"]["JP"]["text"] == "Avoid non-essential travel"
     assert "ZZ" not in out["countries"]
+
+
+def test_advisory_asp_only_and_regional():
+    e = entry(0, regional=1)
+    e["date-published"] = {"asp": "2026-08-15T10:00:00-04:00"}
+    c = adv.parse_country(e)
+    assert c["updated"] == "2026-08-15" and c["regional"] is True
+    assert c["text"] == "Exercise normal security precautions"
 
 
 def test_advisory_bad_entries_dropped_and_url_sanitised():
@@ -145,7 +156,7 @@ def test_advisory_bad_entries_dropped_and_url_sanitised():
     out = adv.build(f, ["PT"], NOW)
     assert out["countries"]["PT"]["url"] == adv.FALLBACK_URL
     assert adv.parse_country(entry(1, date="garbage"))["level"] == 1
-    assert "updated" not in adv.parse_country(entry(1, date="garbage"))
+    assert "updated" not in adv.parse_country(entry(1, date=None))
     assert adv.parse_country(entry(True)) is None
 
 
@@ -169,17 +180,19 @@ def test_fx_build_and_missing_currencies():
     codes = fx.wanted_currencies({"PT": "EUR", "JP": "JPY", "MX": "MXN", "CA": "CAD", "DO": "DOP"}, ["PT", "JP", "MX", "DO", "CA"])
     assert codes == ["DOP", "EUR", "JPY", "MXN"]
     ans = {"amount": 1, "base": "CAD", "date": "2026-10-02", "rates": {"EUR": 0.6612345678, "JPY": 108.2, "MXN": 13.1}}
-    out = fx.build(ans, codes)
+    out = fx.build(ans, codes, min_rates=3)
     assert out == {"date": "2026-10-02", "source": fx.SOURCE, "base": "CAD",
                    "rates": {"EUR": 0.661235, "JPY": 108.2, "MXN": 13.1}}
-    assert fx.request_url(["EUR", "JPY"]).endswith("?base=CAD&symbols=EUR,JPY")
+    assert fx.request_url().endswith("?base=CAD")
 
 
 def test_fx_gate():
     for bad in (None, {"base": "USD", "date": "2026-10-02", "rates": {}}, {"base": "CAD", "date": "x", "rates": {}},
                 {"base": "CAD", "date": "2026-10-02", "rates": {"EUR": 0.6}}, {"base": "CAD", "date": "2026-10-02", "rates": {"EUR": -1, "JPY": 0}}):
         with pytest.raises(ValueError):
-            fx.build(bad, ["EUR", "JPY", "MXN"])
+            fx.build(bad, ["EUR", "JPY", "MXN"], min_rates=2)
+    with pytest.raises(ValueError):  # the default gate wants 15 currencies
+        fx.build({"base": "CAD", "date": "2026-10-02", "rates": {"EUR": 0.6, "JPY": 100}}, ["EUR", "JPY"])
 
 
 # ── holidays ────────────────────────────────────────────────────────────────
@@ -189,7 +202,8 @@ def row(date, name="Fiesta", local="Fiesta Local", glob=True):
 
 
 def test_parse_rows_filters_and_orders():
-    raw = [row("2026-12-25", "Christmas"), row("2026-10-12", "National Day", "Fiesta Nacional"),
+    obs = {**row("2026-06-01", "Observance Day"), "types": ["Observance"]}
+    raw = [obs, row("2026-12-25", "Christmas"), row("2026-10-12", "National Day", "Fiesta Nacional"),
            row("2027-01-01"), {"date": "bad", "name": "x"}, "x", row("2026-05-01", glob=False)]
     out = hol.parse_rows(raw, 2026)
     assert [r["date"] for r in out] == ["2026-05-01", "2026-10-12", "2026-12-25"]

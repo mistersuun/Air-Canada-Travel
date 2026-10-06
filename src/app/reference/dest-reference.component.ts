@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { currencyCode } from '../pages/destination/currency';
 import {
-  advisoryQuiet, advisoryUpdated, fxLine, holidayName, holidayNote, shortDate, upcomingHolidays,
+  advisoryQuiet, advisoryUpdated, fxLine, holidayKey, holidayName, holidayNote, shortDate, upcomingHolidays,
 } from './reference';
 import { ReferenceService } from './reference.service';
 
@@ -20,13 +20,14 @@ import { ReferenceService } from './reference.service';
       <p class="r r--adv tn" [class.is-quiet]="quiet()" data-advisory>
         <span>{{ a.text }}</span>
         @if (updated()) { <span> · {{ updated() }}</span> }
+        @if (a.regional) { <span> · regional advisories in effect</span> }
         <span> · </span><a [href]="a.url" target="_blank" rel="noopener">travel.gc.ca</a>
       </p>
     }
     @if (fx(); as f) {
       <p class="r tn" data-fx>{{ f.text }} · {{ f.source }}</p>
     }
-    @for (h of holidays(); track h.date) {
+    @for (h of holidays(); track key(h)) {
       <p class="r tn" data-holiday><b>{{ short(h.date) }}</b> · {{ name(h) }} · {{ note(h) }}</p>
     }
   `,
@@ -58,6 +59,7 @@ export class DestReferenceComponent {
   protected readonly holidays = computed(() => upcomingHolidays(this.ref.holidays(), this.iso2(), this.todayKey()));
 
   protected short(key: string): string { return shortDate(key, this.todayKey()); }
+  protected readonly key = holidayKey;
   protected readonly name = holidayName;
   protected readonly note = holidayNote;
 }

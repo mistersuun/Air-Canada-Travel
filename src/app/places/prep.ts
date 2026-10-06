@@ -13,7 +13,7 @@ import { hubDisplayName, tzDiffLabel } from '../ui/format';
 import { airportTz, findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
 import {
-  advisoryUpdated, holidayName, holidaysBetween, shortDate,
+  advisoryUpdated, holidayKey, holidayName, holidaysBetween, shortDate,
   type AdvisoryIndex, type HolidayIndex,
 } from '../reference/reference';
 import { acAirports, countryName } from './place';
@@ -238,29 +238,31 @@ export interface PrepReference { advisories?: AdvisoryIndex | null; holidays?: H
 
 /**
  * Not critical, from the destination country's static data: the Government of
- * Canada advice when its level is 2 or 3 ('Avoid non-essential travel'), and
- * a public holiday that falls within the trip dates.
+ * Canada advice when its level is 2 or 3 ('Avoid non-essential travel') or a
+ * regional advisory is in effect, and nationwide public holidays that fall
+ * within the trip dates.
  */
 export function referenceItems(trip: Trip, ref: PrepReference | null | undefined): PrepItem[] {
   const iso = trip.goal.iso2;
   if (!iso || !ref) return [];
   const out: PrepItem[] = [];
   const adv = ref.advisories?.get(iso.toUpperCase());
-  if (adv && adv.level >= 2) {
+  if (adv && (adv.level >= 2 || adv.regional)) {
     const id = 'advisory:gc';
     const upd = advisoryUpdated(adv, trip.outboundDate);
     out.push({
-      id, title: `Government of Canada advice for ${countryName(iso)}: ${adv.text}`,
+      id, title: `Government of Canada advice for ${countryName(iso)}: ${adv.text}${adv.regional ? ' · regional advisories in effect' : ''}`,
       detail: `Official travel.gc.ca page${upd ? ` · ${upd}` : ''}`,
       link: { label: 'Official travel.gc.ca page', url: adv.url },
       critical: false, source: 'manual', done: !!trip.prep[id]?.done,
     });
   }
   for (const h of holidaysBetween(ref.holidays ?? null, iso, trip.outboundDate, trip.homeBy.dateKey)) {
-    const id = `holiday:${iso}:${h.date}`;
+    if (!h.global) continue;
+    const id = `holiday:${iso}:${holidayKey(h)}`;
     out.push({
       id, title: `Public holiday in ${countryName(iso)} · ${shortDate(h.date, trip.outboundDate)} · ${holidayName(h)}`,
-      detail: h.global ? 'Banks and many shops may be closed' : 'In some regions only · banks and many shops there may be closed',
+      detail: 'Public holiday',
       link: null, critical: false, source: 'manual', done: !!trip.prep[id]?.done,
     });
   }

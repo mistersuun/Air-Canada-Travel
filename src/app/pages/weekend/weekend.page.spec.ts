@@ -40,13 +40,14 @@ describe('WeekendPage', () => {
     const { el, flat } = await render();
     expect(flat()).toContain('Leave after Fri, Oct 9');
     expect(flat()).toContain('home by Sun, Oct 11');
+    expect(flat()).toContain('YUL time');
     const rows = [...el.querySelectorAll('a.row')];
     expect(rows.length).toBe(5);
     expect(rows[0].textContent).toContain('LGA');
-    expect(rows[0].textContent).toContain('11 tries home');
+    expect(rows[0].textContent).toMatch(/\d+ out · .*~\d+h there/);
     const href = rows[0].getAttribute('href')!;
     expect(href).toMatch(/^\/flight\/LGA\/2026-10-09\/AC\d+/);
-    expect(href).toContain('ret=2026-10-11');
+    expect(href).toMatch(/ret=2026-10-1[01]/);
   });
 
   it('switches presets and shows the custom fields', async () => {
@@ -59,6 +60,9 @@ describe('WeekendPage', () => {
     chips[4].click();
     fixture.detectChanges();
     expect(el.querySelectorAll('.custom input').length).toBe(4);
+    expect([...el.querySelectorAll('.custom input')].map(i => i.getAttribute('aria-label'))).toEqual([
+      'Leave after date', 'Leave after time', 'Home by date', 'Home by time']);
+    expect(el.querySelectorAll('.custom legend').length).toBe(2);
   });
 
   it('says so when the window ends before it starts', async () => {
@@ -72,5 +76,9 @@ describe('WeekendPage', () => {
     fixture.detectChanges();
     expect(el.querySelector('.note')?.textContent).toContain('Home-by has to be after leave-after');
     expect(el.querySelectorAll('a.row').length).toBe(0);
+    home.value = '';
+    home.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(el.querySelector('.note')?.textContent).toContain('Enter a date and time');
   });
 });

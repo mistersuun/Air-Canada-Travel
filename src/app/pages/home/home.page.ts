@@ -63,7 +63,6 @@ interface ListRow {
   template: `
     <div class="ui-page home">
       <app-today-banner />
-      <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder: where can you go by Sunday night? ›</a>
       <div class="hero">
         <div class="hero__main">
           @if (narrow()) {
@@ -97,6 +96,7 @@ interface ListRow {
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
                           [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
+          <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder ›</a>
         </div>
         @if (wide()) {
           <app-week-card [hub]="state.hub()" [range]="range()" [stats]="state.stats()" [entries]="state.allRoutes()"

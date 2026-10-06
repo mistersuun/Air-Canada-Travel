@@ -6,9 +6,9 @@ import { climateFor, typicalText } from '../../recs/climate';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { flightPath } from '../../ui/links';
 import { findDestination, airportTz } from '../../utils/airports';
-import { formatClock, formatKey, isDateKey, todayKey } from '../../utils/time';
+import { MINUTE_MS, formatClock, formatKey, isDateKey, todayKey } from '../../utils/time';
 import {
-  WEEKEND_LIMIT, WEEKEND_PRESETS, WeekendOption, WeekendPreset, WeekendWindow, presetWindow, weekendMeta, weekendOptions, windowValid,
+  WEEKEND_LIMIT, WEEKEND_PRESETS, WeekendOption, WeekendPreset, WeekendWindow, presetWindow, weekendMeta, weekendOptions, windowProblem,
 } from './weekend-model';
 
 /**
@@ -37,25 +37,31 @@ import {
 
       @if (preset() === 'custom') {
         <div class="ui-card custom">
-          <label>Leave after
+          <fieldset>
+            <legend>Leave after ({{ state.hub() }} time)</legend>
             <span class="pair">
-              <input type="date" [value]="custom().leaveKey" (change)="edit('leaveKey', $any($event.target).value)">
-              <input type="time" [value]="custom().leaveHhmm" (change)="edit('leaveHhmm', $any($event.target).value)">
+              <input type="date" aria-label="Leave after date" [min]="minKey()" [max]="maxKey()" [value]="window().leaveKey"
+                     (change)="edit('leaveKey', $any($event.target).value)">
+              <input type="time" aria-label="Leave after time" [value]="window().leaveHhmm"
+                     (change)="edit('leaveHhmm', $any($event.target).value)">
             </span>
-          </label>
-          <label>Home by
+          </fieldset>
+          <fieldset>
+            <legend>Home by ({{ state.hub() }} time)</legend>
             <span class="pair">
-              <input type="date" [value]="custom().homeKey" (change)="edit('homeKey', $any($event.target).value)">
-              <input type="time" [value]="custom().homeHhmm" (change)="edit('homeHhmm', $any($event.target).value)">
+              <input type="date" aria-label="Home by date" [min]="minKey()" [max]="maxKey()" [value]="window().homeKey"
+                     (change)="edit('homeKey', $any($event.target).value)">
+              <input type="time" aria-label="Home by time" [value]="window().homeHhmm"
+                     (change)="edit('homeHhmm', $any($event.target).value)">
             </span>
-          </label>
+          </fieldset>
         </div>
       }
 
-      <p class="sum tn">Leave after {{ stamp(window().leaveKey, window().leaveHhmm) }} · home by {{ stamp(window().homeKey, window().homeHhmm) }}</p>
+      <p class="sum tn">Leave after {{ stamp(window().leaveKey, window().leaveHhmm) }} · home by {{ stamp(window().homeKey, window().homeHhmm) }} · {{ state.hub() }} time</p>
 
-      @if (!valid()) {
-        <p class="ui-card note" role="status">Home-by has to be after leave-after.</p>
+      @if (problem(); as why) {
+        <p class="ui-card note" role="status">{{ why }}</p>
       } @else if (!rows().length) {
         <p class="ui-card note" role="status">
           No destination has an outbound flight in this window with a return that gets you home on time.
@@ -88,7 +94,8 @@ import {
     }
     .chip[aria-pressed='true'] { background: var(--ink); color: var(--bg); }
     .custom { display: grid; gap: 12px; padding: 14px; margin-top: 12px; }
-    .custom label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+    .custom fieldset { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; min-width: 0; }
+    .custom legend { padding: 0; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
     .pair { display: flex; gap: 8px; }
     .pair input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hair); background: var(--bg); color: var(--ink); font: inherit; }
     .sum { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
@@ -109,21 +116,23 @@ export class WeekendPage {
 
   protected readonly presets = WEEKEND_PRESETS;
   protected readonly preset = signal<WeekendPreset>('this');
-  protected readonly custom = signal<WeekendWindow>(presetWindow('this', todayKey(undefined, this.state.nowMs())));
+  /** Set when Custom is first chosen, from the window then shown (hub-local). */
+  protected readonly custom = signal<WeekendWindow | null>(null);
   protected readonly all = signal(false);
 
   /** Today at the hub: flight dates are hub-local, so the device's date can be a day off. */
   private readonly hubToday = computed(() => todayKey(airportTz(this.state.hub()), this.state.nowMs()));
 
   protected readonly window = computed<WeekendWindow>(() =>
-    this.preset() === 'custom' ? this.custom() : presetWindow(this.preset(), this.hubToday()));
-  protected readonly valid = computed(() =>
-    isDateKey(this.window().leaveKey) && isDateKey(this.window().homeKey)
-    && /^\d\d:\d\d$/.test(this.window().leaveHhmm) && /^\d\d:\d\d$/.test(this.window().homeHhmm)
-    && windowValid(this.window(), this.state.hub()));
+    (this.preset() === 'custom' && this.custom()) || presetWindow(this.preset(), this.hubToday()));
+  /** The minute: the options need not recompute on every clock tick. */
+  private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / MINUTE_MS) * MINUTE_MS);
+  protected readonly problem = computed(() => windowProblem(this.window(), this.state.hub(), this.nowMin()));
+  protected readonly minKey = computed(() => this.hubToday());
+  protected readonly maxKey = computed(() => this.state.coverage().to ?? '');
 
-  private readonly options = computed<WeekendOption[]>(() => !this.valid() ? [] : weekendOptions({
-    hub: this.state.hub(), nowMs: this.state.nowMs(), window: this.window(),
+  private readonly options = computed<WeekendOption[]>(() => this.problem() ? [] : weekendOptions({
+    hub: this.state.hub(), nowMs: this.nowMin(), window: this.window(),
     connect: this.state.connect(), showConnections: this.state.showConnections(),
   }));
 
@@ -136,7 +145,7 @@ export class WeekendPage {
       const c = climateFor(index, o.code, month);
       return {
         o,
-        meta: `${findDestination(o.code)?.city ?? o.code} · ${weekendMeta(o)}`,
+        meta: `${findDestination(o.code)?.city ?? o.code} · ${weekendMeta(o, this.state.showConnections())}`,
         weather: c ? typicalText(c) : null,
         link: flightPath(o.code, first.dateKey, first),
         query: { ...globals, ret: o.retKey },
@@ -150,13 +159,13 @@ export class WeekendPage {
   }
 
   protected choose(p: WeekendPreset): void {
-    if (p === 'custom') this.custom.set(this.window());
+    if (p === 'custom' && !this.custom()) this.custom.set(this.window());
     this.preset.set(p);
     this.all.set(false);
   }
 
   protected edit(field: keyof WeekendWindow, value: string): void {
-    this.custom.update(w => ({ ...w, [field]: value }));
+    this.custom.set({ ...this.window(), [field]: value });
   }
 
   protected stamp(key: string, hhmm: string): string {

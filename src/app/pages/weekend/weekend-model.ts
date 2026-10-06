@@ -5,13 +5,13 @@
  * with the home-by engine, then destinations are ranked by tries home and by
  * time on the ground. Facts only: counts and times, never odds.
  */
-import { isCovered } from '../../data/schedule-index';
+import { getCoverage, isCovered } from '../../data/schedule-index';
 import { DESTINATIONS } from '../../data/destinations';
 import { MIN_STAY_MIN, pairable } from '../../recs/engine';
 import { deadlineUtc, triesOnDay } from '../../trips/engine/homeby';
 import { airportTz } from '../../utils/airports';
 import { ConnectOptions, Itinerary, NO_OPTS, directItineraries, findItineraries } from '../../utils/connections';
-import { MINUTE_MS, addDays, diffDays, toUtcMs, weekdayIndex } from '../../utils/time';
+import { MINUTE_MS, addDays, diffDays, formatKey, isDateKey, toUtcMs, weekdayIndex } from '../../utils/time';
 import { coverageHubFor } from '../../utils/week';
 
 export type WeekendPreset = 'this' | 'next' | 'fri-sun' | 'sat-mon' | 'custom';
@@ -71,8 +71,10 @@ export interface WeekendOption {
   out: Itinerary[];
   /** Returns that get home by the deadline, by departure ("tries home"). */
   tries: Itinerary[];
-  /** The return day with the most tries (the later day on a tie). */
+  /** The latest day with a try, never before the outbound arrival date: what ?ret= carries. */
   retKey: string;
+  /** How many of the tries are nonstop. */
+  directTries: number;
   /** Earliest outbound arrival to the last try's departure, in whole hours. */
   hoursThere: number;
 }
@@ -134,16 +136,13 @@ export function weekendOption(input: WeekendInput, code: string): WeekendOption 
   const paired = pairable(out, back);
   if (!paired.out.length || !paired.back.length) return null;
 
-  const perDay = new Map<string, number>();
-  for (const it of paired.back) perDay.set(it.dateKey, (perDay.get(it.dateKey) ?? 0) + 1);
-  let retKey = paired.back[0].dateKey;
-  for (const [k, n] of perDay) {
-    const best = perDay.get(retKey)!;
-    if (n > best || (n === best && k > retKey)) retKey = k;
-  }
+  const lastKey = paired.back.reduce((k, it) => (it.dateKey > k ? it.dateKey : k), paired.back[0].dateKey);
+  const retKey = lastKey < out[0].arrDateKey ? out[0].arrDateKey : lastKey;
   const arrive = Math.min(...paired.out.map(it => it.arriveUtc));
   const lastDep = Math.max(...paired.back.map(it => it.departUtc));
-  return { code, out: paired.out, tries: paired.back, retKey, hoursThere: Math.max(0, Math.round((lastDep - arrive) / (60 * MINUTE_MS))) };
+  return {
+    code, out: paired.out, tries: paired.back, retKey, directTries: paired.back.filter(it => it.legs.length === 1).length,
+    hoursThere: Math.max(0, Math.round((lastDep - arrive) / (60 * MINUTE_MS))) };
 }
 
 /** Tries home, then hours on the ground, both descending; the code keeps the order stable. */
@@ -162,8 +161,24 @@ export function weekendOptions(input: WeekendInput): WeekendOption[] {
   return out.sort(compareWeekend);
 }
 
-/** '3 out · 5 tries home · ~40h there'. */
-export function weekendMeta(o: WeekendOption): string {
+/** '3 out · 5 tries home · ~40h there'; with connections on and some tries needing one, '3 out · 2 nonstop tries · 5 with connections · ~40h there'. */
+export function weekendMeta(o: WeekendOption, showConnections = false): string {
   const t = o.tries.length;
-  return `${o.out.length} out · ${t} ${t === 1 ? 'try' : 'tries'} home · ~${o.hoursThere}h there`;
+  const tail = `~${o.hoursThere}h there`;
+  if (showConnections && o.directTries < t) return `${o.out.length} out · ${o.directTries} nonstop ${o.directTries === 1 ? 'try' : 'tries'} · ${t} with connections · ${tail}`;
+  return `${o.out.length} out · ${t} ${t === 1 ? 'try' : 'tries'} home · ${tail}`;
+}
+
+/** Why a window cannot be searched, or null. Dates and times are hub-local. */
+export function windowProblem(w: WeekendWindow, hub: string, nowMs: number): string | null {
+  const clock = (h: string) => /^\d\d:\d\d$/.test(h);
+  if (!isDateKey(w.leaveKey) || !isDateKey(w.homeKey) || !clock(w.leaveHhmm) || !clock(w.homeHhmm)) return 'Enter a date and time';
+  const tz = airportTz(hub);
+  if (toUtcMs(w.homeKey, w.homeHhmm, tz) <= nowMs) return 'Home-by is in the past';
+  const to = getCoverage(hub).to;
+  if (to && (w.leaveKey > to || w.homeKey > to)) {
+    return `Schedules only go to ${formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  }
+  if (!windowValid(w, hub)) return 'Home-by has to be after leave-after';
+  return null;
 }

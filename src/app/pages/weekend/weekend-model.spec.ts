@@ -4,7 +4,7 @@ import { MIN_STAY_MIN } from '../../recs/engine';
 import { RECS_META, RECS_ROUTES } from '../../recs/testing/recs-fixture';
 import { toUtcMs } from '../../utils/time';
 import {
-  WeekendInput, WeekendOption, compareWeekend, presetWindow, upcomingFriday, weekendMeta, weekendOption, weekendOptions, windowOutbound,
+  WeekendInput, WeekendOption, compareWeekend, presetWindow, windowProblem, upcomingFriday, weekendMeta, weekendOption, weekendOptions, windowOutbound,
   windowValid,
 } from './weekend-model';
 
@@ -112,13 +112,21 @@ describe('weekend ranking', () => {
     expect(codes(tight)).not.toContain('CUN');
   });
 
-  it('picks the return day with the most tries (the later day on a tie)', () => {
-    const lga = weekendOption(input(), 'LGA')!;
-    const perDay = new Map<string, number>();
-    for (const it of lga.tries) perDay.set(it.dateKey, (perDay.get(it.dateKey) ?? 0) + 1);
-    const most = Math.max(...perDay.values());
-    expect(perDay.get(lga.retKey)).toBe(most);
-    expect(lga.retKey).toBe([...perDay].filter(([, n]) => n === most).map(([k]) => k).sort().pop());
+  it('carries the day of the last try as the return date, never before the outbound arrival', () => {
+    for (const code of ['LGA', 'FLL', 'CDG', 'OPO', 'CUN']) {
+      const o = weekendOption(input(), code)!;
+      expect(o.retKey).toBe([...o.tries].sort((a, b) => a.departUtc - b.departUtc).pop()!.dateKey);
+      expect(o.retKey >= o.out[0].arrDateKey).toBe(true);
+    }
+  });
+
+  it('counts nonstop tries apart', () => {
+    const o = weekendOption(input(), 'LGA')!;
+    expect(o.directTries).toBe(o.tries.filter(it => it.legs.length === 1).length);
+    const connected = { ...o, directTries: 2, tries: o.tries.slice(0, 5) };
+    expect(weekendMeta(connected, true)).toMatch(/^\d+ out · 2 nonstop tries · 5 with connections · ~\d+h there$/);
+    expect(weekendMeta(connected, false)).toMatch(/^\d+ out · 5 tries home · ~\d+h there$/);
+    expect(weekendMeta({ ...connected, directTries: 5 }, true)).toMatch(/5 tries home/);
   });
 
   it('computes only for the codes given and never for the hub', () => {
@@ -139,5 +147,23 @@ describe('weekend ranking', () => {
     const o = weekendOption(input(), 'FLL')!;
     expect(weekendMeta(o)).toBe('3 out · 3 tries home · ~39h there');
     expect(weekendMeta({ ...o, out: [o.out[0]], tries: [o.tries[0]], hoursThere: 5 })).toBe('1 out · 1 try home · ~5h there');
+  });
+});
+
+describe('window problems', () => {
+  const ok = presetWindow('this', '2026-10-06');
+  it('accepts a good window', () => expect(windowProblem(ok, 'YUL', NOW)).toBeNull());
+  it('asks for a date and time when a field is empty', () => {
+    expect(windowProblem({ ...ok, leaveKey: '' }, 'YUL', NOW)).toBe('Enter a date and time');
+    expect(windowProblem({ ...ok, homeHhmm: '' }, 'YUL', NOW)).toBe('Enter a date and time');
+  });
+  it('refuses a home-by in the past', () => {
+    expect(windowProblem(ok, 'YUL', toUtcMs('2026-10-12', '09:00', TZ))).toBe('Home-by is in the past');
+  });
+  it('refuses dates beyond the schedules', () => {
+    expect(windowProblem({ ...ok, homeKey: '2028-01-09' }, 'YUL', NOW)).toMatch(/^Schedules only go to Sep 26, 2027$/);
+  });
+  it('refuses home-by before leave-after', () => {
+    expect(windowProblem({ ...ok, homeKey: '2026-10-08' }, 'YUL', NOW)).toBe('Home-by has to be after leave-after');
   });
 });

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { openFirstDestination, startTripFromFlight, waitForServiceWorker, watchErrors } from './helpers';
 
 test('app boots with no console errors or CSP violations', async ({ page }) => {
-  const problems = watchErrors(page);
+  const problems = await watchErrors(page);
   const res = await page.goto('/');
   expect(res?.headers()['content-security-policy'], 'CSP header served').toContain("default-src 'self'");
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
@@ -15,7 +15,7 @@ test('app boots with no console errors or CSP violations', async ({ page }) => {
 });
 
 test('home lists destinations and a destination shows flights', async ({ page }) => {
-  const problems = watchErrors(page);
+  const problems = await watchErrors(page);
   const dest = await openFirstDestination(page);
   expect(dest).toMatch(/^\/to\/[A-Z]{3}$/);
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
@@ -24,7 +24,7 @@ test('home lists destinations and a destination shows flights', async ({ page })
 });
 
 test('a trip created from a flight survives a reload', async ({ page }) => {
-  const problems = watchErrors(page);
+  const problems = await watchErrors(page);
   const tripPath = await startTripFromFlight(page);
   await page.goto('/trips');
   await expect(page.getByRole('heading', { name: 'Trips', level: 1 })).toBeVisible();
@@ -72,7 +72,7 @@ test('share link round trip: copy link, open in a fresh browser, save', async ({
   const other = await browser.newContext({ serviceWorkers: 'block' });
   try {
     const p2 = await other.newPage();
-    const problems = watchErrors(p2);
+    const problems = await watchErrors(p2);
     const url = new URL(link);
     await p2.goto(url.pathname + url.hash);
     await expect(p2.getByRole('heading', { name: 'Shared plan' })).toBeVisible();

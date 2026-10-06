@@ -61,6 +61,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // The first test in a heavy page spec compiles the component tree; 5s flakes on small runners.
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
     include: ['src/**/*.spec.ts'],
     setupFiles: ['src/test-setup.ts'],
     coverage: {

@@ -1,13 +1,13 @@
 import { expect, type Page } from '@playwright/test';
 
 /** Collects console errors, page errors and CSP violations for the lifetime of a page. */
-export function watchErrors(page: Page): string[] {
+export async function watchErrors(page: Page): Promise<string[]> {
   const problems: string[] = [];
   page.on('console', m => {
     if (m.type() === 'error') problems.push(`console: ${m.text()}`);
   });
   page.on('pageerror', e => problems.push(`pageerror: ${e.message}`));
-  void page.addInitScript(() => {
+  await page.addInitScript(() => {
     document.addEventListener('securitypolicyviolation', e => {
       console.error(`CSP violation: ${e.violatedDirective} ${e.blockedURI}`);
     });

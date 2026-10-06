@@ -3,14 +3,14 @@
 // netlify.toml) so CSP violations show up in tests. No dependencies.
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dist = join(root, 'dist/ac-explorer/browser');
 const port = Number(process.env.E2E_PORT ?? 4300);
 
-/** Minimal [[headers]] parser: `for = "..."` plus key = "value" lines under [headers.values]. */
+/** Minimal [[headers]] parser (single-line key = "value" pairs only, no multi-line TOML): `for = "..."` plus key = "value" lines under [headers.values]. */
 export function parseNetlifyHeaders(toml) {
   const rules = [];
   let cur = null;
@@ -41,13 +41,21 @@ const types = {
   '.wasm': 'application/wasm', '.woff2': 'font/woff2', '.txt': 'text/plain',
 };
 
-createServer((req, res) => {
+function handle(req, res) {
   const url = new URL(req.url ?? '/', 'http://localhost');
-  let path = decodeURIComponent(url.pathname);
+  let path;
+  try {
+    path = decodeURIComponent(url.pathname);
+  } catch {
+    res.writeHead(400).end('Bad request');
+    return;
+  }
   let file = normalize(join(dist, path));
-  if (!file.startsWith(dist)) { res.writeHead(403).end(); return; }
+  if (file !== dist && !file.startsWith(dist + sep)) { res.writeHead(403).end(); return; }
   if (!existsSync(file) || statSync(file).isDirectory()) {
     // public/_redirects is `/* /index.html 200`: SPA fallback for extension-less paths.
+    // Deliberate difference from Netlify: a missing file WITH an extension is a 404 here,
+    // so a broken asset reference fails loudly instead of returning index.html.
     if (extname(path) && path !== '/') { res.writeHead(404).end('Not found'); return; }
     path = '/index.html';
     file = join(dist, 'index.html');
@@ -56,4 +64,14 @@ createServer((req, res) => {
   for (const r of rules) if (matches(r.for, path)) Object.assign(headers, r.values);
   res.writeHead(200, headers);
   res.end(readFileSync(file));
+}
+
+createServer((req, res) => {
+  try {
+    handle(req, res);
+  } catch (e) {
+    if (!res.headersSent) res.writeHead(500);
+    res.end('Server error');
+    console.error(e);
+  }
 }).listen(port, () => console.log(`e2e server on http://localhost:${port}`));

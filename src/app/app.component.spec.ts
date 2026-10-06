@@ -26,6 +26,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
   let state: AppStateService;
   let router: Router;
   let versionUpdates: Subject<VersionEvent>;
+  let unrecoverable: Subject<{ type: 'UNRECOVERABLE_STATE'; reason: string }>;
   let checkForUpdate: ReturnType<typeof vi.fn>;
 
   async function settle(): Promise<void> {
@@ -49,7 +50,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
         { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
         { provide: TRIPS_STORAGE, useValue: tripsStorage },
         { provide: NOW, useValue: () => NOW_MS },
-        { provide: SwUpdate, useValue: { isEnabled: true, versionUpdates, checkForUpdate } },
+        { provide: SwUpdate, useValue: { isEnabled: true, versionUpdates, unrecoverable, checkForUpdate } },
       ],
     });
     fixture = TestBed.createComponent(AppComponent);
@@ -68,6 +69,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     vi.setSystemTime(NOW_MS);
     setScheduleSource(FIXTURE_ROUTES, FIXTURE_META);
     versionUpdates = new Subject<VersionEvent>();
+    unrecoverable = new Subject();
     checkForUpdate = vi.fn().mockResolvedValue(false);
   });
 
@@ -238,6 +240,54 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     el.querySelector<HTMLButtonElement>('app-toast [aria-label="Dismiss"]')!.click();
     await settle();
     expect(el.querySelector('app-toast')).toBeNull();
+  });
+
+  it('holds the update toast back on a pass view and shows it once the user leaves', async () => {
+    await render();
+    state.path.set('/trips/t1/pass/p1');
+    versionUpdates.next({ type: 'VERSION_READY', currentVersion: { hash: 'a' }, latestVersion: { hash: 'b' } });
+    await settle();
+    expect(el.querySelector('app-toast')).toBeNull();
+    state.path.set('/saved');
+    await settle();
+    expect(el.querySelector('app-toast')?.textContent).toContain('New schedules available');
+  });
+
+  it('offers a repair reload when the service worker is unrecoverable', async () => {
+    await render();
+    const pwa = TestBed.inject(PwaUpdateService);
+    const reload = vi.spyOn(pwa, 'reload').mockImplementation(() => undefined);
+    state.path.set('/trips/t1/pass/p1');
+    unrecoverable.next({ type: 'UNRECOVERABLE_STATE', reason: 'corrupt' });
+    await settle();
+    const toast = el.querySelector('app-toast')!;
+    expect(toast.textContent).toContain('The app needs to reload to repair itself');
+    [...toast.querySelectorAll('button')].find(b => b.textContent?.includes('Reload'))!.click();
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it('says so when the schedules failed to load, and Retry re-runs the load', async () => {
+    await render();
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    state.reportDataLoad(false);
+    await settle();
+    const banner = el.querySelector('[role="alert"]')!;
+    expect(banner.textContent).toContain("Couldn't load flight schedules. Results are empty, not cancelled.");
+    const retry = vi.spyOn(state, 'retryDataLoad').mockResolvedValue(undefined);
+    banner.querySelector('button')!.click();
+    expect(retry).toHaveBeenCalled();
+    state.reportDataLoad(true);
+    await settle();
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('tapping the stale tag shows its detail as a notice', async () => {
+    await render();
+    state.todayKey.set('2027-03-20');
+    await settle();
+    el.querySelector<HTMLButtonElement>('app-top-nav button.ui-tag')!.click();
+    await settle();
+    expect(el.querySelector('app-toast')?.textContent).toContain('Published schedules end in');
   });
 
   it('notice actions run from the toast', async () => {

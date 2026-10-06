@@ -1,9 +1,17 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { stageDeepLink } from './deep-link';
-import { hasSkywash, hidesTopNav, isDetailPath, navSection } from './nav-model';
+import { hasSkywash, hidesTopNav, isDetailPath, isPassView, navSection } from './nav-model';
 import { SHORTCUTS } from './shortcuts-sheet.component';
 
 describe('nav-model', () => {
+  it('isPassView matches pass views and the add flow only', () => {
+    expect(isPassView('/trips/t1/pass/p1')).toBe(true);
+    expect(isPassView('/trips/t1/passes/add')).toBe(true);
+    expect(isPassView('/passes/p1')).toBe(true);
+    expect(isPassView('/trips/t1')).toBe(false);
+    expect(isPassView('/saved')).toBe(false);
+  });
+
   it('maps paths to nav sections and chrome', () => {
     expect(navSection('/')).toBe('explore');
     expect(navSection('/to/LIS')).toBe('explore');

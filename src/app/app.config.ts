@@ -12,12 +12,14 @@ import {
   provideRouter,
   withComponentInputBinding,
   withInMemoryScrolling,
+  withNavigationErrorHandler,
   withViewTransitions,
 } from '@angular/router';
 import { provideServiceWorker } from '@angular/service-worker';
 import { loadSchedules } from './data/schedule-index';
 import { loadRouteNetwork } from './data/route-network';
 import { routes } from './app.routes';
+import { reloadOnChunkError } from './state/pwa-update.service';
 import { PhotoService } from './state/photo.service';
 import { AppStateService } from './state/app-state.service';
 import { stageDeepLink } from './shell/deep-link';
@@ -39,6 +41,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
+      withNavigationErrorHandler(e => { reloadOnChunkError(e.error, inject(DOCUMENT).defaultView); }),
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
       withViewTransitions({
         skipInitialTransition: true,
@@ -57,7 +60,9 @@ export const appConfig: ApplicationConfig = {
       const state = inject(AppStateService);
       if (staged) state.markStagedBack();
       const photos = inject(PhotoService);
-      return Promise.all([loadSchedules(), loadRouteNetwork(), photos.load()]).then(() => undefined);
+      return Promise.all([loadSchedules(), loadRouteNetwork(), photos.load()]).then(([schedulesOk]) => {
+        state.reportDataLoad(schedulesOk);
+      });
     }),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),

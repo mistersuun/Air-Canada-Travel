@@ -9,7 +9,7 @@ import { ShellShortcutsDirective } from './shell/shortcuts';
 import { TabBarComponent } from './shell/tab-bar.component';
 import { TopNavComponent } from './shell/top-nav.component';
 import { TripsService } from './trips/trips.service';
-import { hasSkywash } from './shell/nav-model';
+import { hasSkywash, isPassView } from './shell/nav-model';
 
 interface ToastView {
   message: string;
@@ -36,6 +36,12 @@ interface ToastView {
   template: `
     <!-- Handled in code: with <base href="/"> a bare #main resolves to /#main and would leave the page. -->
     <a class="skip-link" href="#main" (click)="skipToMain($event, main)">Skip to content</a>
+    @if (state.dataLoad() === 'failed') {
+      <div class="data-banner" role="alert">
+        <span>Couldn't load flight schedules. Results are empty, not cancelled.</span>
+        <button type="button" class="ui-tag ui-tag--amber" (click)="state.retryDataLoad()">Retry</button>
+      </div>
+    }
     <app-top-nav />
     <main #main id="main" tabindex="-1"><router-outlet /></main>
     <app-tab-bar />
@@ -53,6 +59,12 @@ interface ToastView {
   styles: [`
     :host { display: block; position: relative; min-height: 100vh; min-height: 100dvh; background-color: var(--bg); color: var(--ink); }
     main { display: block; outline: none; }
+    .data-banner {
+      display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;
+      padding: 10px 16px; font-size: 13.5px; font-weight: 600;
+      background: color-mix(in srgb, var(--amber) 15%, var(--bg)); color: var(--amber-ink);
+    }
+    .data-banner button { font-size: 13px; padding: 5px 12px; }
   `],
 })
 export class AppComponent {
@@ -71,7 +83,16 @@ export class AppComponent {
 
   /** The PWA update toast wins over transient notices. */
   protected readonly toast = computed<ToastView | null>(() => {
-    if (this.pwa.ready()) {
+    if (this.pwa.broken()) {
+      return {
+        message: 'The app needs to reload to repair itself',
+        actionLabel: 'Reload',
+        onAction: () => this.pwa.reload(),
+        onDismiss: () => this.pwa.dismiss(),
+      };
+    }
+    // Never interrupt a boarding pass with a reload prompt; it shows once the user leaves.
+    if (this.pwa.ready() && !isPassView(this.state.path())) {
       return {
         message: 'New schedules available',
         actionLabel: 'Reload',

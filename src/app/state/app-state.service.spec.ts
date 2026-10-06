@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { ApplicationRef, Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
@@ -408,16 +409,67 @@ describe('AppStateService', () => {
       expect(state.nowMs()).toBe(clock.now);
     });
 
-    it('dataInfo describes the coverage and flags stale data', () => {
+    it('dataInfo describes the coverage and flags data whose published dates run out', () => {
       const { state, clock } = setup();
       const info = state.dataInfo();
       expect(info.to).toBe('2027-03-31');
       expect(info.updatedLabel).toContain('data to Mar 31, 2027');
+      expect(info.updatedLabel).toBe('Updated Sep 28 · data to Mar 31, 2027');
+      // An old scrape is not stale while the coverage reaches well past today.
       clock.now = new Date('2027-01-20T12:00:00').getTime();
       state.refreshToday();
-      expect(info.updatedLabel).toBe('Updated Sep 28 · data to Mar 31, 2027');
-      expect(info.staleDays).toBeNull();
-      expect(state.dataInfo().staleDays).toBe(114);
+      expect(state.dataInfo().staleDays).toBeNull();
+      expect(state.dataInfo().staleDetail).toBe('');
+      // 21 days left is fine; 20 is not.
+      clock.now = new Date('2027-03-10T12:00:00').getTime();
+      state.refreshToday();
+      expect(state.dataInfo().staleDays).toBeNull();
+      clock.now = new Date('2027-03-11T12:00:00').getTime();
+      state.refreshToday();
+      expect(state.dataInfo().staleDays).toBe(20);
+      expect(state.dataInfo().staleDetail).toContain('end in 20 days');
+      // Past the last date: 0, not negative.
+      clock.now = new Date('2027-04-10T12:00:00').getTime();
+      state.refreshToday();
+      expect(state.dataInfo().staleDays).toBe(0);
+    });
+
+    it('dataLoad starts ok; a retry that succeeds clears a failure and bumps dataVersion', async () => {
+      const { state } = setup();
+      expect(state.dataLoad()).toBe('ok');
+      state.reportDataLoad(false);
+      expect(state.dataLoad()).toBe('failed');
+      const file = JSON.parse(readFileSync(`${process.cwd()}/public/data/schedules.json`, 'utf8'));
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify(file)));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const v = state.dataVersion();
+        await state.retryDataLoad();
+        expect(state.dataLoad()).toBe('ok');
+        expect(state.dataVersion()).toBe(v + 1);
+      } finally {
+        vi.unstubAllGlobals();
+        setScheduleSource(FIXTURE_ROUTES, FIXTURE_META);
+      }
+    });
+
+    it('a retry that fails stays failed, and going online retries a failed load', async () => {
+      const { state } = setup();
+      state.reportDataLoad(false);
+      const fetchMock = vi.fn(async () => new Response('', { status: 503 }));
+      vi.stubGlobal('fetch', fetchMock);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      try {
+        await state.retryDataLoad();
+        expect(state.dataLoad()).toBe('failed');
+        const before = fetchMock.mock.calls.length;
+        window.dispatchEvent(new Event('online'));
+        await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(before));
+        expect(state.dataLoad()).toBe('failed');
+      } finally {
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+      }
     });
   });
   describe('starredThisWeek', () => {

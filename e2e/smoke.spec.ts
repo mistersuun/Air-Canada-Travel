@@ -101,3 +101,28 @@ test('share link round trip: copy link, open in a fresh browser, save', async ({
     await other.close();
   }
 });
+
+test('a share POST is caught by the service worker and lands on /share-in', async ({ page }) => {
+  await seedOnboarded(page);
+  await page.goto('/');
+  await waitForServiceWorker(page);
+  await page.evaluate(() => {
+    const f = document.createElement('form');
+    f.method = 'POST';
+    f.action = '/share-in';
+    f.enctype = 'multipart/form-data';
+    for (const [k, v] of [['title', 'Hotel'], ['text', 'Room 12, late check-in']]) {
+      const i = document.createElement('input');
+      i.name = k;
+      i.value = v;
+      f.appendChild(i);
+    }
+    document.body.appendChild(f);
+    f.submit();
+  });
+  await expect(page).toHaveURL(/\/share-in\?id=[a-z0-9]+$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Add to a trip' })).toBeVisible();
+  // No trips yet: the page says so, and the temporary copy is already deleted.
+  await expect(page.locator('[data-no-trips]')).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => (await (await caches.open('ac-share-in')).keys()).length)).toBe(0);
+});

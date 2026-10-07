@@ -1,43 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#D41833"/>
-      <stop offset="100%" stop-color="#AF1025"/>
-    </linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#CFE6FF"/><stop offset="1" stop-color="#F5F9FF"/></linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <g transform="translate(256,256) scale(1.65)">
-    <path fill="white" d="
-      M 0,-120
-      Q 4,-108 8,-96
-      L 14,-80
-      Q 24,-84 34,-82
-      Q 30,-72 22,-56
-      Q 36,-64 50,-62
-      Q 44,-50 36,-38
-      L 66,-44
-      Q 70,-34 66,-24
-      L 36,-16
-      L 50,8
-      Q 44,16 34,14
-      L 14,0
-      Q 16,20 16,56
-      Q 8,58 0,52
-      Q -8,58 -16,56
-      Q -16,20 -14,0
-      L -34,14
-      Q -44,16 -50,8
-      L -36,-16
-      L -66,-24
-      Q -70,-34 -66,-44
-      L -36,-38
-      Q -44,-50 -50,-62
-      Q -36,-64 -22,-56
-      Q -30,-72 -34,-82
-      Q -24,-84 -14,-80
-      L -8,-96
-      Q -4,-108 0,-120
-      Z
-    "/>
-  </g>
+  <rect width="512" height="512" rx="112" fill="url(#s)"/>
+  <path d="M256 104 L278 150 L305 136 L294 202 L338 157 L348 182 L392 174 L376 220 L395 230 L320 294 L330 324 L264 313 L267 376 L245 376 L248 313 L182 324 L192 294 L117 230 L136 220 L120 174 L164 182 L174 157 L218 202 L207 136 L234 150 Z" fill="#D8222A"/>
+  <path d="M70 420 Q 256 330 442 420" fill="none" stroke="#0A84FF" stroke-width="12" stroke-linecap="round" stroke-dasharray="1 26"/>
+  <g transform="translate(440,412) rotate(112) scale(.9)"><path fill="#0A84FF" d="M0,-46 C4,-46 6,-42 6,-36 L6,-12 L46,10 L46,20 L6,8 L6,30 L18,40 L18,47 L0,42 L-18,47 L-18,40 L-6,30 L-6,8 L-46,20 L-46,10 L-6,-12 L-6,-36 C-6,-42 -4,-46 0,-46 Z"/></g>
 </svg>

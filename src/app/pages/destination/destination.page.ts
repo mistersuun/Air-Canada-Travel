@@ -30,6 +30,7 @@ import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
 import { DestClimateComponent } from './dest-climate.component';
 import { DestForecastComponent } from './dest-forecast.component';
+import { DestWeatherLineComponent } from './dest-weather-line.component';
 import { EventsCardComponent } from '../../events/events-card.component';
 import { DestReferenceComponent } from '../../reference/dest-reference.component';
 import { historyFor, recordAria, recordTag, type HistoryCounts } from '../../trips/engine/track-record';
@@ -71,7 +72,7 @@ const AC_URL = 'https://www.aircanada.com/';
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent,
+    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent, DestWeatherLineComponent,
     DestReferenceComponent, EventsCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -122,6 +123,7 @@ const AC_URL = 'https://www.aircanada.com/';
             <span class="ui-tag ui-tag--neutral">{{ s.season }}</span>
           </div>
           @if (s.meta) { <p class="ui-sub tn meta m-only">{{ s.meta }}</p> }
+          <app-dest-weather-line [code]="code()" [dateKey]="climateDay()" />
         </div>
         @if (next(); as n) {
           <a class="next d-only" [routerLink]="flightLink(n.it)" [queryParams]="state.globalParams()">
@@ -340,7 +342,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .empty .ui-link { font-size: 13.5px; }
 
     .ret__h { align-items: center; }
-    .out-seg { margin: -4px 0 12px; }
+    .out-seg { margin: 0 0 12px; }
     .map { display: block; height: 260px; border-radius: 16px; overflow: hidden; background: var(--sea); }
     .dist { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 0; font-size: 13px; }
     .ess__h { margin-bottom: 12px; }
@@ -362,6 +364,7 @@ const AC_URL = 'https://www.aircanada.com/';
       }
       .handle { width: 36px; height: 5px; border-radius: 3px; background: var(--hair); margin: 0 auto 12px; }
       .card { margin-top: 10px; }
+      .dep app-dest-trip-actions { margin-bottom: 14px; }
       .ret, .side, .avail { margin-top: 16px; }
       .side { display: grid; gap: 22px; }
       .mapc { margin-top: 0; }

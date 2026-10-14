@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { stageDeepLink } from './deep-link';
 import { hasSkywash, hidesTopNav, isDetailPath, isPassView, navSection } from './nav-model';
 import { SHORTCUTS } from './shortcuts-sheet.component';
+import { t } from '../i18n/t';
 
 describe('nav-model', () => {
   it('isPassView matches pass views and the add flow only', () => {
@@ -35,7 +36,7 @@ describe('nav-model', () => {
   });
 
   it('lists Esc in the shortcuts', () => {
-    expect(SHORTCUTS.some(s => s.keys.includes('Esc') && s.label === 'Back / close')).toBe(true);
+    expect(SHORTCUTS.some(s => s.keys.includes('Esc') && t(s.label) === 'Back / close')).toBe(true);
   });
 });
 

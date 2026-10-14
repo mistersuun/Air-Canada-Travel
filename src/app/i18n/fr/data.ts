@@ -1,0 +1,30 @@
+import type { Translation } from '../catalogue';
+import type { data as en } from '../en/data';
+
+export const data: Translation<typeof en> = {
+  'data.region.all': 'Toutes les régions',
+  'data.region.starred': '★ Favoris',
+  'data.region.starredShort': 'Favoris',
+  'data.region.caribbean': 'Caraïbes',
+  'data.region.mexico': 'Mexique',
+  'data.region.usa': 'États-Unis',
+  'data.region.europe': 'Europe',
+  'data.region.asiaPacific': 'Asie et Pacifique',
+  'data.region.centralAmerica': 'Amérique centrale',
+  'data.region.southAmerica': 'Amérique du Sud',
+  'data.region.africaMiddleEast': 'Afrique et Moyen-Orient',
+  'data.type.sun': 'Soleil',
+  'data.type.city': 'Ville',
+  'data.type.adventure': 'Aventure',
+  'data.window.morning': 'Matin',
+  'data.window.afternoon': 'Après-midi',
+  'data.window.evening': 'Soir',
+  'data.window.redeye': 'Vol de nuit',
+  'data.length.day': 'Journée',
+  'data.length.weekend': 'Longue fin de semaine',
+  'data.length.week': 'Une semaine et +',
+  'data.hub.YUL': 'Montréal',
+  'data.hub.YQB': 'Québec',
+  'data.hub.YTZ': 'Toronto (Billy Bishop)',
+  'data.weekdayLetters': 'LMMJVSD',
+};

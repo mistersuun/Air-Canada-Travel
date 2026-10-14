@@ -9,12 +9,13 @@ import { loadRouteNetwork } from '../data/route-network';
 import { airportTz, findDestination, findHub } from '../utils/airports';
 import { summarizeWeek } from '../utils/connections';
 import { EMPTY_FILTERS, Filters, RouteEntry, SortKey, activeFilterCount, computeRoutes, hubStats } from '../utils/routes';
-import { WEEKDAY_SHORT, addDays, dateKey, diffDays, formatKey, isDateKey, todayKey, weekStartKey, weekdayIndex } from '../utils/time';
+import { addDays, dateKey, diffDays, formatKey, isDateKey, todayKey, weekStartKey, weekdayIndex, weekdayShort } from '../utils/time';
 import { getFlightsForWeek } from '../utils/week';
 import { STALE_AFTER_DAYS, STALE_COVERAGE_DAYS } from '../ui/format';
 import { destPath } from '../ui/links';
 import { DEFAULT_HUB, PrefsService, isHubCode, isRegion } from './prefs.service';
 import { UrlState, parseUrlState } from './url-state';
+import { t } from '../i18n/t';
 
 /**
  * The schedule functions the shell calls, behind a token so specs can count
@@ -248,7 +249,7 @@ export class AppStateService {
       }
       items.push({
         code, city: d.city, country: d.country, dayKeys, direct,
-        days: dayKeys.map(k => WEEKDAY_SHORT[weekdayIndex(k)]).join(' '),
+        days: dayKeys.map(k => weekdayShort(weekdayIndex(k))).join(' '),
       });
     }
     return items.sort((a, b) => a.city.localeCompare(b.city));
@@ -260,10 +261,10 @@ export class AppStateService {
     const parts: string[] = [];
     const generatedMs = generatedAt ? Date.parse(generatedAt) : NaN;
     if (!Number.isNaN(generatedMs)) {
-      parts.push(`Updated ${formatKey(dateKey(new Date(generatedMs)), { month: 'short', day: 'numeric' })}`);
+      parts.push(t('shell.data.updated', { date: formatKey(dateKey(new Date(generatedMs)), { month: 'short', day: 'numeric' }) }));
     }
-    if (cov.to) parts.push(`data to ${formatKey(cov.to, { month: 'short', day: 'numeric', year: 'numeric' })}`);
-    else parts.push('No published schedules');
+    if (cov.to) parts.push(t('shell.data.dataTo', { date: formatKey(cov.to, { month: 'short', day: 'numeric', year: 'numeric' }) }));
+    else parts.push(t('shell.data.none'));
     const today = this.todayKey();
     const left = cov.to ? diffDays(today, cov.to) : null;
     const ageDays = Number.isNaN(generatedMs) ? null : diffDays(dateKey(new Date(generatedMs)), today);
@@ -271,14 +272,13 @@ export class AppStateService {
     let staleTag: string | null = null;
     let staleDetail = '';
     if (cov.to && left !== null && left < STALE_COVERAGE_DAYS) {
-      staleTag = left < 0 ? `No schedules after ${formatKey(cov.to, short)}` : `Schedules published to ${formatKey(cov.to, short)}`;
-      staleDetail = left < 0
-        ? `Published schedules ended ${formatKey(cov.to, short)}; later flights are not published, not cancelled.`
-        : `Published schedules end ${formatKey(cov.to, short)}, ${left} day${left === 1 ? '' : 's'} from today; later dates are not published yet.`;
+      const date = formatKey(cov.to, short);
+      staleTag = t(left < 0 ? 'shell.data.noneAfter' : 'shell.data.publishedTo', { date });
+      staleDetail = left < 0 ? t('shell.data.endedDetail', { date }) : t('shell.data.endsDetail', { date, n: left });
     } else if (ageDays !== null && ageDays > STALE_AFTER_DAYS) {
       const upd = formatKey(dateKey(new Date(generatedMs)), short);
-      staleTag = `Schedules last updated ${upd}`;
-      staleDetail = `Schedules were last updated ${upd}, ${ageDays} days ago. Newer changes may be missing.`;
+      staleTag = t('shell.data.lastUpdated', { date: upd });
+      staleDetail = t('shell.data.lastUpdatedDetail', { date: upd, n: ageDays });
     }
     const updatedLabel = parts.join(' · ');
     return {

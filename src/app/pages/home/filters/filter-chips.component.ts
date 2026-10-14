@@ -1,9 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { AppStateService } from '../../../state/app-state.service';
-import { DEPART_WINDOWS, Filters } from '../../../utils/routes';
+import { Filters } from '../../../utils/routes';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { hubDisplayName } from '../../../ui/format';
 import { SORT_OPTIONS } from './filter-sheet.component';
+import { t } from '../../../i18n/t';
+import { departWindowLabel, regionLabel, typeLabel } from '../../../i18n/labels';
 
 export interface ActiveChip {
   id: string;
@@ -23,13 +25,13 @@ export interface ActiveChip {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (chips().length) {
-      <div class="ac ui-snap-row" role="group" aria-label="Active filters">
+      <div class="ac ui-snap-row" role="group" [attr.aria-label]="t('home.chips.label')">
         @for (c of chips(); track c.id) {
-          <button type="button" class="chip" (click)="c.remove()" [attr.aria-label]="'Remove ' + c.label">
+          <button type="button" class="chip" (click)="c.remove()" [attr.aria-label]="t('home.chips.remove', { label: c.label })">
             {{ c.label }}<app-icon name="close" [size]="12" [strokeWidth]="2.4" />
           </button>
         }
-        <button type="button" class="clear ui-link" (click)="clearAll()">Clear</button>
+        <button type="button" class="clear ui-link" (click)="clearAll()">{{ t('common.clear') }}</button>
       </div>
     }
   `,
@@ -52,29 +54,30 @@ export class FilterChipsComponent {
   readonly showRegion = input(true);
   /** After "Clear" (the page also drops ?view). */
   readonly cleared = output<void>();
+  protected readonly t = t;
 
   readonly chips = computed<ActiveChip[]>(() => {
     const f = this.state.filters();
     const out: ActiveChip[] = [];
     const q = this.state.query();
-    if (q) out.push({ id: 'q', label: `“${q}”`, remove: () => this.state.setQuery('') });
+    if (q) out.push({ id: 'q', label: t('home.chips.query', { q }), remove: () => this.state.setQuery('') });
     const r = this.state.region();
-    if (r !== 'All' && this.showRegion()) out.push({ id: 'region', label: r, remove: () => this.state.setRegion('All') });
-    for (const t of f.types) out.push({ id: `t-${t}`, label: t, remove: () => this.patch({ types: f.types.filter(x => x !== t) }) });
+    if (r !== 'All' && this.showRegion()) out.push({ id: 'region', label: regionLabel(r), remove: () => this.state.setRegion('All') });
+    for (const ty of f.types) out.push({ id: `t-${ty}`, label: typeLabel(ty), remove: () => this.patch({ types: f.types.filter(x => x !== ty) }) });
     for (const w of f.departWindows) {
-      out.push({ id: `w-${w}`, label: DEPART_WINDOWS[w].label, remove: () => this.patch({ departWindows: f.departWindows.filter(x => x !== w) }) });
+      out.push({ id: `w-${w}`, label: departWindowLabel(w), remove: () => this.patch({ departWindows: f.departWindows.filter(x => x !== w) }) });
     }
     for (const h of f.viaHubs) {
-      out.push({ id: `h-${h}`, label: `Via ${hubDisplayName(h)}`, remove: () => this.patch({ viaHubs: f.viaHubs.filter(x => x !== h) }) });
+      out.push({ id: `h-${h}`, label: t('home.chips.via', { hub: hubDisplayName(h) }), remove: () => this.patch({ viaHubs: f.viaHubs.filter(x => x !== h) }) });
     }
-    if (f.sameDayArrival) out.push({ id: 'same', label: 'Same-day arrival', remove: () => this.patch({ sameDayArrival: false }) });
-    if (f.widebodyOnly) out.push({ id: 'wide', label: 'Widebody', remove: () => this.patch({ widebodyOnly: false }) });
-    if (f.maxHours) out.push({ id: 'max', label: `Up to ${f.maxHours}h`, remove: () => this.patch({ maxHours: null }) });
-    if (f.starredOnly) out.push({ id: 'star', label: 'Starred only', remove: () => this.patch({ starredOnly: false }) });
+    if (f.sameDayArrival) out.push({ id: 'same', label: t('home.chips.sameDay'), remove: () => this.patch({ sameDayArrival: false }) });
+    if (f.widebodyOnly) out.push({ id: 'wide', label: t('home.chips.widebody'), remove: () => this.patch({ widebodyOnly: false }) });
+    if (f.maxHours) out.push({ id: 'max', label: t('home.chips.maxHours', { h: f.maxHours }), remove: () => this.patch({ maxHours: null }) });
+    if (f.starredOnly) out.push({ id: 'star', label: t('home.chips.starred'), remove: () => this.patch({ starredOnly: false }) });
     const s = this.state.sort();
     if (s !== 'az') {
-      const label = SORT_OPTIONS.find(o => o.key === s)?.label ?? s;
-      out.push({ id: 'sort', label: `Sort: ${label}`, remove: () => this.state.setSort('az') });
+      const key = SORT_OPTIONS.find(o => o.key === s)?.label;
+      out.push({ id: 'sort', label: t('home.chips.sort', { label: key ? t(key) : s }), remove: () => this.state.setSort('az') });
     }
     return out;
   });

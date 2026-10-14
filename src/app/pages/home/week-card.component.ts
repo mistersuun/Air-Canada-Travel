@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import type { HubStats, RouteEntry } from '../../utils/routes';
 import { MapPoint, RouteMapComponent } from '../../ui/route-map.component';
+import { t } from '../../i18n/t';
 
 /**
  * "This week from YUL" (desktop hero, right column): three bento stats and a
@@ -13,7 +14,7 @@ import { MapPoint, RouteMapComponent } from '../../ui/route-map.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wc ui-card ui-glass" aria-labelledby="wc-title">
-      <div class="ui-sec-h"><h2 class="ui-h3" id="wc-title">This week from {{ hub() }}</h2><span class="ui-tag ui-tag--blue tn">{{ range() }}</span></div>
+      <div class="ui-sec-h"><h2 class="ui-h3" id="wc-title">{{ t('home.week.title', { hub: hub() }) }}</h2><span class="ui-tag ui-tag--blue tn">{{ range() }}</span></div>
       <div class="bento">
         @for (t of tiles(); track t.label) {
           <div class="tile"><b class="tn">{{ t.value }}</b><span>{{ t.label }}</span></div>
@@ -48,13 +49,17 @@ export class WeekCardComponent {
   readonly entries = input<readonly RouteEntry[]>([]);
   readonly highlight = input<string | null>(null);
 
+  protected readonly t = t;
+
   protected readonly tiles = computed(() => {
     const s = this.stats();
+    const tile = (n: number, key: 'home.week.destinations' | 'home.week.countries' | 'home.week.departures') =>
+      ({ value: n, label: t(key, { n }) });
     return [
       // All three count nonstop flying only, so the figures agree.
-      { value: s?.directDestinations ?? 0, label: 'destinations' },
-      { value: s?.directCountries ?? 0, label: 'countries' },
-      { value: s?.flightsThisWeek ?? 0, label: 'departures' },
+      tile(s?.directDestinations ?? 0, 'home.week.destinations'),
+      tile(s?.directCountries ?? 0, 'home.week.countries'),
+      tile(s?.flightsThisWeek ?? 0, 'home.week.departures'),
     ];
   });
 

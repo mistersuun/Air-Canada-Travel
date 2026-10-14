@@ -31,10 +31,10 @@ vi.mock('@netlify/blobs', () => ({
   },
 }));
 
-import events from './events.mts';
-import flightStatus from './flight-status.mts';
-import group from './group.mts';
-import { MAX_CIPHERTEXT } from './lib/group';
+import events from '../events.mts';
+import flightStatus from '../flight-status.mts';
+import group from '../group.mts';
+import { MAX_CIPHERTEXT } from './group';
 
 let ipSeq = 0;
 /** A fresh client address per call, so the per-instance limiters never interfere between tests. */

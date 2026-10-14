@@ -8,8 +8,13 @@ const BUDGET_STORES = ['groups-budget', 'aeroapi-budget', 'ticketmaster-budget']
 
 export default async (): Promise<void> => {
   const now = Date.now();
-  const removed = await sweepGroups(getStore({ name: 'groups', consistency: 'strong' }) as unknown as GroupStore, now);
-  console.log(`group-sweep removed ${removed}`);
+  try {
+    const removed = await sweepGroups(getStore({ name: 'groups', consistency: 'strong' }) as unknown as GroupStore, now);
+    console.log(`group-sweep removed ${removed}`);
+  } catch (e) {
+    // Still clean the counters below.
+    console.error('group-sweep groups failed:', e instanceof Error ? e.name : 'unknown');
+  }
   for (const name of BUDGET_STORES) {
     try {
       const n = await sweepBudgetKeys(getStore({ name, consistency: 'strong' }) as unknown as CounterSweepStore, now);

@@ -42,7 +42,7 @@ export class PwaUpdateService {
         this.ready.set(true);
         if (this.doc.visibilityState === 'hidden') this.hiddenWithUpdate = true;
       }
-      else if (e.type === 'VERSION_INSTALLATION_FAILED') console.warn('[sw] new version failed to install:', e.error);
+      else if (e.type === 'VERSION_INSTALLATION_FAILED') console.warn('[sw] new version failed to install:', e.error);   // i18n-ignore
     });
     const broken = this.sw.unrecoverable?.subscribe(() => this.broken.set(true));
     inject(DestroyRef).onDestroy(() => {

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import type { Trip } from '../../trips/model';
 import { groupPath } from '../../ui/links';
@@ -20,11 +21,11 @@ import { AvatarChipComponent } from './avatar-chip.component';
   template: `
     @if (rec(); as r) {
       <a class="ui-card gc" data-group-card [routerLink]="path(r.id)" [queryParams]="state.globalParams()">
-        <span class="gc__t"><b>Group trip</b><span class="ui-sub">{{ summary() }}</span></span>
+        <span class="gc__t"><b>{{ t('group.title') }}</b><span class="ui-sub">{{ summary() }}</span></span>
         @if (rows().length) {
           <ul class="gc__l" data-group-status>
             @for (m of rows(); track m.id) {
-              <li><app-avatar-chip [name]="m.status.name" [showName]="false" /><span><b>{{ m.status.name }}{{ m.me ? ' (you)' : '' }}</b> · {{ m.status.planLabel || 'No plan set' }}</span></li>
+              <li><app-avatar-chip [name]="m.status.name" [showName]="false" /><span><b>{{ m.status.name }}{{ m.me ? ' ' + t('group.you') : '' }}</b> · {{ m.status.planLabel || t('group.noPlan') }}</span></li>
             }
           </ul>
         } @else {
@@ -32,13 +33,13 @@ import { AvatarChipComponent } from './avatar-chip.component';
             @for (n of names(); track $index) { <app-avatar-chip [name]="n" [showName]="false" /> }
           </span>
         }
-        @if (meetup()) { <p class="gc__m" data-group-meetup><span class="ui-label">Meet up</span> {{ meetup() }}</p> }
-        <span class="gc__go">Open the group page</span>
+        @if (meetup()) { <p class="gc__m" data-group-meetup><span class="ui-label">{{ t('group.meetUp') }}</span> {{ meetup() }}</p> }
+        <span class="gc__go">{{ t('group.openPage') }}</span>
       </a>
     } @else {
       <section class="ui-card gc gc--start" data-group-prompt>
-        <span class="gc__t"><b>Travelling with friends?</b><span class="ui-sub">Start a group trip: one private link where everyone adds which flight they are on.</span></span>
-        <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-group-start-card (click)="start.emit()">Start a group trip</button>
+        <span class="gc__t"><b>{{ t('group.card.prompt') }}</b><span class="ui-sub">{{ t('group.card.promptText') }}</span></span>
+        <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-group-start-card (click)="start.emit()">{{ t('group.start') }}</button>
       </section>
     }
   `,
@@ -57,6 +58,7 @@ import { AvatarChipComponent } from './avatar-chip.component';
   `],
 })
 export class GroupCardComponent {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly groups = inject(GroupService);
 
@@ -70,7 +72,7 @@ export class GroupCardComponent {
   protected readonly meetup = computed(() => this.doc()?.meetup?.text ?? '');
   protected readonly summary = computed(() => {
     const n = this.names().length;
-    return n > 1 ? `${n} people in this group` : 'Just you so far. Share the link with your friends.';
+    return n > 1 ? t('group.card.people', { n }) : t('group.card.justYou');
   });
 
   constructor() {

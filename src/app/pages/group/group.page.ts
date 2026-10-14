@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, DOCUMENT, DestroyRef, computed, inject, signal } from '@angular/core';
 import { PlatformLocation } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { MsgKey, t } from '../../i18n/t';
+import { intlLocale } from '../../i18n/locale';
 import { IconComponent } from '../../components/shared/icons.component';
 import { GROUP_ID_RE, type GroupLink, parseGroupFragment } from '../../group/group-crypto';
 import {
@@ -10,7 +12,7 @@ import { GroupService, POLL_MS, type GroupFailure, type GroupRecord } from '../.
 import { shareOrCopy } from '../../group/share-link';
 import { AppStateService } from '../../state/app-state.service';
 import { AvatarChipComponent } from '../../group/ui/avatar-chip.component';
-import { LEG_STATUS_LABEL, type FlightLeg, type LegStatus, type SharedTripPreview } from '../../trips/model';
+import { type FlightLeg, type LegStatus, type SharedTripPreview } from '../../trips/model';
 import { tripPath, tripsPath } from '../../ui/links';
 import { toUtcMs, utcToLocal } from '../../utils/time';
 import { dayLabel } from '../trips/trips-model';
@@ -18,15 +20,19 @@ import { TripCardComponent } from '../trips/plan/trip-card.component';
 
 type View = 'loading' | 'invalid' | 'unavailable' | 'gone' | 'ready';
 
-const MESSAGES: Record<GroupFailure, string> = {
-  unavailable: 'Group sharing needs the online service. Try again when you are connected.',
-  gone: 'This group has ended or expired.',
-  invalid: 'This link could not be opened.',
-  forbidden: 'This link is view only, so it cannot change the plan.',
-  'too-large': 'This plan is too large to share as a group.',
-  budget: 'Group sharing is unavailable right now.',
+const MESSAGES: Record<GroupFailure, MsgKey> = {
+  unavailable: 'group.section.offline',
+  gone: 'group.err.gone',
+  invalid: 'group.err.invalid',
+  forbidden: 'group.err.forbidden',
+  'too-large': 'group.err.tooLarge',
+  budget: 'group.section.budget',
 };
-const FULL = 'This group is full.';
+const FULL: MsgKey = 'group.err.full';
+const LEG_KEYS: Partial<Record<LegStatus, MsgKey>> = {
+  planned: 'group.status.planned', listed: 'group.status.listed', checkedIn: 'group.status.checkedIn',
+  boarded: 'group.status.boarded', notBoarded: 'group.status.notBoarded',
+};
 const CONFETTI_KEY = 'ac.group.confetti.v1';
 const CONFETTI_MS = 2600;
 /** The burst: 22 pieces fanned out radially (golden angle, three rings), each with its own end point and delay. */
@@ -49,25 +55,25 @@ const PIECES = Array.from({ length: 22 }, (_, i) => {
   template: `
     <div class="ui-page ui-page--bare gp">
       <header class="gp__head">
-        <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
-        <h1 class="ui-h3">Group trip</h1>
+        <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('group.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+        <h1 class="ui-h3">{{ t('group.title') }}</h1>
         <span class="gp__sp" aria-hidden="true"></span>
       </header>
 
       @switch (view()) {
-        @case ('loading') { <p class="ui-sub gp__msg" role="status">Opening the group…</p> }
+        @case ('loading') { <p class="ui-sub gp__msg" role="status">{{ t('group.opening') }}</p> }
         @case ('ready') {
           @if (preview(); as p) {
-            <p class="ui-label gp__lbl" data-group-label>Shared plan · read only</p>
+            <p class="ui-label gp__lbl" data-group-label>{{ t('group.sharedPlan') }}</p>
             <app-trip-card [trip]="p.trip" mode="static" />
             @if (p.trip.party.splitNote) {
-              <div class="ui-card gp__box"><div class="ui-label">If we split up</div><p>{{ p.trip.party.splitNote }}</p></div>
+              <div class="ui-card gp__box"><div class="ui-label">{{ t('group.split') }}</div><p>{{ p.trip.party.splitNote }}</p></div>
             }
           }
 
           @if (flights().length) {
             <section class="ui-card gp__box" data-legs>
-              <h2 class="ui-h3">Who is on which flight</h2>
+              <h2 class="ui-h3">{{ t('group.whichFlight') }}</h2>
               <ul class="gp__list">
                 @for (f of flights(); track f.id) {
                   <li data-leg [attr.data-leg-id]="f.id">
@@ -85,30 +91,30 @@ const PIECES = Array.from({ length: 22 }, (_, i) => {
           }
 
           <section class="ui-card gp__box" data-members>
-            <h2 class="ui-h3">Who is where</h2>
+            <h2 class="ui-h3">{{ t('group.whoWhere') }}</h2>
             @if (members().length) {
               <ul class="gp__list">
                 @for (m of members(); track m.id) {
                   <li data-member>
-                    <b class="gp__who"><app-avatar-chip [name]="m.status.name" [showName]="false" />{{ m.status.name }}{{ m.me ? ' (you)' : '' }}</b>
-                    <span>{{ m.status.planLabel || 'No plan set' }}</span>
-                    @if (m.status.arrival) { <span class="gp__when">Arrives {{ when(m.status.arrival) }}</span> }
+                    <b class="gp__who"><app-avatar-chip [name]="m.status.name" [showName]="false" />{{ m.status.name }}{{ m.me ? ' ' + t('group.you') : '' }}</b>
+                    <span>{{ m.status.planLabel || t('group.noPlan') }}</span>
+                    @if (m.status.arrival) { <span class="gp__when">{{ t('group.arrives', { when: when(m.status.arrival) }) }}</span> }
                   </li>
                 }
               </ul>
             } @else {
-              <p class="ui-sub">Nobody has added a status yet.</p>
+              <p class="ui-sub">{{ t('group.nobody') }}</p>
             }
-            @if (doc()?.meetup?.text; as t) { <p class="gp__meet" data-meetup><span class="ui-label">Meet up</span> {{ t }}</p> }
+            @if (doc()?.meetup?.text; as mt) { <p class="gp__meet" data-meetup><span class="ui-label">{{ t('group.meetUp') }}</span> {{ mt }}</p> }
           </section>
 
           @if (canWrite()) {
             <section class="ui-card gp__box" data-mine>
-              <h2 class="ui-h3">Your status</h2>
-              <label class="gp__f"><span class="ui-label">Nickname</span>
+              <h2 class="ui-h3">{{ t('group.yourStatus') }}</h2>
+              <label class="gp__f"><span class="ui-label">{{ t('group.nickname') }}</span>
                 <input type="text" [maxLength]="maxName" autocomplete="off" data-name [value]="name()" (input)="name.set($any($event.target).value)" /></label>
-              <label class="gp__f"><span class="ui-label">Your plan</span>
-                <input type="text" [maxLength]="maxPlan" autocomplete="off" placeholder="On AC834, Bus to YUL…" data-plan-label [value]="label()" (input)="label.set($any($event.target).value)" /></label>
+              <label class="gp__f"><span class="ui-label">{{ t('group.yourPlan') }}</span>
+                <input type="text" [maxLength]="maxPlan" autocomplete="off" [attr.placeholder]="t('group.planPlaceholder')" data-plan-label [value]="label()" (input)="label.set($any($event.target).value)" /></label>
               @if (suggestions().length) {
                 <div class="gp__chips">
                   @for (s of suggestions(); track s) { <button type="button" class="gp__chip" (click)="label.set(s)">{{ s }}</button> }
@@ -117,44 +123,44 @@ const PIECES = Array.from({ length: 22 }, (_, i) => {
               @for (f of flights(); track f.id) {
                 <label class="gp__f"><span class="ui-label">{{ f.label }}</span>
                   <select data-leg-status [attr.data-leg-id]="f.id" (change)="setLegStatus(f.id, $any($event.target).value)">
-                    <option value="" [selected]="!mine()[f.id]">Not set</option>
-                    @for (o of legOptions; track o.value) { <option [value]="o.value" [selected]="mine()[f.id] === o.value">{{ o.label }}</option> }
+                    <option value="" [selected]="!mine()[f.id]">{{ t('group.notSet') }}</option>
+                    @for (o of legOptions(); track o.value) { <option [value]="o.value" [selected]="mine()[f.id] === o.value">{{ o.label }}</option> }
                   </select></label>
               }
-              <label class="gp__f"><span class="ui-label" data-arrival-label>Arrival ({{ zoneLabel() }})</span>
+              <label class="gp__f"><span class="ui-label" data-arrival-label>{{ t('group.arrival', { zone: zoneLabel() }) }}</span>
                 <input type="datetime-local" data-arrival [value]="arrival()" (input)="arrival.set($any($event.target).value)" /></label>
-              <label class="gp__f"><span class="ui-label">Meet-up point</span>
-                <input type="text" [maxLength]="maxMeet" autocomplete="off" placeholder="Gate B12 coffee shop" data-meetup-input [value]="meet()" (input)="editMeet($any($event.target).value)" /></label>
-              <button type="button" class="ui-btn" data-save-status [disabled]="busy() || !name().trim()" (click)="saveStatus()">Update status</button>
+              <label class="gp__f"><span class="ui-label">{{ t('group.meetPoint') }}</span>
+                <input type="text" [maxLength]="maxMeet" autocomplete="off" [attr.placeholder]="t('group.meetPlaceholder')" data-meetup-input [value]="meet()" (input)="editMeet($any($event.target).value)" /></label>
+              <button type="button" class="ui-btn" data-save-status [disabled]="busy() || !name().trim()" (click)="saveStatus()">{{ t('group.update') }}</button>
             </section>
           } @else {
-            <p class="ui-sub gp__fine" data-view-only>This is a view-only link. You can read the plan but not change statuses.</p>
+            <p class="ui-sub gp__fine" data-view-only>{{ t('group.viewOnly') }}</p>
           }
 
           <div class="gp__acts">
-            <button type="button" class="ui-btn ui-btn--ghost" data-copy-link (click)="copyLink(false)">Copy link</button>
-            <button type="button" class="ui-btn" data-save-copy (click)="saveCopy()">Save a copy to my trips</button>
+            <button type="button" class="ui-btn ui-btn--ghost" data-copy-link (click)="copyLink(false)">{{ t('group.copyLink') }}</button>
+            <button type="button" class="ui-btn" data-save-copy (click)="saveCopy()">{{ t('group.saveCopy') }}</button>
           </div>
           @if (canWrite()) {
-            <button type="button" class="gp__link" data-copy-view (click)="copyLink(true)">Copy a view-only link</button>
+            <button type="button" class="gp__link" data-copy-view (click)="copyLink(true)">{{ t('group.copyViewLink') }}</button>
           }
           @if (owner()) {
             @if (confirmStop()) {
-              <div class="ui-card gp__box"><p>This deletes the shared plan for everyone. Saved copies stay on their devices.</p>
-                <div class="gp__acts"><button type="button" class="ui-btn ui-btn--ghost" (click)="confirmStop.set(false)">Keep sharing</button>
-                  <button type="button" class="ui-btn ui-btn--dark" data-stop-confirm [disabled]="busy()" (click)="stop()">Stop sharing</button></div></div>
+              <div class="ui-card gp__box"><p>{{ t('group.stopText') }}</p>
+                <div class="gp__acts"><button type="button" class="ui-btn ui-btn--ghost" (click)="confirmStop.set(false)">{{ t('group.keep') }}</button>
+                  <button type="button" class="ui-btn ui-btn--dark" data-stop-confirm [disabled]="busy()" (click)="stop()">{{ t('group.stop') }}</button></div></div>
             } @else {
-              <button type="button" class="gp__del" data-stop (click)="confirmStop.set(true)">Stop sharing</button>
+              <button type="button" class="gp__del" data-stop (click)="confirmStop.set(true)">{{ t('group.stop') }}</button>
             }
           }
           @if (note()) { <p class="ui-sub gp__fine" role="status" data-note>{{ note() }}</p> }
         }
         @default {
           <div class="ui-card gp__bad" data-group-problem>
-            <h2 class="ui-h3">{{ view() === 'unavailable' ? 'Group sharing needs the online service' : view() === 'gone' ? 'This group has ended' : 'This link could not be opened' }}</h2>
-            <p class="ui-sub">{{ view() === 'unavailable' ? 'Try again when you are connected.' : view() === 'gone' ? 'The owner stopped sharing, or it expired.' : 'It may be cut short. Ask for the link again, and open it in full.' }}</p>
-            @if (view() === 'unavailable') { <button type="button" class="ui-btn ui-btn--ghost" (click)="refresh()">Try again</button> }
-            <a class="ui-btn ui-btn--dark" [routerLink]="tripsPath()" [queryParams]="state.globalParams()">Go to Trips</a>
+            <h2 class="ui-h3">{{ view() === 'unavailable' ? t('group.bad.offlineTitle') : view() === 'gone' ? t('group.bad.goneTitle') : t('group.bad.invalidTitle') }}</h2>
+            <p class="ui-sub">{{ view() === 'unavailable' ? t('group.bad.offlineText') : view() === 'gone' ? t('group.bad.goneText') : t('group.bad.invalidText') }}</p>
+            @if (view() === 'unavailable') { <button type="button" class="ui-btn ui-btn--ghost" (click)="refresh()">{{ t('group.bad.retry') }}</button> }
+            <a class="ui-btn ui-btn--dark" [routerLink]="tripsPath()" [queryParams]="state.globalParams()">{{ t('group.bad.goTrips') }}</a>
           </div>
         }
       }
@@ -164,7 +170,7 @@ const PIECES = Array.from({ length: 22 }, (_, i) => {
           @for (p of pieces; track p.i) { <i [style.--i]="p.i" [style.--dx.px]="p.dx" [style.--dy.px]="p.dy"></i> }
         </div>
       }
-      <p class="ui-sub gp__fine" data-pass-rules>Air Canada pass rules do not allow sharing passes or listing details. Share plans and times only.</p>
+      <p class="ui-sub gp__fine" data-pass-rules>{{ t('group.passRules') }}</p>
     </div>
   `,
   styles: [`
@@ -209,6 +215,7 @@ const PIECES = Array.from({ length: 22 }, (_, i) => {
   `],
 })
 export class GroupPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly groups = inject(GroupService);
   private readonly router = inject(Router);
@@ -232,7 +239,7 @@ export class GroupPage {
   protected readonly mine = signal<Record<string, LegStatus>>({});
   protected readonly burst = signal(false);
   protected readonly pieces = PIECES;
-  protected readonly legOptions = MEMBER_LEG_STATUSES.map(value => ({ value, label: LEG_STATUS_LABEL[value] }));
+  protected readonly legOptions = computed(() => MEMBER_LEG_STATUSES.map(value => ({ value, label: t(LEG_KEYS[value] ?? 'group.status.planned') })));
 
   private link: GroupLink | null = null;
   private version = 0;
@@ -260,7 +267,7 @@ export class GroupPage {
   protected readonly tz = computed(() => { const z = this.preview()?.trip.goal.tz ?? null; return z && validZone(z) ? z : null; });
   protected readonly zoneLabel = computed(() => {
     const p = this.preview();
-    return this.tz() && p ? `${p.trip.goal.name} time` : 'your device time';
+    return this.tz() && p ? t('group.zoneTime', { city: p.trip.goal.name }) : t('group.deviceTime');
   });
   protected readonly flights = computed(() => {
     const p = this.preview();
@@ -268,7 +275,7 @@ export class GroupPage {
     if (!p) return [];
     return p.trip.legs.filter((l): l is FlightLeg => l.kind === 'flight' && l.refs.length > 0).map(l => ({
       id: l.id,
-      label: `${l.refs.map(r => r.flightNumber).join(' + ')} · ${l.refs[0].origin} to ${l.refs[l.refs.length - 1].dest}`,
+      label: t('group.flightLabel', { flights: l.refs.map(r => r.flightNumber).join(' + '), from: l.refs[0].origin, to: l.refs[l.refs.length - 1].dest }),
       when: `${dayLabel(l.refs[0].dateKey)} · ${l.refs[0].depLocal}`,
       friends: d ? friendsOnLeg(d, l.id, this.memberId) : [],
     }));
@@ -432,7 +439,7 @@ export class GroupPage {
     const d = this.doc();
     if (!this.link || !d || !this.name().trim()) return;
     if (groupIsFull(d, this.memberId)) {
-      this.note.set(FULL);
+      this.note.set(t(FULL));
       return;
     }
     this.busy.set(true);
@@ -446,14 +453,14 @@ export class GroupPage {
       const expiresAt = this.owner() ? this.groups.ownerExpiry(this.groups.recordFor(this.link.id), this.expiresAt) : undefined;
       const r = await this.groups.save(this.link, next, this.version, expiresAt, this.ownerToken);
       if (!r.ok) {
-        this.note.set(MESSAGES[r.reason]);
+        this.note.set(t(MESSAGES[r.reason]));
         return;
       }
       this.meetDirty = false;
       this.savedLegs = this.currentLegs(this.mine());
       await this.apply(r.doc, r.version, r.expiresAt ?? this.expiresAt);
       this.remember();
-      this.note.set('Status updated');
+      this.note.set(t('group.updated'));
     } finally {
       this.busy.set(false);
     }
@@ -467,15 +474,15 @@ export class GroupPage {
   protected async copyLink(viewOnly: boolean): Promise<void> {
     if (!this.link) return;
     const url = this.groups.urlOf(viewOnly ? { ...this.link, write: null } : this.link);
-    const out = await shareOrCopy(this.doc_.defaultView, url, 'Group trip', 'Our group trip plan', false);
-    this.state.flash(out === 'copied' ? (viewOnly ? 'View-only link copied' : 'Link copied') : 'Could not copy the link');
+    const out = await shareOrCopy(this.doc_.defaultView, url, t('group.title'), t('group.shareText'), false);
+    this.state.flash(t(out === 'copied' ? (viewOnly ? 'group.viewCopied' : 'group.linkCopied') : 'group.copyFailed'));
   }
 
   protected saveCopy(): void {
     const p = this.preview();
     if (!p) return;
     const trip = this.groups.saveCopy(p);
-    this.state.flash(`Saved ${trip.name} to your trips`);
+    this.state.flash(t('group.saved', { name: trip.name }));
     void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() });
   }
 
@@ -488,7 +495,7 @@ export class GroupPage {
         return;
       }
       this.groups.forget(this.link.id);
-      this.state.flash('Stopped sharing. The group was deleted.');
+      this.state.flash(t('group.stopped'));
       void this.router.navigate(tripsPath(), { queryParams: this.state.globalParams(), replaceUrl: true });
     } finally {
       this.busy.set(false);
@@ -503,9 +510,9 @@ export class GroupPage {
     const opts: Intl.DateTimeFormatOptions = { weekday: 'short', hour: 'numeric', minute: '2-digit' };
     const tz = this.tz();
     if (tz) {
-      try { return new Date(iso).toLocaleString(undefined, { ...opts, timeZone: tz, timeZoneName: 'short' }); } catch { /* unknown zone: device time */ }
+      try { return new Date(iso).toLocaleString(intlLocale(), { ...opts, timeZone: tz, timeZoneName: 'short' }); } catch { /* unknown zone: device time */ }
     }
-    return new Date(iso).toLocaleString(undefined, opts);
+    return new Date(iso).toLocaleString(intlLocale(), opts);
   }
 }
 

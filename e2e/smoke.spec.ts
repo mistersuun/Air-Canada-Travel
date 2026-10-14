@@ -78,8 +78,8 @@ test('share link round trip: copy link, open in a fresh browser, save', async ({
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const tripPath = await startTripFromFlight(page);
   await expect(page).toHaveURL(new RegExp(tripPath));
-  await page.getByRole('button', { name: 'Share and offline' }).click();
-  await page.getByRole('button', { name: 'Copy link' }).click();
+  await page.getByRole('button', { name: 'Share', exact: true }).click();
+  await page.getByRole('button', { name: 'Copy snapshot link' }).click();
   await expect(page.getByText('Link copied')).toBeVisible();
   const link = await page.evaluate(() => navigator.clipboard.readText());
   expect(link).toContain('/trips/import#t=');

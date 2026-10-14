@@ -8,6 +8,8 @@ import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { tripsPath } from '../../ui/links';
+import { GroupCardComponent } from '../../group/ui/group-card.component';
+import { TripShareSheetComponent } from './menu/trip-share-sheet.component';
 import { TripMenuComponent } from './menu/trip-menu.component';
 import { PlanTabComponent } from './plan/plan-tab.component';
 import { PrepTabComponent } from './prep/prep-tab.component';
@@ -24,14 +26,15 @@ export const TRIP_TABS: SegOption[] = [
 
 /**
  * Trip detail (/trips/:id?tab=plan|prep|return&leg=<legId>): a header with
- * back, the trip name and "Spain and Portugal · 2 travellers", and a share
- * circle that opens the trip menu (offline, share, calendar); then the
+ * back, the trip name and "Spain and Portugal · 2 travellers", a Share
+ * circle (the Share sheet) and a "⋯" circle (More: offline, calendar, delete);
+ * a "Travelling with friends?" card on the Plan tab; then the
  * Plan | Prep | Return seg (?tab=, replaceUrl) and the three tab hosts.
  */
 @Component({
   selector: 'app-trip-detail-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripExtrasComponent],
+  imports: [RouterLink, IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripShareSheetComponent, GroupCardComponent, TripExtrasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -42,9 +45,14 @@ export const TRIP_TABS: SegOption[] = [
             <h1 class="ui-h3">{{ t.name }}</h1>
             <p class="td__sub tn">{{ subtitle() }}</p>
           </div>
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Share and offline" data-menu (click)="menuOpen.set(true)">
-            <app-icon name="external" [size]="18" />
-          </button>
+          <div class="td__acts">
+            <button type="button" class="ui-circ ui-circ--glass" aria-label="Share" data-share-open (click)="openShare(false)">
+              <app-icon name="share" [size]="18" />
+            </button>
+            <button type="button" class="ui-circ ui-circ--glass" aria-label="More: offline, calendar, delete" data-menu (click)="menuOpen.set(true)">
+              <app-icon name="more" [size]="18" [strokeWidth]="2.6" />
+            </button>
+          </div>
         </header>
         @if (trips.readOnly()) {
           <p class="ui-sub td__ro">These trips were saved by a newer version of the app. You can look, but changes won't be kept.</p>
@@ -63,7 +71,13 @@ export const TRIP_TABS: SegOption[] = [
         @switch (activeTab()) {
           @case ('prep') { <app-prep-tab [trip]="t" /> }
           @case ('return') { <app-return-tab [trip]="t" [from]="retFrom() ?? null" /> }
-          @default { <app-plan-tab [trip]="t" [leg]="leg()" /> }
+          @default {
+            <app-group-card [trip]="t" (start)="openShare(true)" />
+            <app-plan-tab [trip]="t" [leg]="leg()" />
+          }
+        }
+        @if (shareOpen()) {
+          <app-trip-share-sheet [trip]="t" [startGroup]="startGroup()" (closed)="shareOpen.set(false)" />
         }
         @if (menuOpen()) {
           <app-trip-menu [trip]="t" (closed)="menuOpen.set(false)" (deleted)="afterDelete()" />
@@ -80,6 +94,7 @@ export const TRIP_TABS: SegOption[] = [
   styles: [`
     .td { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
     .td__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .td__acts { display: flex; gap: 8px; }
     .td__title { min-width: 0; text-align: center; }
     .td__title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .td__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
@@ -115,6 +130,9 @@ export class TripDetailPage {
 
   protected readonly tabs = TRIP_TABS;
   protected readonly menuOpen = signal(false);
+  protected readonly shareOpen = signal(false);
+  /** True when the Share sheet was opened from the "Travelling with friends?" card. */
+  protected readonly startGroup = signal(false);
   protected readonly trip = computed(() => this.trips.trips().find(t => t.id === this.id()) ?? null);
   protected readonly subtitle = computed(() => {
     const t = this.trip();
@@ -132,6 +150,11 @@ export class TripDetailPage {
   });
   protected recapLink(id: string): string[] {
     return recapPath(id);
+  }
+
+  protected openShare(startGroup: boolean): void {
+    this.startGroup.set(startGroup);
+    this.shareOpen.set(true);
   }
 
   protected setTab(value: string | null | undefined): void {

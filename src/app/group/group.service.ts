@@ -27,6 +27,8 @@ export interface GroupRecord {
   tripId: string | null;
   /** When the server will delete it (ISO), so expired entries can be dropped from this device. */
   expiresAt: string | null;
+  /** Nicknames seen at the last visit (me first), for the little avatars on the trip card. Nicknames only. */
+  names?: string[];
 }
 
 export type GroupFailure = 'unavailable' | 'gone' | 'invalid' | 'forbidden' | 'too-large' | 'budget';
@@ -237,7 +239,7 @@ export class GroupService {
   /** My entry in the doc (stamped now), for a status edit. */
   withMember(doc: GroupDoc, memberId: string, patch: Partial<MemberStatus> & { name: string }, nowMs: number = Date.now()): GroupDoc {
     const cur = doc.members[memberId];
-    const next: MemberStatus = { name: patch.name, planLabel: patch.planLabel ?? cur?.planLabel ?? '', arrival: patch.arrival === undefined ? (cur?.arrival ?? null) : patch.arrival, updatedAt: new Date(nowMs).toISOString() };
+    const next: MemberStatus = { name: patch.name, planLabel: patch.planLabel ?? cur?.planLabel ?? '', arrival: patch.arrival === undefined ? (cur?.arrival ?? null) : patch.arrival, ...((patch.legs ?? cur?.legs) ? { legs: patch.legs ?? cur?.legs } : {}), updatedAt: new Date(nowMs).toISOString() };
     return { ...doc, members: { ...doc.members, [memberId]: next } };
   }
 
@@ -263,7 +265,7 @@ export class GroupService {
           const expiresAt = typeof r.expiresAt === 'string' && Number.isFinite(Date.parse(r.expiresAt)) ? r.expiresAt : null;
           // The server deletes it at expiry: drop the entry (and its key) from this device too.
           if (expiresAt && Date.parse(expiresAt) <= Date.now()) continue;
-          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, ownerToken: typeof r.ownerToken === 'string' ? r.ownerToken : null, tripId: typeof r.tripId === 'string' ? r.tripId : null, expiresAt };
+          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, ownerToken: typeof r.ownerToken === 'string' ? r.ownerToken : null, tripId: typeof r.tripId === 'string' ? r.tripId : null, expiresAt, ...(Array.isArray(r.names) ? { names: r.names.filter((n): n is string => typeof n === 'string').slice(0, 6) } : {}) };
         }
       }
       return out;

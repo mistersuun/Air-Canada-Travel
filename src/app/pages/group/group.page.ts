@@ -3,12 +3,16 @@ import { PlatformLocation } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { GROUP_ID_RE, type GroupLink, parseGroupFragment } from '../../group/group-crypto';
-import { type GroupDoc, MAX_MEETUP, MAX_NAME, MAX_PLAN_LABEL, groupIsFull, memberList, planLabelSuggestions } from '../../group/group-doc';
+import {
+  type GroupDoc, MAX_MEETUP, MAX_NAME, MAX_PLAN_LABEL, MEMBER_LEG_STATUSES, everyoneBoarded, friendsOnLeg, groupIsFull, memberList, planLabelSuggestions,
+} from '../../group/group-doc';
 import { GroupService, POLL_MS, type GroupFailure, type GroupRecord } from '../../group/group.service';
 import { shareOrCopy } from '../../group/share-link';
 import { AppStateService } from '../../state/app-state.service';
-import type { SharedTripPreview } from '../../trips/model';
+import { AvatarChipComponent } from '../../group/ui/avatar-chip.component';
+import { LEG_STATUS_LABEL, type FlightLeg, type LegStatus, type SharedTripPreview } from '../../trips/model';
 import { tripPath, tripsPath } from '../../ui/links';
+import { toUtcMs, utcToLocal } from '../../utils/time';
 import { TripCardComponent } from '../trips/plan/trip-card.component';
 
 type View = 'loading' | 'invalid' | 'unavailable' | 'gone' | 'ready';
@@ -22,6 +26,10 @@ const MESSAGES: Record<GroupFailure, string> = {
   budget: 'Group sharing is unavailable right now.',
 };
 const FULL = 'This group is full.';
+const CONFETTI_KEY = 'ac.group.confetti.v1';
+const CONFETTI_MS = 2600;
+/** How the burst is spread: 22 pieces, each with its own angle, distance and delay. */
+const PIECES = Array.from({ length: 22 }, (_, i) => i);
 
 /**
  * A group trip (/g/:id#k=<key>[&w=<token>]). The plan and every member's status
@@ -31,7 +39,7 @@ const FULL = 'This group is full.';
 @Component({
   selector: 'app-group-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, TripCardComponent],
+  imports: [RouterLink, IconComponent, TripCardComponent, AvatarChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare gp">
@@ -52,13 +60,32 @@ const FULL = 'This group is full.';
             }
           }
 
+          @if (flights().length) {
+            <section class="ui-card gp__box" data-legs>
+              <h2 class="ui-h3">Who is on which flight</h2>
+              <ul class="gp__list">
+                @for (f of flights(); track f.id) {
+                  <li data-leg [attr.data-leg-id]="f.id">
+                    <b>{{ f.label }}</b>
+                    <span>{{ f.when }}</span>
+                    @if (f.friends.length) {
+                      <span class="gp__av">
+                        @for (fr of f.friends; track fr.id) { <app-avatar-chip [name]="fr.name" [status]="fr.status" /> }
+                      </span>
+                    }
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+
           <section class="ui-card gp__box" data-members>
             <h2 class="ui-h3">Who is where</h2>
             @if (members().length) {
               <ul class="gp__list">
                 @for (m of members(); track m.id) {
                   <li data-member>
-                    <b>{{ m.status.name }}{{ m.me ? ' (you)' : '' }}</b>
+                    <b class="gp__who"><app-avatar-chip [name]="m.status.name" [showName]="false" />{{ m.status.name }}{{ m.me ? ' (you)' : '' }}</b>
                     <span>{{ m.status.planLabel || 'No plan set' }}</span>
                     @if (m.status.arrival) { <span class="gp__when">Arrives {{ when(m.status.arrival) }}</span> }
                   </li>
@@ -82,7 +109,14 @@ const FULL = 'This group is full.';
                   @for (s of suggestions(); track s) { <button type="button" class="gp__chip" (click)="label.set(s)">{{ s }}</button> }
                 </div>
               }
-              <label class="gp__f"><span class="ui-label">Arrival (your time zone)</span>
+              @for (f of flights(); track f.id) {
+                <label class="gp__f"><span class="ui-label">{{ f.label }}</span>
+                  <select data-leg-status [attr.data-leg-id]="f.id" [value]="mine()[f.id] || ''" (change)="setLegStatus(f.id, $any($event.target).value)">
+                    <option value="">Not set</option>
+                    @for (o of legOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
+                  </select></label>
+              }
+              <label class="gp__f"><span class="ui-label" data-arrival-label>Arrival ({{ zoneLabel() }})</span>
                 <input type="datetime-local" data-arrival [value]="arrival()" (input)="arrival.set($any($event.target).value)" /></label>
               <label class="gp__f"><span class="ui-label">Meet-up point</span>
                 <input type="text" [maxLength]="maxMeet" autocomplete="off" placeholder="Gate B12 coffee shop" data-meetup-input [value]="meet()" (input)="editMeet($any($event.target).value)" /></label>
@@ -120,6 +154,11 @@ const FULL = 'This group is full.';
         }
       }
 
+      @if (burst()) {
+        <div class="gp__confetti" aria-hidden="true" data-confetti>
+          @for (i of pieces; track i) { <i [style.--i]="i"></i> }
+        </div>
+      }
       <p class="ui-sub gp__fine" data-pass-rules>Air Canada pass rules do not allow sharing passes or listing details. Share plans and times only.</p>
     </div>
   `,
@@ -136,6 +175,21 @@ const FULL = 'This group is full.';
     .gp__list li { display: grid; gap: 1px; }
     .gp__list span { font-size: 14px; color: var(--ink-2); }
     .gp__meet { font-size: 14px; }
+    .gp__who { display: inline-flex; align-items: center; gap: 8px; }
+    .gp__av { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .gp__f select { border: 0; background: none; color: var(--ink); font: 400 15px/1.4 var(--sans); padding: 0; outline: none; min-height: 28px; }
+    .gp__confetti { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 60; }
+    .gp__confetti i {
+      position: absolute; left: 50%; top: 38%; width: 8px; height: 12px; border-radius: 2px;
+      background: hsl(calc(var(--i) * 47), 70%, 55%);
+      animation: gp-burst 1.9s cubic-bezier(.16,.8,.3,1) calc(var(--i) * 18ms) both;
+    }
+    @keyframes gp-burst {
+      0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+      70% { opacity: 1; }
+      100% { transform: translate(calc((var(--i) - 11) * 15px), calc(120px + (var(--i) * 13px))) rotate(calc(var(--i) * 83deg)); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { .gp__confetti { display: none; } }
     .gp__f { display: grid; gap: 4px; background: var(--fill); border-radius: 14px; padding: 10px 12px; }
     .gp__f input { border: 0; background: none; color: var(--ink); font: 400 15px/1.4 var(--sans); padding: 0; outline: none; min-height: 24px; }
     .gp__f:focus-within { box-shadow: 0 0 0 2px var(--blue); }
@@ -169,6 +223,11 @@ export class GroupPage {
   protected readonly label = signal('');
   protected readonly arrival = signal('');
   protected readonly meet = signal('');
+  /** My status on each flight leg, by leg id. */
+  protected readonly mine = signal<Record<string, LegStatus>>({});
+  protected readonly burst = signal(false);
+  protected readonly pieces = PIECES;
+  protected readonly legOptions = MEMBER_LEG_STATUSES.map(value => ({ value, label: LEG_STATUS_LABEL[value] }));
 
   private link: GroupLink | null = null;
   private version = 0;
@@ -182,10 +241,28 @@ export class GroupPage {
   /** True once the meet-up field was edited since the last sync: only then is it written back. */
   private meetDirty = false;
   private lastPlan = '';
+  private burstTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly canWrite = computed(() => this.view() === 'ready' && !!this.link?.write);
   protected readonly owner = signal(false);
   protected readonly members = computed(() => { const d = this.doc(); return d ? memberList(d, this.memberId) : []; });
+  /** The trip's destination zone: arrival times are entered and shown there. Null when the plan does not say. */
+  protected readonly tz = computed(() => this.preview()?.trip.goal.tz ?? null);
+  protected readonly zoneLabel = computed(() => {
+    const p = this.preview();
+    return this.tz() && p ? `${p.trip.goal.name} time` : 'your time zone';
+  });
+  protected readonly flights = computed(() => {
+    const p = this.preview();
+    const d = this.doc();
+    if (!p) return [];
+    return p.trip.legs.filter((l): l is FlightLeg => l.kind === 'flight' && l.refs.length > 0).map(l => ({
+      id: l.id,
+      label: `${l.refs.map(r => r.flightNumber).join(' + ')} · ${l.refs[0].origin} to ${l.refs[l.refs.length - 1].dest}`,
+      when: `${l.refs[0].dateKey} · ${l.refs[0].depLocal}`,
+      friends: d ? friendsOnLeg(d, l.id, this.memberId) : [],
+    }));
+  });
   protected readonly suggestions = computed(() => { const p = this.preview(); return p ? planLabelSuggestions(p.trip) : []; });
 
   constructor() {
@@ -214,7 +291,7 @@ export class GroupPage {
     const timer = setInterval(() => { if (this.doc_.visibilityState !== 'hidden') void this.poll(); }, POLL_MS);
     const onVisible = () => { if (this.doc_.visibilityState === 'visible' && this.loadedOnce) void this.poll(); };
     this.doc_.addEventListener('visibilitychange', onVisible);
-    destroyRef.onDestroy(() => { clearInterval(timer); this.doc_.removeEventListener('visibilitychange', onVisible); });
+    destroyRef.onDestroy(() => { clearInterval(timer); if (this.burstTimer) clearTimeout(this.burstTimer); this.doc_.removeEventListener('visibilitychange', onVisible); });
   }
 
   protected async refresh(): Promise<void> {
@@ -231,7 +308,7 @@ export class GroupPage {
     if (!this.loadedOnce) {
       this.loadedOnce = true;
       const mine = r.doc.members[this.memberId];
-      if (mine) { this.name.set(mine.name); this.label.set(mine.planLabel); this.arrival.set(toLocalInput(mine.arrival)); }
+      if (mine) { this.name.set(mine.name); this.label.set(mine.planLabel); this.arrival.set(toLocalInput(mine.arrival, this.tz())); this.mine.set({ ...(mine.legs ?? {}) }); }
       this.remember();
       await this.extendLife();
     }
@@ -269,6 +346,37 @@ export class GroupPage {
       this.lastPlan = doc.plan;
       this.preview.set(await this.groups.previewOf(doc));
     }
+    this.maybeCelebrate(doc);
+  }
+
+  /** A short burst when everyone in the group has boarded a leg; once per leg on this device. */
+  private maybeCelebrate(doc: GroupDoc): void {
+    const p = this.preview();
+    if (!p || !this.link) return;
+    const done = readCelebrated();
+    for (const l of p.trip.legs) {
+      const key = `${this.link.id}:${l.id}`;
+      if (l.kind !== 'flight' || done.includes(key) || !everyoneBoarded(doc, l.id)) continue;
+      writeCelebrated([...done, key].slice(-200));
+      if (reducedMotion()) return;
+      this.burst.set(true);
+      if (this.burstTimer) clearTimeout(this.burstTimer);
+      this.burstTimer = setTimeout(() => this.burst.set(false), CONFETTI_MS);
+      return;
+    }
+  }
+
+  protected setLegStatus(legId: string, value: string): void {
+    this.mine.update(m => {
+      const { [legId]: _old, ...rest } = m;
+      return (MEMBER_LEG_STATUSES as readonly string[]).includes(value) ? { ...rest, [legId]: value as LegStatus } : rest;
+    });
+  }
+
+  /** Nicknames of the group (me first), kept for the little avatars on the trip card. */
+  private nicknames(): string[] | undefined {
+    const d = this.doc();
+    return d ? memberList(d, this.memberId).map(m => m.status.name).slice(0, 6) : undefined;
   }
 
   private remember(): void {
@@ -277,6 +385,7 @@ export class GroupPage {
     const rec: GroupRecord = {
       id: this.link.id, key: this.link.key, write: this.link.write ?? old?.write ?? null, memberId: this.memberId,
       name: this.name().trim().slice(0, MAX_NAME), owner: this.owner(), ownerToken: this.ownerToken ?? old?.ownerToken ?? null, tripId: old?.tripId ?? null, expiresAt: this.expiresAt ?? old?.expiresAt ?? null,
+      names: this.nicknames() ?? old?.names,
     };
     // Once this device has the group, only update it: if another tab stopped or forgot it, do not bring it back.
     if (this.remembered) this.groups.update(rec);
@@ -297,7 +406,7 @@ export class GroupPage {
     try {
       const now = Date.now();
       let next = this.groups.withMember(d, this.memberId, {
-        name: this.name().trim().slice(0, MAX_NAME), planLabel: this.label().trim().slice(0, MAX_PLAN_LABEL), arrival: fromLocalInput(this.arrival()),
+        name: this.name().trim().slice(0, MAX_NAME), planLabel: this.label().trim().slice(0, MAX_PLAN_LABEL), arrival: fromLocalInput(this.arrival(), this.tz()), legs: this.mine(),
       }, now);
       const meet = this.meet().trim().slice(0, MAX_MEETUP);
       if (this.meetDirty && meet !== (d.meetup?.text ?? '')) next = { ...next, meetup: { text: meet, updatedAt: new Date(now).toISOString() } };
@@ -357,21 +466,57 @@ export class GroupPage {
   }
 
   protected when(iso: string): string {
-    return new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    const opts: Intl.DateTimeFormatOptions = { weekday: 'short', hour: 'numeric', minute: '2-digit' };
+    const tz = this.tz();
+    if (tz) {
+      try { return new Date(iso).toLocaleString(undefined, { ...opts, timeZone: tz, timeZoneName: 'short' }); } catch { /* unknown zone: device time */ }
+    }
+    return new Date(iso).toLocaleString(undefined, opts);
   }
 }
 
-/** ISO instant -> the value of a datetime-local input in the device's time zone. */
-function toLocalInput(iso: string | null): string {
+/** ISO instant -> the value of a datetime-local input, read in `tz` (the destination) or, without one, the device's zone. */
+export function toLocalInput(iso: string | null, tz: string | null = null): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return '';
+  if (tz) {
+    try {
+      const l = utcToLocal(ms, tz);
+      return `${l.dateKey}T${l.hhmm}`;
+    } catch { /* unknown zone: device time */ }
+  }
+  const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function fromLocalInput(v: string): string | null {
+/** The value of a datetime-local input, typed as wall-clock time in `tz` (or the device's zone), -> ISO instant. */
+export function fromLocalInput(v: string, tz: string | null = null): string | null {
   if (!v) return null;
+  if (tz) {
+    const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(v);
+    if (m) {
+      try { return new Date(toUtcMs(m[1], m[2], tz)).toISOString(); } catch { /* unknown zone: device time */ }
+    }
+  }
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function readCelebrated(): string[] {
+  try {
+    const v = JSON.parse(globalThis.localStorage?.getItem(CONFETTI_KEY) ?? '[]') as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCelebrated(keys: string[]): void {
+  try { globalThis.localStorage?.setItem(CONFETTI_KEY, JSON.stringify(keys)); } catch { /* storage blocked: it may celebrate again */ }
+}
+
+function reducedMotion(): boolean {
+  try { return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true; } catch { return false; }
 }

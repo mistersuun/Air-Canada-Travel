@@ -15,6 +15,8 @@ import {
   ConnectOptions, DEFAULT_MAX_LAYOVER, DEFAULT_MIN_CONNECT, Itinerary, OVERNIGHT_MAX_LAYOVER, compareItineraries,
   directItinerary, hasSegment, segmentFlights,
 } from '../../utils/connections';
+import { t } from '../../i18n/t';
+import { hm } from '../../ui/format';
 import { MINUTE_MS, addDays, diffDays, toUtcMs } from '../../utils/time';
 import { coverageHubFor, type FlightInstance } from '../../utils/week';
 import { buildItinerary } from './legs';
@@ -149,11 +151,7 @@ export function triesFrom(plan: HomeByPlan, startKey: string): number {
 
 /** '8h', '1h30', '45m': the spare time before the deadline. */
 export function spareLabel(min: number): string {
-  const total = Math.max(0, Math.round(min));
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  if (!h) return `${m}m`;
-  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+  return hm(min);
 }
 
 /**
@@ -167,15 +165,15 @@ export function missOneChain(plan: HomeByPlan, dateKey: string): MissStep[] {
   const tries = plan.days.find(d => d.dateKey === dateKey)?.tries ?? [];
   const steps: MissStep[] = [];
   let prevDep = -Infinity;
-  const push = (t: Try) => {
+  const push = (tr: Try) => {
     const first = !steps.length;
     steps.push({
-      label: first ? 'Try 1' : 'If you miss it',
-      itinerary: t.itinerary,
+      label: t(first ? 'trips.miss.try1' : 'trips.miss.ifMissIt'),
+      itinerary: tr.itinerary,
       kind: first ? 'try' : 'fallback',
-      slackMin: t.slackMin,
+      slackMin: tr.slackMin,
     });
-    prevDep = t.itinerary.departUtc;
+    prevDep = tr.itinerary.departUtc;
   };
   for (const t of tries) {
     if (steps.length && t.itinerary.departUtc - prevDep < MISS_GAP_MIN * MINUTE_MS) continue;
@@ -192,7 +190,7 @@ export function missOneChain(plan: HomeByPlan, dateKey: string): MissStep[] {
     : plan.nextAfterDeadline;
   const n = steps.length;
   steps.push({
-    label: n === 0 ? 'No try found before your deadline' : n === 1 ? 'If you miss it' : n === 2 ? 'If you miss both' : 'If you miss them all',
+    label: t(n === 0 ? 'trips.miss.none' : n === 1 ? 'trips.miss.ifMissIt' : n === 2 ? 'trips.miss.ifMissBoth' : 'trips.miss.ifMissAll'),
     itinerary: late,
     kind: 'late',
     slackMin: null,

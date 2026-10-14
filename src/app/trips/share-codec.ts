@@ -71,7 +71,7 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 /** Thrown when even the trimmed trip does not fit in a share link. */
 export class ShareTooLargeError extends Error {
   constructor() {
-    super('This trip is too large to share as a link.');
+    super('This trip is too large to share as a link.'); // i18n-ignore
   }
 }
 

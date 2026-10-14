@@ -8,6 +8,7 @@
  * - Quiet achievements: listed only once earned; no points, levels or streaks.
  */
 import { geoInterpolate } from 'd3-geo';
+import { t } from '../i18n/t';
 import { getDestinationCodes } from '../data/schedule-index';
 import { DESTINATIONS, HUBS, REGIONS } from '../data/destinations';
 import { findHub } from '../utils/airports';
@@ -126,10 +127,10 @@ export function achievements(flights: readonly BoardedFlight[]): Achievement[] {
   const out: Achievement[] = [];
 
   const eq = flights.find(f => crossesEquator(f.origin, f.dest));
-  if (eq) out.push({ id: 'equator', label: 'Crossed the equator', detail: route(eq) });
+  if (eq) out.push({ id: 'equator', label: t('logbook.ach.equator'), detail: route(eq) });
 
   const ar = flights.find(f => entersArctic(f.origin, f.dest));
-  if (ar) out.push({ id: 'arctic', label: 'Over the Arctic Circle', detail: route(ar) });
+  if (ar) out.push({ id: 'arctic', label: t('logbook.ach.arctic'), detail: route(ar) });
 
   const allRegions = REGIONS.filter(r => r !== 'All');
   const seen = new Set<string>();
@@ -138,11 +139,11 @@ export function achievements(flights: readonly BoardedFlight[]): Achievement[] {
     if (a) seen.add(a.region);
   }
   if (flights.length && allRegions.every(r => seen.has(r))) {
-    out.push({ id: 'allRegions', label: 'All regions', detail: `${allRegions.length} regions` });
+    out.push({ id: 'allRegions', label: t('logbook.ach.allRegions'), detail: t('logbook.ach.nRegions', { n: allRegions.length }) });
   }
 
   const re = flights.find(isRedEye);
-  if (re) out.push({ id: 'redEye', label: 'Red-eye', detail: route(re) });
+  if (re) out.push({ id: 'redEye', label: t('logbook.ach.redEye'), detail: route(re) });
 
   const dt = flights.find(f =>
     flights.some(g => g.dateKey === f.dateKey && g.origin === f.dest && g.dest === f.origin && g.key !== f.key));
@@ -151,19 +152,19 @@ export function achievements(flights: readonly BoardedFlight[]): Achievement[] {
       && g.key !== dt.key)!;
     // Out is the one that left first on the day.
     const out1 = (dt.depLocal ?? '') <= (first.depLocal ?? '') ? dt : first;
-    out.push({ id: 'dayTripper', label: 'Day tripper', detail: `${route(out1)} and back` });
+    out.push({ id: 'dayTripper', label: t('logbook.ach.dayTripper'), detail: t('logbook.ach.andBack', { route: route(out1) }) });
   }
 
   const touched = new Set<string>();
   for (const f of flights) { touched.add(f.origin); touched.add(f.dest); }
   if (HUBS.every(h => touched.has(h.code))) {
-    out.push({ id: 'everyHub', label: 'Every hub', detail: `${HUBS.length} hubs` });
+    out.push({ id: 'everyHub', label: t('logbook.ach.everyHub'), detail: t('logbook.ach.nHubs', { n: HUBS.length }) });
   }
 
   const anti = ANTIPODES_CODES.find(c => touched.has(c));
   if (anti) {
     const a = airportInfo(anti);
-    out.push({ id: 'antipodes', label: 'Antipodes', detail: a?.city ?? anti });
+    out.push({ id: 'antipodes', label: t('logbook.ach.antipodes'), detail: a?.city ?? anti });
   }
   return out;
 }

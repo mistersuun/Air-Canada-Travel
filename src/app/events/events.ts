@@ -2,6 +2,7 @@
  * "What's on": events near a destination from Ticketmaster, via our Netlify Function.
  * Pure helpers: response shape, the date window rules and the one-line text. No prices.
  */
+import { t } from '../i18n/t';
 import { addDays, formatClock, formatKey, isDateKey, weekdayIndex } from '../utils/time';
 
 export const EVENTS_ENDPOINT = '/.netlify/functions/events';
@@ -44,7 +45,7 @@ export function aroundDay(day: string, today: string): EventsWindow[] {
 /** 'Week of Oct 5' or 'Weeks of Oct 5 and Oct 12'. */
 export function weekLabel(ws: readonly EventsWindow[]): string {
   const f = (k: string) => formatKey(k, { month: 'short', day: 'numeric' });
-  return ws.length > 1 ? `Weeks of ${f(ws[0].from)} and ${f(ws[1].from)}` : ws.length ? `Week of ${f(ws[0].from)}` : '';
+  return ws.length > 1 ? t('trips.events.weeks', { a: f(ws[0].from), b: f(ws[1].from) }) : ws.length ? t('trips.events.week', { a: f(ws[0].from) }) : '';
 }
 
 export function windowKey(code: string, w: EventsWindow): string {
@@ -101,7 +102,7 @@ export function eventLine(e: EventItem, fmt: '12h' | '24h' = '24h'): string {
     e.time ? formatClock(e.time, fmt) : null,
     e.name,
     e.venue || null,
-    e.rescheduled ? 'rescheduled' : null,
+    e.rescheduled ? t('trips.events.rescheduled') : null,
   ].filter(Boolean).join(' · ');
 }
 

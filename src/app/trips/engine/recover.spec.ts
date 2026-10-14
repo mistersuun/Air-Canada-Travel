@@ -3,7 +3,7 @@ import { resetScheduleSource, setScheduleSource } from '../../data/schedule-inde
 import { toUtcMs } from '../../utils/time';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../testing/seville-fixture';
 import type { FlightLeg, GroundLeg } from '../model';
-import { CLOSED_REASON, currentGateway, leavesGoalArea, missOneOutbound, stillReachable } from './recover';
+import { currentGateway, leavesGoalArea, missOneOutbound, stillReachable } from './recover';
 
 const AT_1805 = toUtcMs('2026-10-08', '18:05', 'America/Toronto');
 const flights = (o: { itinerary: { legs: { flightNumber: string | null }[] } }) => o.itinerary.legs.map(l => l.flightNumber).join('+');
@@ -29,7 +29,7 @@ describe('stillReachable (Seville fixture, YUL at 18:05 Thu Oct 8)', () => {
     const bcn = tonight.find(o => o.gateway === 'BCN')!;
     expect(flights(bcn)).toBe('AC822');
     expect(bcn.status).toBe('closed');
-    expect(bcn.reason).toBe(CLOSED_REASON);
+    expect(bcn.reason).toBe('boarding has likely closed');
     expect(bcn.reason).toBe('boarding has likely closed');
 
     const mad = tonight.find(o => o.gateway === 'MAD')!;

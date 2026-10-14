@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { t } from '../i18n/t';
 import { AppStateService } from '../state/app-state.service';
 import { PrefsService } from '../state/prefs.service';
 import { FlightStatusService } from './flight-status.service';
@@ -26,11 +27,11 @@ import { VISIBLE_MIN_AGE_MS, WINDOW_AFTER_MS, WINDOW_BEFORE_MS, pollDelay, shoul
     @if (line(); as l) {
       <p class="ls" [class.ls--bad]="l.cancelled" data-live-status>
         <b class="tn">{{ l.text }}</b>
-        @if (l.cancelled && recoverLink(); as r) { <a class="ui-link" [routerLink]="r" [queryParams]="recoverParams()">{{ recoverLabel() }}</a> }
+        @if (l.cancelled && recoverLink(); as r) { <a class="ui-link" [routerLink]="r" [queryParams]="recoverParams()">{{ recoverLabel() || t('trips.live.reach') }}</a> }
         <small>{{ l.source }}</small>
       </p>
     } @else if (unavailable()) {
-      <p class="ls ls--quiet" data-live-status-unavailable>Live status unavailable</p>
+      <p class="ls ls--quiet" data-live-status-unavailable>{{ t('trips.live.unavailable') }}</p>
     }
   `,
   styles: [`
@@ -43,6 +44,7 @@ import { VISIBLE_MIN_AGE_MS, WINDOW_AFTER_MS, WINDOW_BEFORE_MS, pollDelay, shoul
   `],
 })
 export class LiveStatusComponent {
+  protected readonly t = t;
   private readonly svc = inject(FlightStatusService);
   private readonly state = inject(AppStateService);
   private readonly prefs = inject(PrefsService);
@@ -56,7 +58,7 @@ export class LiveStatusComponent {
   readonly leadMs = input<number>(WINDOW_AFTER_MS);
   readonly recoverLink = input<string[] | null>(null);
   readonly recoverParams = input<Record<string, string> | undefined>(undefined);
-  readonly recoverLabel = input('What can I still reach?');
+  readonly recoverLabel = input('');
 
   private readonly active = computed(() => {
     if (!/^AC\d{1,4}$/.test(this.flightNumber())) return false; // the endpoint serves Air Canada only

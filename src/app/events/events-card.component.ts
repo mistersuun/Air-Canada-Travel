@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, booleanAttribute, computed, effect, inject, input, untracked } from '@angular/core';
+import { t } from '../i18n/t';
 import { AppStateService } from '../state/app-state.service';
 import { airportTz } from '../utils/airports';
 import { todayKey } from '../utils/time';
@@ -21,18 +22,18 @@ let nextId = 0;
   template: `
     @if (events().length) {
       <section class="ev" data-events [attr.aria-labelledby]="hid">
-        <p class="ev__t" [id]="hid"><b>What's on</b> · {{ label() }}</p>
+        <p class="ev__t" [id]="hid"><b>{{ t('trips.events.title') }}</b> · {{ label() }}</p>
         <ul class="ev__l">
           @for (e of events(); track e.url) {
-            <li><a [href]="e.url" target="_blank" rel="noopener" class="ev__a">{{ line(e) }}<span class="ui-visually-hidden"> (opens in a new tab)</span></a></li>
+            <li><a [href]="e.url" target="_blank" rel="noopener" class="ev__a">{{ line(e) }}<span class="ui-visually-hidden"> {{ t('trips.newTab') }}</span></a></li>
           }
         </ul>
-        <p class="ev__c ui-sub">Events from <a [href]="tm" target="_blank" rel="noopener">Ticketmaster<span class="ui-visually-hidden"> (opens in a new tab)</span></a>. Prices and availability are on their site.</p>
+        <p class="ev__c ui-sub">{{ t('trips.events.from') }} <a [href]="tm" target="_blank" rel="noopener">{{ ticketmaster }}<span class="ui-visually-hidden"> {{ t('trips.newTab') }}</span></a>{{ t('trips.events.prices') }}</p>
       </section>
     } @else if (verbose() && state() === 'loading') {
-      <p class="ev__n ui-sub" role="status" data-events-status>Looking…</p>
+      <p class="ev__n ui-sub" role="status" data-events-status>{{ t('trips.events.looking') }}</p>
     } @else if (verbose() && state() === 'empty') {
-      <p class="ev__n ui-sub" role="status" data-events-status>No events listed</p>
+      <p class="ev__n ui-sub" role="status" data-events-status>{{ t('trips.events.none') }}</p>
     }
   `,
   styles: [`
@@ -49,6 +50,9 @@ let nextId = 0;
   `],
 })
 export class EventsCardComponent {
+  /** A brand name, the same in both languages. */
+  protected readonly ticketmaster = 'Ticketmaster';
+  protected readonly t = t;
   private readonly svc = inject(EventsService);
   private readonly appState = inject(AppStateService);
 

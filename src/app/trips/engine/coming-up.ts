@@ -3,6 +3,7 @@
  * today banner covers) and what is still to do for it, plus the count behind
  * the app-icon badge. Pure; the clock is passed in. Facts and counts only.
  */
+import { t } from '../../i18n/t';
 import { legPrepItems } from '../../places/prep';
 import { returnNotListed } from '../../pages/trips/trips-model';
 import { airportTz } from '../../utils/airports';
@@ -36,11 +37,22 @@ function nextDeparture(trip: Trip, nowMs: number): Next | null {
   return best;
 }
 
-/** Open prep items for a leg, as short actions ('List AC834'); check-in is a day-of step and is left out. */
-function prepActions(trip: Trip, leg: FlightLeg): string[] {
+/**
+ * Open prep items for a leg, as short actions ('List AC834'); check-in is a
+ * day-of step and is left out. `listing` marks the ones that list a flight.
+ */
+function prepActionItems(trip: Trip, leg: FlightLeg): { text: string; listing: boolean }[] {
   return legPrepItems(trip, leg.id)
     .filter(i => !i.done && !i.id.startsWith('checkin:'))
-    .map(i => i.title.replace(/^List for /, 'List '));
+    .map(i => {
+      const m = /^list:[^:]*:(\d+)$/.exec(i.id);
+      const ref = m ? leg.refs[Number(m[1])] : undefined;
+      return ref ? { text: t('trips.comingUp.list', { flight: ref.flightNumber }), listing: true } : { text: i.title, listing: false };
+    });
+}
+
+function prepActions(trip: Trip, leg: FlightLeg): string[] {
+  return prepActionItems(trip, leg).map(a => a.text);
 }
 
 const openChanges = (trip: Trip) => trip.changes.filter(c => c.state === 'open').length;
@@ -71,17 +83,17 @@ export function comingUp(trips: Trip[], _log: FlightLog, nowMs: number): ComingU
   }
   if (!best) return null;
   const { trip, next } = best;
-  const actions = prepActions(trip, next.leg);
-  const listsReturn = next.leg.role === 'return' && actions.some(x => x.startsWith('List '));
+  const items = prepActionItems(trip, next.leg);
+  const actions = items.map(a => a.text);
+  const listsReturn = next.leg.role === 'return' && items.some(a => a.listing);
   if (returnNotListed(trip, nowMs) && !listsReturn) {
-    actions.push('Return not listed');
+    actions.push(t('trips.comingUp.returnNotListed'));
   }
   const changes = openChanges(trip);
-  if (changes) actions.push(`${changes} schedule ${changes === 1 ? 'change' : 'changes'}`);
+  if (changes) actions.push(t('trips.comingUp.changes', { n: changes }));
   const dest = placeName(next.leg.refs[next.leg.refs.length - 1].dest);
-  const where = next.leg.role === 'outbound' ? (trip.goal.name || dest) : next.leg.role === 'return' ? `Home to ${dest}` : dest;
-  const when = next.days === 1 ? 'tomorrow' : `in ${next.days} days`;
-  const head = `${where} ${when}`;
+  const where = next.leg.role === 'outbound' ? (trip.goal.name || dest) : next.leg.role === 'return' ? t('trips.comingUp.homeTo', { dest }) : dest;
+  const head = t('trips.comingUp.head', { where, n: next.days });
   return { tripId: trip.id, days: next.days, actions, head, text: [head, ...actions].join(' · ') };
 }
 

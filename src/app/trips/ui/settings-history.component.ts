@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { t } from '../../i18n/t';
 import { formatKey } from '../../utils/time';
 import { OUTCOME_LABEL, Outcome } from '../model';
 import { TripsService } from '../trips.service';
@@ -36,9 +37,9 @@ export function historyRoutes(outcomes: readonly Outcome[]): HistoryRoute[] {
       return {
         key,
         route: `${list[0].origin} → ${list[0].dest}`,
-        summary: tried.length ? `Boarded ${boarded} of ${tried.length} recorded` : 'No tries recorded',
-        some: some ? `Some of us ${some}` : '',
-        skipped: skipped ? `Didn't try ${skipped}` : '',
+        summary: tried.length ? t('trips.hist.summary', { boarded, n: tried.length }) : t('trips.hist.noTries'),
+        some: some ? t('trips.hist.some', { n: some }) : '',
+        skipped: skipped ? t('trips.hist.skipped', { n: skipped }) : '',
         records: sorted.map(o => ({
           id: o.id,
           text: `${o.flightNumber} · ${formatKey(o.dateKey, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')} · ${OUTCOME_LABEL[o.kind]}`,
@@ -61,7 +62,7 @@ export function historyRoutes(outcomes: readonly Outcome[]): HistoryRoute[] {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="grp" data-settings-history>
-      <p class="ui-label">Standby history</p>
+      <p class="ui-label">{{ t('trips.hist.title') }}</p>
       @for (r of routes(); track r.key) {
         <details class="rt" data-route>
           <summary class="rt__s">
@@ -75,15 +76,15 @@ export function historyRoutes(outcomes: readonly Outcome[]): HistoryRoute[] {
             @for (x of r.records; track x.id) {
               <li>
                 <span class="tn">{{ x.text }}</span>
-                <button type="button" class="rec__rm" [attr.aria-label]="'Delete ' + x.text" (click)="trips.removeOutcome(x.id)">Delete</button>
+                <button type="button" class="rec__rm" [attr.aria-label]="t('trips.hist.deleteAria', { text: x.text })" (click)="trips.removeOutcome(x.id)">{{ t('trips.hist.delete') }}</button>
               </li>
             }
           </ul>
         </details>
       } @empty {
-        <p class="hint" data-empty>After a flight, the app asks how it went. Your answers show here as counts per route.</p>
+        <p class="hint" data-empty>{{ t('trips.hist.empty') }}</p>
       }
-      <p class="hint">Kept on this device. Export from Trips.</p>
+      <p class="hint">{{ t('trips.hist.kept') }}</p>
     </section>
   `,
   styles: [`
@@ -104,6 +105,7 @@ export function historyRoutes(outcomes: readonly Outcome[]): HistoryRoute[] {
   `],
 })
 export class SettingsHistoryComponent {
+  protected readonly t = t;
   protected readonly trips = inject(TripsService);
   protected readonly routes = computed(() => historyRoutes(this.trips.outcomes()));
 }

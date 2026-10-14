@@ -20,6 +20,7 @@ import { airportName } from '../../utils/airports';
 import { formatClock } from '../../utils/time';
 import { dayLabel, legById } from '../trips/trips-model';
 import { flightLegs, legOptionLabel, passName } from './add-pass-model';
+import { t } from '../../i18n/t';
 
 /** navigator.wakeLock, or null where the browser has none (tests provide a fake). */
 export interface WakeLockLike { request(type: 'screen'): Promise<{ release(): Promise<void>; addEventListener?(t: 'release', f: () => void): void }> }
@@ -67,31 +68,31 @@ function cityOf(code: string): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'pv-host' },
   template: `
-    <div class="pv" role="dialog" aria-modal="true" aria-label="Boarding pass" data-pass-view>
+    <div class="pv" role="dialog" aria-modal="true" [attr.aria-label]="t('passes.view.title')" data-pass-view>
       <div class="pv__col">
         <div class="pv__top">
-          <button #closeBtn type="button" class="pv__x" aria-label="Close" data-close (click)="close()"><app-icon name="close" [size]="18" [strokeWidth]="2.2" /></button>
+          <button #closeBtn type="button" class="pv__x" [attr.aria-label]="t('common.close')" data-close (click)="close()"><app-icon name="close" [size]="18" [strokeWidth]="2.2" /></button>
           @if (awake()) {
-            <span class="pv__awake" data-awake><app-icon name="sun" [size]="14" [strokeWidth]="2.2" />Screen stays on</span>
+            <span class="pv__awake" data-awake><app-icon name="sun" [size]="14" [strokeWidth]="2.2" />{{ t('passes.view.awake') }}</span>
           } @else if (wakeTried()) {
-            <span class="pv__noawake" data-no-awake>Keep the screen on yourself; this browser can't.</span>
+            <span class="pv__noawake" data-no-awake>{{ t('passes.view.noAwake') }}</span>
           } @else { <span></span> }
           @if (current()) {
-            <button type="button" class="pv__x" aria-label="Pass options" data-more (click)="menuOpen.set(true)"><app-icon name="more" [size]="18" [strokeWidth]="2.2" /></button>
+            <button type="button" class="pv__x" [attr.aria-label]="t('passes.view.options')" data-more (click)="menuOpen.set(true)"><app-icon name="more" [size]="18" [strokeWidth]="2.2" /></button>
           }
         </div>
 
         @if (!ready()) {
-          <p class="pv__msg" role="status">Opening the pass…</p>
+          <p class="pv__msg" role="status">{{ t('passes.view.opening') }}</p>
         } @else if (!slides().length) {
           <div class="pv__msg" data-missing>
-            <b>This pass isn't on this phone.</b>
-            <span>It may have been deleted, or saved in another browser.</span>
-            <button type="button" class="pv__btn" (click)="close()">Back to the trip</button>
+            <b>{{ t('passes.view.missing') }}</b>
+            <span>{{ t('passes.view.missing.hint') }}</span>
+            <button type="button" class="pv__btn" (click)="close()">{{ t('passes.view.back') }}</button>
           </div>
         } @else {
           <div #track class="pv__track" (scroll)="onScroll()"
-               [attr.role]="slides().length > 1 ? 'group' : null" [attr.aria-label]="slides().length > 1 ? 'Passes on this leg' : null">
+               [attr.role]="slides().length > 1 ? 'group' : null" [attr.aria-label]="slides().length > 1 ? t('passes.view.onLeg') : null">
             @for (s of slides(); track s.pass.id; let i = $index) {
               <article class="pv__slide" [attr.aria-hidden]="i !== index()" [attr.data-slide]="s.pass.id">
                 <div class="pv__route tn">
@@ -100,48 +101,48 @@ function cityOf(code: string): string {
                   <div class="pv__r"><span class="pv__code">{{ s.pass.to }}</span><small>{{ s.toName }}</small></div>
                 </div>
                 <dl class="pv__grid tn">
-                  <div><dt>Flight</dt><dd>{{ s.pass.flightNumber }}</dd></div>
-                  <div><dt>Departs<span class="ui-visually-hidden"> (scheduled)</span></dt><dd [attr.title]="s.ref ? 'Scheduled' : null">{{ s.departs }}</dd></div>
-                  <div><dt>Seat</dt><dd>{{ s.pass.seat ?? '–' }}</dd></div>
-                  <div><dt>Seq</dt><dd>{{ s.pass.sequence ?? '–' }}</dd></div>
+                  <div><dt>{{ t('passes.view.flight') }}</dt><dd>{{ s.pass.flightNumber }}</dd></div>
+                  <div><dt>{{ t('passes.view.departs') }}<span class="ui-visually-hidden"> {{ t('passes.view.scheduled') }}</span></dt><dd [attr.title]="s.ref ? t('passes.view.scheduledTitle') : null">{{ s.departs }}</dd></div>
+                  <div><dt>{{ t('passes.seatLabel') }}</dt><dd>{{ s.pass.seat ?? '–' }}</dd></div>
+                  <div><dt>{{ t('passes.view.seq') }}</dt><dd>{{ s.pass.sequence ?? '–' }}</dd></div>
                 </dl>
                 <p class="pv__who"><span><b>{{ name(s.pass) }}</b> · {{ s.pass.cabin }}</span><span class="tn">{{ s.date }}@if (s.date) { · }<b data-pnr>{{ s.pass.pnr }}</b></span></p>
 
                 <div class="pv__bc" [class.is-square]="s.pass.format !== 'PDF417'">
                   @if (mode() === 'image' && i === index() && imageUrl()) {
-                    <img class="pv__img" [src]="imageUrl()" alt="Your original boarding pass image" data-original>
+                    <img class="pv__img" [src]="imageUrl()" [alt]="t('passes.view.originalAlt')" data-original>
                   } @else if (svgs()[s.pass.id]; as svg) {
-                    <div class="pv__svg" role="img" [attr.aria-label]="s.pass.format + ' barcode for ' + s.pass.flightNumber" [innerHTML]="svg" data-barcode></div>
+                    <div class="pv__svg" role="img" [attr.aria-label]="t('passes.view.barcodeFor', { format: s.pass.format, flight: s.pass.flightNumber })" [innerHTML]="svg" data-barcode></div>
                   } @else if (failed().has(s.pass.id)) {
-                    <p class="pv__bcmsg" data-render-failed>The barcode can't be drawn here. Use your original image.</p>
+                    <p class="pv__bcmsg" data-render-failed>{{ t('passes.view.renderFailed') }}</p>
                   } @else {
-                    <p class="pv__bcmsg">Drawing the barcode…</p>
+                    <p class="pv__bcmsg">{{ t('passes.view.drawing') }}</p>
                   }
                 </div>
               </article>
             }
           </div>
 
-          <div class="pv__seg" role="group" aria-label="Show">
-            <button type="button" [class.on]="mode() === 'barcode'" [attr.aria-pressed]="mode() === 'barcode'" data-mode="barcode" (click)="mode.set('barcode')">Barcode</button>
+          <div class="pv__seg" role="group" [attr.aria-label]="t('passes.view.show')">
+            <button type="button" [class.on]="mode() === 'barcode'" [attr.aria-pressed]="mode() === 'barcode'" data-mode="barcode" (click)="mode.set('barcode')">{{ t('passes.barcode') }}</button>
             <button type="button" [class.on]="mode() === 'image'" [attr.aria-pressed]="mode() === 'image'" data-mode="image"
-                    [disabled]="!current()?.imageBlobId" (click)="showImage()">Original image</button>
+                    [disabled]="!current()?.imageBlobId" (click)="showImage()">{{ t('passes.view.original') }}</button>
           </div>
-          <p class="pv__bright">Turn your screen brightness up at the gate.</p>
+          <p class="pv__bright">{{ t('passes.view.bright') }}</p>
 
           <div class="pv__foot">
             @if (offer(); as o) {
               <div class="pv__swap" data-swap-offer>
                 <p>{{ o.text }}</p>
-                <button type="button" class="pv__btn" data-swap [disabled]="swapping()" (click)="swap()">Swap to {{ o.flightNumber }}</button>
+                <button type="button" class="pv__btn" data-swap [disabled]="swapping()" (click)="swap()">{{ t('passes.swapTo', { flight: o.flightNumber }) }}</button>
               </div>
             }
             @if (slides().length > 1) {
               <div class="pv__nav">
-                <button type="button" class="pv__btn pv__btn--ghost" data-prev [disabled]="index() === 0" (click)="go(index() - 1)">Previous pass</button>
-                <button type="button" class="pv__btn pv__btn--ghost" data-next [disabled]="index() === slides().length - 1" (click)="go(index() + 1)">Next pass</button>
+                <button type="button" class="pv__btn pv__btn--ghost" data-prev [disabled]="index() === 0" (click)="go(index() - 1)">{{ t('passes.view.prev') }}</button>
+                <button type="button" class="pv__btn pv__btn--ghost" data-next [disabled]="index() === slides().length - 1" (click)="go(index() + 1)">{{ t('passes.view.next') }}</button>
               </div>
-              <p data-count aria-live="polite">{{ index() + 1 }} of {{ slides().length }} passes on this leg · swipe for the next</p>
+              <p data-count aria-live="polite">{{ t('passes.view.count', { i: index() + 1, n: slides().length }) }}</p>
             }
           </div>
         }
@@ -149,16 +150,16 @@ function cityOf(code: string): string {
     </div>
 
     @if (menuOpen() && current(); as p) {
-      <app-glass-sheet title="Pass options" [open]="true" (closed)="closeMenu()">
+      <app-glass-sheet [title]="t('passes.view.options')" [open]="true" (closed)="closeMenu()">
         <div class="pm">
           <label class="pm__row">
-            <span class="pm__tx"><b>Delete after the trip</b><small>Removed the day after you're home</small></span>
+            <span class="pm__tx"><b>{{ t('passes.deleteAfter') }}</b><small>{{ t('passes.deleteAfter.hint') }}</small></span>
             <input type="checkbox" role="switch" class="switch" [checked]="p.deleteAfterTrip" data-delete-after
                    (change)="setDeleteAfter(p, $any($event.target).checked)">
           </label>
           @if (moving()) {
             <fieldset class="pm__pick" data-move-list>
-              <legend class="ui-label">Move to another leg</legend>
+              <legend class="ui-label">{{ t('passes.view.move') }}</legend>
               @for (o of moveOptions(); track o.id) {
                 <label class="pm__opt">
                   <input type="radio" name="pv-move" [value]="o.id" [checked]="(p.legId ?? '') === o.id" (change)="move(p, o.id)" [attr.data-move]="o.id">
@@ -167,19 +168,19 @@ function cityOf(code: string): string {
               }
             </fieldset>
           } @else {
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--block" data-move-open (click)="moving.set(true)">Move to another leg</button>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--block" data-move-open (click)="moving.set(true)">{{ t('passes.view.move') }}</button>
           }
           @if (confirming()) {
             <div class="pm__confirm" role="alert">
-              <p>Delete this boarding pass from this phone?</p>
+              <p>{{ t('passes.view.confirm') }}</p>
               <div class="pm__acts">
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="confirming.set(false)">Keep it</button>
-                <button type="button" class="ui-btn ui-btn--sm" data-delete-confirm (click)="remove(p)">Delete pass</button>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="confirming.set(false)">{{ t('passes.view.keep') }}</button>
+                <button type="button" class="ui-btn ui-btn--sm" data-delete-confirm (click)="remove(p)">{{ t('passes.view.delete') }}</button>
               </div>
             </div>
           } @else {
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--block pm__del" data-delete (click)="confirming.set(true)">
-              <app-icon name="trash" [size]="16" />Delete pass
+              <app-icon name="trash" [size]="16" />{{ t('passes.view.delete') }}
             </button>
           }
         </div>
@@ -311,6 +312,7 @@ export class PassViewPage {
   readonly id = input.required<string>();
   readonly passId = input.required<string>();
 
+  protected readonly t = t;
   protected readonly ready = signal(false);
   protected readonly mode = signal<'barcode' | 'image'>('barcode');
   protected readonly index = signal(0);
@@ -347,7 +349,7 @@ export class PassViewPage {
   protected readonly moveOptions = computed(() => {
     const t = this.trip();
     if (!t) return [];
-    return [...flightLegs(t).map(l => ({ id: l.id, label: legOptionLabel(l) })), { id: '', label: 'No leg, keep it with the trip' }];
+    return [...flightLegs(t).map(l => ({ id: l.id, label: legOptionLabel(l) })), { id: '', label: t('passes.noLeg') }];
   });
 
   private lock: { release(): Promise<void> } | null = null;
@@ -518,7 +520,7 @@ export class PassViewPage {
     const err = await this.passes.relink(p.id, leg ? leg.id : null, leg ? Math.max(0, ri) : null, leg ? 'manual' : 'none');
     this.closeMenu();
     if (err) return this.state.flash(FILES_ERROR_TEXT[err]);
-    this.state.flash(leg && leg.kind === 'flight' ? `Pass moved to ${leg.refs.map(r => r.flightNumber).join(' + ')}` : 'Pass kept with the trip');
+    this.state.flash(leg && leg.kind === 'flight' ? t('passes.view.movedTo', { flights: leg.refs.map(r => r.flightNumber).join(' + ') }) : t('passes.view.kept'));
   }
 
   /** Swaps the leg to the pass's backup (with Undo) and links the pass to the new leg. */

@@ -8,6 +8,7 @@ import { isFinalStatus, type FlightRef, type Trip } from '../trips/model';
 import { diffDays } from '../utils/time';
 import { julianToDateKey, normalizeFlightNumber } from './bcbp';
 import type { BcbpLeg, MatchCandidate, PassRecord } from './model';
+import { t } from '../i18n/t';
 
 interface Ranked { c: MatchCandidate; final: boolean; order: number }
 
@@ -91,7 +92,7 @@ export function passAlternate(
 
 /** "This pass is for AC812 (your backup). Swap this leg to AC812?" */
 export function swapOfferText(flightNumber: string): string {
-  return `This pass is for ${flightNumber} (your backup). Swap this leg to ${flightNumber}?`;
+  return t('passes.swapOffer', { flight: flightNumber });
 }
 
 /** The pass date to show when nothing matched: anchored on the trip's first day (null → ask the user). */

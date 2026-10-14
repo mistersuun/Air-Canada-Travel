@@ -12,6 +12,7 @@ import type {
 } from '../../passes/model';
 import type { FlightLeg, FlightRef, Trip } from '../../trips/model';
 import { refsRoute, refsTimes, dayLabel, monthDay, legById } from '../trips/trips-model';
+import { t } from '../../i18n/t';
 
 /** Where the pass came from. */
 export type PassSource = PassRecord['source'];
@@ -117,13 +118,13 @@ export function matchLine(trip: Trip, ref: FlightRef, fmt: TimeFormat): string {
 
 /** 'Day 281' and '= Oct 8' ('= ?' when no year fits). */
 export function julianLabel(julian: number, dateKey: string | null): { day: string; date: string } {
-  return { day: `Day ${julian}`, date: dateKey ? `= ${monthDay(dateKey)}` : '= ?' };
+  return { day: t('passes.add.day', { n: julian }), date: dateKey ? `= ${monthDay(dateKey)}` : '= ?' };
 }
 
 /** 'PDF417 · 1 leg', 'Aztec · 2 legs'. */
 export function barcodeLabel(format: BarcodeFormat, legCount: number): string {
-  const f = format === 'QRCode' ? 'QR code' : format;
-  return `${f} · ${legCount} ${legCount === 1 ? 'leg' : 'legs'}`;
+  const f = format === 'QRCode' ? t('passes.add.qr') : format;
+  return t('passes.add.barcodeLabel', { format: f, n: legCount });
 }
 
 /** "This pass is for AC812 (your backup). Swap this leg to AC812?" */
@@ -178,9 +179,9 @@ export function toNewPass(
 
 /** 'Pass saved to AC834', '2 passes saved', 'Pass saved to the trip'. */
 export function savedText(saved: readonly PassRecord[]): string {
-  if (saved.length > 1) return `${saved.length} passes saved`;
+  if (saved.length > 1) return t('passes.add.savedMany', { n: saved.length });
   const p = saved[0];
-  return p?.legId ? `Pass saved to ${p.flightNumber}` : 'Pass saved to the trip';
+  return p?.legId ? t('passes.add.savedTo', { flight: p.flightNumber }) : t('passes.add.savedTrip');
 }
 
 /** 'Doe/John'-style name as decoded ('DOE/JOHN' stays as on the pass). */

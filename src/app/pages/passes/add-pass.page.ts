@@ -9,12 +9,15 @@ import { FilesService } from '../../files/files.service';
 import { FILES_ERROR_TEXT, MAX_FILE_BYTES, type FilesError } from '../../files/model';
 import { BarcodeService } from '../../passes/barcode.service';
 import { displayText, parseBcbp } from '../../passes/bcbp';
-import { NOT_BCBP_TEXT, NO_BARCODE_TEXT, type DecodedRead, type PassRecord } from '../../passes/model';
+import { noBarcodeText, notBcbpText, type DecodedRead, type PassRecord } from '../../passes/model';
 import { PassSwapService } from '../../passes/pass-swap.service';
 import { ShareInboxService } from '../../share-in/share-inbox.service';
 import { PassesService } from '../../passes/passes.service';
 import { AppStateService } from '../../state/app-state.service';
-import { LEG_STATUS_LABEL, type FlightLeg, type FlightRef, type Trip } from '../../trips/model';
+import { type FlightLeg, type FlightRef, type Trip } from '../../trips/model';
+import { legStatusLabel } from '../today/today-model';
+import { msgParts } from '../../extras/msg-parts';
+import { t } from '../../i18n/t';
 import { TripsService } from '../../trips/trips.service';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
 import { tripPath } from '../../ui/links';
@@ -46,30 +49,30 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
     <div class="ui-page ui-page--bare ap" (pointerover)="warm()" (focusin)="warm()">
       <header class="ap__head">
         @if (step() === 'check') {
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back to the sources" data-back (click)="restart()">
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('passes.add.backToSources')" data-back (click)="restart()">
             <app-icon name="arrow-left" [size]="18" />
           </button>
-          <h1 #checkTtl class="ap__ttl" tabindex="-1" data-check-title>Check the details</h1>
+          <h1 #checkTtl class="ap__ttl" tabindex="-1" data-check-title>{{ t('passes.add.check') }}</h1>
         } @else {
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Close" data-close (click)="close()">
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('common.close')" data-close (click)="close()">
             <app-icon name="close" [size]="18" />
           </button>
-          <h1 class="ap__ttl">Add boarding pass<small>{{ trip()?.name }}</small></h1>
+          <h1 class="ap__ttl">{{ t('passes.add') }}<small>{{ trip()?.name }}</small></h1>
         }
         <span class="ap__sp" aria-hidden="true"></span>
       </header>
 
       @if (step() !== 'check') {
-        <div class="srcs" role="group" aria-label="Where the pass is">
+        <div class="srcs" role="group" [attr.aria-label]="t('passes.add.where')">
           <button type="button" class="src" [class.on]="step() === 'scan'" [attr.aria-pressed]="step() === 'scan'" data-src="camera"
                   (click)="scan()">
-            <b><app-icon name="camera" [size]="18" [strokeWidth]="2" /></b>Scan<small>Camera</small>
+            <b><app-icon name="camera" [size]="18" [strokeWidth]="2" /></b>{{ t('passes.add.scan') }}<small>{{ t('passes.add.camera') }}</small>
           </button>
           <button #photoBtn type="button" class="src" [class.on]="active() === 'image'" data-src="image" (click)="pick(photoIn)">
-            <b><app-icon name="image" [size]="18" [strokeWidth]="2" /></b>Photo<small>or screenshot</small>
+            <b><app-icon name="image" [size]="18" [strokeWidth]="2" /></b>{{ t('passes.add.photo') }}<small>{{ t('passes.add.orScreenshot') }}</small>
           </button>
           <button type="button" class="src" [class.on]="active() === 'pdf'" data-src="pdf" (click)="pick(pdfIn)">
-            <b><app-icon name="doc" [size]="18" [strokeWidth]="2" /></b>PDF<small>from Files</small>
+            <b><app-icon name="doc" [size]="18" [strokeWidth]="2" /></b>{{ t('passes.add.pdf') }}<small>{{ t('passes.add.fromFiles') }}</small>
           </button>
           <input #photoIn class="ui-visually-hidden" type="file" accept="image/*" tabindex="-1" aria-hidden="true" data-input="image"
                  (change)="onFile($event, 'image')">
@@ -83,7 +86,7 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
           }
           @case ('reading') {
             <div class="ui-card ap__msg" role="status" data-reading>
-              <span class="ap__spin" aria-hidden="true"></span>Reading the barcode on this phone…
+              <span class="ap__spin" aria-hidden="true"></span>{{ t('passes.add.reading') }}
             </div>
           }
           @case ('fail') {
@@ -92,18 +95,18 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
               <div class="ap__ft">
                 <b>{{ failText() }}</b>
                 @if (failure() === 'notBcbp') {
-                  <span>The barcode was read, but it isn't a boarding pass. Use the one printed on the pass.</span>
+                  <span>{{ t('passes.add.fail.notBcbp') }}</span>
                 } @else if (failure() === 'tooLarge') {
-                  <span>A screenshot of the pass, or a photo cropped close to the barcode, works best.</span>
+                  <span>{{ t('passes.add.fail.tooLarge') }}</span>
                 } @else {
-                  <span>Crop close to the barcode, or use a sharper screenshot.</span>
+                  <span>{{ t('passes.add.fail.none') }}</span>
                 }
               </div>
               <div class="ap__fa">
-                <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-retry (click)="retry()">Try another image</button>
+                <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-retry (click)="retry()">{{ t('passes.add.tryAnother') }}</button>
                 @if (lastFile()) {
                   <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-save-file (click)="saveAsFile()" [disabled]="busy()">
-                    {{ hintLeg() ? 'Save the image as a file on this leg' : 'Save the image as a file on this trip' }}
+                    {{ hintLeg() ? t('passes.add.saveImage.leg') : t('passes.add.saveImage.trip') }}
                   </button>
                 }
               </div>
@@ -112,22 +115,22 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
           }
         }
         @if (camera() === 'off') {
-          <p class="ui-card ap__msg ap__msg--warn" role="status" data-camera-off>Camera not available. Pick a photo or screenshot instead.</p>
+          <p class="ui-card ap__msg ap__msg--warn" role="status" data-camera-off>{{ t('passes.add.cameraOff') }}</p>
         }
 
         <div class="ui-card ap__priv">
           <app-icon name="lock" [size]="14" [strokeWidth]="2.2" />
-          <span>Read on this phone. The pass is stored here only and is <b>never in share links</b>.</span>
+          <span>{{ priv()[0] }}<b>{{ priv()[1] }}</b>{{ priv()[2] }}</span>
         </div>
-        <p class="ui-sub ap__any">Works for passes from any airline that use the standard barcode.</p>
+        <p class="ui-sub ap__any">{{ t('passes.add.anyAirline') }}</p>
       } @else {
         @for (d of drafts(); track d.key) {
-          <section class="ap__draft" [attr.data-draft]="d.key" [attr.aria-label]="d.flightNumber + ' ' + d.leg.from + ' to ' + d.leg.to">
+          <section class="ap__draft" [attr.data-draft]="d.key" [attr.aria-label]="t('passes.add.draftLabel', { flight: d.flightNumber, from: d.leg.from, to: d.leg.to })">
             @if (drafts().length > 1) {
               <label class="ap__inc">
                 <input type="checkbox" [checked]="included().has(d.key)" (change)="toggleInclude(d.key, $any($event.target).checked)"
                        data-include>
-                <span>Save {{ d.flightNumber }} {{ d.leg.from }} → {{ d.leg.to }}</span>
+                <span>{{ t('passes.add.include', { flight: d.flightNumber, from: d.leg.from, to: d.leg.to }) }}</span>
               </label>
             }
             <div class="ui-card ap__card">
@@ -136,23 +139,23 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
               </div>
               <p class="ui-sub tn ap__fl">{{ d.flightNumber }}@if (d.dateKey) { · {{ day(d.dateKey) }}}</p>
               <dl class="kv tn">
-                <div class="w2"><dt>Passenger</dt><dd>{{ name(d) }}</dd></div>
-                <div><dt>Booking</dt><dd data-pnr>{{ d.leg.pnr }}</dd></div>
-                <div><dt>Date</dt><dd data-date>{{ julian(d).day }}<small>{{ julian(d).date }}</small></dd></div>
-                <div><dt>Cabin</dt><dd>{{ d.leg.cabin }}</dd></div>
-                <div><dt>Seat</dt><dd>{{ d.leg.seat ?? '–' }}</dd></div>
-                <div><dt>Sequence</dt><dd>{{ d.leg.sequence ?? '–' }}</dd></div>
-                <div class="w2"><dt>Barcode</dt><dd>{{ bcLabel(d) }}</dd></div>
+                <div class="w2"><dt>{{ t('passes.add.passenger') }}</dt><dd>{{ name(d) }}</dd></div>
+                <div><dt>{{ t('passes.add.booking') }}</dt><dd data-pnr>{{ d.leg.pnr }}</dd></div>
+                <div><dt>{{ t('passes.add.date') }}</dt><dd data-date>{{ julian(d).day }}<small>{{ julian(d).date }}</small></dd></div>
+                <div><dt>{{ t('passes.add.cabin') }}</dt><dd>{{ d.leg.cabin }}</dd></div>
+                <div><dt>{{ t('passes.seatLabel') }}</dt><dd>{{ d.leg.seat ?? '–' }}</dd></div>
+                <div><dt>{{ t('passes.add.sequence') }}</dt><dd>{{ d.leg.sequence ?? '–' }}</dd></div>
+                <div class="w2"><dt>{{ t('passes.barcode') }}</dt><dd>{{ bcLabel(d) }}</dd></div>
               </dl>
               <details class="raw">
-                <summary>Barcode text</summary>
+                <summary>{{ t('passes.add.barcodeText') }}</summary>
                 <p class="raw__t">{{ rawText(d) }}</p>
               </details>
             </div>
 
             @if (!d.dateKey && !choiceOf(d.key)?.legId) {
               <label class="ui-card ap__date">
-                <span class="ap__dl">Which day is this flight?</span>
+                <span class="ap__dl">{{ t('passes.add.whichDay') }}</span>
                 <input type="date" [value]="userDate()[d.key] || ''" (input)="setDate(d.key, $any($event.target).value)" data-date-input>
               </label>
             }
@@ -161,34 +164,34 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
               <div class="match" data-match>
                 <span class="match__ic" aria-hidden="true"><app-icon name="check" [size]="18" [strokeWidth]="2.6" /></span>
                 <div class="match__rt">
-                  <b>Matches your {{ s.ref.flightNumber }} leg</b>
+                  <b>{{ t('passes.add.matches', { flight: s.ref.flightNumber }) }}</b>
                   <span class="tn">{{ matchText(s.ref) }} · <app-provenance-tag value="scheduled" /></span>
                 </div>
               </div>
               @if (pickerFor() !== d.key) {
-                <p class="ap__other">Not this one? <button type="button" class="ui-link" data-pick-other (click)="pickerFor.set(d.key)">Pick another leg</button></p>
+                <p class="ap__other">{{ t('passes.add.notThis') }} <button type="button" class="ui-link" data-pick-other (click)="pickerFor.set(d.key)">{{ t('passes.add.pickAnother') }}</button></p>
               }
             } @else if (d.candidates.length > 1) {
-              <p class="ap__note" data-several>This pass fits more than one of your legs. Pick the one it's for.</p>
+              <p class="ap__note" data-several>{{ t('passes.add.several') }}</p>
             } @else if (!choiceOf(d.key)) {
               @if (d.alternate) {
                 <p class="ap__note" data-swap-offer>{{ altText(d) }}</p>
                 <p class="ap__other">
-                  <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-swap (click)="swapToBackup(d)">Swap to {{ d.flightNumber }}</button>
+                  <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-swap (click)="swapToBackup(d)">{{ t('passes.swapTo', { flight: d.flightNumber }) }}</button>
                 </p>
               } @else {
-                <p class="ap__note" data-no-match>No leg in this trip has {{ d.flightNumber }} {{ d.leg.from }} → {{ d.leg.to }} on that day. Pick a leg, or keep the pass with the trip.</p>
+                <p class="ap__note" data-no-match>{{ t('passes.add.noMatch', { flight: d.flightNumber, from: d.leg.from, to: d.leg.to }) }}</p>
               }
             }
 
             @if (showPicker(d)) {
               <fieldset class="ui-card ap__pick" data-picker>
-                <legend class="ui-visually-hidden">Leg for {{ d.flightNumber }}</legend>
+                <legend class="ui-visually-hidden">{{ t('passes.add.legFor', { flight: d.flightNumber }) }}</legend>
                 @for (o of options(d); track o.id) {
                   <label class="ap__opt">
                     <input type="radio" [name]="'leg-' + d.key" [value]="o.id" [checked]="choiceKey(d.key) === o.id"
                            (change)="choose(d, o.id)" [attr.data-option]="o.id">
-                    <span>{{ o.label }}@if (o.fits) { <small>Fits this pass</small> }</span>
+                    <span>{{ o.label }}@if (o.fits) { <small>{{ t('passes.add.fits') }}</small> }</span>
                   </label>
                 }
               </fieldset>
@@ -199,13 +202,13 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
         <div class="ui-card ap__opts">
           @if (checkInLegs().length) {
             <label class="ap__row">
-              <span class="ap__rt"><b>Set leg to Checked in</b><small>{{ checkInHint() }}</small></span>
+              <span class="ap__rt"><b>{{ t('passes.add.setCheckedIn') }}</b><small>{{ checkInHint() }}</small></span>
               <input type="checkbox" role="switch" class="switch" [checked]="checkIn()" (change)="checkIn.set($any($event.target).checked)"
                      data-check-in>
             </label>
           }
           <label class="ap__row">
-            <span class="ap__rt"><b>Delete after the trip</b><small>Removed the day after you're home</small></span>
+            <span class="ap__rt"><b>{{ t('passes.deleteAfter') }}</b><small>{{ t('passes.deleteAfter.hint') }}</small></span>
             <input type="checkbox" role="switch" class="switch" [checked]="deleteAfter()" (change)="deleteAfter.set($any($event.target).checked)"
                    data-delete-after>
           </label>
@@ -215,7 +218,7 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
         <button type="button" class="ui-btn ui-btn--dark ui-btn--block ap__save" data-save [disabled]="!canSave() || busy()" (click)="save()">
           {{ saveLabel() }}
         </button>
-        <p class="ap__foot"><app-icon name="lock" [size]="14" [strokeWidth]="2.2" />On this phone only · never shared</p>
+        <p class="ap__foot"><app-icon name="lock" [size]="14" [strokeWidth]="2.2" />{{ t('passes.add.onlyHere') }}</p>
       }
     </div>
   `,
@@ -352,6 +355,8 @@ export class AddPassPage {
   /** ?src=camera|file: preselects the input. */
   readonly src = input<string | undefined>(undefined);
 
+  protected readonly t = t;
+  protected readonly priv = computed(() => msgParts('passes.add.privacy', ['strong']));
   protected readonly trip = computed(() => this.tripsSvc.trip(this.id()));
   protected readonly hintLeg = computed(() => {
     const t = this.trip();
@@ -379,7 +384,7 @@ export class AddPassPage {
 
   protected readonly failText = computed(() => {
     const f = this.failure();
-    return f === 'notBcbp' ? NOT_BCBP_TEXT : f === 'tooLarge' ? FILES_ERROR_TEXT.tooLarge : NO_BARCODE_TEXT;
+    return f === 'notBcbp' ? notBcbpText() : f === 'tooLarge' ? FILES_ERROR_TEXT.tooLarge : noBarcodeText();
   });
 
   /** The legs "Set leg to Checked in" would change (planned or listed, chosen for an included draft). */
@@ -395,8 +400,8 @@ export class AddPassPage {
   });
   protected readonly checkInHint = computed(() => {
     const legs = this.checkInLegs();
-    if (legs.length !== 1) return 'Only if you want.';
-    return `It's ${LEG_STATUS_LABEL[legs[0].status]} now. Only if you want.`;
+    if (legs.length !== 1) return t('passes.add.onlyIfYouWant');
+    return t('passes.add.itsNow', { status: legStatusLabel(legs[0].status) });
   });
 
   protected readonly canSave = computed(() => {
@@ -413,9 +418,9 @@ export class AddPassPage {
   });
   protected readonly saveLabel = computed(() => {
     const inc = this.drafts().filter(d => this.included().has(d.key));
-    if (inc.length > 1) return `Save ${inc.length} passes`;
+    if (inc.length > 1) return t('passes.add.saveMany', { n: inc.length });
     const c = inc[0] ? this.choices()[inc[0].key] : null;
-    return c && !c.legId ? 'Save to the trip' : 'Save to this leg';
+    return c && !c.legId ? t('passes.add.saveTrip') : t('passes.add.saveLeg');
   });
 
   constructor() {
@@ -553,7 +558,7 @@ export class AddPassPage {
       this.fileError.set(FILES_ERROR_TEXT[res.error]);
       return;
     }
-    this.state.flash(leg ? 'Image saved as a file on this leg' : 'Image saved as a file on this trip');
+    this.state.flash(leg ? t('passes.add.imageSaved.leg') : t('passes.add.imageSaved.trip'));
     this.close();
   }
 
@@ -604,7 +609,7 @@ export class AddPassPage {
     const legs = flightLegs(t).map(l => ({ id: l.id, label: legOptionLabel(l), fits: fits.has(l.id) }));
     // Candidates first (in match order), then the other flight legs.
     legs.sort((a, b) => Number(b.fits) - Number(a.fits));
-    return [...legs, { id: '', label: 'No leg, keep it with the trip', fits: false }];
+    return [...legs, { id: '', label: t('passes.noLeg'), fits: false }];
   }
 
   protected choose(d: PassDraft, legId: string): void {

@@ -18,7 +18,8 @@ import { deadlineUtc, spareLabel } from '../../trips/engine/homeby';
 import { endTz, refArrUtc, refDepUtc } from '../../trips/engine/legs';
 import { placeName } from '../../trips/engine/today';
 import type { FlightLeg, GroundLeg, Trip, TripLeg } from '../../trips/model';
-import { dayLabel } from './today-model';
+import { t } from '../../i18n/t';
+import { dayLabel, groundModeLabel, zoneLabel } from './today-model';
 
 export type TimelineKind = 'depart' | 'arrive' | 'layover' | 'ground' | 'final' | 'next';
 
@@ -39,9 +40,10 @@ export interface TimelineRow {
 
 export type TimelineRowView = TimelineRow & { past: boolean };
 
-const MODE_WORD: Record<string, string> = {
-  train: 'Train', bus: 'Bus', car: 'Car', ferry: 'Ferry', flight: 'Flight', other: 'Transfer',
-};
+/** 'Train', 'Bus'...; any other (or unknown) mode reads as 'Transfer'. */
+function modeWord(mode: string): string {
+  return ['train', 'bus', 'car', 'ferry', 'flight'].includes(mode) ? groundModeLabel(mode) : t('today.mode.transfer');
+}
 
 function row(r: Omit<TimelineRow, 'alert'> & { alert?: boolean }): TimelineRow {
   return { ...r, alert: r.alert ?? false };
@@ -55,7 +57,7 @@ export function markPast(rows: readonly TimelineRow[], nowMs: number): TimelineR
 /** '+6h vs Montréal' or '' when the arrival airport is on home time. */
 function diffVsHome(trip: Trip, dest: string, atUtc: number): string {
   const diff = tzDiffLabel(airportTz(dest), airportTz(trip.homeAirport), atUtc);
-  return diff === '0h' ? '' : `${diff} vs ${placeName(trip.homeAirport)}`;
+  return diff === '0h' ? '' : t('today.tl.vsHome', { diff, place: placeName(trip.homeAirport) });
 }
 
 interface Onward {
@@ -72,32 +74,32 @@ function onward(trip: Trip, last: FlightLeg['refs'][number], ground: GroundLeg |
     // A ground leg that does not end at the goal is reached under its own name and time zone.
     const at = utcToLocal(utc, ground ? endTz(ground.to) ?? goalTz : goalTz);
     return row({
-      id: 'final', kind: 'final', time: formatClock(at.hhmm, fmt), title: `Reach ${ground ? ground.to.name : trip.goal.name}`,
-      detail: `${dayLabel(at.dateKey)} · ${overnight ? 'overnight likely · ' : ''}${note}`, atUtc: utc,
+      id: 'final', kind: 'final', time: formatClock(at.hhmm, fmt), title: t('today.tl.reach', { place: ground ? ground.to.name : trip.goal.name }),
+      detail: `${dayLabel(at.dateKey)} · ${overnight ? `${t('today.tl.overnight')} · ` : ''}${note}`, atUtc: utc,
     });
   };
 
   if (ground?.userTimes) {
-    const t = ground.userTimes;
-    const depUtc = toUtcMs(t.depDateKey, t.depLocal, endTz(ground.from) ?? 'UTC');
-    const arrUtc = toUtcMs(t.arrDateKey, t.arrLocal, endTz(ground.to) ?? endTz(ground.from) ?? 'UTC');
+    const ut = ground.userTimes;
+    const depUtc = toUtcMs(ut.depDateKey, ut.depLocal, endTz(ground.from) ?? 'UTC');
+    const arrUtc = toUtcMs(ut.arrDateKey, ut.arrLocal, endTz(ground.to) ?? endTz(ground.from) ?? 'UTC');
     return {
       rows: [row({
-        id: 'ground', kind: 'ground', time: formatClock(t.depLocal, fmt),
-        title: `${MODE_WORD[ground.mode] ?? 'Transfer'} ${ground.from.name} → ${ground.to.name}`,
-        detail: `${dayLabel(t.depDateKey)} · saved by you · arrives ${formatClock(t.arrLocal, fmt)}`, atUtc: depUtc,
+        id: 'ground', kind: 'ground', time: formatClock(ut.depLocal, fmt),
+        title: `${modeWord(ground.mode)} ${ground.from.name} → ${ground.to.name}`,
+        detail: t('today.tl.savedArrives', { day: dayLabel(ut.depDateKey), time: formatClock(ut.arrLocal, fmt) }), atUtc: depUtc,
       })],
-      reach: reachRow(arrUtc, 'saved by you'),
+      reach: reachRow(arrUtc, t('today.tl.savedByYou')),
     };
   }
 
   let g: GroundEstimate;
-  let modeWord: string;
+  let mode: string;
   let from: string;
   let to: string;
   if (ground) {
     g = groundEstimate(ground.from, ground.to, { dateKey: last.arrDateKey });
-    modeWord = MODE_WORD[ground.mode] ?? 'Transfer';
+    mode = modeWord(ground.mode);
     from = ground.from.name;
     to = ground.to.name;
   } else {
@@ -105,7 +107,7 @@ function onward(trip: Trip, last: FlightLeg['refs'][number], ground: GroundLeg |
     if (!end) return null;
     g = groundEstimate(end, trip.goal, { dateKey: last.arrDateKey });
     if (g.mode === 'unknown' || g.rideMin === null) return null;
-    modeWord = MODE_WORD[g.mode] ?? 'Transfer';
+    mode = modeWord(g.mode);
     from = placeName(last.dest);
     to = trip.goal.name;
   }
@@ -119,24 +121,24 @@ function onward(trip: Trip, last: FlightLeg['refs'][number], ground: GroundLeg |
     const ready = utcToLocal(readyUtc, dir.tz);
     const readyMin = hhmmToMin(ready.hhmm);
     const today = (departuresOn(dir, ready.dateKey) ?? []).filter(d => d.depMin >= readyMin).slice(0, 2);
-    if (today.length) parts.push(`next ${today.map(d => formatClock(minToHhmm(d.depMin), fmt)).join(', ')}`);
-    else if (arr?.departure) parts.push(`next ${dayLabel(arr.departure.dateKey)} ${formatClock(arr.departure.hhmm, fmt)}`);
-    else if (arr?.noService) parts.push('nothing running in the timetable');
+    if (today.length) parts.push(t('today.tl.next', { when: today.map(d => formatClock(minToHhmm(d.depMin), fmt)).join(', ') }));
+    else if (arr?.departure) parts.push(t('today.tl.next', { when: `${dayLabel(arr.departure.dateKey)} ${formatClock(arr.departure.hhmm, fmt)}` }));
+    else if (arr?.noService) parts.push(t('today.tl.nothingRunning'));
     else parts.push(g.label);
     if (arr?.departure) atUtc = toUtcMs(arr.departure.dateKey, arr.departure.hhmm, dir.tz);
     else if (today.length) atUtc = toUtcMs(ready.dateKey, minToHhmm(today[0].depMin), dir.tz);
   } else {
     parts.push(g.label);
   }
-  if (arr?.lastDepMissed) parts.push('last one likely gone');
+  if (arr?.lastDepMissed) parts.push(t('today.tl.lastGone'));
   const scheduled = !!arr?.departure;
   // The trip's own leg carries its estimate; the estimator only adds timetable hints.
   const estMin = ground ? ground.estMinutes : g.totalMin;
   const goalUtc = scheduled && arr?.utc != null ? arr.utc : estMin != null ? landUtc + estMin * MINUTE_MS : arr?.utc ?? null;
   const groundRow = row({
-    id: 'ground', kind: 'ground', time: null, title: `${modeWord} ${from} → ${to}`, detail: parts.join(' · ') || null, atUtc,
+    id: 'ground', kind: 'ground', time: null, title: `${mode} ${from} → ${to}`, detail: parts.join(' · ') || null, atUtc,
   });
-  return { rows: [groundRow], reach: goalUtc !== null ? reachRow(goalUtc, scheduled ? 'scheduled' : 'estimated', !!arr?.overnightLikely && !ground) : null };
+  return { rows: [groundRow], reach: goalUtc !== null ? reachRow(goalUtc, t(scheduled ? 'today.tl.scheduled' : 'today.tl.estimated'), !!arr?.overnightLikely && !ground) : null };
 }
 
 /** Flights to count as "flying on": departing `from` within a day of landing (`landUtc`), if given. */
@@ -157,8 +159,8 @@ function laterFlight(trip: Trip, idx: number, from: string, landUtc: number | nu
 function nextFlightRow(l: FlightLeg, fmt: TimeFormat): TimelineRow {
   const r = l.refs[0];
   return row({
-    id: 'next', kind: 'next', time: formatClock(r.depLocal, fmt), title: `Next: ${r.flightNumber} ${r.origin} → ${l.refs[l.refs.length - 1].dest}`,
-    detail: `${dayLabel(r.dateKey)} · ${r.origin} time`, atUtc: refDepUtc(r),
+    id: 'next', kind: 'next', time: formatClock(r.depLocal, fmt), title: t('today.tl.nextFlight', { flight: r.flightNumber, from: r.origin, to: l.refs[l.refs.length - 1].dest }),
+    detail: `${dayLabel(r.dateKey)} · ${zoneLabel(r.origin)}`, atUtc: refDepUtc(r),
   });
 }
 
@@ -177,26 +179,26 @@ export function travelTimeline(input: { trip: Trip; leg: TripLeg | undefined; fm
     const arrUtc = refArrUtc(ref);
     rows.push(row({
       id: `dep:${i}`, kind: 'depart', time: formatClock(ref.depLocal, fmt),
-      title: `${ref.flightNumber} departs ${placeName(ref.origin)} (${ref.origin})`,
-      detail: `${dayLabel(ref.dateKey)} · ${ref.origin} time`, atUtc: refDepUtc(ref),
+      title: t('today.tl.departs', { flight: ref.flightNumber, place: placeName(ref.origin), code: ref.origin }),
+      detail: `${dayLabel(ref.dateKey)} · ${zoneLabel(ref.origin)}`, atUtc: refDepUtc(ref),
     }));
     const diff = diffVsHome(trip, ref.dest, arrUtc);
     const nextDay = ref.arrDateKey !== ref.dateKey ? dayLabel(ref.arrDateKey) : null;
     rows.push(row({
       id: `arr:${i}`, kind: 'arrive', time: formatClock(ref.arrLocal, fmt),
-      title: `Arrives ${placeName(ref.dest)} (${ref.dest})`,
-      detail: [nextDay, `${ref.dest} time`, diff].filter(Boolean).join(' · '), atUtc: arrUtc,
+      title: t('today.tl.arrives', { place: placeName(ref.dest), code: ref.dest }),
+      detail: [nextDay, zoneLabel(ref.dest), diff].filter(Boolean).join(' · '), atUtc: arrUtc,
       forecast: { code: ref.dest, dateKey: ref.arrDateKey },
     }));
     const next = leg.refs[i + 1];
     if (next) {
       const min = Math.round((refDepUtc(next) - arrUtc) / MINUTE_MS);
       const alert = isLayoverAlert(min, minConnect);
-      const reason = min < 0 ? 'Next flight leaves before this one lands'
-        : min < minConnect ? 'Tight connection' : min > LONG_LAYOVER ? 'Long wait' : null;
+      const reason = min < 0 ? t('today.tl.leavesBefore')
+        : min < minConnect ? t('today.tl.tight') : min > LONG_LAYOVER ? t('today.tl.longWait') : null;
       rows.push(row({
         id: `lay:${i}`, kind: 'layover', time: null,
-        title: min < 0 ? `Layover at ${ref.dest}` : `Layover at ${ref.dest} · ${hm(min)}`,
+        title: min < 0 ? t('today.tl.layover', { code: ref.dest }) : t('today.tl.layoverDur', { code: ref.dest, dur: hm(min) }),
         detail: alert ? reason : null, atUtc: refDepUtc(next), alert,
       }));
     }
@@ -209,11 +211,11 @@ export function travelTimeline(input: { trip: Trip; leg: TripLeg | undefined; fm
     const slack = Math.round((deadline - landUtc) / MINUTE_MS);
     const atHome = last.dest === trip.homeAirport;
     const spare = atHome
-      ? (slack >= 0 ? `${spareLabel(slack)} after landing` : `landing ${spareLabel(-slack)} after it`)
-      : `landing at ${last.dest}, ${spareLabel(Math.abs(slack))} ${slack >= 0 ? 'before' : 'after'} your ${trip.homeAirport} deadline`;
+      ? (slack >= 0 ? t('today.tl.spareAfter', { spare: spareLabel(slack) }) : t('today.tl.landsAfter', { spare: spareLabel(-slack) }))
+      : t('today.tl.landsAt', { code: last.dest, spare: spareLabel(Math.abs(slack)), rel: slack >= 0 ? 'before' : 'after', home: trip.homeAirport });
     rows.push(row({
       id: 'final', kind: 'final', time: formatClock(trip.homeBy.hhmm, fmt),
-      title: `Home by ${dayLabel(trip.homeBy.dateKey)}`, detail: `${trip.homeAirport} time · ${spare}`, atUtc: deadline,
+      title: t('today.tl.homeBy', { day: dayLabel(trip.homeBy.dateKey) }), detail: `${zoneLabel(trip.homeAirport)} · ${spare}`, atUtc: deadline,
     }));
     return rows;
   }
@@ -242,8 +244,8 @@ export function travelTimeline(input: { trip: Trip; leg: TripLeg | undefined; fm
     rows.push(ride.reach);
   } else if (!ride) {
     rows.push(row({
-      id: 'final', kind: 'final', time: null, title: `Onward to ${trip.goal.name}`,
-      detail: 'Onward ride not found in our data', atUtc: landUtc,
+      id: 'final', kind: 'final', time: null, title: t('today.tl.onwardTo', { place: trip.goal.name }),
+      detail: t('today.tl.onwardMissing'), atUtc: landUtc,
     }));
   }
   return rows;

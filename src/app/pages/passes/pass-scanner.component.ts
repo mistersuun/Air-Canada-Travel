@@ -5,6 +5,7 @@ import { IconComponent } from '../../components/shared/icons.component';
 import { BarcodeService } from '../../passes/barcode.service';
 import { parseBcbp } from '../../passes/bcbp';
 import type { DecodedRead } from '../../passes/model';
+import { t } from '../../i18n/t';
 
 /** getUserMedia, or null when this browser has no camera API (tests provide a fake). */
 export const CAMERA = new InjectionToken<((c: MediaStreamConstraints) => Promise<MediaStream>) | null>('CAMERA', {
@@ -39,18 +40,18 @@ export interface ScanResult { read: DecodedRead; frame: Blob | null }
       <video #video class="vf__video" playsinline muted autoplay aria-hidden="true"></video>
       <p class="vf__hint" aria-live="polite">
         @switch (state()) {
-          @case ('starting') { Starting the camera… }
-          @case ('found') { Got it }
-          @default { Hold the barcode inside the frame }
+          @case ('starting') { {{ t('passes.scan.starting') }} }
+          @case ('found') { {{ t('passes.scan.got') }} }
+          @default { {{ t('passes.scan.hold') }} }
         }
       </p>
       <div class="vf__corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       @if (found(); as f) {
-        <div class="vf__found" role="status" data-found><app-icon name="check" [size]="14" [strokeWidth]="3" />{{ f }} read</div>
+        <div class="vf__found" role="status" data-found><app-icon name="check" [size]="14" [strokeWidth]="3" />{{ t('passes.scan.read', { format: f }) }}</div>
       } @else if (notPass()) {
-        <div class="vf__found vf__found--warn" role="status" data-not-pass>Not a boarding pass barcode</div>
+        <div class="vf__found vf__found--warn" role="status" data-not-pass>{{ t('passes.scan.notPass') }}</div>
       } @else {
-        <p class="vf__tilt">Tilt away from lights if it doesn't read</p>
+        <p class="vf__tilt">{{ t('passes.scan.tilt') }}</p>
       }
     </div>
   `,
@@ -95,6 +96,7 @@ export class PassScannerComponent {
   /** No camera, or permission denied. */
   readonly unavailable = output<void>();
 
+  protected readonly t = t;
   protected readonly state = signal<'starting' | 'live' | 'found' | 'off'>('starting');
   protected readonly found = signal<string | null>(null);
   protected readonly notPass = signal(false);

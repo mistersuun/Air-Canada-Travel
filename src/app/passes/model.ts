@@ -4,6 +4,7 @@
  * output. `raw` is kept only to redraw the barcode; it is never shown whole.
  */
 import type { FlightRef } from '../trips/model';
+import { t } from '../i18n/t';
 
 export type BarcodeFormat = 'PDF417' | 'Aztec' | 'QRCode';
 export type DecodeStep = 'native' | 'as-is' | 'invert' | 'up2x' | 'rot+7' | 'rot-7';
@@ -65,5 +66,9 @@ export interface MatchCandidate {
 export type NewPass = Omit<PassRecord, 'v' | 'id' | 'createdAt' | 'imageBlobId'>;
 
 /** UI copy for a decode that found nothing / found something else. */
-export const NO_BARCODE_TEXT = 'No barcode found in this image.';
-export const NOT_BCBP_TEXT = 'Not a boarding pass barcode.';
+export function noBarcodeText(): string {
+  return t('passes.noBarcode');
+}
+export function notBcbpText(): string {
+  return t('passes.notBcbp');
+}

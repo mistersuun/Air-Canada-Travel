@@ -4,6 +4,7 @@ import { IconComponent } from '../../components/shared/icons.component';
 import { addPassPath, addPassQuery, passPath } from '../../extras/links';
 import { AppStateService } from '../../state/app-state.service';
 import { PassesService } from '../passes.service';
+import { t } from '../../i18n/t';
 
 /**
  * Today, under the big flight card (extras spec §2.2): a dark 56px "Show
@@ -19,12 +20,12 @@ import { PassesService } from '../passes.service';
     @if (first(); as p) {
       <a class="ui-btn ui-btn--dark tp tp--show" [routerLink]="passLink(p.id)" [queryParams]="state.globalParams()" data-show-pass>
         <app-icon name="barcode" [size]="20" [strokeWidth]="2" />
-        <span>Show boarding pass</span>
+        <span>{{ t('passes.show') }}</span>
         @if (meta(); as m) { <small class="tn">{{ m }}</small> }
       </a>
     } @else {
       <a class="ui-btn ui-btn--ghost tp" [routerLink]="addLink()" [queryParams]="addQuery()" data-add-pass>
-        <app-icon name="barcode" [size]="18" [strokeWidth]="2" />Add boarding pass
+        <app-icon name="barcode" [size]="18" [strokeWidth]="2" />{{ t('passes.add') }}
       </a>
     }
   `,
@@ -38,6 +39,7 @@ import { PassesService } from '../passes.service';
 export class TodayPassComponent {
   private readonly passes = inject(PassesService);
   protected readonly state = inject(AppStateService);
+  protected readonly t = t;
 
   readonly tripId = input.required<string>();
   readonly legId = input.required<string>();
@@ -47,8 +49,8 @@ export class TodayPassComponent {
   /** '· 2 passes' or '· seat 34K'. */
   protected readonly meta = computed(() => {
     const l = this.list();
-    if (l.length > 1) return `· ${l.length} passes`;
-    return l[0]?.seat ? `· seat ${l[0].seat}` : null;
+    if (l.length > 1) return `· ${t('passes.count', { n: l.length })}`;
+    return l[0]?.seat ? `· ${t('passes.seat', { seat: l[0].seat })}` : null;
   });
   protected readonly addLink = computed(() => addPassPath(this.tripId()));
   protected readonly addQuery = computed(() => ({ ...this.state.globalParams(), ...addPassQuery(this.legId()) }));

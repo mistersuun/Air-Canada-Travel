@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output } from '@angular/core';
 import { allItineraries, NO_OPTS, type ConnectOptions, type Itinerary } from '../../utils/connections';
 import type { Coverage } from '../../data/schedule-index';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -35,11 +35,15 @@ interface Nearby {
       @for (n of presets; track n) {
         <button type="button" class="chip" [attr.aria-pressed]="shownNights() === n" (click)="nightsChange.emit(n)">{{ n }} nights</button>
       }
+      <button type="button" class="chip" data-other [attr.aria-pressed]="isCustom() || otherOpen()" [attr.aria-expanded]="showStepper()"
+              (click)="otherOpen.set(!otherOpen())">Other</button>
+      @if (showStepper()) {
       <div class="stepper" [class.is-on]="isCustom()">
         <button type="button" aria-label="One night fewer" [disabled]="shownNights() <= 1" (click)="nightsChange.emit(shownNights() - 1)">−</button>
         <output class="tn" aria-live="polite">{{ shownNights() }}<span> night{{ shownNights() === 1 ? '' : 's' }}</span></output>
         <button type="button" aria-label="One night more" [disabled]="shownNights() >= maxNights" (click)="nightsChange.emit(shownNights() + 1)">+</button>
       </div>
+      }
     </div>
 
     <div class="when">
@@ -75,15 +79,18 @@ interface Nearby {
   `,
   styles: [`
     :host { display: grid; gap: 12px; }
-    .nights { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    /* Row gap leaves room for each chip's 44px tap area (see .chip::after). */
+    .nights { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 8px; }
     .chip {
-      padding: 7px 12px; border-radius: 999px; background: var(--fill); color: var(--ink-2);
+      position: relative; padding: 7px 12px; border-radius: 999px; background: var(--fill); color: var(--ink-2);
       font-size: 13px; font-weight: 600; white-space: nowrap;
     }
+    .chip::after { content: ''; position: absolute; inset: -7px -2px; }
     .chip[aria-pressed='true'] { background: var(--ink); color: var(--bg); }
     .stepper { display: inline-flex; align-items: center; border-radius: 999px; background: var(--fill); padding: 2px; }
     .stepper.is-on { background: var(--ink); color: var(--bg); }
-    .stepper button { width: 30px; height: 30px; border-radius: 50%; font-size: 16px; font-weight: 600; color: inherit; }
+    .stepper button { position: relative; width: 30px; height: 30px; border-radius: 50%; font-size: 16px; font-weight: 600; color: inherit; }
+    .stepper button::after { content: ''; position: absolute; inset: -7px -3px; }
     .stepper button:disabled { opacity: .35; cursor: default; }
     .stepper output { min-width: 62px; text-align: center; font-size: 13px; font-weight: 650; }
     .stepper output span { font-weight: 500; opacity: .7; }
@@ -126,6 +133,10 @@ export class ReturnPanelComponent {
 
   readonly retDate = computed(() =>
     this.fromCalendar() ? this.ret()! : addDays(this.outbound().arrDateKey, this.nights()));
+
+  /** The stepper hides behind "Other" while a preset chip covers the stay. */
+  protected readonly otherOpen = linkedSignal<number, boolean>({ source: () => this.shownNights(), computation: () => false });
+  protected readonly showStepper = computed(() => this.isCustom() || this.otherOpen());
 
   protected readonly shownNights = computed(() => diffDays(this.outbound().arrDateKey, this.retDate()));
   protected readonly isCustom = computed(() => !(NIGHT_PRESETS as readonly number[]).includes(this.shownNights()));

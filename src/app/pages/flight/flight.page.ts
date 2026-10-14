@@ -8,8 +8,9 @@ import { ShareService } from '../../state/share.service';
 import { findDestination } from '../../utils/airports';
 import { allItineraries, findAlternatives, type Itinerary } from '../../utils/connections';
 import { buildIcs, downloadIcs, icsFilename } from '../../utils/ics';
-import { addDays, diffDays, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
+import { addDays, diffDays, formatKey, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
+import { seasonEvent } from '../home/home-model';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
 import { WeekStripComponent } from '../../ui/week-strip.component';
@@ -89,6 +90,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
 
           <app-seg class="pk" [stretch]="true" ariaLabel="Choose a flight" [options]="pickOptions()"
                    [value]="chosen().pick ?? ''" (valueChange)="setPick($event)" />
+          @if (nonstopWhy(); as why) { <p class="pk-why ui-sub" id="pk-why">{{ why }}</p> }
 
           @if (outside()) {
             <div class="ui-card state">
@@ -215,6 +217,8 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
     .ctx { text-align: center; margin: 0 0 12px; font-size: 12.5px; }
     .strip { display: block; margin-bottom: 12px; }
     .pk { margin-bottom: 14px; }
+    .pk-why { margin: -8px 0 14px; font-size: 12.5px; }
+    .pk:has(+ .pk-why) { margin-bottom: 8px; }
     .state { padding: 22px; display: grid; gap: 8px; justify-items: start; }
     .state h2, .state p { margin: 0; }
     .state .ui-btn { margin-top: 6px; }
@@ -306,6 +310,18 @@ export class FlightPage {
     { value: 'nonstop', label: 'NONSTOP', disabled: !pickOf(this.itineraries(), 'nonstop') },
     { value: 'fastest', label: 'FASTEST', disabled: !this.itineraries().length },
   ]);
+
+  /** Why NONSTOP is greyed out: 'No nonstop on Sat · last one Oct 23', or null when it is pickable (or nothing flies). */
+  protected readonly nonstopWhy = computed(() => {
+    if (this.outside() || !this.itineraries().length || pickOf(this.itineraries(), 'nonstop')) return null;
+    const day = formatKey(this.dateKey(), { weekday: 'short' });
+    const ev = seasonEvent(this.hub(), this.dest(), this.state.todayKey());
+    if (ev && ev.kind !== 'starts' && ev.dateKey >= this.state.todayKey()) {
+      return `No nonstop on ${day} · last one ${formatKey(ev.dateKey, { month: 'short', day: 'numeric' })}`;
+    }
+    const next = nextFlightDate(this.hub(), this.dest(), this.dateKey(), false);
+    return next ? `No nonstop on ${day} · next one ${shortDay(next)}` : 'No nonstop this day';
+  });
 
   protected readonly ticket = computed(() => {
     const it = this.current();

@@ -4,7 +4,7 @@
  * listing reminders per flight leg, and "find the real train/bus" for each
  * ground leg. Pure.
  */
-import { monthsBetween, typicalForMonths } from '../recs/climate';
+import { monthsBetween, packingFacts, typicalForMonths } from '../recs/climate';
 import type { ClimateIndex } from '../recs/model';
 import { currencyName } from '../pages/destination/currency';
 import type { FlightLeg, FlightRef, GroundLeg, LegEnd, LegStatus, Trip } from '../trips/model';
@@ -219,18 +219,15 @@ function weatherCode(trip: Trip): string | null {
 
 /** 'Typical 8° / 2°, 14 wet days — pack a rain layer' for the trip's months; nothing without normals. Not critical. */
 export function weatherItems(trip: Trip, climate: ClimateIndex | null | undefined): PrepItem[] {
-  const t = typicalForMonths(climate, weatherCode(trip), monthsBetween(trip.outboundDate, trip.homeBy.dateKey));
+  const code = weatherCode(trip);
+  const months = monthsBetween(trip.outboundDate, trip.homeBy.dateKey);
+  const t = typicalForMonths(climate, code, months);
   if (!t) return [];
-  const id = 'weather:typical';
-  return [{
-    id,
-    title: t.advice.length ? `${t.text} — pack ${t.advice.join(' and ')}` : t.text,
-    detail: 'Typical for these months, not a forecast',
-    link: null,
-    critical: false,
-    source: 'manual',
-    done: !!trip.prep[id]?.done,
-  }];
+  const item = (id: string, title: string): PrepItem => ({
+    id, title, detail: 'Typical for these months, not a forecast', link: null, critical: false,
+    source: 'manual', done: !!trip.prep[id]?.done,
+  });
+  return [item('weather:typical', t.text), ...packingFacts(climate, code, months).map(p => item(p.id, p.title))];
 }
 
 /** Reference facts the checklist can use (all optional: a missing file adds nothing). */

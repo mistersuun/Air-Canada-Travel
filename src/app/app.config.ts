@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import {
   type ActivatedRouteSnapshot,
+  Router,
   provideRouter,
   withComponentInputBinding,
   withInMemoryScrolling,
@@ -18,7 +19,7 @@ import {
 import { provideServiceWorker } from '@angular/service-worker';
 import { loadSchedules } from './data/schedule-index';
 import { loadRouteNetwork } from './data/route-network';
-import { startupLoad } from './startup';
+import { createReloadGuard, startupLoad } from './startup';
 import { routes } from './app.routes';
 import { reloadOnChunkError } from './state/pwa-update.service';
 import { PhotoService } from './state/photo.service';
@@ -71,7 +72,10 @@ export const appConfig: ApplicationConfig = {
       const photos = inject(PhotoService);
       // Raced against a budget so a slow network cannot hold the first render;
       // see startupLoad for what happens to the loads that finish later.
-      return startupLoad(state, loadSchedules(), Promise.all([loadRouteNetwork(), photos.load()]), () => extras.announceSchedules());
+      const doc = inject(DOCUMENT);
+      const guard = createReloadGuard(doc, inject(Router));
+      void photos.load();
+      return startupLoad(state, loadSchedules(), loadRouteNetwork(), () => extras.announceSchedules(), guard, doc);
     }),
     provideServiceWorker('sw.js', {
       enabled: !isDevMode(),

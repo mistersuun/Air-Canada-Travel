@@ -291,6 +291,17 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     expect(el.querySelector('[role="alert"]')).toBeNull();
   });
 
+  it('shows "Flight schedules ready" with a Refresh button once late data arrived', async () => {
+    await render();
+    state.reportDataReady();
+    await settle();
+    const banner = el.querySelector('[role="status"].data-banner')!;
+    expect(banner.textContent).toContain('Flight schedules ready');
+    const reload = vi.spyOn(state, 'reloadPage').mockImplementation(() => undefined);
+    banner.querySelector('button')!.click();
+    expect(reload).toHaveBeenCalled();
+  });
+
   it('tapping the stale tag shows its detail as a notice', async () => {
     await render();
     clockOverride = Date.parse('2027-03-20T17:00:00Z');

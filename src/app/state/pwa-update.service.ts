@@ -102,7 +102,7 @@ export function holdsReload(path: string): boolean {
   return isPassView(path) || /^\/(g\/|share-in|trips\/import)/.test(path);
 }
 
-function isEditingField(doc: Document): boolean {
+export function isEditingField(doc: Document): boolean {
   const el = doc.activeElement;
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || (el as HTMLElement).isContentEditable === true);
 }

@@ -135,8 +135,14 @@ export class AppStateService {
   private rolledFor = this.todayKey();
 
   // ── Data load ─────────────────────────────────────────────────────────────
-  /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. 'loading' when startup gave up waiting and it is still coming. */
-  readonly dataLoad = signal<'ok' | 'loading' | 'failed'>('ok');
+  /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. 'loading' when startup gave up waiting and it is still coming; 'ready' when it arrived late and a refresh would show it everywhere. */
+  readonly dataLoad = signal<'ok' | 'loading' | 'ready' | 'failed'>('ok');
+  /**
+   * Bumped each time schedule data arrives after startup. The derived routes, stats and
+   * coverage read it, so what is on screen updates; pages that read the schedule index
+   * directly still need a reload (see the 'ready' banner).
+   */
+  readonly scheduleRev = signal(0);
   private retrying = false;
 
   // ── Shell UI state ────────────────────────────────────────────────────────
@@ -155,13 +161,19 @@ export class AppStateService {
   private pendingPush = false;
 
   // ── Derived ───────────────────────────────────────────────────────────────
+  /** The hub, read together with scheduleRev so late-arriving schedules recompute whatever calls the engine. */
+  private hubAtRev(): string {
+    this.scheduleRev();
+    return this.hub();
+  }
+
   readonly hubName = computed(() => findHub(this.hub())?.name ?? this.hub());
   readonly hubInfo = computed<Hub>(() => findHub(this.hub()) ?? HUBS.find(h => h.code === DEFAULT_HUB)!);
 
   /** Filtered, searched and sorted routes (Home results mode). */
   readonly routes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
-      home: this.hub(),
+      home: this.hubAtRev(),
       weekStartKey: this.weekStartKey(),
       dateKey: this.selectedDateKey(),
       region: this.region(),
@@ -180,7 +192,7 @@ export class AppStateService {
    */
   readonly unsearchedRoutes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
-      home: this.hub(),
+      home: this.hubAtRev(),
       weekStartKey: this.weekStartKey(),
       dateKey: this.selectedDateKey(),
       region: this.region(),
@@ -196,7 +208,7 @@ export class AppStateService {
   /** Every route from the hub in scope (week or selected day), ignoring search, filters and region. */
   readonly allRoutes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
-      home: this.hub(),
+      home: this.hubAtRev(),
       weekStartKey: this.weekStartKey(),
       dateKey: this.selectedDateKey(),
       region: 'All',
@@ -210,9 +222,9 @@ export class AppStateService {
     () => new Map(this.allRoutes().map(r => [r.destination.code, r])),
   );
 
-  readonly stats = computed(() => this.engine.hubStats(this.hub(), this.weekStartKey(), this.connect()));
+  readonly stats = computed(() => this.engine.hubStats(this.hubAtRev(), this.weekStartKey(), this.connect()));
 
-  readonly coverage = computed<Coverage>(() => this.engine.getCoverage(this.hub()));
+  readonly coverage = computed<Coverage>(() => this.engine.getCoverage(this.hubAtRev()));
 
   /** Active filter chips plus search; region is shown separately. */
   readonly activeFilterCount = computed(() => activeFilterCount(this.filters()) + (this.query() ? 1 : 0));
@@ -221,7 +233,7 @@ export class AppStateService {
   readonly favouriteSet = computed<ReadonlySet<string>>(() => new Set(this.favourites()));
 
   readonly starredThisWeek = computed<StarredItem[]>(() => {
-    const hub = this.hub();
+    const hub = this.hubAtRev();
     const week = this.weekStartKey();
     const withConnections = this.showConnections();
     const connect = this.connect();
@@ -366,6 +378,13 @@ export class AppStateService {
   /** Records the startup load (app initializer). */
   reportDataLoad(ok: boolean): void {
     this.dataLoad.set(ok ? 'ok' : 'failed');
+    if (ok) this.scheduleRev.update(n => n + 1);
+  }
+
+  /** Data arrived after startup but the page was not reloaded: on-screen lists update, a refresh brings the rest. */
+  reportDataReady(): void {
+    this.dataLoad.set('ready');
+    this.scheduleRev.update(n => n + 1);
   }
 
   /**

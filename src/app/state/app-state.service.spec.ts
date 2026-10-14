@@ -471,6 +471,19 @@ describe('AppStateService', () => {
       expect(state.dataInfo().staleTag).toBe('No schedules after Mar 31');
     });
 
+    it('late data bumps scheduleRev so routes and coverage recompute without a reload', () => {
+      const { state } = setup();
+      const before = state.scheduleRev();
+      const first = state.routes();
+      expect(state.routes()).toBe(first);
+      state.reportDataReady();
+      expect(state.dataLoad()).toBe('ready');
+      expect(state.scheduleRev()).toBe(before + 1);
+      expect(state.routes()).not.toBe(first);
+      state.reportDataLoad(false);
+      expect(state.scheduleRev()).toBe(before + 1);
+    });
+
     it('reportDataPending shows loading, and a later report replaces it', () => {
       const { state } = setup();
       state.reportDataPending();

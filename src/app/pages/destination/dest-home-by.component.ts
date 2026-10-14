@@ -4,6 +4,7 @@ import { IconComponent } from '../../components/shared/icons.component';
 import { gatewaysNear } from '../../places/reach';
 import { AppStateService } from '../../state/app-state.service';
 import type { Trip } from '../../trips/model';
+import { lastStopPlace } from '../../trips/stops';
 import { TripsService } from '../../trips/trips.service';
 import { tripPath, tripQuery } from '../../ui/links';
 import { WEEKDAY_SHORT, weekdayIndex } from '../../utils/time';
@@ -12,7 +13,7 @@ import { buildReturnView, returnGateway, triesLabel } from '../trips/return/retu
 /** The first active trip that could fly home from `code`: its return gateway, the goal itself, or a gateway near the goal. */
 export function tripHomeFrom(trips: readonly Trip[], code: string): Trip | null {
   return trips.find(t => code !== t.homeAirport && (
-    returnGateway(t) === code || t.goal.acCode === code || gatewaysNear(t.goal).some(g => g.code === code)
+    returnGateway(t) === code || lastStopPlace(t).acCode === code || gatewaysNear(lastStopPlace(t)).some(g => g.code === code)
   )) ?? null;
 }
 

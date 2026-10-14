@@ -355,8 +355,10 @@ export function tripAwayAirports(trip: Trip): Set<string> {
       if (l.to.code) out.add(l.to.code);
     }
   }
-  if (trip.goal.acCode) out.add(trip.goal.acCode);
-  for (const g of gatewaysNear(trip.goal)) out.add(g.code);
+  for (const place of [trip.goal, ...(trip.stops ?? []).map(s => s.place)]) {
+    if (place.acCode) out.add(place.acCode);
+    for (const g of gatewaysNear(place)) out.add(g.code);
+  }
   out.delete(trip.fromHub);
   out.delete(trip.homeAirport);
   return out;

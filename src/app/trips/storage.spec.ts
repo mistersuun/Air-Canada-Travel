@@ -66,7 +66,7 @@ describe('trips storage', () => {
 
   it('shows data from a newer app read-only', () => {
     const s = new MemoryStorage();
-    s.setItem(TRIPS_KEY, JSON.stringify({ schema: 2, trips: [SEVILLE_TRIP] }));
+    s.setItem(TRIPS_KEY, JSON.stringify({ schema: 3, trips: [SEVILLE_TRIP] }));
     const r = loadTrips(s);
     expect(r.readOnly).toBe(true);
     expect(r.file.trips).toHaveLength(1);

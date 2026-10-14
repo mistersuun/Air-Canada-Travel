@@ -396,7 +396,7 @@ export class LegSheetComponent {
   protected useInstead(alt: Alternate): void {
     const f = this.flight();
     if (!f) return;
-    const plan = alternateSwapPlan(this.trip(), alt);
+    const plan = alternateSwapPlan(this.trip(), f, alt);
     if (!plan) return;
     this.trips.swapLeg(this.trip().id, f.id, plan.it, plan.ground);
     this.closed.emit();

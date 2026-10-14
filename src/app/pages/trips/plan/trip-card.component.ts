@@ -9,6 +9,7 @@ import { PrefsService } from '../../../state/prefs.service';
 import type { Trip } from '../../../trips/model';
 import { LegStatusTagComponent } from '../../../trips/ui/leg-status-tag.component';
 import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.component';
+import { isMultiStop, stopNames } from '../../../trips/stops';
 import { tripPath, tripQuery } from '../../../ui/links';
 import { TriesMeterComponent } from '../return/tries-meter.component';
 import { triesHomeLeft } from '../return/tries-meter';
@@ -34,9 +35,9 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
         <div class="tc__goal">
           <div class="ui-label">Goal</div>
           @if (mode() === 'link') {
-            <h2 class="ui-h2 tc__name"><a [routerLink]="tripLink()" [queryParams]="state.globalParams()">{{ trip().goal.name }}</a></h2>
+            <h2 class="ui-h2 tc__name"><a [routerLink]="tripLink()" [queryParams]="state.globalParams()">{{ heading() }}</a></h2>
           } @else {
-            <h2 class="ui-h2 tc__name">{{ trip().goal.name }}</h2>
+            <h2 class="ui-h2 tc__name">{{ heading() }}</h2>
           }
           <p class="ui-sub tn tc__dates">{{ dates() }}</p>
           @if (groupNames().length) {
@@ -189,6 +190,8 @@ export class TripCardComponent {
   readonly partyPick = output<void>();
 
   protected readonly cd = computed(() => countdown(this.trip(), this.state.nowMs()));
+  /** The goal, or all stops ('Seville, Lisbon and Porto') on a multi-stop trip. */
+  protected readonly heading = computed(() => isMultiStop(this.trip()) ? stopNames(this.trip()) : this.trip().goal.name);
   protected readonly cdTitle = computed(() => (/sleeps$/.test(this.cd().text) ? `${this.cd().text} to ${this.trip().goal.name}` : this.cd().text));
   protected readonly dates = computed(() => tripDatesLabel(this.trip(), this.state.timeFormat()));
   protected readonly partyText = computed(() => partyLabel(this.trip().party));

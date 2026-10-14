@@ -8,6 +8,7 @@
  * no odds, "not found in our schedule data" rather than "no flights", and
  * listing is always the traveller's own step.
  */
+import { currentStop, stopForLeg } from '../../trips/stops';
 import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
 import { networkNoteFor } from '../../data/route-network';
@@ -319,7 +320,7 @@ export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripI
   return {
     tripId: trip.id,
     eyebrow: `${trip.name} · ${dayLabel(todayKey)}`,
-    title: n >= 1 ? `Day ${n} in ${trip.goal.name}` : `On your way to ${trip.goal.name}`,
+    title: stopTitle(trip, todayKey, n),
     next: nextLeg(trip, nowMs, fmt, listingHours),
     homeBy: {
       label: `Home by ${dayLabel(trip.homeBy.dateKey)}, ${formatClock(trip.homeBy.hhmm, fmt)}${zone}`,
@@ -328,6 +329,13 @@ export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripI
     quiet: startedToday ? 'Nothing else today.' : 'Nothing is scheduled today.',
     fact: goalFact(trip, nowMs),
   };
+}
+
+/** 'Day 3 in Lisbon': counts from arriving at the stop you are in (the goal until a later stop begins). */
+function stopTitle(trip: Trip, todayKey: string, goalDay: number): string {
+  const stop = currentStop(trip, todayKey);
+  if (stop.id !== 'goal') return `Day ${diffDays(stop.arriveDate, todayKey) + 1} in ${stop.place.name}`;
+  return goalDay >= 1 ? `Day ${goalDay} in ${trip.goal.name}` : `On your way to ${trip.goal.name}`;
 }
 
 export interface UpcomingTripView { tripId: string; title: string; detail: string; listing?: { label: string; open: boolean } | null }
@@ -423,7 +431,7 @@ export function returnBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions
 export function todayBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions, fmt: TimeFormat): TodayBackup | null {
   // Recovery searches toward the goal: for a return leg the backup is the next way home.
   if (leg.role === 'return') return returnBackup(trip, leg, connect, fmt);
-  const r = missOneOutbound(trip, leg.id, connect);
+  const r = missOneOutbound(trip, leg.id, connect);   // heads for the leg's own stop (stopForLeg)
   const missed = leg.refs[0].flightNumber;
   const tonight = r.tonight.find(o => o.status === 'usable');
   if (tonight) {
@@ -683,8 +691,10 @@ export function recoverNote(trip: Trip, leg: FlightLeg | null, tonight: Reachabl
 export function recoverView(input: {
   trip: Trip; at: string | null; legId: string | null; nowMs: number; connect: ConnectOptions; fmt: TimeFormat;
 }): RecoverView {
-  const { trip, nowMs, fmt } = input;
-  const leg = recoverLeg(trip, input.at, input.legId);
+  const { nowMs, fmt } = input;
+  const leg = recoverLeg(input.trip, input.at, input.legId);
+  // Recovery heads for the place this leg is going to (an onward leg: its stop, not the first one).
+  const trip: Trip = leg ? { ...input.trip, goal: stopForLeg(input.trip, leg) } : input.trip;
   const at = input.at || leg?.refs[0].origin || trip.fromHub;
   const r = stillReachable({ trip, at, nowMs, connect: input.connect });
   // Never offer the very flight being recovered from.

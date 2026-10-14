@@ -22,13 +22,15 @@ import { ESTIMATED_FLIGHT, refsFromItinerary, sameRefs, sortLegs } from './engin
 import { OutcomePrompt, pendingOutcomePrompts } from './engine/today';
 import { backupFilename, exportBackup, mergeBackup, parseBackup } from './export';
 import { newId } from './ids';
+import { addDays, diffDays } from '../utils/time';
 import {
-  Alternate, FlightLeg, FlightLog, GroundLeg, GroundMode, GroundTimes, LegEnd, LegStatus, LoadNote, NewTrip,
-  FLIGHTLOG_KEY, Outcome, TRIPS_SCHEMA, calendarKey, OutcomeKind, SharedTripPreview, TRIPS_KEY, Trip, TripLeg, TripsFile, defaultTripName, instanceKey,
+  Alternate, FlightLeg, FlightLog, Place, Stop, GroundLeg, GroundMode, GroundTimes, LegEnd, LegStatus, LoadNote, NewTrip,
+  FLIGHTLOG_KEY, Outcome, TRIPS_SCHEMA, FLIGHTLOG_SCHEMA, schemaFor, calendarKey, OutcomeKind, SharedTripPreview, TRIPS_KEY, Trip, TripLeg, TripsFile, defaultTripName, instanceKey,
   isFinalStatus,
 } from './model';
+import { MAX_STOPS, withStop, withoutStop } from './stops';
 import { decodeTripShare, encodeTripShare, shareUrl } from './share-codec';
-import { TRIPS_STORAGE, clearCorrupt, loadCorrupt, loadFlightLog, loadTrips, saveFlightLog, saveTrips, sanitizeLeg } from './storage';
+import { TRIPS_STORAGE, clearCorrupt, loadCorrupt, loadFlightLog, loadTrips, storedTripsSchema, saveFlightLog, saveTrips, sanitizeLeg } from './storage';
 
 /** What swapLeg needs from a ground estimate (places/ground GroundEstimate fits). */
 export interface GroundEstimateLike {
@@ -58,8 +60,8 @@ export class TripsService {
   private readonly prefs = inject(PrefsService);
   private readonly profile = inject(ProfileService);
 
-  private readonly file = signal<TripsFile>({ schema: TRIPS_SCHEMA, trips: [] });
-  private readonly log = signal<FlightLog>({ schema: TRIPS_SCHEMA, notes: [], outcomes: [], dismissed: [] });
+  private readonly file = signal<TripsFile>({ schema: 1, trips: [] });
+  private readonly log = signal<FlightLog>({ schema: FLIGHTLOG_SCHEMA, notes: [], outcomes: [], dismissed: [] });
   private readonly readOnlyState = signal(false);
   /** Epoch ms of the last check (refreshes the time-based lists). */
   private readonly tick = signal(0);
@@ -200,6 +202,82 @@ export class TripsService {
         list.splice(Math.min(idx, list.length), 0, removed);
         this.setTrips(list);
       },
+    });
+  }
+
+  // ── Editing ───────────────────────────────────────────────────────────────
+
+  rename(id: string, name: string): void {
+    const clean = name.trim().slice(0, 120);
+    if (!clean) return;
+    this.update(id, t => (t.name === clean ? t : { ...t, name: clean }));
+  }
+
+  /**
+   * Moves the outbound date. With `it` (the outbound flight found for the new
+   * day) the current outbound leg is swapped to it (old one Dropped, backups
+   * kept, ground legs from the gateway re-dated; the swap's Undo puts the old
+   * date back too); with null the legs stay as they are. The home-by date is
+   * pushed out only when it would fall before the new outbound date.
+   */
+  setOutboundDate(id: string, dateKey: string, it: Itinerary | null): void {
+    const before = this.trip(id);
+    if (!before || before.outboundDate === dateKey) return;
+    const leg = before.legs.find((l): l is FlightLeg => l.kind === 'flight' && l.role === 'outbound' && !isFinalStatus(l.status));
+    const firstStop = before.stops?.[0];
+    if (firstStop && dateKey >= firstStop.arriveDate) {
+      this.flash(`Your next stop, ${firstStop.place.name}, starts ${firstStop.arriveDate}. Move or remove it first.`);
+      return;
+    }
+    const stay = diffDays(before.outboundDate, before.homeBy.dateKey);
+    const move = (t: Trip): Trip => ({
+      ...t, outboundDate: dateKey,
+      homeBy: t.homeBy.dateKey < dateKey ? { ...t.homeBy, dateKey: addDays(dateKey, Math.max(0, stay)) } : t.homeBy,
+    });
+    if (it && leg) {
+      this.swapLeg(id, leg.id, it, null, { onUndo: () => this.update(id, t => ({ ...t, outboundDate: before.outboundDate, homeBy: before.homeBy })) });
+      this.update(id, move);
+      return;
+    }
+    this.update(id, move);
+    this.flash(leg ? 'Date changed. No flight found that day, so your flight stays as it was.' : 'Date changed');
+  }
+
+  /** Removes a leg (and the schedule changes waiting on it), with Undo. */
+  removeLeg(id: string, legId: string): void {
+    const trip = this.trip(id);
+    const leg = trip?.legs.find(l => l.id === legId);
+    if (!trip || !leg) return;
+    const dropped = trip.changes.filter(c => c.legId === legId);
+    this.update(id, t => ({ ...t, legs: t.legs.filter(l => l.id !== legId), changes: t.changes.filter(c => c.legId !== legId) }));
+    this.flash('Leg removed', {
+      label: 'Undo',
+      run: () => this.update(id, t => t.legs.some(l => l.id === legId) ? t
+        : { ...t, legs: sortLegs([...t.legs, leg]), changes: [...t.changes, ...dropped] }),
+    });
+  }
+
+  /** Adds a stop after the goal (kept in arrival order). Returns its id ('' when the trip is unknown). */
+  addStop(id: string, place: Place, arriveDate: string): string {
+    const trip = this.trip(id);
+    if (!trip) return '';
+    if ((trip.stops?.length ?? 0) >= MAX_STOPS) {
+      this.flash(`A trip can have ${MAX_STOPS} stops after the first. Remove one to add another.`);
+      return '';
+    }
+    const stop: Stop = { id: newId(), place, arriveDate };
+    this.update(id, t => withStop(t, stop));
+    return stop.id;
+  }
+
+  /** Removes a later stop with Undo. Its legs stay: remove them on their own. */
+  removeStop(id: string, stopId: string): void {
+    const stop = this.trip(id)?.stops?.find(s => s.id === stopId);
+    if (!stop) return;
+    this.update(id, t => withoutStop(t, stopId));
+    this.flash(`${stop.place.name} removed. Its legs stay.`, {
+      label: 'Undo',
+      run: () => this.update(id, t => t.stops?.some(s => s.id === stopId) ? t : withStop(t, stop)),
     });
   }
 
@@ -596,7 +674,7 @@ export class TripsService {
   }
 
   private setTrips(trips: Trip[]): void {
-    const file: TripsFile = { schema: TRIPS_SCHEMA, trips };
+    const file: TripsFile = { schema: schemaFor(trips), trips };
     this.file.set(file);
     if (this.readOnlyState()) return;
     if (!this.persistAsked) {
@@ -614,7 +692,10 @@ export class TripsService {
   /** Writes what changed (plus whichever file failed last time); a failure raises `unsaved` (once, with a toast) and the next change tries again. */
   private persist(changed: 'trips' | 'log'): void {
     const was = this.unsaved();
-    if (changed === 'trips' || this.tripsUnsaved()) this.tripsUnsaved.set(!saveTrips(this.storage, this.file()));
+    // Another tab or a newer app may have written a newer schema since we loaded: never overwrite it.
+    if ((storedTripsSchema(this.storage) ?? 0) > TRIPS_SCHEMA) {
+      this.readOnlyState.set(true);
+    } else if (changed === 'trips' || this.tripsUnsaved()) this.tripsUnsaved.set(!saveTrips(this.storage, this.file()));
     if (changed === 'log' || this.logUnsaved()) this.logUnsaved.set(!saveFlightLog(this.storage, this.log()));
     if (this.unsaved() && !was) {
       this.flash(UNSAVED_NOTICE, { label: 'Export', run: () => void this.downloadBackup() });

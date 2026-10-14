@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { t } from '../../i18n/t';
 import type { LegEnd } from '../../trips/model';
 import { otherWays } from '../other-ways';
 
@@ -19,7 +20,7 @@ import { otherWays } from '../other-ways';
           <li><a class="ui-link" [href]="w.href" target="_blank" rel="noopener noreferrer" [attr.data-way]="w.id">{{ w.label }}</a></li>
         }
       </ul>
-      <p class="ow__foot">Opens other sites in a new tab. We do not show prices or availability.</p>
+      <p class="ow__foot">{{ t('places.other.foot') }}</p>
     </section>
   `,
   styles: [`
@@ -41,7 +42,9 @@ export class OtherWaysComponent {
   readonly land = input<boolean>(true);
   /** Airport to search flights to (Kiwi.com). */
   readonly toAirport = input<string | undefined>(undefined);
-  readonly heading = input<string>('Other ways there');
+  readonly headingInput = input<string | undefined>(undefined, { alias: 'heading' });
+  protected readonly t = t;
+  protected readonly heading = computed(() => this.headingInput() ?? t('places.other.title'));
 
   protected readonly ways = computed(() =>
     otherWays({ from: this.from(), to: this.to(), dateKey: this.dateKey(), land: this.land(), toAirport: this.toAirport() }));

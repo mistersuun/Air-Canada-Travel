@@ -1,4 +1,5 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
+import { t } from '../i18n/t';
 import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 /**
@@ -83,26 +84,24 @@ export function fastestTransit(code: string | null | undefined): CityOption | nu
 /** 'Terminal 1', 'Terminals 1 and 3', 'Domestic and International terminals', 'Single terminal', or '' when unknown. */
 export function terminalLabel(i: AirportInfo): string {
   if (i.terminals.length) {
-    const names = i.terminals.join(' and ');
+    const n = i.terminals.length;
+    const names = n > 1 ? t('places.joinAnd', { list: i.terminals.slice(0, -1).join(', '), last: i.terminals[n - 1] }) : i.terminals[0];
     // Short names are numbers or letters ('1', 'B'); longer ones are words ('Domestic').
-    if (i.terminals.every(t => t.length <= 2)) return `${i.terminals.length > 1 ? 'Terminals' : 'Terminal'} ${names}`;
-    return `${names} ${i.terminals.length > 1 ? 'terminals' : 'terminal'}`;
+    return t(i.terminals.every(x => x.length <= 2) ? 'places.airport.terminals' : 'places.airport.namedTerminals', { n, names });
   }
-  return i.singleTerminal ? 'Single terminal' : '';
+  return i.singleTerminal ? t('places.airport.single') : '';
 }
 
 /** 'Maple Leaf Lounge: yes', 'Maple Leaf Lounge closed until early 2027', or '' when unknown. */
 export function loungeLabel(i: AirportInfo): string {
   if (i.mapleLeafLounge === null) return '';
-  if (i.loungeClosed) return `Maple Leaf Lounge closed${i.loungeNote ? ` ${i.loungeNote}` : ''}`;
-  return `Maple Leaf Lounge: ${i.mapleLeafLounge ? 'yes' : 'no'}${i.loungeNote ? ` · ${i.loungeNote}` : ''}`;
+  if (i.loungeClosed) return t('places.airport.lounge', { state: 'closed', note: i.loungeNote ? ` ${i.loungeNote}` : '' });
+  return t('places.airport.lounge', { state: i.mapleLeafLounge ? 'yes' : 'no', note: i.loungeNote ? ` · ${i.loungeNote}` : '' });
 }
-
-const MODE_WORD: Record<CityMode, string> = { train: 'Train', bus: 'Bus', metro: 'Metro', taxi: 'Taxi' };
 
 /** 'Train about 25 min · UP Express to Union Station'. */
 export function cityOptionLabel(o: CityOption): string {
-  return `${MODE_WORD[o.mode]} about ${o.min} min · ${o.note}`;
+  return t('places.airport.city', { mode: o.mode, min: o.min, note: o.note });
 }
 
 // ── Loading ─────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { t } from '../../i18n/t';
 import { GroundTimetableService } from '../ground-timetable.service';
 
 /**
@@ -15,20 +16,20 @@ import { GroundTimetableService } from '../ground-timetable.service';
   template: `
     @if (doc(); as d) {
       <details class="grp credits">
-        <summary class="row"><span class="nm">Timetable credits</span><span class="chev" aria-hidden="true">›</span></summary>
+        <summary class="row"><span class="nm">{{ t('places.credit.ttTitle') }}</span><span class="chev" aria-hidden="true">›</span></summary>
         <ul class="cr">
           @for (s of sources(); track s.id) {
             <li [attr.data-source]="s.id">
               <b>{{ s.name }}</b>&ngsp;<a [href]="s.url" target="_blank" rel="noopener">{{ s.credit }}</a>,
               @if (s.licenceUrl) { <a [href]="s.licenceUrl" target="_blank" rel="noopener license">{{ s.licence }}</a> }
               @else { {{ s.licence }} }
-              @if (s.fetched) { · downloaded {{ s.fetched }} }
+              @if (s.fetched) { · {{ t('places.credit.downloaded', { date: s.fetched }) }} }
             </li>
           }
           <li>
-            <b>Timetable file</b>&ngsp;Typical departures for each corridor, built from the feeds above and published under the
-            <a [href]="d.licenseUrl || odbl" target="_blank" rel="noopener license">Open Database License (ODbL 1.0)</a>.
-            Timetables, not bookings or live times. Check before you go.
+            <b>{{ t('places.credit.ttFile') }}</b>&ngsp;{{ t('places.credit.ttA') }}
+            <a [href]="d.licenseUrl || odbl" target="_blank" rel="noopener license">{{ t('places.credit.ttLicence') }}</a>.
+            {{ t('places.credit.ttB') }}
           </li>
         </ul>
       </details>
@@ -50,6 +51,7 @@ import { GroundTimetableService } from '../ground-timetable.service';
   `],
 })
 export class GroundCreditComponent {
+  protected readonly t = t;
   private readonly service = inject(GroundTimetableService);
   protected readonly odbl = 'https://opendatacommons.org/licenses/odbl/1-0/';
   protected readonly doc = computed(() => this.service.timetables());

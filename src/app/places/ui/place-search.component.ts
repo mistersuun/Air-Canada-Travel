@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { DESTINATIONS, HUBS } from '../../data/destinations';
 import { findDestination } from '../../utils/airports';
@@ -47,8 +48,8 @@ export function searchPlaces(q: string, cityHits: readonly Place[], limit = 6, d
   template: `
     <label class="ui-search ui-glass ps__f">
       <app-icon name="search" [size]="18" [strokeWidth]="2" />
-      <span class="ui-visually-hidden">{{ label() }}</span>
-      <input type="search" data-place-search autocomplete="off" enterkeyhint="search" [placeholder]="label()"
+      <span class="ui-visually-hidden">{{ labelText() }}</span>
+      <input type="search" data-place-search autocomplete="off" enterkeyhint="search" [placeholder]="labelText()"
              [value]="q()" (input)="onInput($event)">
     </label>
     @if (rows().length) {
@@ -61,7 +62,7 @@ export function searchPlaces(q: string, cityHits: readonly Place[], limit = 6, d
     }
     <div role="status" aria-live="polite">
       @if (!rows().length && q().trim().length >= 2) {
-        <p class="ui-sub ps__none" data-place-none>No place found{{ loading() ? ' yet. Looking through more cities...' : destinationsOnly() ? '. Trips start from your hub, so pick where you are going.' : '. Try the city name.' }}</p>
+        <p class="ui-sub ps__none" data-place-none>{{ noneText() }}</p>
       }
     </div>
   `,
@@ -82,7 +83,10 @@ export class PlaceSearchComponent {
   private readonly cities = inject(CityIndexService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  readonly label = input('Search a city or airport');
+  readonly label = input<string | undefined>(undefined);
+  protected readonly labelText = computed(() => this.label() ?? t('places.search.label'));
+  protected readonly noneText = computed(() =>
+    t(this.loading() ? 'places.search.noneLoading' : this.destinationsOnly() ? 'places.search.noneDest' : 'places.search.none'));
   /** Leave out the hubs (trips start from one, they are not somewhere to go to). */
   readonly destinationsOnly = input(false);
   /** Focus the field when it appears. */
@@ -112,6 +116,6 @@ export class PlaceSearchComponent {
   }
 
   protected where(p: Place): string {
-    return [p.admin1, p.country].filter(Boolean).join(', ') || (p.acCode ? `Airport ${p.acCode}` : '');
+    return [p.admin1, p.country].filter(Boolean).join(', ') || (p.acCode ? t('places.search.airport', { code: p.acCode }) : '');
   }
 }

@@ -4,9 +4,10 @@ import type { Trip } from '../trips/model';
 import { sevilleTrip } from '../trips/testing/seville-fixture';
 import { CARD_MIN_H } from './trip-card';
 import {
-  DEFAULT_RECAP_OPTIONS, RECAP_PHOTO_H, coverRect, flagEmoji, recapDates, recapExtras, recapFilename, recapHead, recapLayout,
+  DEFAULT_RECAP_OPTIONS, RECAP_PHOTO_H, coverRect, recapDates, recapExtras, recapFilename, recapHead, recapLayout,
   renderRecapCard,
 } from './recap-card';
+import { flagFromIso2 as flagEmoji } from '../utils/flags';
 import { stubCanvas } from './testing/stub-canvas';
 
 const noFonts = async () => undefined;

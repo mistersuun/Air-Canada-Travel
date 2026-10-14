@@ -13,6 +13,7 @@ import { geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { PHOTO_BASE } from '../state/photo.service';
 import { LAND_URL, type LandCollection, topologyToLand } from '../state/geo.service';
 import { type TripRecap, airportInfo, boardedFlights, recapLine, standbyRecordLine, statsOf, tripBoardedFlights, tripRecap } from '../logbook/logbook';
+import { flagFromIso2 } from '../utils/flags';
 import { milestones } from '../logbook/milestones';
 import type { Outcome, Trip } from '../trips/model';
 import { formatKey } from '../utils/time';
@@ -140,19 +141,12 @@ export function recapDates(trip: Trip): string {
   return first === last ? f(first) : `${f(first)} – ${f(last)}`;
 }
 
-/** Regional-indicator flag for an ISO 3166-1 alpha-2 code ('' when it is not two letters). */
-export function flagEmoji(iso2: string): string {
-  const c = iso2.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(c)) return '';
-  return String.fromCodePoint(...[...c].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
-}
-
 /** The countries of the trip's boarded flights as flag emoji, plus the milestones it earned. */
 export function recapExtras(trip: Trip, opts: Pick<RecapOptions, 'outcomes' | 'allTrips'>): { flags: string; badges: string } {
   const own = (opts.outcomes ?? []).filter(o => o.tripId === trip.id);
   const flights = boardedFlights({ outcomes: own }, [trip]);
   const iso = statsOf(flights).countries.map(c => c.iso2);
-  const shown = iso.slice(0, FLAGS_MAX).map(flagEmoji).filter(Boolean);
+  const shown = iso.slice(0, FLAGS_MAX).map(flagFromIso2).filter(Boolean);
   const flags = shown.join(' ') + (iso.length > FLAGS_MAX ? ` +${iso.length - FLAGS_MAX}` : '');
   const mine = new Set([...tripBoardedFlights(trip), ...flights].map(f => f.key));
   const all = boardedFlights({ outcomes: [...(opts.outcomes ?? [])] }, opts.allTrips ?? [trip]);

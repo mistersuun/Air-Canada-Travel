@@ -290,6 +290,23 @@ describe('TripDetailPage', () => {
       }
     });
 
+    it('Copy link right after the trip changed still shares synchronously (the old link stays until the rebuild lands)', async () => {
+      const share = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+      try {
+        const { el, stable, trips } = await render();
+        el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
+        await stable();
+        await new Promise(r => setTimeout(r, 50));
+        trips.update(SEVILLE_IDS.trip, t => ({ ...t, name: 'Renamed trip' }));
+        await stable();
+        el.querySelector<HTMLButtonElement>('[data-copy]')!.click();
+        expect(share).toHaveBeenCalledTimes(1);
+      } finally {
+        delete (navigator as { share?: unknown }).share;
+      }
+    });
+
     it('Copy link before the link is ready hands the clipboard a promise instead of waiting', async () => {
       const write = vi.fn().mockResolvedValue(undefined);
       let item: Record<string, Promise<Blob>> | null = null;

@@ -265,6 +265,11 @@ describe('AppStateService', () => {
       await settle();
       expect(state.todayKey()).toBe('2026-10-05');
       expect(state.weekStartKey()).toBe('2026-10-05');
+      // And back: an untouched week follows today backwards too.
+      state.setHub('YVR');
+      await settle();
+      expect(state.todayKey()).toBe('2026-10-04');
+      expect(state.weekStartKey()).toBe('2026-09-28');
     });
 
     it('leaves a week the user chose alone', () => {

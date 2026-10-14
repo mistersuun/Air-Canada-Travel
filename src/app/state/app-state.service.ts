@@ -566,7 +566,7 @@ export class AppStateService {
     this.rolledFor = t;
     if (!this.navigated) {
       const current = weekStartKey(t);
-      if (this.weekStartKey() < current) {
+      if (this.weekStartKey() !== current) {
         this.weekStartKey.set(current);
         this.selectedDateKey.set(null);
       }

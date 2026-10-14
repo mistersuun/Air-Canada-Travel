@@ -10,7 +10,7 @@ import { TRIPS_KEY } from '../trips/model';
 import { TRIPS_STORAGE } from '../trips/storage';
 import { SEVILLE_TRIPS_FILE } from '../trips/testing/seville-fixture';
 import { parseGroupFragment } from './group-crypto';
-import { groupExpiry, parseGroupDoc } from './group-doc';
+import { groupExpiry, parseGroupDoc, tripLastDate } from './group-doc';
 import { GroupService, type GroupRecord } from './group.service';
 
 const NOW_MS = Date.parse('2026-10-01T13:41:00Z');
@@ -289,6 +289,21 @@ describe('GroupService (client against the real server logic)', () => {
       expect(svc.ownerExpiry(null, null, NOW_MS)).toBeUndefined();
     });
 
+    it('ownerExpiry does not extend once the trip ended more than 30 days ago', async () => {
+      const r = await svc.create(trip, 'Ana', NOW_MS);
+      if (!r.ok) throw new Error('create failed');
+      const end = Date.parse(`${tripLastDate(trip)}T23:59:59Z`);
+      expect(svc.ownerExpiry(r.record, null, end + 29 * 86_400_000)).toBeDefined();
+      expect(svc.ownerExpiry(r.record, null, end + 31 * 86_400_000)).toBeUndefined();
+    });
+
+    it('create stores the expiry the server answered with', async () => {
+      const r = await svc.create(trip, 'Ana', Date.now());
+      if (!r.ok) throw new Error('create failed');
+      const served = (await svc.load(svc.linkOf(r.record)));
+      expect(served.ok && served.expiresAt).toBe(r.record.expiresAt);
+    });
+
     it('an owner save extends the group; a companion save does not', async () => {
       const r = await svc.create(trip, 'Ana', Date.now());
       if (!r.ok) throw new Error('create failed');
@@ -315,6 +330,17 @@ describe('GroupService (client against the real server logic)', () => {
       svc.remember(rec('CCCCCCCCCCCCCCCCCCCCCC'));
       expect(Object.keys(JSON.parse(localStorage.getItem('ac.groups.v1')!)).sort()).toEqual(['AAAAAAAAAAAAAAAAAAAAAA', 'BBBBBBBBBBBBBBBBBBBBBB', 'CCCCCCCCCCCCCCCCCCCCCC']);
       expect(Object.keys(svc.all()).sort()).toHaveLength(3);
+    });
+
+    it('update does not bring back a group another tab forgot', () => {
+      svc.remember(rec('AAAAAAAAAAAAAAAAAAAAAA'));
+      localStorage.setItem('ac.groups.v1', '{}'); // the other tab forgot it
+      svc.update({ ...rec('AAAAAAAAAAAAAAAAAAAAAA'), name: 'changed' });
+      expect(svc.recordFor('AAAAAAAAAAAAAAAAAAAAAA')).toBeNull();
+      expect(JSON.parse(localStorage.getItem('ac.groups.v1')!)).toEqual({});
+      svc.remember(rec('BBBBBBBBBBBBBBBBBBBBBB'));
+      svc.update({ ...rec('BBBBBBBBBBBBBBBBBBBBBB'), name: 'changed' });
+      expect(svc.recordFor('BBBBBBBBBBBBBBBBBBBBBB')?.name).toBe('changed');
     });
 
     it('forget also leaves another tab\'s groups alone', () => {

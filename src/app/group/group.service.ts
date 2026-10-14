@@ -6,7 +6,7 @@ import { TripsService } from '../trips/trips.service';
 import {
   type GroupLink, buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newMemberId, newOwnerToken, newWriteToken,
 } from './group-crypto';
-import { type GroupDoc, type MemberStatus, capMembers, forGroup, groupExpiry, mergeGroupDocs, parseGroupDoc, serializeGroupDoc } from './group-doc';
+import { type GroupDoc, type MemberStatus, capMembers, forGroup, groupExpiry, mergeGroupDocs, tripLastDate, parseGroupDoc, serializeGroupDoc } from './group-doc';
 
 export const GROUP_ENDPOINT = '/.netlify/functions/group';
 const STORAGE_KEY = 'ac.groups.v1';
@@ -68,6 +68,11 @@ export class GroupService {
 
   remember(r: GroupRecord): void {
     this.mutate(m => ({ ...m, [r.id]: r }));
+  }
+
+  /** Updates a record this device already has; does nothing when another tab forgot it meanwhile (so it is not brought back). */
+  update(r: GroupRecord): void {
+    this.mutate(m => (m[r.id] ? { ...m, [r.id]: r } : m));
   }
 
   forget(id: string): void {
@@ -182,6 +187,8 @@ export class GroupService {
     if (!rec?.owner || !rec.tripId) return undefined;
     const trip = this.trips.trip(rec.tripId);
     if (!trip) return undefined;
+    // A trip that ended long ago has nothing left to keep alive for.
+    if (Date.parse(`${tripLastDate(trip)}T23:59:59Z`) + 30 * 86_400_000 < nowMs) return undefined;
     const want = groupExpiry(trip, nowMs);
     const cur = current ? Date.parse(current) : NaN;
     return Number.isFinite(cur) && Date.parse(want) - cur <= 86_400_000 ? undefined : want;
@@ -211,7 +218,7 @@ export class GroupService {
       const doc: GroupDoc = { s: 1, plan, planAt: at, members: { [memberId]: { name, planLabel: '', arrival: null, updatedAt: at } }, meetup: null };
       const saved = await this.save(this.linkOf(record), doc, 0, expiresAt, record.ownerToken);
       if (saved.ok) {
-        const rec = { ...record, expiresAt };
+        const rec = { ...record, expiresAt: saved.expiresAt ?? expiresAt };
         this.remember(rec);
         return { ok: true, record: rec };
       }

@@ -228,6 +228,7 @@ export const INBOUND_TTL_MS = 15 * 60_000;
 export interface InboundStore {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<unknown>;
+  delete?(key: string): Promise<unknown>;
 }
 
 /**
@@ -243,10 +244,13 @@ export async function cachedInbound(
   try {
     const raw = store ? await store.get(key) : null;
     if (raw) {
-      const c = JSON.parse(raw) as { at?: unknown; inbound?: unknown };
-      if (typeof c.at === 'number' && nowMs - c.at >= 0 && nowMs - c.at < INBOUND_TTL_MS) {
+      let c: { at?: unknown; inbound?: unknown } | null = null;
+      try { c = JSON.parse(raw) as { at?: unknown; inbound?: unknown }; } catch { /* malformed */ }
+      if (c && typeof c.at === 'number' && nowMs - c.at >= 0 && nowMs - c.at < INBOUND_TTL_MS) {
         return isRec(c.inbound) ? normalizeCachedInbound(c.inbound) : null;
       }
+      // Stale or malformed: remove it, so keys for flights that are over do not pile up in the store.
+      await store?.delete?.(key);
     }
   } catch { /* unreadable: look it up */ }
   const fresh = await fetchInbound();

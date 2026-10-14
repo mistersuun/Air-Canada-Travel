@@ -212,6 +212,19 @@ describe('cachedInbound (15 minute cache keyed by the inbound flight id)', () =>
     await cachedInbound(s, 'ACA999-1', NOW, look);
     expect(calls).toBe(3);
   });
+  it('deletes an entry it finds stale or unreadable before looking up again', async () => {
+    const m = new Map<string, string>();
+    const deleted: string[] = [];
+    const s = { get: async (k: string) => m.get(k) ?? null, set: async (k: string, v: string) => { m.set(k, v); }, delete: async (k: string) => { deleted.push(k); m.delete(k); } };
+    m.set('inbound-ACA811-9', JSON.stringify({ at: NOW - INBOUND_TTL_MS - 1, inbound }));
+    await cachedInbound(s, 'ACA811-9', NOW, async () => undefined);
+    expect(deleted).toEqual(['inbound-ACA811-9']);
+    expect(m.size).toBe(0);
+    m.set('inbound-ACA811-9', 'junk');
+    await cachedInbound(s, 'ACA811-9', NOW, async () => inbound);
+    expect(deleted).toHaveLength(2);
+    expect(m.size).toBe(1); // the fresh lookup is stored again
+  });
   it('a refused or failed lookup (undefined) gives null and is not cached', async () => {
     const s = store();
     let calls = 0;

@@ -217,7 +217,7 @@ export class TripMenuComponent {
 
   private async buildLink(): Promise<void> {
     const seq = ++this.buildSeq;
-    this.link.set(null);
+    // The previous link stays until the new one resolves, so a tap during a rebuild still shares synchronously.
     let next: { url: string } | 'too-large' | null;
     try {
       const url = await this.trips.shareLink(this.trip().id);

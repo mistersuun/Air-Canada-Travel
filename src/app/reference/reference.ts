@@ -5,7 +5,7 @@
  * decoding, formatting and the Trip Prep items. Facts and their source and
  * date only, no interpretation.
  */
-import { addDays, diffDays, formatKey } from '../utils/time';
+import { addDays, formatKey } from '../utils/time';
 
 export interface Advisory { level: 0 | 1 | 2 | 3; text: string; updated: string | null; url: string; regional: boolean }
 export interface Holiday { date: string; name: string; localName: string; global: boolean }
@@ -173,7 +173,3 @@ export function holidayNote(h: Holiday): string {
   return h.global ? 'Public holiday' : 'Public holiday in some regions';
 }
 
-/** Days from today to the holiday (for the aria text). */
-export function daysUntil(h: Holiday, fromKey: string): number {
-  return diffDays(fromKey, h.date);
-}

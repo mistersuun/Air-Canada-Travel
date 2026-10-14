@@ -7,35 +7,16 @@ import {
   coverageHubFor,
   droppedForBlockTime,
   flightsOn,
-  formatDayLabel,
   formatWeekLabel,
-  formatWeekNavLabel,
-  getFlightForDay,
   getFlightsForWeek,
-  getWeekStart,
   nextFlightDate,
   parseDayMask,
-  routeHasFlightOnDay,
-  routeHasFlightsInWeek,
-  weekdayShort,
 } from './week';
 
 beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
 afterEach(() => {
   resetScheduleSource();
   vi.useRealTimers();
-});
-
-describe('getWeekStart', () => {
-  it('returns the Monday at local midnight without mutating the input', () => {
-    const wed = new Date('2026-06-10T09:00:00');
-    const before = wed.getTime();
-    const r = getWeekStart(wed);
-    expect([r.getDay(), r.getDate(), r.getHours()]).toEqual([1, 8, 0]);
-    expect(getWeekStart(new Date('2026-06-14T20:00:00')).getDate()).toBe(8); // Sunday
-    expect(getWeekStart(new Date('2026-06-08T12:00:00')).getDate()).toBe(8); // Monday
-    expect(wed.getTime()).toBe(before);
-  });
 });
 
 describe('parseDayMask', () => {
@@ -158,8 +139,8 @@ describe('flightsOn / getFlightsForWeek', () => {
   it('treats toDate as inclusive, even when called with a Date at noon', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2027-03-31T12:00:00'));
-    expect(getFlightForDay('YUL', 'LHR', new Date()).flies).toBe(true); // toDate = 2027-03-31
-    expect(routeHasFlightOnDay('YUL', 'LHR', '2027-04-01')).toBe(false);
+    expect(getFlightsForWeek('YUL', 'LHR', '2027-03-29')[2].flies).toBe(true); // toDate = 2027-03-31
+    expect(flightsOn('YUL', 'LHR', '2027-04-01')).toEqual([]);
   });
 
   it('computes durations across the DST week (UK falls back Oct 25, Canada Nov 1)', () => {
@@ -178,13 +159,14 @@ describe('flightsOn / getFlightsForWeek', () => {
   });
 
   it('fills the deprecated first-flight fields', () => {
-    const d = getFlightForDay('YUL', 'ATH', '2026-10-07');
+    const week = getFlightsForWeek('YUL', 'ATH', '2026-10-05');
+    const d = week[2];
     expect(d.flightNumber).toBe('AC898');
     expect(d.departure).toBe('17:25');
     expect(d.arrival).toBe('10:35');
     expect(d.aircraft).toBe('788');
     expect(d.date.getDate()).toBe(7);
-    expect(getFlightForDay('YUL', 'ATH', '2026-10-06').flightNumber).toBeUndefined();
+    expect(week[1].flightNumber).toBeUndefined();
   });
 
   it('accepts a legacy Date week start without mutating it', () => {
@@ -198,8 +180,7 @@ describe('flightsOn / getFlightsForWeek', () => {
 
   it('returns nothing for unknown routes', () => {
     expect(getFlightsForWeek('YYZ', 'ZZZ', '2026-10-05').every(d => !d.flies)).toBe(true);
-    expect(routeHasFlightsInWeek('YYZ', 'ZZZ', '2026-10-05')).toBe(false);
-    expect(routeHasFlightsInWeek('YUL', 'ATH', '2026-10-05')).toBe(true);
+    expect(getFlightsForWeek('YUL', 'ATH', '2026-10-05').some(d => d.flies)).toBe(true);
   });
 
   it('skips malformed rows', () => {
@@ -256,9 +237,4 @@ describe('labels', () => {
     expect(formatWeekLabel('2026-12-28')).toBe('Dec 28, 2026 – Jan 3, 2027');
   });
 
-  it('formats nav and day labels', () => {
-    expect(formatWeekNavLabel('2026-06-08')).toBe('Jun 8');
-    expect(formatDayLabel(new Date('2026-06-09T00:00:00'))).toBe('Tue, Jun 9');
-    expect(weekdayShort('2026-06-09')).toBe('Tue');
-  });
 });

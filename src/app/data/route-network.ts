@@ -183,21 +183,6 @@ export function isRouteOnly(a: string | null | undefined, b: string | null | und
   return getSchedulesForRoute(a!, b!).length === 0 && getSchedulesForRoute(b!, a!).length === 0;
 }
 
-/** Airports the network links to `origin`, sorted. */
-export function networkDestinations(origin: string): string[] {
-  const out: string[] = [];
-  for (const key of current.routes.keys()) {
-    const [a, b] = key.split('-');
-    if (a === origin) out.push(b);
-    else if (b === origin) out.push(a);
-  }
-  return out.sort();
-}
-
-export function routeNetworkMeta(): RouteNetworkMeta | null {
-  return current.meta;
-}
-
 /** Licence and attribution of the loaded file (empty strings when none is loaded). */
 export function routeNetworkCredit(): { license: string; attribution: string; builtAt: string | null } {
   return { license: current.license, attribution: current.attribution, builtAt: current.meta?.builtAt ?? null };
@@ -212,11 +197,6 @@ export function routeNetworkLoaded(): boolean {
 export const ROUTE_ONLY_TEXT = 'Flies this route · times not in our data';
 /** The same, mid-sentence ('USA · flies this route · times not in our data'). */
 export const ROUTE_ONLY_NOTE = 'flies this route · times not in our data';
-
-/** True when the network lists every segment (origin → dest) of a flight. */
-export function networkListsAll(segments: readonly { origin: string; dest: string }[]): boolean {
-  return segments.length > 0 && segments.every(s => !!routeFact(s.origin, s.dest));
-}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 

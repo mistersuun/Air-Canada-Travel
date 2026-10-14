@@ -54,22 +54,6 @@ export const REGIONS = [
 
 export const TYPES = ['All', 'Sun', 'City', 'Adventure'] as const;
 
-/**
- * @deprecated Use `regionVar(region)` from utils/region-color (CSS custom
- * properties with dark-theme variants). Kept until route-card and flight-modal
- * are restyled (WS5/WS6).
- */
-export const REGION_COLORS: Record<string, string> = {
-  'Caribbean': '#0EA5E9',
-  'Mexico': '#E89020',
-  'USA': '#6366F1',
-  'Europe': '#8B5CF6',
-  'Asia & Pacific': '#10B981',
-  'Central America': '#65A30D',
-  'South America': '#F97316',
-  'Africa & Middle East': '#E05090',
-};
-
 export const DESTINATIONS: Destination[] = [
   // ─── CARIBBEAN ───
   { city: 'Punta Cana', country: 'Dominican Republic', code: 'PUJ', iso2: 'DO', tz: 'America/Santo_Domingo', lat: 18.57, lng: -68.37, region: 'Caribbean', type: 'Sun', duration: '4h 45m', aircraft: '737 MAX 8', season: 'Oct – Apr' },

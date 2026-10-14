@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newWriteToken, parseGroupFragment, viewOnlyLink,
+  buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newWriteToken, parseGroupFragment,
 } from './group-crypto';
 
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA';
@@ -47,7 +47,7 @@ describe('group links', () => {
     const url = buildGroupLink('https://x.test/', { id, key, write });
     expect(url).toBe(`https://x.test/g/${id}#k=${key}&w=${write}`);
     expect(url.split('#')[0]).not.toContain(key);
-    expect(buildGroupLink('https://x.test', viewOnlyLink({ id, key, write }))).toBe(`https://x.test/g/${id}#k=${key}`);
+    expect(buildGroupLink('https://x.test', { id, key, write: null })).toBe(`https://x.test/g/${id}#k=${key}`);
   });
   it('parses what it builds, with or without the # and the token', () => {
     expect(parseGroupFragment(id, `k=${key}&w=${write}`)).toEqual({ id, key, write });

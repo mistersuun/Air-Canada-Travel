@@ -3,6 +3,8 @@
  * attached to a trip, a leg or a day. Kept in IndexedDB on this device only;
  * they go into a backup only when the user turns on "Include files in backups".
  */
+import { t } from '../i18n/t';
+
 export const FILES_DB = 'routes-files';
 export const FILES_DB_VERSION = 1;
 export const FILES_PREFS_KEY = 'ac.files.v1';
@@ -71,17 +73,22 @@ export type FilesError = 'quota' | 'tooLarge' | 'unsupported' | 'readOnly' | 'fa
 
 /** User-facing copy per FilesError (the quota copy takes the file size). */
 export const FILES_ERROR_TEXT: Record<FilesError, string> = {
-  quota: 'Not enough space on this phone for this file. Delete some files or photos, then try again.',
-  tooLarge: 'This file is over 50 MB. Pick a smaller one.',
-  unsupported: "Files can't be kept on this browser.",
-  readOnly: 'Files were saved by a newer version of the app, so they cannot be changed here.',
-  failed: "Couldn't save this file. Try again.",
+  // Getters, so the text follows the UI language at the moment it is read.
+  get quota() { return t('files.error.quota'); },
+  get tooLarge() { return t('files.error.tooLarge'); },
+  get unsupported() { return t('files.error.unsupported'); },
+  get readOnly() { return t('files.error.readOnly'); },
+  get failed() { return t('files.error.failed'); },
 };
 
 /** Shown when IndexedDB is unavailable and files live in memory only. */
-export const MEMORY_WARNING = "Files can't be kept on this browser. They'll be gone when you close the app.";
+export function memoryWarning(): string {
+  return t('files.memoryWarning');
+}
 /** Flashed when another tab upgraded the database. */
-export const VERSION_CHANGE_NOTICE = 'Routes was updated in another tab. Reload to keep using files.';
+export function versionChangeNotice(): string {
+  return t('files.versionChange');
+}
 
 export interface UsageSummary {
   count: number;                 // attachments + passes

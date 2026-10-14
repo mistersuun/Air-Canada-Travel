@@ -88,17 +88,6 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/worker-*.js"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-# worker-basic.min.js (Angular's fallback worker) is unhashed: undo the rule above for it.
-[[headers]]
-  for = "/worker-basic.min.js"
-  [headers.values]
-    Cache-Control = "no-cache"
-
-[[headers]]
   for = "/styles-*.css"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"

@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { FORECAST_FETCH, FORECAST_STORAGE } from '../../recs/forecast.service';
 import { GROUND_FETCH, GroundTimetableService } from '../../places/ground-timetable.service';
+import { AIRPORT_INFO_FETCH } from '../../places/airport-info';
 import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
 import { groundTimetables, setGroundTimetables } from '../../places/timetable';
 import { AppStateService, NOW } from '../../state/app-state.service';
@@ -60,6 +61,7 @@ function configure(nowMs: number, store = seeded()) {
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
       { provide: STATUS_FETCH, useValue: async () => ({ status: 503, body: { error: 'not-configured' } }) },
       { provide: GROUND_FETCH, useValue: (groundFetch = vi.fn(async () => null)) },
+      { provide: AIRPORT_INFO_FETCH, useValue: async () => null },
       { provide: FORECAST_STORAGE, useValue: new MemoryStorage() },
       { provide: FORECAST_FETCH, useValue: (forecastFetch = vi.fn(async (_url: string) => FORECAST_RAW)) },
     ],

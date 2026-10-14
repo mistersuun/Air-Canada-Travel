@@ -52,11 +52,15 @@ ids pinned below, child stops included through parent_station):
 Usage:
   python3 scripts/build-ground.py [--out PATH] [--cache DIR] [--offline]
                                   [--only renfe,sncf] [--include cp,trenitalia,swiss]
-                                  [--skip flix] [--today YYYY-MM-DD]
+                                  [--skip flix] [--today YYYY-MM-DD] [--problems PATH]
 
 Downloads go to --cache (default ~/.cache/routes-ground), with If-Modified-Since.
 --offline uses the cache only. A feed that fails keeps the corridors of the
-previous ground.json while they are still valid. The file is left untouched
+previous ground.json while they are still valid; an unreadable required feed
+fails the run. A corridor whose pinned stop id is gone from its feed is left
+out on its own (::warning::, previous entry kept while valid, else dropped) and
+listed in the --problems Markdown file, which the workflow turns into an issue
+after committing the other corridors. The file is left untouched
 when only builtAt / fetched / validFrom dates would change. Refuses to write over 150 KB.
 
 Stdlib only. Pure functions are unit-tested in scripts/tests/test_build_ground.py
@@ -226,9 +230,13 @@ CORRIDORS: list[dict] = [
            "tz": "Europe/Dublin"},
      "b": {"stops": ["700000017125", "700000017104"], "name": "Belfast Grand Central", "tz": "Europe/London"},
      "note": "Dublin Express only. Translink Goldline also runs this route."},
+    # gtfs.de renumbers stop ids between releases (2026-10: 350706 -> 296266 "Frankfurt (Main) Flughafen
+    # Fernbahnhof", 2678 -> 265963 "Köln Hbf"). "near" (lat, lon) makes a missing pin's report list the
+    # feed's stations there, to re-pin from.
     {"key": "FRA-2886242", "feed": "dbfv", "mode": "train", "op": "Deutsche Bahn", "product": "word",
-     "a": {"stops": ["350706"], "name": "Frankfurt Airport long-distance station", "tz": "Europe/Berlin"},
-     "b": {"stops": ["2678"], "name": "Köln Hbf", "tz": "Europe/Berlin"}},
+     "a": {"stops": ["296266"], "name": "Frankfurt Airport long-distance station", "tz": "Europe/Berlin",
+           "near": [50.0531, 8.5702]},
+     "b": {"stops": ["265963"], "name": "Köln Hbf", "tz": "Europe/Berlin", "near": [50.9430, 6.9587]}},
     {"key": "FCO-3172394", "feed": "trenitalia", "mode": "train", "op": "Trenitalia", "product": "long",
      "a": {"stops": ["IT::StopPlace:otherTRENITALIA:830008409"], "name": "Roma Termini", "tz": "Europe/Rome"},
      "b": {"stops": ["IT::StopPlace:otherTRENITALIA:830009218"], "name": "Napoli Centrale", "tz": "Europe/Rome"},
@@ -287,7 +295,9 @@ def is_bus_route_type(rt: str) -> bool:
 
 
 class PinnedStopMissing(Exception):
-    """A pinned stop id is not in the feed's stops.txt: fix the config, never write nothing silently."""
+    """A pinned stop id is not in the feed's stops.txt: fix the config, never write nothing silently.
+    main() leaves just that corridor out (its previous entry kept while valid) and reports it through
+    --problems; load_feed without `broken` raises it."""
 
 
 # ── Reading GTFS ────────────────────────────────────────────────────────────
@@ -358,6 +368,20 @@ def resolve_stops(stops: dict[str, str], pinned: list[str], where: str,
     return want | {s for s, parent in stops.items() if parent in want}
 
 
+def km(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Great-circle distance in km."""
+    la1, lo1, la2, lo2 = map(math.radians, (*a, *b))
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
+    return 12742 * math.asin(math.sqrt(h))
+
+
+def stations_near(stops: dict[str, str], names: dict[str, str], coords: dict[str, tuple[float, float]],
+                  near: list[float], radius_km: float = 1.5, n: int = 3) -> list[str]:
+    """'id "name" (0.1 km)' for the feed's top-level stops nearest `near`: the candidates to re-pin."""
+    found = sorted((km(tuple(near), ll), sid) for sid, ll in coords.items() if not stops.get(sid))
+    return [f'{sid} "{names.get(sid, "")}" ({d:.1f} km)' for d, sid in found[:n] if d <= radius_km]
+
+
 def stop_product(stop_id: str) -> str:
     """SNCF 'StopPoint:OCETGV INOUI-87271494' -> 'TGV INOUI'."""
     m = re.match(r"StopPoint:OCE(.+)-\d+$", stop_id)
@@ -387,27 +411,48 @@ def service_dates(cal: dict[str, tuple], extra: dict[str, list[tuple[date, str]]
     return out
 
 
-def load_feed(z: zipfile.ZipFile, corridors: list[dict], lo: date, hi: date) -> dict[str, dict[str, list]]:
+def load_feed(z: zipfile.ZipFile, corridors: list[dict], lo: date, hi: date,
+              broken: dict[str, str] | None = None) -> dict[str, dict[str, list]]:
     """For every corridor of one feed, both directions: {key: {'out': runs, 'back': runs}} where a run is
-    (local departure datetime, ride minutes, product). Reads only what it needs; never shapes.txt."""
+    (local departure datetime, ride minutes, product). Reads only what it needs; never shapes.txt.
+    A pinned stop missing from the feed raises PinnedStopMissing, unless `broken` is given: the corridor
+    is then left out of the result and broken[key] says what is missing and which stations are "near"."""
     stops: dict[str, str] = {}
     names: dict[str, str] = {}
-    for sid, parent, nm in rows(z, "stops.txt", ("stop_id", "parent_station", "stop_name")):
+    coords: dict[str, tuple[float, float]] = {}
+    for sid, parent, nm, lat, lon in rows(z, "stops.txt", ("stop_id", "parent_station", "stop_name", "stop_lat", "stop_lon")):
         stops[sid] = parent
         names[sid] = nm
+        try:
+            coords[sid] = (float(lat), float(lon))
+        except ValueError:
+            pass
+    if not stops:
+        raise ValueError("stops.txt has no stops")  # the whole feed is broken, not one corridor
     sets: dict[str, tuple[set[str], set[str]]] = {}
     skipped: list[str] = []
     for c in list(corridors):
         lenient = bool(c.get("provisional"))
-        try:
-            sets[c["key"]] = (resolve_stops(stops, c["a"]["stops"], f"{c['key']} ({c['a']['name']})", names, lenient),
-                              resolve_stops(stops, c["b"]["stops"], f"{c['key']} ({c['b']['name']})", names, lenient))
-        except PinnedStopMissing as e:
-            if not lenient:
-                raise
-            print(f"  warning: provisional corridor skipped: {e}", file=sys.stderr)
+        missing: list[str] = []
+        resolved: list[set[str]] = []
+        for side in (c["a"], c["b"]):
+            try:
+                resolved.append(resolve_stops(stops, side["stops"], f"{c['key']} ({side['name']})", names, lenient))
+            except PinnedStopMissing as e:
+                if lenient:
+                    print(f"  warning: provisional corridor skipped: {e}", file=sys.stderr)
+                    break
+                if broken is None:
+                    raise
+                near = stations_near(stops, names, coords, side["near"]) if side.get("near") else []
+                missing.append(f"{e}" + (f"; stations near {side['name']}: {', '.join(near)}" if near else ""))
+        if len(resolved) == 2:
+            sets[c["key"]] = (resolved[0], resolved[1])
+        elif missing and broken is not None:
+            broken[c["key"]] = " | ".join(missing)
+        else:
             skipped.append(c["key"])
-    corridors = [c for c in corridors if c["key"] not in skipped]
+    corridors = [c for c in corridors if c["key"] in sets]
     if not corridors:
         return {k: {"out": [], "back": []} for k in skipped}
     every = set().union(*(a | b for a, b in sets.values()))
@@ -760,14 +805,16 @@ def expiry_warnings(doc: dict, today: date, days: int = EXPIRY_WARN_DAYS) -> lis
 
 
 def assemble(corridors: dict[str, dict], fetched: dict[str, str], previous: dict | None, failed: set[str],
-             today: date) -> dict:
-    """The ground.json document. Corridors of failed or unselected feeds come from the previous file while still valid."""
+             today: date, broken: Iterable[str] = ()) -> dict:
+    """The ground.json document. Corridors of failed or unselected feeds, and `broken` corridors (a pinned
+    stop gone from the feed), come from the previous file while still valid."""
     corr = dict(corridors)
+    broken = set(broken)
     sources = {fid: source_entry(fid, d) for fid, d in fetched.items()}
     if previous:
         for key, entry in previous.get("corridors", {}).items():
             src = (entry.get("out") or entry.get("back") or {}).get("src")
-            if key not in corr and src in failed and still_valid(entry, today):
+            if key not in corr and (src in failed or key in broken) and still_valid(entry, today):
                 corr[key] = entry
                 if src in previous.get("sources", {}):
                     sources.setdefault(src, previous["sources"][src])
@@ -801,6 +848,19 @@ def same_content(a: dict, b: dict) -> bool:
     return strip(a) == strip(b)
 
 
+def problems_report(broken: dict[str, str], doc: dict) -> str:
+    """Markdown for the workflow's issue: each corridor left out because a pinned stop is gone, and
+    whether the app keeps its previous timetable (until when) or falls back to Estimated."""
+    lines = ["Pinned stops are missing from the feed, so these corridors were not rebuilt. "
+             "Re-pin them in CORRIDORS (scripts/build-ground.py), checking name and coordinates.", ""]
+    for key, why in sorted(broken.items()):
+        kept = doc.get("corridors", {}).get(key)
+        fate = (f"Previous timetable kept until {kept['validTo']}" if kept
+                else "Dropped (no valid previous timetable): the app shows Estimated times")
+        lines.append(f"- **{key}**: {why}. {fate}.")
+    return "\n".join(lines) + "\n"
+
+
 def selected_feeds(only: list[str], include: list[str], skip: list[str]) -> list[str]:
     for f in only + include + skip:
         if f not in FEEDS:
@@ -831,6 +891,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--include", default="", help="opt-in feeds: cp, trenitalia, swiss")
     ap.add_argument("--skip", default="")
     ap.add_argument("--today", default="", help="build day (YYYY-MM-DD), default today in UTC")
+    ap.add_argument("--problems", type=pathlib.Path, default=None,
+                    help="write a Markdown report here when corridors are left out for missing pinned stops "
+                         "(the file is removed when there are none)")
     args = ap.parse_args(argv)
     split = lambda s: [x for x in s.split(",") if x]  # noqa: E731
     feeds = selected_feeds(split(args.only), split(args.include), split(args.skip))
@@ -847,6 +910,7 @@ def main(argv: list[str] | None = None) -> int:
     built: dict[str, dict] = {}
     fetched: dict[str, str] = {}
     failed: set[str] = set()
+    broken: dict[str, str] = {}
     for fid in feeds:
         corridors = [c for c in CORRIDORS if c["feed"] == fid]
         if not corridors:
@@ -859,9 +923,8 @@ def main(argv: list[str] | None = None) -> int:
         tolerant = bool(FEEDS[fid].get("optional")) or all(c.get("provisional") for c in corridors)
         try:
             with zipfile.ZipFile(path) as z:
-                runs = load_feed(z, corridors, lo, hi)  # PinnedStopMissing propagates for required feeds: fail loudly
-        except PinnedStopMissing:
-            raise
+                # A corridor whose pinned stop is gone lands in `broken`; an unreadable required feed raises.
+                runs = load_feed(z, corridors, lo, hi, broken)
         except (KeyError, zipfile.BadZipFile, ValueError, UnicodeDecodeError, csv.Error, OSError) as e:
             if not tolerant:
                 raise
@@ -872,6 +935,9 @@ def main(argv: list[str] | None = None) -> int:
             continue
         fetched[fid] = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).date().isoformat()
         for c in corridors:
+            if c["key"] in broken:
+                print(f"::warning title=Ground corridor left out::{c['key']}: {broken[c['key']]}")
+                continue
             entry = build_corridor(c, runs[c["key"]], today)
             if entry:
                 built[c["key"]] = entry
@@ -880,7 +946,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {c['key']:<12} no departures in the next {SCAN_DAYS} days: left out")
 
     # Feeds not run this time (opt-in without --include, --only/--skip) keep their previous corridors too.
-    doc = assemble(built, fetched, previous, failed | (set(FEEDS) - set(feeds)), today)
+    doc = assemble(built, fetched, previous, failed | (set(FEEDS) - set(feeds)), today, broken)
+    if args.problems:
+        if broken:
+            args.problems.parent.mkdir(parents=True, exist_ok=True)
+            args.problems.write_text(problems_report(broken, doc), encoding="utf-8")
+        else:
+            args.problems.unlink(missing_ok=True)
     text = encode(doc)
     size = len(text.encode("utf-8"))
     if size > MAX_BYTES:

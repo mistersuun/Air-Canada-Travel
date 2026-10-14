@@ -588,3 +588,37 @@ def test_domestic_baseline_excluded_when_skipped(fs, out):
     hubhub = {f"{a}-{b}": [] for a in HUBS for b in HUBS if a != b}
     out.write_text(prev_json({"YUL-CDG": [], **hubhub}))
     assert _run(fs, out, ["--dry-run", "--skip-domestic"]) == 0
+
+
+def test_run_writes_the_small_meta_file_next_to_the_schedules(fs, out):
+    from datetime import datetime, timezone
+    t1 = lambda: datetime(2026, 9, 30, 12, 0, 0, tzinfo=timezone.utc)
+    t2 = lambda: datetime(2026, 10, 1, 8, 30, 0, tzinfo=timezone.utc)
+    meta_path = out.parent / "schedules-meta.json"
+    assert not meta_path.exists()
+    assert _run(fs, out, now=t1) == 0
+    meta = json.loads(meta_path.read_text())
+    full = json.loads(out.read_text())["meta"]
+    assert meta["generatedAt"] == "2026-09-30T12:00:00Z" == full["generatedAt"]
+    assert meta["coverageFrom"] == full["coverageFrom"] and meta["coverageTo"] == full["coverageTo"]
+    assert "sources" not in meta and "routes" not in meta and meta_path.stat().st_size < 2000
+    # Nothing changed: both files are left alone.
+    before = meta_path.read_text()
+    assert _run(fs, out, now=t2) == 0
+    assert meta_path.read_text() == before
+    # New data: the meta follows the new generatedAt.
+    out.write_text(out.read_text().replace('"AC7"', '"AC9"'))
+    assert _run(fs, out, now=t2) == 0
+    assert json.loads(meta_path.read_text())["generatedAt"] == "2026-10-01T08:30:00Z"
+
+
+def test_meta_is_created_for_an_existing_file_and_not_by_a_failed_run(fs, out):
+    meta_path = out.parent / "schedules-meta.json"
+    assert _run(fs, out, discover=lambda: []) == 1
+    assert not meta_path.exists()
+    out.write_text(json.dumps({"version": 1, "meta": {"generatedAt": "2026-09-01T00:00:00Z", "coverageTo": "2027-01-01", "sources": ["x"]}, "routes": {}}))
+    assert fs.write_meta(str(out)) is True       # bootstraps from the committed file
+    assert fs.write_meta(str(out)) is False      # unchanged
+    assert json.loads(meta_path.read_text()) == {"generatedAt": "2026-09-01T00:00:00Z", "coverageTo": "2027-01-01"}
+    assert fs.meta_json("not json") is None
+    assert fs.meta_json('{"meta": {}}') is None

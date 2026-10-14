@@ -82,7 +82,7 @@ jobs:
           {
             echo '### Data diff'
             echo '```'
-            git diff --stat -- public/data/schedules.json public/data/route-network.json || true
+            git diff --stat -- public/data/schedules.json public/data/schedules-meta.json public/data/route-network.json || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -96,10 +96,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git diff --quiet -- public/data/schedules.json public/data/route-network.json && exit 0
+          git diff --quiet -- public/data/schedules.json public/data/schedules-meta.json public/data/route-network.json && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/data/schedules.json public/data/route-network.json
+          git add public/data/schedules.json public/data/schedules-meta.json public/data/route-network.json
           git commit -m "chore: update flight schedules and route network"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF}"
 

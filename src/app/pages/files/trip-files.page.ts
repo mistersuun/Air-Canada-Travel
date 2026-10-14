@@ -170,7 +170,7 @@ import { PhotoViewerComponent } from './photo-viewer.component';
     .tf__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tf__muted { font-size: 13px; color: var(--ink-2); font-weight: 400; }
     .tf__use { padding: 16px; display: grid; gap: 0; }
-    .tf__use-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .tf__use-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; }
     .tf__use-h h2 { margin: 0; }
     .tf__bar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--fill); margin-top: 12px; }
     .tf__bar i { display: block; height: 100%; flex-basis: 0; min-width: 3px; }

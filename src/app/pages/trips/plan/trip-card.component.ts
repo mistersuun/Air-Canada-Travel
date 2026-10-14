@@ -38,7 +38,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
           <p class="ui-sub tn tc__dates">{{ dates() }}</p>
           @if (groupNames().length) {
             <p class="tc__grp" data-group-indicator>
-              <span class="tc__grpav">@for (n of groupNames(); track n) { <app-avatar-chip [name]="n" [showName]="false" /> }</span>
+              <span class="tc__grpav">@for (n of groupNames(); track $index) { <app-avatar-chip [name]="n" [showName]="false" /> }</span>
               <span class="ui-sub">Group trip</span>
             </p>
           }
@@ -159,9 +159,10 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
 export class TripCardComponent {
   protected readonly state = inject(AppStateService);
   private readonly groups = inject(GroupService);
-  /** Nicknames of the group this device started for the trip (none on a static preview). */
+  /** Nicknames of the group this device started for the trip (on the trips list only). */
   protected readonly groupNames = computed(() => {
-    if (this.mode() === 'static') return [];
+    // The list only: the detail page has its own group card.
+    if (this.mode() !== 'link') return [];
     this.groups.all();
     const r = this.groups.forTrip(this.trip().id);
     return r ? (r.names?.length ? r.names : [r.name]).filter(Boolean).slice(0, 4) : [];

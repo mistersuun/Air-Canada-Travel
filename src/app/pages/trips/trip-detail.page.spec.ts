@@ -251,6 +251,7 @@ describe('TripDetailPage', () => {
       el.querySelector<HTMLButtonElement>('[data-group-start-card]')!.click();
       await stable();
       expect(el.querySelector('app-trip-share-sheet [data-group-name]')).toBeTruthy();
+      expect(document.activeElement).toBe(el.querySelector('[data-group-name]'));
     });
 
     it('with a group, the card shows the group instead of the prompt, and the trip card gets a group indicator', async () => {
@@ -263,7 +264,8 @@ describe('TripDetailPage', () => {
       expect(el.querySelector('[data-group-prompt]')).toBeNull();
       expect(el.querySelector('[data-group-card]')).toBeTruthy();
       expect(el.querySelector('app-avatar-chip[data-avatar="Sam"], [data-avatar="Sam"]')).toBeTruthy();
-      expect(el.querySelector('app-trip-card [data-group-indicator]')).toBeTruthy();
+      // The detail page has its own card: the list's indicator is not repeated here.
+      expect(el.querySelector('app-trip-card [data-group-indicator]')).toBeNull();
     });
 
     it('the Share sheet shows edit and view-only links separately once a group exists', async () => {

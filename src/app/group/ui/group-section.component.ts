@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, linkedSignal, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DOCUMENT, ElementRef, afterNextRender, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import type { Trip } from '../../trips/model';
@@ -62,6 +62,7 @@ import { shareOrCopy } from '../share-link';
     .gt__opt > .ui-btn { min-height: 44px; }
     .gt__acts .ui-btn--ghost, .gt__start { background: var(--surface); }
     .gt__opt .ui-btn--ghost { background: var(--fill); }
+    .gt__opt .gt__acts .ui-btn--ghost { background: var(--fill); }
     .gt__start { justify-self: start; min-height: 44px; }
     .gt__open { justify-self: start; font-size: 14px; font-weight: 600; color: var(--blue); min-height: 44px; display: inline-flex; align-items: center; }
   `],
@@ -70,6 +71,7 @@ export class GroupSectionComponent {
   private readonly groups = inject(GroupService);
   private readonly state = inject(AppStateService);
   private readonly doc = inject(DOCUMENT);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly trip = input.required<Trip>();
   /** Open straight on the nickname field (from the "Travelling with friends?" card). */
@@ -80,6 +82,11 @@ export class GroupSectionComponent {
   protected readonly nick = signal('');
   protected readonly problem = signal('');
   protected readonly rec = computed<GroupRecord | null>(() => { this.groups.all(); return this.groups.forTrip(this.trip().id); });
+
+  constructor() {
+    // Opened from the "Travelling with friends?" card: the nickname is the next thing to type.
+    afterNextRender(() => { if (this.startOpen()) this.host.nativeElement.querySelector<HTMLInputElement>('[data-group-name]')?.focus(); });
+  }
 
   protected path(r: GroupRecord): string[] { return groupPath(r.id); }
 

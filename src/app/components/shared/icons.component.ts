@@ -14,6 +14,7 @@ export type IconName =
   | 'gear'
   | 'calendar'
   | 'share'
+  | 'share-box'
   | 'warning'
   | 'search'
   | 'close'
@@ -76,6 +77,7 @@ export const ICON_PATHS: Record<IconName, string[]> = {
   ],
   // ↗ (open / share out)
   share: ['M7 17 17 7', 'M8.5 7H17v8.5'],
+  'share-box': ['M12 15V3.5M7.5 8 12 3.5 16.5 8', 'M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12'],
   'arrow-left': ['M19 12H5', 'm11 18-6-6 6-6'],
   filter: ['M4 7h16M7 12h10M10 17h4'],
   locate: ['M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],

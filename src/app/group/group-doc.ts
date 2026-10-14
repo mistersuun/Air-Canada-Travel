@@ -19,7 +19,11 @@ export interface MemberStatus {
   planLabel: string;
   /** Expected arrival, ISO instant, or null. */
   arrival: string | null;
-  /** My own status per flight leg id ('listed', 'boarded'…); absent on entries from older versions. */
+  /**
+   * My own status per flight leg id ('listed', 'boarded'…); absent on entries from older versions.
+   * A client that predates this field drops it when it saves its own status, so each device also keeps its
+   * own legs in its GroupRecord (myLegs) and quietly writes them back when its entry comes back without them.
+   */
   legs?: Record<string, LegStatus>;
   updatedAt: string;
 }
@@ -54,7 +58,8 @@ const MAX_LEG_STATUSES = 12;
 function sanitizeLegs(v: unknown): Record<string, LegStatus> | null {
   if (!isRec(v)) return null;
   const out: Record<string, LegStatus> = {};
-  for (const [id, st] of Object.entries(v).slice(0, MAX_LEG_STATUSES)) {
+  for (const [id, st] of Object.entries(v)) {
+    if (Object.keys(out).length >= MAX_LEG_STATUSES) break;
     if (/^[A-Za-z0-9_-]{1,40}$/.test(id) && typeof st === 'string' && (LEG_STATUSES as readonly string[]).includes(st)) out[id] = st as LegStatus;
   }
   return Object.keys(out).length ? out : null;
@@ -191,8 +196,8 @@ export function friendsOnLeg(doc: GroupDoc, legId: string, me: string | null): L
     .map(m => ({ id: m.id, me: m.me, name: m.status.name, status: m.status.legs![legId] }));
 }
 
-/** True when two or more members are in the group and every one of them is boarded on this leg. */
+/** True when two or more members have said something about this leg and every one of them is boarded. Members with no status for the leg are not counted (they may not be on it). */
 export function everyoneBoarded(doc: GroupDoc, legId: string): boolean {
-  const all = Object.values(doc.members);
-  return all.length >= 2 && all.every(m => m.legs?.[legId] === 'boarded');
+  const on = Object.values(doc.members).filter(m => m.legs?.[legId]);
+  return on.length >= 2 && on.every(m => m.legs![legId] === 'boarded');
 }

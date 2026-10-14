@@ -47,7 +47,7 @@ export const TRIP_TABS: SegOption[] = [
           </div>
           <div class="td__acts">
             <button type="button" class="ui-circ ui-circ--glass" aria-label="Share" data-share-open (click)="openShare(false)">
-              <app-icon name="share" [size]="18" />
+              <app-icon name="share-box" [size]="18" />
             </button>
             <button type="button" class="ui-circ ui-circ--glass" aria-label="More: offline, calendar, delete" data-menu (click)="menuOpen.set(true)">
               <app-icon name="more" [size]="18" [strokeWidth]="2.6" />
@@ -93,8 +93,8 @@ export const TRIP_TABS: SegOption[] = [
   `,
   styles: [`
     .td { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
-    .td__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .td__acts { display: flex; gap: 8px; }
+    .td__head { display: grid; grid-template-columns: 96px minmax(0, 1fr) 96px; align-items: center; gap: 8px; }
+    .td__acts { display: flex; gap: 8px; justify-self: end; }
     .td__title { min-width: 0; text-align: center; }
     .td__title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .td__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }

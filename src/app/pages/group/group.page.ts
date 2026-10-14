@@ -13,6 +13,7 @@ import { AvatarChipComponent } from '../../group/ui/avatar-chip.component';
 import { LEG_STATUS_LABEL, type FlightLeg, type LegStatus, type SharedTripPreview } from '../../trips/model';
 import { tripPath, tripsPath } from '../../ui/links';
 import { toUtcMs, utcToLocal } from '../../utils/time';
+import { dayLabel } from '../trips/trips-model';
 import { TripCardComponent } from '../trips/plan/trip-card.component';
 
 type View = 'loading' | 'invalid' | 'unavailable' | 'gone' | 'ready';
@@ -28,8 +29,12 @@ const MESSAGES: Record<GroupFailure, string> = {
 const FULL = 'This group is full.';
 const CONFETTI_KEY = 'ac.group.confetti.v1';
 const CONFETTI_MS = 2600;
-/** How the burst is spread: 22 pieces, each with its own angle, distance and delay. */
-const PIECES = Array.from({ length: 22 }, (_, i) => i);
+/** The burst: 22 pieces fanned out radially (golden angle, three rings), each with its own end point and delay. */
+const PIECES = Array.from({ length: 22 }, (_, i) => {
+  const a = (i * 137.5 * Math.PI) / 180;
+  const r = 70 + (i % 3) * 45;
+  return { i, dx: Math.round(Math.cos(a) * r), dy: Math.round(Math.sin(a) * r) };
+});
 
 /**
  * A group trip (/g/:id#k=<key>[&w=<token>]). The plan and every member's status
@@ -111,9 +116,9 @@ const PIECES = Array.from({ length: 22 }, (_, i) => i);
               }
               @for (f of flights(); track f.id) {
                 <label class="gp__f"><span class="ui-label">{{ f.label }}</span>
-                  <select data-leg-status [attr.data-leg-id]="f.id" [value]="mine()[f.id] || ''" (change)="setLegStatus(f.id, $any($event.target).value)">
-                    <option value="">Not set</option>
-                    @for (o of legOptions; track o.value) { <option [value]="o.value">{{ o.label }}</option> }
+                  <select data-leg-status [attr.data-leg-id]="f.id" (change)="setLegStatus(f.id, $any($event.target).value)">
+                    <option value="" [selected]="!mine()[f.id]">Not set</option>
+                    @for (o of legOptions; track o.value) { <option [value]="o.value" [selected]="mine()[f.id] === o.value">{{ o.label }}</option> }
                   </select></label>
               }
               <label class="gp__f"><span class="ui-label" data-arrival-label>Arrival ({{ zoneLabel() }})</span>
@@ -156,7 +161,7 @@ const PIECES = Array.from({ length: 22 }, (_, i) => i);
 
       @if (burst()) {
         <div class="gp__confetti" aria-hidden="true" data-confetti>
-          @for (i of pieces; track i) { <i [style.--i]="i"></i> }
+          @for (p of pieces; track p.i) { <i [style.--i]="p.i" [style.--dx.px]="p.dx" [style.--dy.px]="p.dy"></i> }
         </div>
       }
       <p class="ui-sub gp__fine" data-pass-rules>Air Canada pass rules do not allow sharing passes or listing details. Share plans and times only.</p>
@@ -187,7 +192,7 @@ const PIECES = Array.from({ length: 22 }, (_, i) => i);
     @keyframes gp-burst {
       0% { transform: translate(0, 0) rotate(0); opacity: 1; }
       70% { opacity: 1; }
-      100% { transform: translate(calc((var(--i) - 11) * 15px), calc(120px + (var(--i) * 13px))) rotate(calc(var(--i) * 83deg)); opacity: 0; }
+      100% { transform: translate(var(--dx), calc(var(--dy) + 36px)) rotate(calc(var(--i) * 83deg)); opacity: 0; }
     }
     @media (prefers-reduced-motion: reduce) { .gp__confetti { display: none; } }
     .gp__f { display: grid; gap: 4px; background: var(--fill); border-radius: 14px; padding: 10px 12px; }
@@ -242,15 +247,20 @@ export class GroupPage {
   private meetDirty = false;
   private lastPlan = '';
   private burstTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Legs celebrated during this visit, so blocked storage cannot make every poll burst again. */
+  private readonly celebrated = new Set<string>();
+  /** My leg statuses as last saved or loaded; kept in this device's record (see MemberStatus.legs). */
+  private savedLegs: Record<string, LegStatus> = {};
+  private restoring = false;
 
   protected readonly canWrite = computed(() => this.view() === 'ready' && !!this.link?.write);
   protected readonly owner = signal(false);
   protected readonly members = computed(() => { const d = this.doc(); return d ? memberList(d, this.memberId) : []; });
   /** The trip's destination zone: arrival times are entered and shown there. Null when the plan does not say. */
-  protected readonly tz = computed(() => this.preview()?.trip.goal.tz ?? null);
+  protected readonly tz = computed(() => { const z = this.preview()?.trip.goal.tz ?? null; return z && validZone(z) ? z : null; });
   protected readonly zoneLabel = computed(() => {
     const p = this.preview();
-    return this.tz() && p ? `${p.trip.goal.name} time` : 'your time zone';
+    return this.tz() && p ? `${p.trip.goal.name} time` : 'your device time';
   });
   protected readonly flights = computed(() => {
     const p = this.preview();
@@ -259,7 +269,7 @@ export class GroupPage {
     return p.trip.legs.filter((l): l is FlightLeg => l.kind === 'flight' && l.refs.length > 0).map(l => ({
       id: l.id,
       label: `${l.refs.map(r => r.flightNumber).join(' + ')} · ${l.refs[0].origin} to ${l.refs[l.refs.length - 1].dest}`,
-      when: `${l.refs[0].dateKey} · ${l.refs[0].depLocal}`,
+      when: `${dayLabel(l.refs[0].dateKey)} · ${l.refs[0].depLocal}`,
       friends: d ? friendsOnLeg(d, l.id, this.memberId) : [],
     }));
   });
@@ -280,6 +290,7 @@ export class GroupPage {
       return;
     }
     this.remembered = !!rec;
+    this.savedLegs = { ...(rec?.myLegs ?? {}) };
     this.memberId = rec?.memberId ?? this.groups.newMember();
     this.name.set(rec?.name ?? '');
     this.owner.set(rec?.owner === true && rec.key === this.link.key);
@@ -308,7 +319,7 @@ export class GroupPage {
     if (!this.loadedOnce) {
       this.loadedOnce = true;
       const mine = r.doc.members[this.memberId];
-      if (mine) { this.name.set(mine.name); this.label.set(mine.planLabel); this.arrival.set(toLocalInput(mine.arrival, this.tz())); this.mine.set({ ...(mine.legs ?? {}) }); }
+      if (mine) { this.name.set(mine.name); this.label.set(mine.planLabel); this.arrival.set(toLocalInput(mine.arrival, this.tz())); this.savedLegs = { ...(mine.legs ?? this.savedLegs) }; this.mine.set({ ...this.savedLegs }); }
       this.remember();
       await this.extendLife();
     }
@@ -347,6 +358,27 @@ export class GroupPage {
       this.preview.set(await this.groups.previewOf(doc));
     }
     this.maybeCelebrate(doc);
+    void this.restoreLegs(doc);
+  }
+
+  /** An older client saved my entry without my leg statuses: quietly write them back from this device's copy. */
+  private async restoreLegs(doc: GroupDoc): Promise<void> {
+    const mine = doc.members[this.memberId];
+    if (!this.link?.write || this.restoring || this.busy() || !mine || mine.legs || !Object.keys(this.savedLegs).length) return;
+    this.restoring = true;
+    try {
+      const next = this.groups.withMember(doc, this.memberId, { name: mine.name, legs: this.currentLegs(this.savedLegs) });
+      const r = await this.groups.save(this.link, next, this.version);
+      if (r.ok) await this.apply(r.doc, r.version, r.expiresAt ?? this.expiresAt);
+    } finally {
+      this.restoring = false;
+    }
+  }
+
+  /** Only statuses for legs the plan still has. */
+  private currentLegs(legs: Record<string, LegStatus>): Record<string, LegStatus> {
+    const ids = new Set(this.flights().map(f => f.id));
+    return Object.fromEntries(Object.entries(legs).filter(([id]) => ids.has(id)));
   }
 
   /** A short burst when everyone in the group has boarded a leg; once per leg on this device. */
@@ -356,7 +388,8 @@ export class GroupPage {
     const done = readCelebrated();
     for (const l of p.trip.legs) {
       const key = `${this.link.id}:${l.id}`;
-      if (l.kind !== 'flight' || done.includes(key) || !everyoneBoarded(doc, l.id)) continue;
+      if (l.kind !== 'flight' || done.includes(key) || this.celebrated.has(key) || !everyoneBoarded(doc, l.id)) continue;
+      this.celebrated.add(key);
       writeCelebrated([...done, key].slice(-200));
       if (reducedMotion()) return;
       this.burst.set(true);
@@ -385,7 +418,7 @@ export class GroupPage {
     const rec: GroupRecord = {
       id: this.link.id, key: this.link.key, write: this.link.write ?? old?.write ?? null, memberId: this.memberId,
       name: this.name().trim().slice(0, MAX_NAME), owner: this.owner(), ownerToken: this.ownerToken ?? old?.ownerToken ?? null, tripId: old?.tripId ?? null, expiresAt: this.expiresAt ?? old?.expiresAt ?? null,
-      names: this.nicknames() ?? old?.names,
+      names: this.nicknames() ?? old?.names, myLegs: Object.keys(this.savedLegs).length ? this.savedLegs : undefined,
     };
     // Once this device has the group, only update it: if another tab stopped or forgot it, do not bring it back.
     if (this.remembered) this.groups.update(rec);
@@ -406,7 +439,7 @@ export class GroupPage {
     try {
       const now = Date.now();
       let next = this.groups.withMember(d, this.memberId, {
-        name: this.name().trim().slice(0, MAX_NAME), planLabel: this.label().trim().slice(0, MAX_PLAN_LABEL), arrival: fromLocalInput(this.arrival(), this.tz()), legs: this.mine(),
+        name: this.name().trim().slice(0, MAX_NAME), planLabel: this.label().trim().slice(0, MAX_PLAN_LABEL), arrival: fromLocalInput(this.arrival(), this.tz()), legs: this.currentLegs(this.mine()),
       }, now);
       const meet = this.meet().trim().slice(0, MAX_MEETUP);
       if (this.meetDirty && meet !== (d.meetup?.text ?? '')) next = { ...next, meetup: { text: meet, updatedAt: new Date(now).toISOString() } };
@@ -417,6 +450,7 @@ export class GroupPage {
         return;
       }
       this.meetDirty = false;
+      this.savedLegs = this.currentLegs(this.mine());
       await this.apply(r.doc, r.version, r.expiresAt ?? this.expiresAt);
       this.remember();
       this.note.set('Status updated');
@@ -502,6 +536,10 @@ export function fromLocalInput(v: string, tz: string | null = null): string | nu
   }
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function validZone(tz: string): boolean {
+  try { new Intl.DateTimeFormat(undefined, { timeZone: tz }); return true; } catch { return false; }
 }
 
 function readCelebrated(): string[] {

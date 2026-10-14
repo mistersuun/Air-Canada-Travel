@@ -30,7 +30,7 @@ const TOO_LARGE = 'This trip is too large to share as a link · use Export trips
             <p class="ui-sub" data-snapshot-desc>A read-only copy that does not update. Includes your notes on legs, "If we split up" and your load notes, so only send it to people you trust with them. Changes need a new link.</p>
           </div>
           <label class="split">
-            <span class="ui-label">If we split up (in the snapshot only)</span>
+            <span class="ui-label">If we split up</span>
             <textarea rows="2" maxlength="400" placeholder="Where you meet, who books the room…" data-split
                       [value]="trip().party.splitNote" (change)="saveSplit($any($event.target).value)"></textarea>
           </label>

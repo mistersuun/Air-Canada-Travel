@@ -85,6 +85,10 @@ export default defineConfig({
         'src/app/components/shared/**/*.ts': { lines: 80, statements: 80, functions: 80, branches: 70 },
         // Clear Sky primitives every page builds on.
         'src/app/ui/**/*.ts': { lines: 80, statements: 80, functions: 75, branches: 70 },
+        // Trip engine, recommendations and places: measured coverage minus 2 points, so they only guard regressions.
+        'src/app/trips/engine/**/*.ts': { lines: 97, statements: 97, functions: 98, branches: 88 },
+        'src/app/recs/**/*.ts': { lines: 96, statements: 96, functions: 94, branches: 89 },
+        'src/app/places/**/*.ts': { lines: 94, statements: 94, functions: 95, branches: 87 },
       },
     },
   },

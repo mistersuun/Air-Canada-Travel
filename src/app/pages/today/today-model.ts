@@ -15,7 +15,7 @@ import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock,
 import { MISS_GAP_MIN, deadlineUtc, departuresHome } from '../../trips/engine/homeby';
 import { hm, supOffset } from '../../ui/format';
 import type { TimeFormat } from '../../state/prefs.service';
-import { airportEnd, arrivalAtGoal, groundEstimate, placeEnd, type GroundEstimate } from '../../places/ground';
+import { aboutDuration, airportEnd, arrivalAtGoal, groundEstimate, placeEnd, type GroundEstimate } from '../../places/ground';
 import { tonightCheckIn } from '../../places/stay-links';
 import { legPrepItems, type PrepItem } from '../../places/prep';
 import { partOfDay } from '../reach/reach-model';
@@ -24,7 +24,6 @@ import { endTz, legStartUtc, legWindow, refArrUtc, refDepUtc, sortLegs } from '.
 import { findDestination, findHub } from '../../utils/airports';
 import { getDestinationCodes } from '../../data/schedule-index';
 import { dailyFact } from '../destination/fun-facts';
-import { MODE_LABEL, groundRide } from '../trips/trips-model';
 import { type ReachableOption, legDepartureKey, leavesGoalArea, missOneOutbound, stillReachable } from '../../trips/engine/recover';
 import { activeTravelDay, placeName } from '../../trips/engine/today';
 import {
@@ -127,6 +126,24 @@ export function currentSegment(trip: Trip, leg: FlightLeg, outcomes: readonly Ou
 
 // ── Ground legs and the days between flights ────────────────────────────────
 
+// Not imported from pages/trips/trips-model: this file is in the eager bundle (the Explore banner), and
+// pulling that page model in (here or in today.page) changes module evaluation order enough to break in-app navigation to /to/:code.
+const MODE_LABEL: Record<GroundLeg['mode'], string> = {
+  train: 'Train', bus: 'Bus', car: 'Car', ferry: 'Ferry', flight: 'Flight', other: 'Ground',
+};
+
+/** A ground leg's ride as the Plan tab words it: the corridor or timetable label while it still fits, else mode and minutes. */
+function rideOf(leg: GroundLeg): { label: string; provenance: Provenance } {
+  if (leg.provenance === 'unknown' || leg.estMinutes === null) return { label: 'Onward travel unknown', provenance: leg.provenance };
+  const from = leg.from.code ? airportEnd(leg.from.code) ?? leg.from : leg.from;
+  const g = groundEstimate(from, leg.to, { dateKey: leg.dateKey });
+  if (g.mode === leg.mode && g.source === 'timetable') {
+    return { label: g.label, provenance: leg.provenance === 'estimated' ? 'scheduled' : leg.provenance };
+  }
+  if (g.mode === leg.mode && g.totalMin === leg.estMinutes) return { label: g.label, provenance: leg.provenance };
+  return { label: `${MODE_LABEL[leg.mode]} about ${aboutDuration(leg.estMinutes)}`, provenance: leg.provenance };
+}
+
 /** The calendar a ground leg is read against: local at its start place (else the goal). */
 function groundDayKey(leg: GroundLeg, trip: Trip, nowMs: number): { today: string; day: string } {
   const tz = endTz(leg.from) ?? trip.goal.tz ?? airportTz(trip.fromHub);
@@ -182,7 +199,7 @@ export function groundTodayView(input: { trip: Trip; legId: string; nowMs: numbe
   const leg = trip.legs.find(l => l.id === input.legId);
   if (!leg || leg.kind !== 'ground') return null;
   const t = leg.userTimes;
-  const ride = groundRide(leg);
+  const ride = rideOf(leg);
   const from = leg.from.code ? airportEnd(leg.from.code) ?? leg.from : leg.from;
   const g = groundEstimate(from, leg.to, { dateKey: leg.dateKey });
   const sub = t
@@ -261,7 +278,7 @@ function nextLeg(trip: Trip, nowMs: number, fmt: TimeFormat): MidTripView['next'
   const time = leg.userTimes ? ` ${formatClock(leg.userTimes.depLocal, fmt)}` : '';
   return {
     title: `Next: ${MODE_LABEL[leg.mode] ?? 'Ground'} ${leg.from.name} → ${leg.to.name} · ${dayLabel(day)}${time}`,
-    detail: groundRide(leg).label,
+    detail: rideOf(leg).label,
   };
 }
 

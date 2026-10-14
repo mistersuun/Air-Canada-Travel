@@ -15,7 +15,7 @@ import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component'
 import { recoverPath, tripPath, tripQuery, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
 import { type TodayTarget, groundTodayView, midTripView, resolveGroundToday, resolveToday, statusForTick, todayView, upcomingTripView } from './today-model';
-import { MODE_ICON } from '../trips/trips-model';
+import type { IconName } from '../../components/shared/icons.component';
 import { TodayTimelineComponent } from './today-timeline.component';
 import { TodayInAirComponent } from './in-air.component';
 import { LiveStatusComponent } from '../../live/live-status.component';
@@ -314,7 +314,7 @@ export class TodayPage {
   });
 
   protected depUtc = refDepUtc;
-  protected icon = (mode: keyof typeof MODE_ICON) => MODE_ICON[mode] ?? 'pin';
+  protected icon = (mode: string): IconName => (mode === 'train' || mode === 'bus' || mode === 'car' || mode === 'plane' ? mode : mode === 'flight' ? 'plane' : 'pin');
   protected planLink = tripPath;
   protected planQuery = (legId: string) => tripQuery('plan', legId);
 

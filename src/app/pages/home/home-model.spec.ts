@@ -196,15 +196,15 @@ describe('placeRows / reachDep', () => {
 
   it('drops cities AC serves and labels the rest "Not on AC\'s network"', () => {
     const rows = placeRows([hit({}), hit({ id: 'gn-2267057', name: 'Lisbon', country: 'Portugal' }, 'LIS')], 'sev');
-    expect(rows).toEqual([{ id: 'gn-2510911', name: 'Seville', sub: "Spain · Not in our schedule data" }]);
+    expect(rows).toEqual([{ id: 'gn-2510911', name: 'Seville', sub: "Andalusia, Spain · Find ways to get there" }]);
   });
 
-  it('adds the region when two places share a name, and needs 3 characters', () => {
+  it('always adds the region, and needs 3 characters', () => {
     const rows = placeRows([
       hit({ id: 'gn-1', name: 'Roseville', country: 'United States', admin1: 'California' }),
       hit({ id: 'gn-2', name: 'Roseville', country: 'United States', admin1: 'Michigan' }),
     ], 'rose');
-    expect(rows.map(r => r.sub)).toEqual(["California, United States · Not in our schedule data", "Michigan, United States · Not in our schedule data"]);
+    expect(rows.map(r => r.sub)).toEqual(["California, United States · Find ways to get there", "Michigan, United States · Find ways to get there"]);
     expect(placeRows([hit({})], 'se')).toEqual([]);
   });
 

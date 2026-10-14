@@ -49,15 +49,16 @@ const FLICK_MS = 1000;
                 @if (settled()) {
                   <app-photo-card [code]="p.destination.code" [title]="p.destination.city" [meta]="meta()" />
                 } @else {
-                  <div class="skel"></div>
+                  <div class="skel" data-surprise-pending><span>Picking somewhere…</span></div>
                 }
               </div>
+              <!-- The actions appear with the result; until then the row only holds its height. -->
               <div class="acts">
-                <a class="ui-btn ui-btn--sm" [routerLink]="path(p)" [queryParams]="state.globalParams()" (click)="close()"
-                   [attr.aria-disabled]="!settled()" [attr.tabindex]="settled() ? null : -1" [class.off]="!settled()">Open</a>
-                <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-surprise-again [attr.aria-disabled]="!settled()"
-                        (click)="settled() && spin()">
-                  <app-icon name="dice" [size]="16" [strokeWidth]="2" /> Spin again</button>
+                @if (settled()) {
+                  <a class="ui-btn ui-btn--sm" [routerLink]="path(p)" [queryParams]="state.globalParams()" (click)="close()">Open</a>
+                  <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-surprise-again (click)="spin()">
+                    <app-icon name="dice" [size]="16" [strokeWidth]="2" /> Spin again</button>
+                }
               </div>
             }
           </div>
@@ -74,9 +75,14 @@ const FLICK_MS = 1000;
     .out { margin-top: 12px; }
     .card { width: min(150px, 45%); margin: 0 auto; aspect-ratio: 3 / 4; }
     .card--on { animation: ui-fade-in var(--dur) var(--ease-out); }
-    .skel { width: 100%; height: 100%; border-radius: var(--radius-photo); background: var(--fill); }
-    .acts { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
-    .off, [aria-disabled='true'] { opacity: .45; pointer-events: none; }
+    .skel {
+      width: 100%; height: 100%; border-radius: var(--radius-photo); display: grid; place-items: center; padding: 12px;
+      background: var(--fill); color: var(--ink-3); font-size: 12.5px; font-weight: 600; text-align: center;
+      animation: skel-pulse 1.1s ease-in-out infinite alternate;
+    }
+    @keyframes skel-pulse { from { opacity: .55; } to { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+    .acts { display: flex; gap: 10px; justify-content: center; margin-top: 12px; min-height: 44px; }
   `],
 })
 export class SurpriseSheetComponent {

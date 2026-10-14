@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, computed, effect, inject, input, signal, untracked,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { recapLine, returnBoarded, tripRecap } from '../../logbook/logbook';
 import {
@@ -11,6 +12,7 @@ import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
 import type { Trip } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
+import { tripPath } from '../../ui/links';
 import { SHARE_ENV } from './trip-share.page';
 
 /** Draws the recap (the real canvas renderer by default; specs stub it). */
@@ -33,7 +35,7 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
 @Component({
   selector: 'app-recap-page',
   standalone: true,
-  imports: [IconComponent],
+  imports: [IconComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rp ui-page ui-page--bare">
@@ -50,7 +52,12 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
         </header>
 
         @if (!ready()) {
-          <p class="ui-sub rp__wait" data-not-ready role="status">A recap is available once your way home is marked as boarded.</p>
+          <section class="ui-card rp__empty" data-not-ready role="status">
+            <span class="rp__empty-ic" aria-hidden="true"><app-icon name="plane" [size]="26" /></span>
+            <h2 class="ui-h3">Nothing flown yet</h2>
+            <p class="ui-sub">A recap is a picture of a finished trip. It appears once the way home is marked as boarded. On the Plan tab, mark each flight boarded as you fly it.</p>
+            <a class="ui-btn ui-btn--sm" [routerLink]="planPath(t.id)">Open the Plan tab</a>
+          </section>
         } @else {
           <div class="rp__card" [class.is-busy]="!url()" data-preview>
             @if (url(); as src) {
@@ -101,7 +108,10 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
     .rp__title h1 { margin: 0; }
     .rp__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .rp__sp { width: 40px; flex: none; }
-    .rp__wait { text-align: center; margin-top: 24px; }
+    .rp__empty { display: grid; justify-items: center; gap: 8px; margin-top: 24px; padding: 28px 22px; text-align: center; }
+    .rp__empty h2, .rp__empty p { margin: 0; }
+    .rp__empty .ui-btn { margin-top: 6px; }
+    .rp__empty-ic { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--ink-2); }
     .rp__card {
       margin-top: 12px; border-radius: 22px; overflow: hidden; box-shadow: var(--shadow-l);
       background: linear-gradient(165deg, #CFE6FF 0%, #EAF3FF 46%, #FFFFFF 100%);
@@ -143,6 +153,7 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
 })
 export class RecapPage {
   private readonly trips = inject(TripsService);
+  protected readonly planPath = tripPath;
   private readonly state = inject(AppStateService);
   private readonly render = inject(RECAP_RENDERER);
   private readonly env = inject(SHARE_ENV);

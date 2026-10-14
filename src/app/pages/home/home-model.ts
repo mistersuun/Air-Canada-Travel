@@ -296,11 +296,11 @@ export function focusDayIndex(weekStart: string, day: string | null, today: stri
 /** Explore loads the city index and shows Places from this many characters. */
 export const PLACES_MIN_QUERY = 3;
 
-/** One "Places" row: Seville · Spain · Not in our schedule data → /reach/gn-2510911?dep=… */
+/** One "Places" row: Seville · Spain · Find ways to get there → /reach/gn-2510911?dep=… */
 export interface PlaceRow {
   id: string;
   name: string;
-  /** 'Spain · Not in our schedule data' (or 'Andalusia, Spain · …' when two hits share a name). */
+  /** 'Andalusia, Spain · Find ways to get there' ('Spain · …' when the city data has no region). */
   sub: string;
 }
 
@@ -311,10 +311,10 @@ export interface PlaceRow {
 export function placeRows(hits: readonly CityHit[], query: string): PlaceRow[] {
   if (query.trim().length < PLACES_MIN_QUERY) return [];
   const rows = hits.filter(h => !h.servedBy);
-  const dup = new Set(rows.map(h => h.place.name).filter((n, i, all) => all.indexOf(n) !== i));
   return rows.map(h => {
-    const where = dup.has(h.place.name) && h.place.admin1 ? `${h.place.admin1}, ${h.place.country}` : h.place.country;
-    return { id: h.place.id, name: h.place.name, sub: `${where || 'Unknown country'} · Not in our schedule data` };
+    // The state or region is always shown when the city data has it ('Paris · Texas, United States').
+    const where = h.place.admin1 && h.place.country ? `${h.place.admin1}, ${h.place.country}` : h.place.country || h.place.admin1;
+    return { id: h.place.id, name: h.place.name, sub: `${where || 'Unknown country'} · Find ways to get there` };
   });
 }
 

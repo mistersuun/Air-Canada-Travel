@@ -71,7 +71,7 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
 
           <section class="ui-card rp__opts" aria-label="What to include">
             <label class="rp__sw" for="rp-arc">
-              <span><b>Route arc</b><span class="rp__muted">A dashed line from home to {{ t.goal.name }}</span></span>
+              <span><b>Route arc</b><span class="rp__muted">Your route on a small world map</span></span>
               <input id="rp-arc" type="checkbox" role="switch" class="switch" data-arc
                      [checked]="arc()" (change)="arc.set($any($event.target).checked)">
             </label>
@@ -179,7 +179,7 @@ export class RecapPage {
     return s ? `Boarded ${s.boarded} of ${s.tries} ${s.tries === 1 ? 'try' : 'tries'}` : '';
   });
   readonly opts = computed<RecapOptions>(() => ({
-    arc: this.arc(), standbyRecord: this.record() && this.hasTries(), outcomes: this.trips.outcomes(),
+    arc: this.arc(), standbyRecord: this.record() && this.hasTries(), outcomes: this.trips.outcomes(), allTrips: this.trips.trips(),
   }));
   protected readonly alt = computed(() => {
     const s = this.summary();

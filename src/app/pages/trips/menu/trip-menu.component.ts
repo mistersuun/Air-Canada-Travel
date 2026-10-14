@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, output, signal } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { SCHEDULES_URL, getCoverage, getSchedulesMeta, scheduleVersion } from '../../../data/schedule-index';
@@ -10,23 +10,20 @@ import { TripsService } from '../../../trips/trips.service';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { downloadIcs } from '../../../utils/ics';
 import { monthDay, offlineAirportsLabel, offlineUntil, savedAtLabel } from '../trips-model';
-import { GroupSectionComponent } from '../../../group/ui/group-section.component';
-import { ShareEntryComponent } from '../../../share/ui/share-entry.component';
 import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type OfflineItemResult } from './offline-save';
 
 /**
- * Trip menu (mockup g8): what is ready offline (honest ticks only), "Save
- * for offline", and sharing with a companion: the "If we split up" note,
- * "Copy link" (Web Share when present, else the clipboard) and a calendar
- * file that marks every flight "Tentative standby".
+ * The "⋯" More menu (mockup g8): what is ready offline (honest ticks only),
+ * "Save for offline", a calendar file that marks every flight "Tentative
+ * standby", and Delete. Sharing lives in the Share sheet.
  */
 @Component({
   selector: 'app-trip-menu',
   standalone: true,
-  imports: [IconComponent, GlassSheetComponent, ShareEntryComponent, GroupSectionComponent],
+  imports: [IconComponent, GlassSheetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet [title]="trip().name" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet [title]="'More: ' + trip().name" [open]="true" (closed)="closed.emit()">
       <div class="tm">
         <section class="grp" data-offline>
           <div>
@@ -58,29 +55,18 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
           @if (reportText()) { <p class="ui-sub tm__fine" data-offline-report>{{ reportText() }}</p> }
         </section>
 
-        <section class="grp" data-share>
+        <section class="grp" data-calendar-sec>
           <div>
-            <h3 class="ui-h3">Share with your companion</h3>
-            <p class="ui-sub">They get the plan, the backups and your notes. Changes need a new share.</p>
+            <h3 class="ui-h3">Calendar</h3>
+            <p class="ui-sub">A file for your calendar app. It marks every flight "Tentative standby". Stays on this device.</p>
           </div>
-          <label class="split">
-            <span class="ui-label">If we split up</span>
-            <textarea rows="2" maxlength="400" placeholder="Where you meet, who books the room…" data-split
-                      [value]="trip().party.splitNote" (change)="saveSplit($any($event.target).value)"></textarea>
-          </label>
-          <div class="acts">
-            <button type="button" class="ui-btn ui-btn--sm ui-btn--dark" data-copy (click)="copyLink()" [disabled]="busy()">Copy link</button>
-            <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-calendar (click)="calendar()">
-              <app-icon name="calendar" [size]="16" /> Calendar
-            </button>
-          </div>
-          <app-share-entry [trip]="trip()" />
+          <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost tm__save" data-calendar (click)="calendar()">
+            <app-icon name="calendar" [size]="16" /> Export to calendar
+          </button>
           @if (trip().calendarExportedAt) {
             <p class="ui-sub tm__fine">Calendar file has a reminder to list 48 hours before each flight.</p>
           }
         </section>
-
-        <app-group-section [trip]="trip()" />
 
         <button type="button" class="tm__del" data-delete (click)="remove()">Delete this trip</button>
       </div>
@@ -103,16 +89,7 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
     .rt b { font-weight: 650; font-size: 15px; }
     .rt .m { font-size: 12.5px; color: var(--ink-2); }
     .tm__save { justify-self: start; min-height: 40px; background: var(--surface); }
-    .split { display: grid; gap: 4px; background: var(--surface); border-radius: 14px; padding: 10px 12px; }
-    .split textarea {
-      border: 0; background: none; resize: vertical; min-height: 44px; color: var(--ink);
-      font: 400 14px/1.45 var(--sans); padding: 0; outline: none;
-    }
-    .split:focus-within { box-shadow: 0 0 0 2px var(--blue); }
-    .acts { display: flex; gap: 8px; }
-    .acts .ui-btn { flex: 1; min-height: 44px; }
-    .acts .ui-btn--ghost { background: var(--surface); }
-    .tm__fine { font-size: 12px; }
+        .tm__fine { font-size: 12px; }
     .tm__del { justify-self: center; color: var(--red-ink); font-size: 14px; font-weight: 600; min-height: 44px; padding: 0 12px; }
   `],
 })
@@ -128,7 +105,6 @@ export class TripMenuComponent {
   /** Emitted after the trip is deleted (the page leaves). */
   readonly deleted = output<void>();
 
-  protected readonly busy = signal(false);
   /** True while "Save for offline" is fetching. */
   protected readonly saving = signal(false);
   /** True when the schedules file is in the service worker cache (or the worker is off and the data is loaded). */
@@ -146,21 +122,8 @@ export class TripMenuComponent {
   protected readonly reportText = computed(() => { const r = this.report(); return r ? offlineReportLabel(r) : ''; });
   protected readonly schedulesReady = computed(() => this.cached() === true);
 
-  /**
-   * The share link, built when the menu opens (and again when the trip changes) so that
-   * Copy link can call navigator.share / clipboard.writeText inside the tap itself: after an
-   * await some browsers (Safari, iOS) no longer treat the call as a user gesture.
-   */
-  private readonly link = signal<{ url: string } | 'too-large' | null>(null);
-  private building: Promise<void> = Promise.resolve();
-  private buildSeq = 0;
-
   constructor() {
     void this.checkCache();
-    effect(() => {
-      this.trip();
-      untracked(() => { this.building = this.buildLink(); });
-    });
   }
 
   /** Looks for the schedules in Cache Storage; with no service worker, loaded data counts. */
@@ -207,91 +170,6 @@ export class TripMenuComponent {
       return;
     }
     this.state.flash(this.cached() ? 'Saved for offline' : 'Plan saved. Schedules need a connection to download.');
-  }
-
-  protected saveSplit(text: string): void {
-    const splitNote = text.trim().slice(0, 400);
-    if (splitNote === this.trip().party.splitNote) return;
-    this.trips.update(this.trip().id, t => ({ ...t, party: { ...t.party, splitNote } }));
-  }
-
-  private async buildLink(): Promise<void> {
-    const seq = ++this.buildSeq;
-    // The previous link stays until the new one resolves, so a tap during a rebuild still shares synchronously.
-    let next: { url: string } | 'too-large' | null;
-    try {
-      const url = await this.trips.shareLink(this.trip().id);
-      next = url ? { url } : null;
-    } catch {
-      next = 'too-large';
-    }
-    // A newer build (the trip changed meanwhile) owns the signal.
-    if (seq === this.buildSeq) this.link.set(next);
-  }
-
-  protected copyLink(): Promise<void> {
-    const ready = this.link();
-    if (ready === 'too-large') {
-      this.state.flash('This trip is too large to share as a link · use Export trips in Settings');
-      return Promise.resolve();
-    }
-    // Normal case: the link is ready, so share/copy start synchronously inside the tap.
-    if (ready) return this.deliver(ready.url);
-    const nav = this.doc.defaultView?.navigator;
-    const win = this.doc.defaultView as (Window & { ClipboardItem?: typeof ClipboardItem }) | null;
-    if (!nav?.share && nav?.clipboard?.write && win?.ClipboardItem) {
-      // Not built yet: a clipboard item can take the link as a promise and still count as the tap.
-      const text = this.building.then(() => {
-        const l = this.link();
-        if (!l || l === 'too-large') throw new Error('no link');
-        return new Blob([l.url], { type: 'text/plain' });
-      });
-      return this.busyWhile(async () => {
-        try {
-          await nav.clipboard.write([new win.ClipboardItem!({ 'text/plain': text })]);
-          this.state.flash('Link copied');
-        } catch {
-          this.state.flash(this.link() === 'too-large' ? 'This trip is too large to share as a link · use Export trips in Settings' : 'Could not copy the link');
-        }
-      });
-    }
-    return this.busyWhile(async () => {
-      await this.building;
-      const l = this.link();
-      if (l === 'too-large') this.state.flash('This trip is too large to share as a link · use Export trips in Settings');
-      else if (l) await this.deliver(l.url);
-    });
-  }
-
-  private async busyWhile(run: () => Promise<void>): Promise<void> {
-    this.busy.set(true);
-    try {
-      await run();
-    } finally {
-      this.busy.set(false);
-    }
-  }
-
-  /** navigator.share when there is one, else the clipboard. The first call happens before any await. */
-  private deliver(url: string): Promise<void> {
-    const nav = this.doc.defaultView?.navigator;
-    return this.busyWhile(async () => {
-      if (nav?.share) {
-        try {
-          await nav.share({ title: this.trip().name, text: `${this.trip().name}: our standby plan`, url });
-          return;
-        } catch (e) {
-          if ((e as DOMException)?.name === 'AbortError') return;
-        }
-      }
-      try {
-        if (!nav?.clipboard) throw new Error('no clipboard');
-        await nav.clipboard.writeText(url);
-        this.state.flash('Link copied');
-      } catch {
-        this.state.flash('Could not copy the link');
-      }
-    });
   }
 
   protected calendar(): void {

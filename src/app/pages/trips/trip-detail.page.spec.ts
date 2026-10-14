@@ -14,6 +14,7 @@ import { TRIPS_KEY, Trip } from '../../trips/model';
 import { TRIPS_STORAGE } from '../../trips/storage';
 import { encodeTripShare } from '../../trips/share-codec';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, SEVILLE_TRIPS_FILE, sevilleTrip } from '../../trips/testing/seville-fixture';
+import { GroupService } from '../../group/group.service';
 import { TripsService } from '../../trips/trips.service';
 import { SettingsDataComponent } from '../../trips/ui/settings-data.component';
 import { toUtcMs } from '../../utils/time';
@@ -236,8 +237,59 @@ describe('TripDetailPage', () => {
     expect(clean(el.querySelector('[data-party]')?.textContent)).toContain('3 travellers · stay together');
   });
 
+  describe('travelling with friends', () => {
+    it('the header has Share and a ⋯ More button, not the old external-link icon', async () => {
+      const { el } = await render();
+      expect(el.querySelector('[data-share-open]')?.getAttribute('aria-label')).toBe('Share');
+      expect(el.querySelector('[data-menu]')?.getAttribute('aria-label')).toContain('More');
+      expect(el.querySelector('[aria-label="Share and offline"]')).toBeNull();
+    });
+
+    it('the prompt card starts a group: it opens the Share sheet on the nickname field', async () => {
+      const { el, stable } = await render();
+      expect(clean(el.querySelector('[data-group-prompt]')?.textContent)).toContain('Travelling with friends?');
+      el.querySelector<HTMLButtonElement>('[data-group-start-card]')!.click();
+      await stable();
+      expect(el.querySelector('app-trip-share-sheet [data-group-name]')).toBeTruthy();
+      expect(document.activeElement).toBe(el.querySelector('[data-group-name]'));
+    });
+
+    it('with a group, the card shows the group instead of the prompt, and the trip card gets a group indicator', async () => {
+      const { el, stable } = await render();
+      TestBed.inject(GroupService).remember({
+        id: 'g'.repeat(22), key: 'k'.repeat(43), write: null, memberId: 'member-1', name: 'Ana', owner: true, ownerToken: null,
+        tripId: SEVILLE_IDS.trip, expiresAt: null, names: ['Ana', 'Sam'],
+      });
+      await stable();
+      expect(el.querySelector('[data-group-prompt]')).toBeNull();
+      expect(el.querySelector('[data-group-card]')).toBeTruthy();
+      expect(el.querySelector('app-avatar-chip[data-avatar="Sam"], [data-avatar="Sam"]')).toBeTruthy();
+      // The detail page has its own card: the list's indicator is not repeated here.
+      expect(el.querySelector('app-trip-card [data-group-indicator]')).toBeNull();
+    });
+
+    it('the Share sheet shows edit and view-only links separately once a group exists', async () => {
+      const { el, stable } = await render();
+      TestBed.inject(GroupService).remember({
+        id: 'g'.repeat(22), key: 'k'.repeat(43), write: 'w'.repeat(43), memberId: 'member-1', name: 'Ana', owner: true, ownerToken: null,
+        tripId: SEVILLE_IDS.trip, expiresAt: null,
+      });
+      el.querySelector<HTMLButtonElement>('[data-share-open]')!.click();
+      await stable();
+      expect(clean(el.querySelector('[data-group-edit] b')?.textContent)).toBe('Edit link');
+      expect(clean(el.querySelector('[data-group-view] b')?.textContent)).toBe('View-only link');
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+      el.querySelector<HTMLButtonElement>('[data-group-copy-view]')!.click();
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+      expect(writeText.mock.calls[0][0]).toContain('#k=');
+      expect(writeText.mock.calls[0][0]).not.toContain('w=');
+      delete (navigator as { clipboard?: unknown }).clipboard;
+    });
+  });
+
   describe('trip menu (g8)', () => {
-    it('shows honest offline ticks, the split note and the share actions', async () => {
+    it('shows honest offline ticks', async () => {
       const { el, stable } = await render();
       el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
       await stable();
@@ -253,7 +305,19 @@ describe('TripDetailPage', () => {
       expect(items[2].querySelector('.box.on')).toBeNull();
       expect(clean(items[2].querySelector('.m')?.textContent)).toBe('Needs internet (Google Maps)');
 
-      const ta = menu.querySelector<HTMLTextAreaElement>('[data-split]')!;
+    });
+
+    it('the Share sheet labels each choice and saves the split note', async () => {
+      const { el, stable } = await render();
+      el.querySelector<HTMLButtonElement>('[data-share-open]')!.click();
+      await stable();
+      const sheet = el.querySelector('app-trip-share-sheet')!;
+      expect([...sheet.querySelectorAll('h3')].map(h => clean(h.textContent))).toEqual(['Live group plan', 'Snapshot link', 'Image or text']);
+      expect(clean(sheet.querySelector('[data-group-shared]')?.textContent)).toContain('Does not share: your notes on legs');
+      expect(clean(sheet.querySelector('[data-snapshot-desc]')?.textContent)).toContain('Includes your notes on legs');
+      expect(sheet.querySelector('[data-share-entry]')).toBeTruthy();
+      expect(el.querySelector('app-trip-menu')).toBeNull();
+      const ta = sheet.querySelector<HTMLTextAreaElement>('[data-split]')!;
       expect(ta.value).toBe('Meet at Seville Santa Justa station. Whoever arrives first books the room.');
       ta.value = 'Meet at the Alcázar gate.';
       ta.dispatchEvent(new Event('change'));
@@ -261,11 +325,13 @@ describe('TripDetailPage', () => {
       expect(stored().party.splitNote).toBe('Meet at the Alcázar gate.');
     });
 
-    it('Copy link puts a /trips/import#t= link on the clipboard', async () => {
+    });
+
+    it('Copy snapshot link puts a /trips/import#t= link on the clipboard', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
       const { el, stable, state } = await render();
-      el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
+      el.querySelector<HTMLButtonElement>('[data-share-open]')!.click();
       await stable();
       el.querySelector<HTMLButtonElement>('[data-copy]')!.click();
       await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
@@ -279,7 +345,7 @@ describe('TripDetailPage', () => {
       Object.defineProperty(navigator, 'share', { configurable: true, value: share });
       try {
         const { el, stable } = await render();
-        el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
+        el.querySelector<HTMLButtonElement>('[data-share-open]')!.click();
         await stable();
         await new Promise(r => setTimeout(r, 50)); // the build is async: let it finish
         el.querySelector<HTMLButtonElement>('[data-copy]')!.click();
@@ -295,7 +361,7 @@ describe('TripDetailPage', () => {
       Object.defineProperty(navigator, 'share', { configurable: true, value: share });
       try {
         const { el, stable, trips } = await render();
-        el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
+        el.querySelector<HTMLButtonElement>('[data-share-open]')!.click();
         await stable();
         await new Promise(r => setTimeout(r, 50));
         trips.update(SEVILLE_IDS.trip, t => ({ ...t, name: 'Renamed trip' }));
@@ -317,7 +383,7 @@ describe('TripDetailPage', () => {
         const { el, stable, state, trips } = await render();
         let release!: (u: string) => void;
         vi.spyOn(trips, 'shareLink').mockImplementation(() => new Promise<string>(r => { release = r; }));
-        el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
+        el.querySelector<HTMLButtonElement>('[data-share-open]')!.click();
         await stable();
         el.querySelector<HTMLButtonElement>('[data-copy]')!.click();
         expect(write).toHaveBeenCalledTimes(1); // synchronously, before the link exists

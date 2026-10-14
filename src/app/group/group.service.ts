@@ -6,7 +6,8 @@ import { TripsService } from '../trips/trips.service';
 import {
   type GroupLink, buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newMemberId, newOwnerToken, newWriteToken,
 } from './group-crypto';
-import { type GroupDoc, type MemberStatus, capMembers, forGroup, groupExpiry, mergeGroupDocs, tripLastDate, parseGroupDoc, serializeGroupDoc } from './group-doc';
+import { LEG_STATUSES, type LegStatus } from '../trips/model';
+import { type GroupDoc, type MemberStatus, MAX_NAME, capMembers, forGroup, groupExpiry, mergeGroupDocs, tripLastDate, parseGroupDoc, serializeGroupDoc } from './group-doc';
 
 export const GROUP_ENDPOINT = '/.netlify/functions/group';
 const STORAGE_KEY = 'ac.groups.v1';
@@ -27,11 +28,24 @@ export interface GroupRecord {
   tripId: string | null;
   /** When the server will delete it (ISO), so expired entries can be dropped from this device. */
   expiresAt: string | null;
+  /** Nicknames seen at the last visit (me first), for the little avatars on the trip card. Nicknames only. */
+  names?: string[];
+  /** My own status per flight leg, kept here too because a client that predates per-leg statuses drops it from the shared doc on save. */
+  myLegs?: Record<string, LegStatus>;
 }
 
 export type GroupFailure = 'unavailable' | 'gone' | 'invalid' | 'forbidden' | 'too-large' | 'budget';
 export type LoadResult = { ok: true; doc: GroupDoc; version: number; expiresAt: string | null } | { ok: false; reason: GroupFailure };
 export type SaveResult = { ok: true; doc: GroupDoc; version: number; expiresAt: string | null } | { ok: false; reason: GroupFailure };
+
+function storedLegs(v: unknown): Record<string, LegStatus> | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const out: Record<string, LegStatus> = {};
+  for (const [id, st] of Object.entries(v)) {
+    if (Object.keys(out).length < 12 && typeof st === 'string' && (LEG_STATUSES as readonly string[]).includes(st)) out[id] = st as LegStatus;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 interface Reply { status: number; json: Record<string, unknown> | null }
 
@@ -56,6 +70,8 @@ export class GroupService {
   private readonly seen = new Map<string, number>();
   private readonly records = signal<Record<string, GroupRecord>>(this.readRecords());
   readonly all = this.records.asReadonly();
+  /** The last successful read per group, so a screen that only wants a glance does not fetch again. */
+  private readonly recent = new Map<string, { at: number; res: Extract<LoadResult, { ok: true }> }>();
 
   recordFor(id: string): GroupRecord | null {
     return this.records()[id] ?? null;
@@ -142,7 +158,15 @@ export class GroupService {
     const doc = text === null ? null : parseGroupDoc(text);
     if (!doc) return { ok: false, reason: 'invalid' };
     this.seen.set(link.id, j['version']);
-    return { ok: true, doc, version: j['version'], expiresAt: typeof j['expiresAt'] === 'string' ? j['expiresAt'] : null };
+    const res = { ok: true as const, doc, version: j['version'], expiresAt: typeof j['expiresAt'] === 'string' ? j['expiresAt'] : null };
+    this.recent.set(link.id, { at: Date.now(), res });
+    return res;
+  }
+
+  /** `load`, unless this session already read the group less than `maxAgeMs` ago. */
+  async loadRecent(link: GroupLink, maxAgeMs: number = 60_000): Promise<LoadResult> {
+    const hit = this.recent.get(link.id);
+    return hit && Date.now() - hit.at < maxAgeMs ? hit.res : this.load(link);
   }
 
   /**
@@ -161,6 +185,7 @@ export class GroupService {
       const r = await this.call('PUT', link.id, link.write, { ...sealed, baseVersion: base, ...(expiresAt ? { expiresAt } : {}) }, ownerToken);
       if (r.status === 200 && r.json && typeof r.json['version'] === 'number') {
         this.seen.set(link.id, r.json['version']);
+        this.recent.set(link.id, { at: Date.now(), res: { ok: true, doc: mine, version: r.json['version'], expiresAt: typeof r.json['expiresAt'] === 'string' ? r.json['expiresAt'] : null } });
         return { ok: true, doc: mine, version: r.json['version'], expiresAt: typeof r.json['expiresAt'] === 'string' ? r.json['expiresAt'] : null };
       }
       if (r.status !== 409) return { ok: false, reason: this.fail(r) };
@@ -237,7 +262,7 @@ export class GroupService {
   /** My entry in the doc (stamped now), for a status edit. */
   withMember(doc: GroupDoc, memberId: string, patch: Partial<MemberStatus> & { name: string }, nowMs: number = Date.now()): GroupDoc {
     const cur = doc.members[memberId];
-    const next: MemberStatus = { name: patch.name, planLabel: patch.planLabel ?? cur?.planLabel ?? '', arrival: patch.arrival === undefined ? (cur?.arrival ?? null) : patch.arrival, updatedAt: new Date(nowMs).toISOString() };
+    const next: MemberStatus = { name: patch.name, planLabel: patch.planLabel ?? cur?.planLabel ?? '', arrival: patch.arrival === undefined ? (cur?.arrival ?? null) : patch.arrival, ...((patch.legs ?? cur?.legs) ? { legs: patch.legs ?? cur?.legs } : {}), updatedAt: new Date(nowMs).toISOString() };
     return { ...doc, members: { ...doc.members, [memberId]: next } };
   }
 
@@ -263,7 +288,8 @@ export class GroupService {
           const expiresAt = typeof r.expiresAt === 'string' && Number.isFinite(Date.parse(r.expiresAt)) ? r.expiresAt : null;
           // The server deletes it at expiry: drop the entry (and its key) from this device too.
           if (expiresAt && Date.parse(expiresAt) <= Date.now()) continue;
-          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, ownerToken: typeof r.ownerToken === 'string' ? r.ownerToken : null, tripId: typeof r.tripId === 'string' ? r.tripId : null, expiresAt };
+          const myLegs = storedLegs(r.myLegs);
+          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, ownerToken: typeof r.ownerToken === 'string' ? r.ownerToken : null, tripId: typeof r.tripId === 'string' ? r.tripId : null, expiresAt, ...(Array.isArray(r.names) ? { names: r.names.filter((n): n is string => typeof n === 'string').map(n => n.slice(0, MAX_NAME)).slice(0, 6) } : {}), ...(myLegs ? { myLegs } : {}) };
         }
       }
       return out;

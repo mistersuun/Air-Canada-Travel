@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, booleanAttribute, computed, inject,
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
+import { GroupService } from '../../../group/group.service';
+import { AvatarChipComponent } from '../../../group/ui/avatar-chip.component';
 import { AppStateService } from '../../../state/app-state.service';
 import type { Trip } from '../../../trips/model';
 import { LegStatusTagComponent } from '../../../trips/ui/leg-status-tag.component';
@@ -21,7 +23,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
 @Component({
   selector: 'app-trip-card',
   standalone: true,
-  imports: [RouterLink, NgTemplateOutlet, IconComponent, LegStatusTagComponent, ProvenanceTagComponent],
+  imports: [RouterLink, NgTemplateOutlet, IconComponent, AvatarChipComponent, LegStatusTagComponent, ProvenanceTagComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="ui-card tc" [class.is-compact]="compact()">
@@ -34,6 +36,12 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
             <h2 class="ui-h2 tc__name">{{ trip().goal.name }}</h2>
           }
           <p class="ui-sub tn tc__dates">{{ dates() }}</p>
+          @if (groupNames().length) {
+            <p class="tc__grp" data-group-indicator>
+              <span class="tc__grpav">@for (n of groupNames(); track $index) { <app-avatar-chip [name]="n" [showName]="false" /> }</span>
+              <span class="ui-sub">Group trip</span>
+            </p>
+          }
         </div>
         <span class="ui-tag tc__cd" [class]="'ui-tag--' + cd().tone" data-countdown [attr.title]="cdTitle()">{{ cd().text }}</span>
       </div>
@@ -100,6 +108,8 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     .tc__name a { color: inherit; }
     .tc__name a:hover { color: var(--blue); }
     .tc__dates { margin-top: 2px; }
+    .tc__grp { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; }
+    .tc__grpav { display: flex; }
     .tc__cd { flex: none; margin-top: 2px; }
     .tc__chips { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tc__chip {
@@ -148,6 +158,15 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
 })
 export class TripCardComponent {
   protected readonly state = inject(AppStateService);
+  private readonly groups = inject(GroupService);
+  /** Nicknames of the group this device started for the trip (on the trips list only). */
+  protected readonly groupNames = computed(() => {
+    // The list only: the detail page has its own group card.
+    if (this.mode() !== 'link') return [];
+    this.groups.all();
+    const r = this.groups.forTrip(this.trip().id);
+    return r ? (r.names?.length ? r.names : [r.name]).filter(Boolean).slice(0, 4) : [];
+  });
 
   readonly trip = input.required<Trip>();
   /** 'link': legs and the goal link to the trip; 'button': legs emit legPick; 'static': read only. */

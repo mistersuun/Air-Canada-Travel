@@ -29,4 +29,20 @@ describe('return model on a multi-stop trip', () => {
     // A planned return flight still decides.
     expect(returnGateway({ ...multi, legs: sevilleTrip().legs })).toBe('LIS');
   });
+
+  it('uses the last stop\'s own airport, and the far end of a ground leg that starts at it', () => {
+    const lisbon = placeFromDestination('LIS');
+    const train = {
+      kind: 'ground' as const, id: 'g-opo', status: 'planned' as const, statusAt: null, note: '', mode: 'train' as const,
+      from: { name: 'Lisbon', code: 'LIS', lat: lisbon.lat, lng: lisbon.lng, tz: lisbon.tz },
+      to: { name: 'Porto', code: 'OPO', lat: 41.24, lng: -8.68, tz: 'Europe/Lisbon' },
+      dateKey: '2026-10-12', estMinutes: 180, provenance: 'estimated' as const, userTimes: null,
+    };
+    const t: Trip = { ...sevilleTrip(), legs: [train], stops: [{ id: 's', place: lisbon, arriveDate: '2026-10-11' }] };
+    expect(returnGateway(t)).toBe('OPO');
+    // Without stops the same leg is just a leg.
+    expect(returnGateway({ ...t, stops: undefined })).toBe('OPO');
+    // A train between earlier stops (Madrid to Seville) does not decide for a Lisbon ending.
+    expect(returnGateway({ ...t, legs: sevilleTrip().legs.slice(1, 2) })).toBe('LIS');
+  });
 });

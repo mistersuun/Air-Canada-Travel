@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { ElementRef, afterNextRender, Injector, ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
 
 import { PlaceSearchComponent } from '../../../places/ui/place-search.component';
 import { AppStateService } from '../../../state/app-state.service';
@@ -7,7 +7,7 @@ import {
 } from '../../../trips/engine/edit';
 import { refsFromItinerary } from '../../../trips/engine/legs';
 import { GROUND_MODES, GroundMode, Place, Trip } from '../../../trips/model';
-import { tripStops } from '../../../trips/stops';
+import { MAX_STOPS, tripStops } from '../../../trips/stops';
 import { TripsService } from '../../../trips/trips.service';
 import { itinKey, prettyFlight } from '../../../ui/format';
 import type { Itinerary } from '../../../utils/connections';
@@ -46,7 +46,7 @@ type AddKind = 'flight' | 'ground';
       </div>
 
       <section class="te__sec">
-        <h3 class="ui-h3">Stops</h3>
+        <h3 class="ui-h3" tabindex="-1" data-stops-h>Stops</h3>
         <ol class="te__l" data-stops>
           @for (s of stops(); track s.id; let i = $index) {
             <li class="te__it" [attr.data-stop]="s.id">
@@ -63,20 +63,24 @@ type AddKind = 'flight' | 'ground';
             @if (newStop(); as p) {
               <p><b>{{ p.name }}</b> <button type="button" class="te__lnk" (click)="newStop.set(null)">Change</button></p>
               <label class="fld"><span class="ui-label">You get there on</span>
-                <input type="date" name="stopDate" data-stop-date [min]="trip().outboundDate" [value]="stopDate()" (input)="stopDate.set($any($event.target).value)"></label>
+                <input type="date" name="stopDate" data-stop-date [min]="stopMin()" [max]="trip().homeBy.dateKey" [value]="stopDate()"
+                       (input)="stopDate.set($any($event.target).value); stopError.set('')"></label>
+              @if (stopError()) { <p class="te__err" role="alert" data-stop-error>{{ stopError() }}</p> }
               <button type="button" class="ui-btn ui-btn--dark ui-btn--block" data-stop-add (click)="addStop(p)">Add stop</button>
             } @else {
               <app-place-search label="Search the next stop" (picked)="pickStop($event)" />
             }
             <button type="button" class="te__lnk" (click)="closeStop()">Cancel</button>
           </div>
-        } @else {
+        } @else if (stops().length <= maxStops) {
           <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost te__add" data-stop-open (click)="openStop()">Add a stop</button>
+        } @else {
+          <p class="ui-sub" data-stops-full>That is the most stops a trip can hold. Remove one to add another.</p>
         }
       </section>
 
       <section class="te__sec">
-        <h3 class="ui-h3">Legs</h3>
+        <h3 class="ui-h3" tabindex="-1" data-legs-h>Legs</h3>
         <ol class="te__l" data-legs>
           @for (r of rows(); track r.id) {
             <li class="te__it" [attr.data-leg-edit]="r.id" [class.is-done]="r.done">
@@ -92,21 +96,21 @@ type AddKind = 'flight' | 'ground';
         @if (adding(); as kind) {
           <div class="te__box" data-leg-form [attr.data-kind]="kind">
             <div class="te__seg" role="group" aria-label="Kind of leg">
-              <button type="button" [class.on]="kind === 'flight'" [attr.aria-pressed]="kind === 'flight'" data-kind-flight (click)="adding.set('flight')">Flight</button>
-              <button type="button" [class.on]="kind === 'ground'" [attr.aria-pressed]="kind === 'ground'" data-kind-ground (click)="adding.set('ground')">Ground</button>
+              <button type="button" [class.on]="kind === 'flight'" [attr.aria-pressed]="kind === 'flight'" data-kind-flight (click)="setKind('flight')">Flight</button>
+              <button type="button" [class.on]="kind === 'ground'" [attr.aria-pressed]="kind === 'ground'" data-kind-ground (click)="setKind('ground')">Ground</button>
             </div>
             <div class="te__2">
               <label class="fld"><span class="ui-label">From</span>
-                <select name="from" data-from (change)="from.set($any($event.target).value)">
+                <select name="from" data-from (change)="from.set($any($event.target).value); error.set('')">
                   @for (o of ends(kind); track o.key) { <option [value]="o.key" [selected]="o.key === from()">{{ o.label }}</option> }
                 </select></label>
               <label class="fld"><span class="ui-label">To</span>
-                <select name="to" data-to (change)="to.set($any($event.target).value)">
+                <select name="to" data-to (change)="to.set($any($event.target).value); error.set('')">
                   @for (o of ends(kind); track o.key) { <option [value]="o.key" [selected]="o.key === to()">{{ o.label }}</option> }
                 </select></label>
             </div>
             <label class="fld"><span class="ui-label">Day</span>
-              <input type="date" name="legDate" data-leg-date [value]="legDate()" (input)="legDate.set($any($event.target).value)"></label>
+              <input type="date" name="legDate" data-leg-date [value]="legDate()" (input)="legDate.set($any($event.target).value); error.set('')"></label>
 
             @if (kind === 'flight') {
               <div data-flights>
@@ -121,15 +125,15 @@ type AddKind = 'flight' | 'ground';
               </div>
             } @else {
               <label class="fld"><span class="ui-label">How</span>
-                <select name="mode" data-mode (change)="mode.set($any($event.target).value)">
+                <select name="mode" data-mode (change)="mode.set($any($event.target).value); error.set('')">
                   <option value="" [selected]="!mode()">Best guess</option>
                   @for (m of modes; track m) { <option [value]="m" [selected]="m === mode()">{{ modeLabel[m] }}</option> }
                 </select></label>
               <div class="te__2">
                 <label class="fld"><span class="ui-label">Leaves (optional)</span>
-                  <input type="time" name="depTime" data-dep-time [value]="depTime()" (input)="depTime.set($any($event.target).value)"></label>
+                  <input type="time" name="depTime" data-dep-time [value]="depTime()" (input)="depTime.set($any($event.target).value); error.set('')"></label>
                 <label class="fld"><span class="ui-label">Arrives (optional)</span>
-                  <input type="time" name="arrTime" data-arr-time [value]="arrTime()" (input)="arrTime.set($any($event.target).value)"></label>
+                  <input type="time" name="arrTime" data-arr-time [value]="arrTime()" (input)="arrTime.set($any($event.target).value); error.set('')"></label>
               </div>
               @if (error()) { <p class="te__err" role="alert">{{ error() }}</p> }
               <button type="button" class="ui-btn ui-btn--dark ui-btn--block" data-ground-add (click)="addGround()">Add ground leg</button>
@@ -177,6 +181,21 @@ type AddKind = 'flight' | 'ground';
 export class TripEditComponent {
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+
+  constructor() {
+    // Opening Edit puts the cursor in the first field.
+    afterNextRender(() => this.focus('[data-name]'));
+  }
+
+  private focus(selector: string): void {
+    this.host.nativeElement.querySelector<HTMLElement>(selector)?.focus();
+  }
+
+  private focusLater(selector: string): void {
+    afterNextRender(() => this.focus(selector), { injector: this.injector });
+  }
 
   readonly trip = input.required<Trip>();
   /** Emitted after "Delete this trip" (the page leaves). */
@@ -200,6 +219,9 @@ export class TripEditComponent {
   protected readonly depTime = signal('');
   protected readonly arrTime = signal('');
   protected readonly error = signal('');
+  protected readonly stopError = signal('');
+  protected readonly maxStops = MAX_STOPS;
+  protected readonly stopMin = computed(() => addDays(this.trip().outboundDate, 1));
 
   protected readonly today = computed(() => todayKey(airportTz(this.state.hub()), this.state.nowMs()));
   protected readonly stops = computed(() => tripStops(this.trip()));
@@ -275,23 +297,40 @@ export class TripEditComponent {
   protected addStop(p: Place): void {
     const t = this.trip();
     const date = this.stopDate();
-    if (!date) return;
-    const prev = tripStops(t)[tripStops(t).length - 1].place;
-    this.trips.addStop(t.id, p, date);
+    if (!date || date <= t.outboundDate || date > t.homeBy.dateKey) {
+      this.stopError.set(`Pick a day after ${dayLabel(t.outboundDate)} and no later than ${dayLabel(t.homeBy.dateKey)}.`);
+      return;
+    }
+    const stopId = this.trips.addStop(t.id, p, date);
     this.closeStop();
+    if (!stopId) return;
     this.state.flash(`${p.name} added as a stop`);
-    // Offer the way there: a ground leg from the last stop, with the flight tab one tap away.
+    // Offer the way there: a ground leg from the stop before it (found after the insert, so a stop in the middle works).
+    const list = tripStops(this.trips.trip(t.id) ?? t);
+    const prev = list[Math.max(0, list.findIndex(s => s.id === stopId) - 1)].place;
     this.openAdd('ground', `place:${prev.id}`, `place:${p.id}`, date);
   }
 
   protected removeStop(stopId: string): void {
+    const i = this.stops().findIndex(s => s.id === stopId) - 1;   // the goal has no Remove button
     this.trips.removeStop(this.trip().id, stopId);
+    this.focusNext('[data-stop-remove]', i, '[data-stops-h]');
   }
 
   // ── Legs ──────────────────────────────────────────────────────────────────
 
   protected removeLeg(legId: string): void {
+    const i = this.rows().findIndex(r => r.id === legId);
     this.trips.removeLeg(this.trip().id, legId);
+    this.focusNext('[data-leg-remove]', i, '[data-legs-h]');
+  }
+
+  /** After a removal the focused button is gone: focus the one that took its place, else the section heading. */
+  private focusNext(buttons: string, index: number, heading: string): void {
+    afterNextRender(() => {
+      const all = this.host.nativeElement.querySelectorAll<HTMLElement>(buttons);
+      (all[Math.min(index, all.length - 1)] ?? this.host.nativeElement.querySelector<HTMLElement>(heading))?.focus();
+    }, { injector: this.injector });
   }
 
   protected openAdd(kind: AddKind, from?: string, to?: string, date?: string): void {
@@ -303,6 +342,12 @@ export class TripEditComponent {
     this.mode.set('');
     this.depTime.set('');
     this.arrTime.set('');
+    this.error.set('');
+    this.focusLater('[data-from]');
+  }
+
+  protected setKind(kind: AddKind): void {
+    this.adding.set(kind);
     this.error.set('');
   }
 

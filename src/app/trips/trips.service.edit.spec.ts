@@ -98,4 +98,50 @@ describe('trip editing', () => {
     expect(t.legs[0].status).toBe('listed');
     expect(t.homeBy.dateKey).toBe('2026-10-25');   // the 5-day stay is kept
   });
+
+  it('caps the stops at 12 with a message', () => {
+    const { svc, state } = make();
+    for (let i = 0; i < 12; i++) expect(svc.addStop(ID, placeFromDestination('LIS'), '2026-10-12')).not.toBe('');
+    expect(svc.addStop(ID, placeFromDestination('MAD'), '2026-10-12')).toBe('');
+    expect(svc.trip(ID)!.stops).toHaveLength(12);
+    expect(state.notice()?.message).toContain('12 stops');
+  });
+
+  it('refuses to move the outbound date onto or past the next stop', () => {
+    const { svc, state } = make();
+    svc.addStop(ID, placeFromDestination('LIS'), '2026-10-12');
+    svc.setOutboundDate(ID, '2026-10-12', null);
+    expect(svc.trip(ID)!.outboundDate).toBe('2026-10-08');
+    expect(state.notice()?.message).toContain('Lisbon');
+    svc.setOutboundDate(ID, '2026-10-10', null);
+    expect(svc.trip(ID)!.outboundDate).toBe('2026-10-10');
+  });
+
+  it('removing a stop says its legs stay', () => {
+    const { svc, state } = make();
+    const id = svc.addStop(ID, placeFromDestination('LIS'), '2026-10-12');
+    svc.removeStop(ID, id);
+    expect(state.notice()?.message).toBe('Lisbon removed. Its legs stay.');
+  });
+
+  it('writes schema 1 until a trip has stops, then 2', () => {
+    const { svc, store } = make();
+    svc.rename(ID, 'Renamed');
+    expect(JSON.parse(store.getItem(TRIPS_KEY)!).schema).toBe(1);
+    const id = svc.addStop(ID, placeFromDestination('LIS'), '2026-10-12');
+    expect(JSON.parse(store.getItem(TRIPS_KEY)!).schema).toBe(2);
+    expect(JSON.parse(svc.exportBackup()).schema).toBe(2);
+    svc.removeStop(ID, id);
+    expect(JSON.parse(store.getItem(TRIPS_KEY)!).schema).toBe(1);
+    expect(JSON.parse(svc.exportBackup()).schema).toBe(1);
+  });
+
+  it('never overwrites a file a newer app wrote after this tab loaded', () => {
+    const { svc, store } = make();
+    const newer = JSON.stringify({ schema: 3, trips: [], future: true });
+    store.setItem(TRIPS_KEY, newer);
+    svc.rename(ID, 'Renamed');
+    expect(store.getItem(TRIPS_KEY)).toBe(newer);
+    expect(svc.readOnly()).toBe(true);
+  });
 });

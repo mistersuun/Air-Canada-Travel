@@ -9,6 +9,7 @@ import { MemoryStorage } from '../state/testing';
 import { TRIPS_KEY } from '../trips/model';
 import { TRIPS_STORAGE } from '../trips/storage';
 import { SEVILLE_TRIPS_FILE } from '../trips/testing/seville-fixture';
+import { fromBase64Url } from '../trips/share-codec';
 import { parseGroupFragment } from './group-crypto';
 import { groupExpiry, parseGroupDoc, tripLastDate } from './group-doc';
 import { GroupService, type GroupRecord } from './group.service';
@@ -51,6 +52,14 @@ function serverFetch(store: GroupStore, sent: { url: string; init: RequestInit }
   });
 }
 
+function indexOfBytes(hay: Uint8Array, needle: Uint8Array): number {
+  outer: for (let i = 0; i + needle.length <= hay.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
+    return i;
+  }
+  return -1;
+}
+
 describe('GroupService (client against the real server logic)', () => {
   let store: ReturnType<typeof memory>;
   let sent: { url: string; init: RequestInit }[];
@@ -81,7 +90,10 @@ describe('GroupService (client against the real server logic)', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const raw = [...store.m.values()][0].v;
-    for (const secret of [r.record.key, r.record.write!, 'Ana', trip.name]) expect(raw).not.toContain(secret);
+    // Short plaintexts like 'Ana' can match inside base64 text by chance, so look for them in the decoded ciphertext bytes.
+    for (const secret of [r.record.key, r.record.write!]) expect(raw).not.toContain(secret);
+    const bytes = fromBase64Url((JSON.parse(raw) as { ciphertext: string }).ciphertext);
+    for (const plain of ['Ana', trip.name]) expect(indexOfBytes(bytes, new TextEncoder().encode(plain))).toBe(-1);
     for (const s of sent) {
       expect(s.url).not.toContain(r.record.key);
       expect(String(s.init.body ?? '')).not.toContain(r.record.key);

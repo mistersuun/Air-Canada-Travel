@@ -14,11 +14,12 @@
  *   save can overwrite it.
  */
 import { InjectionToken } from '@angular/core';
+import { MAX_STOPS } from './stops';
 import { isDateKey, isValidTimeZone } from '../utils/time';
 import {
   Alternate, FLIGHTLOG_CORRUPT_KEY, FLIGHTLOG_SCHEMA, Stop, FLIGHTLOG_KEY, FlightLeg, FlightLog, FlightRef, GROUND_MODES, GroundLeg,
   GroundMode, GroundTimes, LEG_STATUSES, LegEnd, LegStatus, LoadNote, OUTCOME_KINDS, Outcome, OutcomeKind,
-  PendingChange, Place, PrepState, TRIPS_CORRUPT_KEY, TRIPS_KEY, TRIPS_SCHEMA, Trip, TripLeg, TripsFile,
+  PendingChange, Place, PrepState, TRIPS_CORRUPT_KEY, TRIPS_KEY, TRIPS_SCHEMA, Trip, TripLeg, TripsFile, schemaFor,
   emptyFlightLog, emptyTripsFile,
 } from './model';
 
@@ -268,7 +269,7 @@ export function sanitizeTrip(raw: unknown): Trip | null {
     const legIds = new Set<string>();
     const uniqueLegs = legs.filter(l => !legIds.has(l.id) && legIds.add(l.id));
     const stopIds = new Set<string>();
-    const stops = arr(r['stops']).slice(0, 12).map(sanitizeStop)
+    const stops = arr(r['stops']).slice(0, MAX_STOPS).map(sanitizeStop)
       .filter((x): x is Stop => !!x && !stopIds.has(x.id) && !!stopIds.add(x.id));
     const now = new Date(0).toISOString();
     const createdAt = iso(r['createdAt']) ?? now;
@@ -366,7 +367,7 @@ export function migrateTrips(raw: unknown): { file: TripsFile; readOnly: boolean
   const schema = schemaOf(r);
   const readOnly = schema !== null && schema > TRIPS_SCHEMA;
   const trips = uniqueById(arr(r?.['trips']).map(sanitizeTrip).filter((t): t is Trip => !!t));
-  return { file: { schema: TRIPS_SCHEMA, trips }, readOnly };
+  return { file: { schema: schemaFor(trips), trips }, readOnly };
 }
 
 /** Parsed JSON → a valid FlightLog. Never throws. */
@@ -451,6 +452,18 @@ function save(storage: Storage | null, key: string, value: unknown): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** The schema number of the trips file as stored right now (null when absent, unreadable or without one). */
+export function storedTripsSchema(storage: Storage | null): number | null {
+  try {
+    const text = storage?.getItem(TRIPS_KEY);
+    if (!text) return null;
+    const s = (JSON.parse(text) as { schema?: unknown } | null)?.schema;
+    return typeof s === 'number' ? s : null;
+  } catch {
+    return null;
   }
 }
 

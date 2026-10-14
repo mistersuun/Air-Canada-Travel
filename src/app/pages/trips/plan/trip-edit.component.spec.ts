@@ -3,6 +3,7 @@ import { Component, computed, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../../data/schedule-index';
+import { placeFromDestination } from '../../../places/place';
 import { AppStateService, NOW } from '../../../state/app-state.service';
 import { PREFS_STORAGE } from '../../../state/prefs.service';
 import { MemoryStorage } from '../../../state/testing';
@@ -160,5 +161,70 @@ describe('TripEditComponent', () => {
     expect(host.deleted).toBe(true);
     expect(trips.trip(SEVILLE_IDS.trip)).toBeNull();
     expect(state.notice()?.actionLabel).toBe('Undo');
+  });
+
+  it('refuses a stop outside the trip dates, with a message', async () => {
+    const { q, type, click, trips } = await render();
+    await click('[data-stop-open]');
+    await type('[data-place-search]', 'lis');
+    await click('[data-place="ac-LIS"]');
+    expect(q<HTMLInputElement>('[data-stop-date]').min).toBe('2026-10-09');
+    expect(q<HTMLInputElement>('[data-stop-date]').max).toBe('2026-10-13');
+    await type('[data-stop-date]', '2026-10-08');
+    await click('[data-stop-add]');
+    expect(q('[data-stop-error]').textContent).toContain('after Thu Oct 8');
+    await type('[data-stop-date]', '2026-10-20');
+    await click('[data-stop-add]');
+    expect(trips.trip(SEVILLE_IDS.trip)!.stops).toBeUndefined();
+    await type('[data-stop-date]', '2026-10-13');
+    await click('[data-stop-add]');
+    expect(trips.trip(SEVILLE_IDS.trip)!.stops).toHaveLength(1);
+  });
+
+  it('offers the way there from the stop before a stop added in the middle', async () => {
+    const { q, type, click, trips } = await render();
+    const lis = trips.addStop(SEVILLE_IDS.trip, placeFromDestination('LIS'), '2026-10-12');
+    await click('[data-stop-open]');
+    await type('[data-place-search]', 'mad');
+    await click('[data-place="ac-MAD"]');
+    await type('[data-stop-date]', '2026-10-10');
+    await click('[data-stop-add]');
+    const t = trips.trip(SEVILLE_IDS.trip)!;
+    expect(t.stops!.map(s => s.place.name)).toEqual(['Madrid', 'Lisbon']);
+    expect(lis).not.toBe('');
+    // From the goal (the stop before Madrid), not from Lisbon.
+    expect(q<HTMLSelectElement>('[data-from]').value).toBe(`place:${t.goal.id}`);
+    expect(q<HTMLSelectElement>('[data-to]').value).toBe('place:ac-MAD');
+  });
+
+  it('hides Add a stop at the cap', async () => {
+    const { el, trips, fixture } = await render();
+    for (let i = 0; i < 12; i++) trips.addStop(SEVILLE_IDS.trip, placeFromDestination('LIS'), '2026-10-12');
+    await fixture.whenStable();
+    expect(trips.trip(SEVILLE_IDS.trip)!.stops).toHaveLength(12);
+    expect(el.querySelector('[data-stop-open]')).toBeNull();
+    expect(el.querySelector('[data-stops-full]')).not.toBeNull();
+  });
+
+  it('moves focus: to the first field on open, to the next Remove (else the heading) after a removal', async () => {
+    const { el, click, fixture } = await render();
+    expect(document.activeElement === el.querySelector('[data-name]') || !document.body.contains(el)).toBe(true);
+    await click(`[data-leg-edit="${SEVILLE_IDS.outbound}"] [data-leg-remove]`);
+    await fixture.whenStable();
+    const first = el.querySelector('[data-leg-edit] [data-leg-remove]');
+    expect(first && el.contains(document.activeElement)).toBeTruthy();
+  });
+
+  it('clears the ground-time error as soon as a field changes', async () => {
+    const { q, type, click, trips } = await render();
+    await click('[data-leg-open]');
+    await click('[data-kind-ground]');
+    await type('[data-from]', `place:${trips.trip(SEVILLE_IDS.trip)!.goal.id}`, 'change');
+    await type('[data-to]', 'code:MAD', 'change');
+    await type('[data-dep-time]', '08:30');
+    await click('[data-ground-add]');
+    expect(q('.te__err').textContent).toContain('both times');
+    await type('[data-arr-time]', '09:30');
+    expect(document.querySelector('.te__err')).toBeNull();
   });
 });

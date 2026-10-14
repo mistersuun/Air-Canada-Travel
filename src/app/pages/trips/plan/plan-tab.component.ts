@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { AppStateService } from '../../../state/app-state.service';
 import type { Trip } from '../../../trips/model';
+import { TripsService } from '../../../trips/trips.service';
 import { TripChangesComponent } from '../../../trips/ui/trip-changes.component';
 import { isMultiStop, tripStops } from '../../../trips/stops';
 import { tripsPath } from '../../../ui/links';
@@ -27,10 +28,12 @@ import { TripEditComponent } from './trip-edit.component';
     <div class="pt">
       <div class="pt__bar">
         @if (stopsLine(); as line) { <p class="ui-sub pt__stops tn" data-stops-line>{{ line }}</p> }
-        <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost pt__edit" data-edit-toggle
-                [attr.aria-pressed]="editing()" (click)="editing.set(!editing())">{{ editing() ? 'Done' : 'Edit' }}</button>
+        @if (!trips.readOnly()) {
+          <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost pt__edit" data-edit-toggle
+                  [attr.aria-pressed]="editing()" (click)="editing.set(!editing())">{{ editing() ? 'Done' : 'Edit' }}</button>
+        }
       </div>
-      @if (editing()) {
+      @if (editing() && !trips.readOnly()) {
         <app-trip-edit [trip]="trip()" (deleted)="afterDelete()" />
       }
       <app-trip-changes [trip]="trip()" [compact]="true" />
@@ -64,6 +67,7 @@ import { TripEditComponent } from './trip-edit.component';
 export class PlanTabComponent {
   private readonly router = inject(Router);
   private readonly state = inject(AppStateService);
+  protected readonly trips = inject(TripsService);
 
   readonly trip = input.required<Trip>();
   /** ?leg= from the route: the leg whose sheet is open. */

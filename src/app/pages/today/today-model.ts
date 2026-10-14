@@ -8,7 +8,7 @@
  * no odds, "not found in our schedule data" rather than "no flights", and
  * listing is always the traveller's own step.
  */
-import { currentStop } from '../../trips/stops';
+import { currentStop, stopForLeg } from '../../trips/stops';
 import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
 import { networkNoteFor } from '../../data/route-network';
@@ -428,7 +428,7 @@ export function returnBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions
 export function todayBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions, fmt: TimeFormat): TodayBackup | null {
   // Recovery searches toward the goal: for a return leg the backup is the next way home.
   if (leg.role === 'return') return returnBackup(trip, leg, connect, fmt);
-  const r = missOneOutbound(trip, leg.id, connect);
+  const r = missOneOutbound(trip, leg.id, connect);   // heads for the leg's own stop (stopForLeg)
   const missed = leg.refs[0].flightNumber;
   const tonight = r.tonight.find(o => o.status === 'usable');
   if (tonight) {
@@ -688,8 +688,10 @@ export function recoverNote(trip: Trip, leg: FlightLeg | null, tonight: Reachabl
 export function recoverView(input: {
   trip: Trip; at: string | null; legId: string | null; nowMs: number; connect: ConnectOptions; fmt: TimeFormat;
 }): RecoverView {
-  const { trip, nowMs, fmt } = input;
-  const leg = recoverLeg(trip, input.at, input.legId);
+  const { nowMs, fmt } = input;
+  const leg = recoverLeg(input.trip, input.at, input.legId);
+  // Recovery heads for the place this leg is going to (an onward leg: its stop, not the first one).
+  const trip: Trip = leg ? { ...input.trip, goal: stopForLeg(input.trip, leg) } : input.trip;
   const at = input.at || leg?.refs[0].origin || trip.fromHub;
   const r = stillReachable({ trip, at, nowMs, connect: input.connect });
   // Never offer the very flight being recovered from.

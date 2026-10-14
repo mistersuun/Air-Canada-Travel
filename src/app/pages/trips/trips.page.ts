@@ -50,7 +50,7 @@ export const STARRED_PREVIEW = 3;
       @if (newOpen()) {
         <app-glass-sheet title="New trip" [open]="true" (closed)="newOpen.set(false)">
           <p class="ui-sub tp__np">Where do you want to go? You pick the flight on the next screen.</p>
-          <app-place-search label="Search a city or airport" (picked)="startFrom($event)" />
+          <app-place-search label="Search a city or airport" [destinationsOnly]="true" (picked)="startFrom($event)" />
         </app-glass-sheet>
       }
       <app-coming-up-banner />
@@ -200,6 +200,10 @@ export class TripsPage {
    */
   protected startFrom(place: Place): void {
     this.newOpen.set(false);
+    if (place.acCode && !findDestination(place.acCode)) {
+      this.state.flash('Trips start from a hub. Pick where you are going.');
+      return;
+    }
     if (place.acCode) {
       void this.router.navigate(destPath(place.acCode), { queryParams: this.state.globalParams() });
       return;

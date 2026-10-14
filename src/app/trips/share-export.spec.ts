@@ -101,7 +101,7 @@ describe('backup export / import', () => {
     const text = exportBackup(SEVILLE_TRIPS_FILE, log, NOW);
     const raw = JSON.parse(text);
     expect(raw.kind).toBe('routes-backup');
-    expect(raw.schema).toBe(2);
+    expect(raw.schema).toBe(1);
     expect(raw.exportedAt).toBe('2026-10-01T13:41:00.000Z');
     const parsed = parseBackup(text);
     expect('error' in parsed).toBe(false);

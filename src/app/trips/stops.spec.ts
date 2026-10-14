@@ -3,6 +3,7 @@ import { placeFromDestination } from '../places/place';
 import { Trip, TRIPS_SCHEMA } from './model';
 import { decodeTripShare, encodeTripShare, toBase64Url } from './share-codec';
 import { migrateTrips, sanitizeTrip, tripsLossy } from './storage';
+import { searchPlaces } from '../places/ui/place-search.component';
 import { forGroup } from '../group/group-doc';
 import { currentStop, isMultiStop, lastStopPlace, stopNames, tripStops, withStop, withoutStop } from './stops';
 import { SEVILLE_PLACE, SEVILLE_TRIP, sevilleTrip } from './testing/seville-fixture';
@@ -54,7 +55,7 @@ describe('trips schema 1 -> 2', () => {
     const v1 = JSON.parse(JSON.stringify({ schema: 1, trips: [SEVILLE_TRIP] }));
     const { file, readOnly } = migrateTrips(v1);
     expect(readOnly).toBe(false);
-    expect(file.schema).toBe(2);
+    expect(file.schema).toBe(1);   // nothing changed for a trip without stops
     expect(file.trips).toHaveLength(1);
     // Every v1 field survives untouched and no stops appear.
     expect(file.trips[0]).toEqual(SEVILLE_TRIP);
@@ -107,4 +108,12 @@ describe('share links with stops', () => {
     expect(back!.trip.legs).toHaveLength(4);
     expect(lastStopPlace(back!.trip).name).toBe('Seville');
   });
+
+describe('searchPlaces destinationsOnly', () => {
+  it('drops hubs for New trip but keeps them for stops', () => {
+    expect(searchPlaces('vancouver', []).map(p => p.acCode)).toContain('YVR');
+    expect(searchPlaces('vancouver', [], 6, true)).toEqual([]);
+    expect(searchPlaces('lisb', [], 6, true).map(p => p.acCode)).toEqual(['LIS']);
+  });
+});
 });

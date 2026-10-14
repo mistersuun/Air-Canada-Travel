@@ -20,6 +20,13 @@ export const FLIGHTLOG_CORRUPT_KEY = 'ac.flightlog.corrupt';
  */
 export const TRIPS_SCHEMA = 2;
 export const FLIGHTLOG_SCHEMA = 1;
+/**
+ * The schema number to write: 1 while no trip has stops (so an older app keeps
+ * reading and writing the file), 2 as soon as one does.
+ */
+export function schemaFor(trips: readonly Pick<Trip, 'stops'>[]): 1 | 2 {
+  return trips.some(t => t.stops?.length) ? 2 : 1;
+}
 
 export type Provenance = 'scheduled' | 'estimated' | 'saved' | 'unknown';
 export const PROVENANCE_LABEL: Record<Provenance, string> =
@@ -194,7 +201,7 @@ export interface Outcome {
 }
 
 export interface FlightLog { schema: typeof FLIGHTLOG_SCHEMA; notes: LoadNote[]; outcomes: Outcome[]; dismissed: string[] /* prompt keys */ }
-export interface TripsFile { schema: typeof TRIPS_SCHEMA; trips: Trip[] }
+export interface TripsFile { schema: 1 | 2; trips: Trip[] }
 
 /** Input of TripsService.create. */
 export interface NewTrip {
@@ -222,7 +229,7 @@ export function instanceKey(r: { flightNumber: string; origin: string; dateKey: 
 }
 
 export function emptyTripsFile(): TripsFile {
-  return { schema: TRIPS_SCHEMA, trips: [] };
+  return { schema: 1, trips: [] };
 }
 
 export function emptyFlightLog(): FlightLog {

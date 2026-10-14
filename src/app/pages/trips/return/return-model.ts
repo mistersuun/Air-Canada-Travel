@@ -12,7 +12,8 @@ import { gatewaysNear, homeOptionsByAirport } from '../../../places/reach';
 import type { TimeFormat } from '../../../state/prefs.service';
 import { HomeByPlan, MissStep, homeByPlan, missOneChain, triesFrom } from '../../../trips/engine/homeby';
 import { placeName } from '../../../trips/engine/today';
-import { type FlightLeg, type GroundLeg, type GroundMode, type Trip, isFinalStatus } from '../../../trips/model';
+import { type FlightLeg, type GroundLeg, type GroundMode, type LegEnd, type Trip, isFinalStatus } from '../../../trips/model';
+import { greatCircleKm } from '../../../utils/geo';
 import { isMultiStop, lastStopPlace } from '../../../trips/stops';
 import { GROUND_BEFORE_DEPARTURE_MIN } from '../../../trips/engine/legs';
 import { airportTz } from '../../../utils/airports';
@@ -20,6 +21,9 @@ import { prettyFlight } from '../../../ui/format';
 import type { ConnectOptions, Itinerary } from '../../../utils/connections';
 import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../../utils/time';
 import type { FlightInstance } from '../../../utils/week';
+
+/** A ground leg starting this close to the last stop starts at it. */
+const LAST_STOP_KM = 40;
 
 /** How many other airports "Other airports home" lists at most. */
 export const OTHER_AIRPORTS_MAX = 3;
@@ -66,13 +70,17 @@ export function activeReturnLeg(trip: Trip): FlightLeg | null {
 export function returnGateway(trip: Trip): string | null {
   const leg = activeReturnLeg(trip);
   if (leg) return leg.refs[0].origin;
-  // On a multi-stop trip a leg's airport only counts when it is the last stop's own airport (else one near it) (the legs between stops don't).
+  // On a multi-stop trip a leg's airport only counts when it serves the last stop: that stop's own airport (one near it only when it has none),
+  // or the far end of a ground leg that starts at the last stop (Lisbon by train to Porto). Legs between earlier stops don't.
+  const multi = isMultiStop(trip);
   const last = lastStopPlace(trip);
   const nearLast = new Set(last.acCode ? [last.acCode] : gatewaysNear(last).map(g => g.code));
-  const ok = (c: string | undefined): c is string => !!c && c !== trip.homeAirport && (!isMultiStop(trip) || nearLast.has(c));
-  const ground = [...trip.legs].reverse().find(l => l.kind === 'ground' && l.status !== 'abandoned' && (ok(l.to.code) || ok(l.from.code)));
+  const ok = (c: string | undefined): c is string => !!c && c !== trip.homeAirport && (!multi || nearLast.has(c));
+  const startsAtLast = (e: LegEnd) => multi && ((!!e.code && e.code === last.acCode) || greatCircleKm(e, last) <= LAST_STOP_KM);
+  const ground = [...trip.legs].reverse().find(l => l.kind === 'ground' && l.status !== 'abandoned'
+    && (ok(l.to.code) || ok(l.from.code) || (startsAtLast(l.from) && !!l.to.code && l.to.code !== trip.homeAirport)));
   if (ground?.kind === 'ground') {
-    if (ok(ground.to.code)) return ground.to.code;
+    if (ok(ground.to.code) || (startsAtLast(ground.from) && ground.to.code && ground.to.code !== trip.homeAirport)) return ground.to.code!;
     if (ok(ground.from.code)) return ground.from.code;
   }
   const flight = [...trip.legs].reverse().find((l): l is FlightLeg =>

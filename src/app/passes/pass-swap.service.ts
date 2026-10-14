@@ -34,7 +34,7 @@ export class PassSwapService {
     const trip = this.trips.trip(tripId);
     const leg = trip?.legs.find(l => l.id === m.legId);
     const alt = leg?.kind === 'flight' ? leg.alternates.find(a => a.id === m.altId) : undefined;
-    const plan = trip && alt ? alternateSwapPlan(trip, alt) : null;
+    const plan = trip && alt && leg?.kind === 'flight' ? alternateSwapPlan(trip, leg, alt) : null;
     if (!trip || !plan) return null;
     const legId = this.trips.swapLeg(tripId, m.legId, plan.it, plan.ground, { onUndo });
     if (!legId) return null;

@@ -285,7 +285,7 @@ describe('backup with files', () => {
     const text = await (await svc.exportWithFiles()).text();
     const json = JSON.parse(text);
     expect(json.kind).toBe('routes-backup');
-    expect(json.schema).toBe(2);
+    expect(json.schema).toBe(1);
     expect(json.trips.map((t: { id: string }) => t.id)).toEqual([SEVILLE_IDS.trip]);
     expect(json.flightlog).toBeTruthy();
     expect(json.files.schema).toBe(1);

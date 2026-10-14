@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { IconComponent } from '../../components/shared/icons.component';
 import { DESTINATIONS, HUBS } from '../../data/destinations';
+import { findDestination } from '../../utils/airports';
 import type { Place } from '../../trips/model';
 import { CityIndexService } from '../city-index.service';
 import { placeFromDestination, placeFromHit } from '../place';
@@ -13,15 +14,17 @@ const CITY_INDEX_MIN = 3;
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
 /** Air Canada destinations and hubs whose city or code starts with / contains the query, then city-index hits; no duplicates. */
-export function searchPlaces(q: string, cityHits: readonly Place[], limit = 6): Place[] {
+export function searchPlaces(q: string, cityHits: readonly Place[], limit = 6, destinationsOnly = false): Place[] {
   const f = fold(q);
   if (f.length < PLACE_SEARCH_MIN) return [];
-  const ac = [...DESTINATIONS.map(d => ({ code: d.code, city: d.city })), ...HUBS.map(h => ({ code: h.code, city: h.name }))]
+  const ac = [...DESTINATIONS.map(d => ({ code: d.code, city: d.city })), ...(destinationsOnly ? [] : HUBS.map(h => ({ code: h.code, city: h.name })))]
     .filter(a => fold(a.city).startsWith(f) || a.code.toLowerCase() === f)
     .map(a => placeFromDestination(a.code));
   const out: Place[] = [];
   const seen = new Set<string>();
   for (const p of [...ac, ...cityHits]) {
+    // Hubs are where trips start from; a trip to one has no destination page.
+    if (destinationsOnly && p.acCode && !findDestination(p.acCode)) continue;
     const key = p.acCode ? `ac-${p.acCode}` : p.id;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -55,9 +58,12 @@ export function searchPlaces(q: string, cityHits: readonly Place[], limit = 6): 
             <b>{{ p.name }}</b><span class="ui-sub">{{ where(p) }}</span></button></li>
         }
       </ul>
-    } @else if (q().trim().length >= 2) {
-      <p class="ui-sub ps__none" data-place-none>No place found{{ loading() ? ' yet. Looking through more cities...' : '. Try the city name.' }}</p>
     }
+    <div role="status" aria-live="polite">
+      @if (!rows().length && q().trim().length >= 2) {
+        <p class="ui-sub ps__none" data-place-none>No place found{{ loading() ? ' yet. Looking through more cities...' : destinationsOnly() ? '. Trips start from your hub, so pick where you are going.' : '. Try the city name.' }}</p>
+      }
+    </div>
   `,
   styles: [`
     :host { display: block; }
@@ -74,8 +80,13 @@ export function searchPlaces(q: string, cityHits: readonly Place[], limit = 6): 
 })
 export class PlaceSearchComponent {
   private readonly cities = inject(CityIndexService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly label = input('Search a city or airport');
+  /** Leave out the hubs (trips start from one, they are not somewhere to go to). */
+  readonly destinationsOnly = input(false);
+  /** Focus the field when it appears. */
+  readonly autoFocus = input(true);
   readonly picked = output<Place>();
 
   protected readonly q = signal('');
@@ -84,10 +95,13 @@ export class PlaceSearchComponent {
     const q = this.q();
     const hits = q.trim().length >= CITY_INDEX_MIN && this.cities.status() === 'ready'
       ? this.cities.search(q, 6).map(placeFromHit) : [];
-    return searchPlaces(q, hits);
+    return searchPlaces(q, hits, 6, this.destinationsOnly());
   });
 
   constructor() {
+    afterNextRender(() => {
+      if (this.autoFocus()) this.host.nativeElement.querySelector<HTMLInputElement>('input')?.focus();
+    });
     effect(() => {
       if (this.q().trim().length >= CITY_INDEX_MIN) untracked(() => void this.cities.ensureLoaded());
     });

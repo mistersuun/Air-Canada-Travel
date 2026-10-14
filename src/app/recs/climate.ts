@@ -3,6 +3,8 @@
  * scripts/build-climate.py from Open-Meteo's ERA5 archive (CC BY 4.0).
  * Always shown as "Typical", never as a forecast. Pure functions only.
  */
+import { t } from '../i18n/t';
+import { monthShort } from '../utils/time';
 import type { ClimateFile, ClimateIndex, ClimateMonth } from './model';
 
 const VARS = ['tmax', 'tmin', 'precip', 'wet'] as const;
@@ -48,11 +50,12 @@ export function formatTypical(c: ClimateMonth, monthShort: string): string {
   return `${monthShort} ${c.tmaxC}° / ${c.tminC}°`;
 }
 
+/** English month abbreviations; for display use monthShort(i), which follows the UI language. */
 export const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
 /** 'Oct 30° / 23°' for a ClimateMonth, using its own month. */
 export function typicalText(c: ClimateMonth): string {
-  return formatTypical(c, MONTH_SHORT[c.month - 1]);
+  return formatTypical(c, monthShort(c.month - 1));
 }
 
 export const COLD_BELOW_C = 5;
@@ -91,17 +94,17 @@ export function typicalForMonths(
   const [wetMin, wetMax] = range(c => c.wetDays);
   const deg = (a: number, b: number) => (a === b ? `${a}°` : `${a}\u2013${b}°`);
   const advice: string[] = [];
-  if (wetMax >= WET_DAYS_RAIN) advice.push('a rain layer');
-  if (loMin < COLD_BELOW_C) advice.push('warm layers');
-  if (hiMax >= HOT_FROM_C) advice.push('for the heat');
-  return { text: `Typical ${deg(hiMin, hiMax)} / ${deg(loMin, loMax)}, ${wetDaysText(wetMin, wetMax)}`, advice };
+  if (wetMax >= WET_DAYS_RAIN) advice.push(t('recs.advice.rain'));
+  if (loMin < COLD_BELOW_C) advice.push(t('recs.advice.warm'));
+  if (hiMax >= HOT_FROM_C) advice.push(t('recs.advice.heat'));
+  return { text: t('recs.climate.typical', { hi: deg(hiMin, hiMax), lo: deg(loMin, loMax), wet: wetDaysText(wetMin, wetMax) }), advice };
 }
 
 /** 'no wet days', '1 wet day', '9 wet days', '9\u201314 wet days'. */
 export function wetDaysText(min: number, max: number = min): string {
-  if (max === 0) return 'no wet days';
-  if (min === max) return `${min} wet ${min === 1 ? 'day' : 'days'}`;
-  return `${min}\u2013${max} wet days`;
+  if (max === 0) return t('recs.climate.noWet');
+  if (min === max) return t('recs.climate.wet', { n: min });
+  return t('recs.climate.wetRange', { min, max });
 }
 
 /** Lows below this suggest a warm layer. */
@@ -125,25 +128,25 @@ export function packingFacts(
   if (!rows.length) return [];
   const by = (f: (c: ClimateMonth) => number, pick: 'max' | 'min') =>
     rows.reduce((a, b) => (pick === 'max' ? (f(b) > f(a) ? b : a) : (f(b) < f(a) ? b : a)));
-  const mon = (c: ClimateMonth) => MONTH_SHORT[c.month - 1];
+  const mon = (c: ClimateMonth) => monthShort(c.month - 1);
   const out: PackingFact[] = [];
   const wet = by(c => c.wetDays, 'max');
   if (wet.wetDays >= WET_DAYS_RAIN) {
     // Below freezing the wet days are snow as much as rain.
-    const what = wet.tmaxC <= 0 ? 'Waterproof layer \u2014 rain or snow' : 'Rain jacket \u2014 wet';
-    out.push({ id: 'pack:rain', title: `${what} on about ${wet.wetDays} of ${DAYS_IN_MONTH[wet.month - 1]} days in ${mon(wet)}` });
+    const key = wet.tmaxC <= 0 ? 'recs.pack.snow' : 'recs.pack.rain';
+    out.push({ id: 'pack:rain', title: t(key, { n: wet.wetDays, days: DAYS_IN_MONTH[wet.month - 1], month: mon(wet) }) });
   }
   const cold = by(c => c.tmaxC, 'min');
   if (cold.tmaxC < COLD_BELOW_C) {
-    out.push({ id: 'pack:coat', title: `Winter coat \u2014 highs only around ${cold.tmaxC}\u00b0 in ${mon(cold)}` });
+    out.push({ id: 'pack:coat', title: t('recs.pack.coat', { deg: cold.tmaxC, month: mon(cold) }) });
   }
   const low = by(c => c.tminC, 'min');
   if (low.tminC < WARM_LAYER_BELOW_C) {
-    out.push({ id: 'pack:warm', title: `Warm layer \u2014 lows around ${low.tminC}\u00b0 in ${mon(low)}` });
+    out.push({ id: 'pack:warm', title: t('recs.pack.warm', { deg: low.tminC, month: mon(low) }) });
   }
   const hot = by(c => c.tmaxC, 'max');
   if (hot.tmaxC >= HOT_FROM_C) {
-    out.push({ id: 'pack:sun', title: `Sun protection \u2014 highs around ${hot.tmaxC}\u00b0 in ${mon(hot)}` });
+    out.push({ id: 'pack:sun', title: t('recs.pack.sun', { deg: hot.tmaxC, month: mon(hot) }) });
   }
   return out;
 }

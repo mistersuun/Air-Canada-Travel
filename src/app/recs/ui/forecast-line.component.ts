@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
+import { t } from '../../i18n/t';
 import { NOW } from '../../state/app-state.service';
 import { airportTz } from '../../utils/airports';
 import { todayKey } from '../../utils/time';
@@ -19,8 +20,8 @@ export const FORECAST_SOURCE_URL = 'https://open-meteo.com/';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (text(); as t) {
-      <span class="fc tn" data-forecast>Forecast · {{ t }} @if (plain()) { · Open-Meteo } @else { <a class="fc__src" [href]="source" target="_blank" rel="noopener" aria-label="Forecast data from Open-Meteo">Open-Meteo</a> }</span>
+    @if (text(); as txt) {
+      <span class="fc tn" data-forecast>{{ t('recs.forecast') }} · {{ txt }} @if (plain()) { · {{ brand }} } @else { <a class="fc__src" [href]="source" target="_blank" rel="noopener" [attr.aria-label]="t('recs.forecast.source')">{{ brand }}</a> }</span>
     }
   `,
   styles: [`
@@ -37,6 +38,8 @@ export class ForecastLineComponent {
   readonly dateKey = input.required<string>();
   /** Inside a link (a row that is itself an anchor): the source is text, not a nested link. */
   readonly plain = input(false);
+  protected readonly t = t;
+  protected readonly brand = 'Open-Meteo';
   protected readonly source = FORECAST_SOURCE_URL;
 
   private readonly inRange = computed(() => withinForecast(this.dateKey(), todayKey(airportTz(this.code()), this.now())));

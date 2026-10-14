@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, afterNextRender, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { profilePath } from '../../extras/links';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
@@ -24,9 +25,9 @@ import { RecCardComponent, dismissWithUndo } from './rec-card.component';
       <section class="ideas" aria-labelledby="h-ideas" data-ideas>
         <div class="ui-sec-h hd">
           <h2 class="ui-h3" id="h-ideas">{{ title() }}</h2>
-          <a [routerLink]="profileLink" [queryParams]="state.globalParams()" data-profile-link>Profile</a>
+          <a [routerLink]="profileLink" [queryParams]="state.globalParams()" data-profile-link>{{ t('recs.ideas.profile') }}</a>
         </div>
-        <p class="line">Scheduled flights, not seats. No boarding chances.</p>
+        <p class="line">{{ t('recs.forYou.line') }}</p>
         <div class="list">
           @for (r of items(); track r.id) {
             <app-rec-card [items]="[r]" (dismiss)="dismiss($event)" />
@@ -34,13 +35,13 @@ import { RecCardComponent, dismissWithUndo } from './rec-card.component';
           @if (profile.isEmpty()) {
             <a class="ui-card tell" [routerLink]="profileLink" [queryParams]="state.globalParams()" data-tell>
               <span class="tell__ic"><app-icon name="sparkle" [size]="18" /></span>
-              <span class="tell__tx"><b>Tell us what you like</b>&ngsp;<span>Travel profile</span></span>
+              <span class="tell__tx"><b>{{ t('recs.tell') }}</b>&ngsp;<span>{{ t('recs.profile.title') }}</span></span>
               <app-icon class="chev" name="chevron-right" [size]="16" />
             </a>
           }
         </div>
         @if (hasWeather()) {
-          <p class="foot">Typical weather from Open-Meteo (CC BY 4.0). Not a forecast.</p>
+          <p class="foot">{{ t('recs.weatherCredit') }}</p>
         }
       </section>
     }
@@ -65,6 +66,7 @@ import { RecCardComponent, dismissWithUndo } from './rec-card.component';
   `],
 })
 export class TripIdeasComponent {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   protected readonly profile = inject(ProfileService);
   private readonly recs = inject(RecsService);
@@ -72,7 +74,7 @@ export class TripIdeasComponent {
 
   protected readonly profileLink = profilePath();
   protected readonly items = computed(() => this.recs.forTrips().flatMap(g => g.items));
-  protected readonly title = computed(() => (this.trips.activeTrips().length ? 'Ideas for later' : 'Ideas'));
+  protected readonly title = computed(() => (this.trips.activeTrips().length ? t('recs.group.ideas') : t('recs.ideas.title')));
   protected readonly hasWeather = computed(() => this.items().some(r => r.weather));
 
   constructor() {

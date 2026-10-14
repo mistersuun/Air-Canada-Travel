@@ -2,14 +2,15 @@ import { ChangeDetectionStrategy, Component, afterNextRender, computed, inject }
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { profilePath } from '../../extras/links';
+import { MsgKey, t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import type { RecGroup, Recommendation } from '../model';
 import { ProfileService } from '../profile.service';
 import { RecsService } from '../recs.service';
 import { RecCardComponent, cardsFor, dismissWithUndo } from './rec-card.component';
 
-/** The fixed honesty line under the heading (extras spec §0.3). */
-export const FOR_YOU_LINE = 'Scheduled flights, not seats. No boarding chances.';
+/** The fixed honesty line under the heading (extras spec §0.3): 'Scheduled flights, not seats. No boarding chances.' */
+export const FOR_YOU_LINE: MsgKey = 'recs.forYou.line';
 
 /** The key of the "Tell us what you like" card in wideCards(). */
 export const TELL_KEY = 'tell';
@@ -55,10 +56,10 @@ export function wideCards(groups: readonly RecGroup[], withTell: boolean): Set<s
     @if (groups().length) {
       <section class="fy-sec" aria-labelledby="h-foryou" data-for-you>
         <div class="ui-sec-h hd">
-          <h2 class="ui-h2 st" id="h-foryou">For you</h2>
-          <a [routerLink]="profileLink" [queryParams]="state.globalParams()" data-edit-profile>Edit profile</a>
+          <h2 class="ui-h2 st" id="h-foryou">{{ t('recs.forYou') }}</h2>
+          <a [routerLink]="profileLink" [queryParams]="state.globalParams()" data-edit-profile>{{ t('recs.editProfile') }}</a>
         </div>
-        <p class="line">{{ line }}</p>
+        <p class="line">{{ t(line) }}</p>
         <div class="grid">
           @for (g of groups(); track g.id) {
             @if (g.id === 'more') { <h3 class="ui-label more" data-more>{{ g.title }}</h3> }
@@ -70,13 +71,13 @@ export function wideCards(groups: readonly RecGroup[], withTell: boolean): Set<s
           @if (profile.isEmpty()) {
             <a class="ui-card tell" [class.wide]="wide().has(tellKey)" [routerLink]="profileLink" [queryParams]="state.globalParams()" data-tell>
               <span class="tell__ic"><app-icon name="sparkle" [size]="18" /></span>
-              <span class="tell__tx"><b>Tell us what you like</b>&ngsp;<span>Travel profile</span></span>
+              <span class="tell__tx"><b>{{ t('recs.tell') }}</b>&ngsp;<span>{{ t('recs.profile.title') }}</span></span>
               <app-icon class="chev" name="chevron-right" [size]="16" />
             </a>
           }
         </div>
         @if (hasWeather()) {
-          <p class="foot" data-weather-credit>Typical weather from Open-Meteo (CC BY 4.0). Not a forecast.</p>
+          <p class="foot" data-weather-credit>{{ t('recs.weatherCredit') }}</p>
         }
       </section>
     }
@@ -110,6 +111,7 @@ export function wideCards(groups: readonly RecGroup[], withTell: boolean): Set<s
   `],
 })
 export class ForYouComponent {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   protected readonly profile = inject(ProfileService);
   private readonly recs = inject(RecsService);

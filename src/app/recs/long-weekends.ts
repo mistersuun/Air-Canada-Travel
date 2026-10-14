@@ -3,6 +3,7 @@
  * Pure: holidays come from trips/engine/holidays (rules, any year).
  */
 import { Holiday, holidaysIn } from '../trips/engine/holidays';
+import { MsgKey, isMsgKey, t } from '../i18n/t';
 import { addDays, diffDays, weekdayIndex } from '../utils/time';
 import { TravelProfile } from './model';
 
@@ -12,7 +13,30 @@ export const HUB_PROVINCE: Record<string, string> = {
 };
 
 /** Statutory somewhere, but most people still work: never suggested as a long weekend. */
-export const NOT_WIDELY_OFF = ['Easter Monday', 'National Day for Truth and Reconciliation', 'Remembrance Day'];
+export const NOT_WIDELY_OFF = ['Easter Monday', 'National Day for Truth and Reconciliation', 'Remembrance Day'];   // i18n-ignore
+
+const HOLIDAY_KEYS: Readonly<Record<string, MsgKey>> = {
+  'Good Friday': 'recs.holiday.goodFriday',
+  'Easter Monday': 'recs.holiday.easterMonday',
+  'Victoria Day': 'recs.holiday.victoriaDay',
+  'Canada Day': 'recs.holiday.canadaDay',
+  'Civic Holiday': 'recs.holiday.civic',
+  'Labour Day': 'recs.holiday.labourDay',
+  'National Day for Truth and Reconciliation': 'recs.holiday.truth',   // i18n-ignore
+  Thanksgiving: 'recs.holiday.thanksgiving',
+  'Remembrance Day': 'recs.holiday.remembrance',
+  'Christmas Day': 'recs.holiday.christmas',
+  'Boxing Day': 'recs.holiday.boxing',
+  'Family Day': 'recs.holiday.family',
+  'Louis Riel Day': 'recs.holiday.riel',
+  'Heritage Day': 'recs.holiday.heritage',
+};
+
+/** A holiday's name in the UI language (names from the holiday rules are English); unknown names stay as they are. */
+export function holidayName(name: string): string {
+  const k = HOLIDAY_KEYS[name];
+  return k && isMsgKey(k) ? t(k) : name;
+}
 
 export interface LongWeekend {
   id: string;            // 'lw:2026-10-12' (the observed day)

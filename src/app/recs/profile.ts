@@ -2,7 +2,9 @@
  * Travel profile: pure sanitising and summary helpers (extras spec §5.1).
  * The profile only steers suggestions; it never changes a number we show.
  */
-import { WEEKDAY_SHORT } from '../utils/time';
+import { typeLabel } from '../i18n/labels';
+import { MsgKey, t } from '../i18n/t';
+import { weekdayShort } from '../utils/time';
 import { TravelProfile, TripLength, TripStyle } from './model';
 
 export const TRIP_STYLES: readonly TripStyle[] = ['Sun', 'City', 'Adventure'];
@@ -11,14 +13,19 @@ export const MAX_DISMISSED = 200;
 export const MAX_USUAL_ITEMS = 30;
 export const MAX_USUAL_ITEM_LEN = 80;
 /** One-tap suggestions for "My usual items" (standby trips: the flight you want may be full). */
-export const USUAL_SUGGESTIONS: readonly string[] = [
-  'Change of clothes in carry-on',
-  'Phone charger',
-  'Passport / ID',
-  'Snacks for a long wait',
-  'Medications',
-  'Reusable water bottle',
+const USUAL_SUGGESTION_KEYS: readonly MsgKey[] = [
+  'recs.usual.clothes',
+  'recs.usual.charger',
+  'recs.usual.id',
+  'recs.usual.snacks',
+  'recs.usual.meds',
+  'recs.usual.bottle',
 ];
+
+/** The suggestions in the UI language (a tapped one is saved as the text shown). */
+export function usualSuggestions(): string[] {
+  return USUAL_SUGGESTION_KEYS.map(k => t(k));
+}
 
 /** Trimmed, non-empty, de-duplicated (case-insensitive) items, each capped, at most MAX_USUAL_ITEMS. */
 export function sanitizeUsualItems(raw: unknown): string[] {
@@ -86,13 +93,18 @@ export function sanitizeProfile(raw: unknown): TravelProfile {
 /** 'Sun', 'City and Sun', 'City, Sun and Adventure'. */
 export function joinAnd(parts: readonly string[]): string {
   if (parts.length <= 1) return parts.join('');
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  return t('recs.joinAnd', { list: parts.slice(0, -1).join(', '), last: parts[parts.length - 1] });
 }
 
 /** Styles in display order (City, Sun, Adventure: the mock's "like City and Sun"). */
 export function stylesDisplay(styles: readonly TripStyle[]): TripStyle[] {
   const order: TripStyle[] = ['City', 'Sun', 'Adventure'];
   return order.filter(s => styles.includes(s));
+}
+
+/** The styles as shown ('City', 'Sun'; 'Ville', 'Soleil'), in display order. */
+export function stylesLabels(styles: readonly TripStyle[]): string[] {
+  return stylesDisplay(styles).map(typeLabel);
 }
 
 /**
@@ -107,21 +119,21 @@ export function daysRange(days: readonly number[], sep = '–'): string | null {
   if (starts.length === 1) {
     const start = starts[0];
     const end = ((start - 1 + days.length - 1) % 7) + 1;
-    return days.length === 1 ? WEEKDAY_SHORT[start - 1] : `${WEEKDAY_SHORT[start - 1]}${sep}${WEEKDAY_SHORT[end - 1]}`;
+    return days.length === 1 ? weekdayShort(start - 1) : `${weekdayShort(start - 1)}${sep}${weekdayShort(end - 1)}`;
   }
-  return [...days].sort((a, b) => a - b).map(d => WEEKDAY_SHORT[d - 1]).join(', ');
+  return [...days].sort((a, b) => a - b).map(d => weekdayShort(d - 1)).join(', ');
 }
 
-const LENGTH_SUMMARY: Record<TripLength, string> = { day: 'day trips', weekend: 'long weekends', week: 'a week or more' };
+const LENGTH_SUMMARY: Record<TripLength, MsgKey> = { day: 'recs.summary.day', weekend: 'recs.summary.weekend', week: 'recs.summary.week' };
 
 /** 'City, Sun · long weekends · up to 7h · Thu–Mon', or 'Not set up'. */
 export function profileSummary(p: TravelProfile): string {
-  if (p.updatedAt === null) return 'Not set up';
+  if (p.updatedAt === null) return t('recs.summary.none');
   const parts: string[] = [];
-  if (p.styles.length) parts.push(stylesDisplay(p.styles).join(', '));
-  if (p.length) parts.push(LENGTH_SUMMARY[p.length]);
-  if (p.maxFlightHours !== null) parts.push(`up to ${p.maxFlightHours}h`);
+  if (p.styles.length) parts.push(stylesLabels(p.styles).join(', '));
+  if (p.length) parts.push(t(LENGTH_SUMMARY[p.length]));
+  if (p.maxFlightHours !== null) parts.push(t('recs.summary.upTo', { h: p.maxFlightHours }));
   const d = daysRange(p.days);
   if (d) parts.push(d);
-  return parts.length ? parts.join(' · ') : 'Any trip';
+  return parts.length ? parts.join(' · ') : t('recs.summary.any');
 }

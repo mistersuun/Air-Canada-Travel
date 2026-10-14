@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { t } from '../../i18n/t';
 import { ClimateService } from '../climate.service';
 
 /**
@@ -13,13 +14,13 @@ import { ClimateService } from '../climate.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <details class="grp credits">
-        <summary class="row"><span class="nm">Weather credits</span><span class="chev" aria-hidden="true">›</span></summary>
+        <summary class="row"><span class="nm">{{ t('recs.credit.title') }}</span><span class="chev" aria-hidden="true">›</span></summary>
         <p class="cr" data-forecast-credit>
-          <b>Forecast</b>&ngsp;<a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> weather forecast API, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">CC BY 4.0</a>. Shown for dates within 16 days; only the destination's coordinates are sent.
+          <b>{{ t('recs.credit.forecast') }}</b>&ngsp;<a href="https://open-meteo.com/" target="_blank" rel="noopener">{{ om }}</a> {{ t('recs.credit.forecastApi') }}, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">{{ ccBy }}</a>. {{ t('recs.credit.forecastNote') }}
         </p>
         @if (typical()) {
         <p class="cr">
-          <b>Typical weather</b>&ngsp;<a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> historical weather (ERA5 reanalysis, Copernicus), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">CC BY 4.0</a>. Averaged for 2021–2025 from the middle two weeks of each month. Typical, not a forecast.
+          <b>{{ t('recs.credit.typical') }}</b>&ngsp;<a href="https://open-meteo.com/" target="_blank" rel="noopener">{{ om }}</a> {{ t('recs.credit.typicalData') }}, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">{{ ccBy }}</a>. {{ t('recs.credit.typicalNote') }}
         </p>
         }
       </details>
@@ -40,6 +41,9 @@ import { ClimateService } from '../climate.service';
   `],
 })
 export class ClimateCreditComponent {
+  protected readonly t = t;
+  protected readonly om = 'Open-Meteo.com';
+  protected readonly ccBy = 'CC BY 4.0';
   private readonly climate = inject(ClimateService);
   /** The forecast credit is always due; the typical-weather one follows its file. */
   readonly typical = computed(() => this.climate.status() !== 'missing');

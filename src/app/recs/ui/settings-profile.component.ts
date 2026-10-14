@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { t } from '../../i18n/t';
 import { SettingsProfileBodyComponent } from './settings-profile-body.component';
 
 /**
@@ -16,7 +17,7 @@ import { SettingsProfileBodyComponent } from './settings-profile-body.component'
     @defer (on idle) {
       <app-settings-profile-body />
     } @placeholder (minimum 0ms) {
-      <section class="grp" aria-busy="true"><p class="ui-label">Suggestions</p><span class="nm">Travel profile</span></section>
+      <section class="grp" aria-busy="true"><p class="ui-label">{{ t('recs.settings.group') }}</p><span class="nm">{{ t('recs.profile.title') }}</span></section>
     }
   `,
   styles: [`
@@ -25,4 +26,6 @@ import { SettingsProfileBodyComponent } from './settings-profile-body.component'
     .nm { font-size: 15px; font-weight: 600; }
   `],
 })
-export class SettingsProfileComponent {}
+export class SettingsProfileComponent {
+  protected readonly t = t;
+}

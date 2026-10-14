@@ -6,7 +6,7 @@ import type { Alternatives, Itinerary } from '../../utils/connections';
 import { isLayoverAlert, LONG_LAYOVER } from '../../utils/connections';
 import type { FlightInstance } from '../../utils/week';
 import { flightsOn } from '../../utils/week';
-import { aircraftName, aircraftWithSeats } from '../../utils/aircraft';
+import { aircraftName, aircraftCompact, aircraftWithSeats, shortAircraft } from '../../utils/aircraft';
 import { airportName, airportTz, isHub } from '../../utils/airports';
 import { addDays, formatClock, formatDuration, formatKey, utcToLocal, weekStartKey, weekKeys } from '../../utils/time';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -62,9 +62,7 @@ export function placeName(code: string): string {
 }
 
 /** 'A330-300', '777-300ER': the aircraft name without the maker. */
-export function shortAircraft(code: string | null | undefined): string {
-  return aircraftName(code).replace(/^(Airbus|Boeing)\s+/, '');
-}
+export { shortAircraft };
 
 /** Days in the week of `dateKey` on which this flight number operates. */
 export function weekFrequency(leg: FlightInstance): number {
@@ -184,7 +182,9 @@ export function optionRow(it: Itinerary, fmt: TimeFormat = '24h', name?: string)
   const first = it.legs[0];
   const last = it.legs[it.legs.length - 1];
   const times = `${it.origin} ${formatClock(first.depLocal, fmt)} → ${it.dest} ${formatClock(last.arrLocal, fmt)}${supOffset(it.arrDayOffset)}`;
-  const aircraft = [...new Set(it.legs.map(l => aircraftWithSeats(l.aircraft)).filter(Boolean))].join(' / ');
+  const aircraft = it.legs.length === 1
+    ? aircraftCompact(first.aircraft)
+    : [...new Set(it.legs.map(l => shortAircraft(l.aircraft)).filter(Boolean))].join(' / ');
   return {
     key: itinKey(it),
     tile: hub ?? (isHub(it.dest) ? it.origin : it.dest),

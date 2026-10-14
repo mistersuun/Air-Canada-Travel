@@ -3,7 +3,7 @@
  * aircraft, the next day and nearby holidays. Facts only, never odds.
  */
 import { isCovered } from '../../data/schedule-index';
-import { aircraftName } from '../../utils/aircraft';
+import { shortAircraft } from '../../utils/aircraft';
 import { addDays } from '../../utils/time';
 import { FlightInstance, coverageHubFor, flightsOn } from '../../utils/week';
 import { Holiday, holidaysNear } from './holidays';
@@ -19,7 +19,7 @@ export interface ScheduleFacts {
 
 /** 'A330-300' for '333' (the maker's name dropped, for compact tiles). */
 export function shortAircraftName(code: string): string {
-  return aircraftName(code).replace(/^(Airbus|Boeing|Bombardier|Embraer|De Havilland)\s+/, '');
+  return shortAircraft(code);
 }
 
 export function scheduleFacts(origin: string, dest: string, dateKey: string): ScheduleFacts {

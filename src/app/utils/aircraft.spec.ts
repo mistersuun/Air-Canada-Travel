@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../data/schedule-index';
 import { rec, route } from '../data/testing/schedule-fixtures';
-import { WIDEBODY, aircraftName, aircraftSeats, aircraftWithSeats, isWidebody, seatsLabel, widebodyCodes } from './aircraft';
+import { WIDEBODY, aircraftName, aircraftCompact, aircraftSeats, aircraftWithSeats, isWidebody, seatsLabel, widebodyCodes } from './aircraft';
 
 afterEach(() => resetScheduleSource());
 
@@ -29,7 +29,8 @@ describe('aircraft', () => {
   it('gives typical seat counts for known types only', () => {
     expect(aircraftSeats('789')).toBe(298);
     expect(aircraftSeats('223')).toBe(137);
-    expect(aircraftSeats('32Q')).toBeNull();
+    expect(aircraftSeats('32Q')).toBe(182);
+    expect(aircraftSeats('XYZ')).toBeNull();
     expect(aircraftSeats(null)).toBeNull();
     expect(seatsLabel('77W')).toBe('about 400 seats');
     expect(seatsLabel('XYZ')).toBe('');
@@ -37,7 +38,9 @@ describe('aircraft', () => {
 
   it('joins name and seats', () => {
     expect(aircraftWithSeats('789')).toBe('787-9 · about 298 seats');
-    expect(aircraftWithSeats('32Q')).toBe('A321neo');
+    expect(aircraftWithSeats('32Q')).toBe('A321XLR · about 182 seats');
+    expect(aircraftCompact('223')).toBe('A220-300 · 137 seats');
+    expect(aircraftCompact('XYZ')).toBe('XYZ');
     expect(aircraftWithSeats(undefined)).toBe('');
   });
 });

@@ -144,6 +144,7 @@ export class AppComponent {
     }
     if (this.pwa.reloadOnResume(this.state.path())) return;
     this.state.refreshToday();
+    this.listing.check(this.state.nowMs());
     this.pwa.check();
     this.trips.checkChanges();
   }

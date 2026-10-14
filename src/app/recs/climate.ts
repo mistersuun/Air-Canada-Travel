@@ -129,7 +129,9 @@ export function packingFacts(
   const out: PackingFact[] = [];
   const wet = by(c => c.wetDays, 'max');
   if (wet.wetDays >= WET_DAYS_RAIN) {
-    out.push({ id: 'pack:rain', title: `Rain jacket \u2014 wet on about ${wet.wetDays} of ${DAYS_IN_MONTH[wet.month - 1]} days in ${mon(wet)}` });
+    // Below freezing the wet days are snow as much as rain.
+    const what = wet.tmaxC <= 0 ? 'Waterproof layer \u2014 rain or snow' : 'Rain jacket \u2014 wet';
+    out.push({ id: 'pack:rain', title: `${what} on about ${wet.wetDays} of ${DAYS_IN_MONTH[wet.month - 1]} days in ${mon(wet)}` });
   }
   const cold = by(c => c.tmaxC, 'min');
   if (cold.tmaxC < COLD_BELOW_C) {

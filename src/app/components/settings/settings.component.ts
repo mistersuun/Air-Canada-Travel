@@ -88,7 +88,7 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
             <span class="nm">Listing reminder</span>
             <app-seg stretch ariaLabel="Listing reminder, hours before departure" data-setting="listing" [options]="listingOptions"
                      [value]="'' + p().listingHours" (valueChange)="prefs.update({ listingHours: +$event! })" />
-            <span class="hint">When a flight shows Listing open, and the calendar reminder. Check your own pass rules.</span>
+            <span class="hint">When a flight shows Listing open, and the calendar reminder. A notification when it opens needs permission, granted under background checks below. Check your own pass rules.</span>
           </div>
           <label class="row" for="settings-overnight">
             <span class="row__tx"><span class="nm">Overnight connections</span><span class="hint">Allow a layover that crosses midnight at the hub</span></span>

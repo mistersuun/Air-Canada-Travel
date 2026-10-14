@@ -321,8 +321,10 @@ describe('today model: ground legs and days between flights (Seville fixture)', 
   it('future trip: Next trip in N days; none after the trip ends, archived, or with no trips', () => {
     const trip = sevilleTrip();
     const before = toUtcMs('2026-10-01', '12:00', 'America/Toronto');
-    expect(upcomingTripView([trip], before)).toEqual({ tripId: SEVILLE_IDS.trip, title: 'Next trip in 7 days', detail: 'Seville trip · Thu Oct 8' });
+    expect(upcomingTripView([trip], before)).toEqual({ tripId: SEVILLE_IDS.trip, title: 'Next trip in 7 days', detail: 'Seville trip · Thu Oct 8', listing: null });
     expect(upcomingTripView([trip], toUtcMs('2026-10-07', '12:00', 'America/Toronto'))!.title).toBe('Next trip tomorrow');
+    (trip.legs[0] as FlightLeg).status = 'planned';
+    expect(upcomingTripView([trip], toUtcMs('2026-10-07', '12:00', 'America/Toronto'))!.listing).toMatchObject({ label: 'Listing open', open: true });
     expect(midTripView([trip], before, '24h')).toBeNull();
     expect(upcomingTripView([trip], MID_TRIP)).toBeNull();
     expect(upcomingTripView([{ ...trip, archived: true }], before)).toBeNull();

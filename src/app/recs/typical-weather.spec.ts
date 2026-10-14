@@ -61,6 +61,7 @@ describe('packingFacts', () => {
     ]);
     expect(packingFacts(mk(33, 24, 3), 'AAA', [7])).toEqual([{ id: 'pack:sun', title: 'Sun protection — highs around 33° in Jul' }]);
     expect(packingFacts(mk(2, -5, 3), 'AAA', [1]).map(p => p.id)).toEqual(['pack:coat', 'pack:warm']);
+    expect(packingFacts(mk(-3, -10, 12), 'AAA', [1])[0].title).toBe('Waterproof layer \u2014 rain or snow on about 12 of 31 days in Jan');
   });
 
   it('says nothing for mild weather or an unknown code', () => {

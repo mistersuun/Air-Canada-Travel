@@ -98,10 +98,26 @@ export function fxRate(code: string | null, fx: FxTable | null): number | null {
   return rate && rate > 0 && code !== 'CAD' ? rate : null;
 }
 
-/** Parse what a person typed into an amount ('12.5', '12,5', ' 1 200 '); null when it is not a non-negative number. */
+/**
+ * Parse what a person typed: '12.5', '12,5' (one comma and 1-2 digits is a decimal), '1,200' (a comma
+ * before exactly three digits is thousands), '1,200.50' and '1.200,50' (the last separator is the
+ * decimal), spaces ignored. Null when it is not a non-negative number.
+ */
 export function parseAmount(text: string): number | null {
-  const t = text.trim().replace(/\s/g, '').replace(',', '.');
-  if (!t || !/^\d*\.?\d*$/.test(t) || t === '.') return null;
+  let t = text.trim().replace(/\s/g, '');
+  if (!t || /[^\d.,]/.test(t)) return null;
+  const lastDot = t.lastIndexOf('.');
+  const lastComma = t.lastIndexOf(',');
+  if (lastDot >= 0 && lastComma >= 0) {
+    const dec = lastDot > lastComma ? '.' : ',';
+    const grp = dec === '.' ? ',' : '.';
+    t = t.split(grp).join('').replace(dec, '.');
+  } else if (lastComma >= 0) {
+    const after = t.length - lastComma - 1;
+    const single = t.indexOf(',') === lastComma;
+    t = single && after !== 3 ? t.replace(',', '.') : t.split(',').join('');
+  }
+  if (!/^\d*\.?\d*$/.test(t) || t === '.' || !t) return null;
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }

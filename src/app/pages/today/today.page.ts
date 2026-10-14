@@ -172,6 +172,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
           @if (upcoming(); as u) {
             <h1 class="td__title" data-upcoming>{{ u.title }}</h1>
             <p class="ui-sub">{{ u.detail }}. On a day you travel, this page shows your flight or ride and what's left to do.</p>
+            @if (u.listing; as l) { <p class="ui-sub" data-listing [class.td__lst-open]="l.open">{{ l.label }}</p> }
             <a class="ui-btn ui-btn--dark" [routerLink]="planLink(u.tripId)">Open trip</a>
           } @else {
             <h1 class="td__title">Nothing planned today</h1>
@@ -313,7 +314,7 @@ export class TodayPage {
     this.view() || this.ground() ? null : midTripView(this.trips.trips(), this.state.nowMs(), this.prefs.timeFormat(), this.trip(), this.prefs.listingHours()));
 
   protected readonly upcoming = computed(() =>
-    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs(), this.trip()));
+    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs(), this.trip(), this.prefs.timeFormat(), this.prefs.listingHours()));
 
   protected readonly tripLink = computed(() => {
     const v = this.view();

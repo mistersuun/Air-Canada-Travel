@@ -330,11 +330,11 @@ export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripI
   };
 }
 
-export interface UpcomingTripView { tripId: string; title: string; detail: string }
+export interface UpcomingTripView { tripId: string; title: string; detail: string; listing?: { label: string; open: boolean } | null }
 
 /** The nearest trip that has not started: 'Next trip in 5 days' with its name and first date (the first leg's own start day). */
-export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string | null): UpcomingTripView | null {
-  let best: { trip: Trip; start: number; tz: string } | null = null;
+export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string | null, fmt: TimeFormat = '24h', listingHours = DEFAULT_LISTING_HOURS): UpcomingTripView | null {
+  let best: { trip: Trip; start: number; tz: string; first: TripLeg | undefined } | null = null;
   for (const trip of trips) {
     if (trip.archived || (tripId && trip.id !== tripId)) continue;
     const first = sortLegs(trip.legs.filter(l => l.status !== 'abandoned'))[0];
@@ -342,7 +342,7 @@ export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string |
     const tz = first ? (first.kind === 'flight' ? airportTz(first.refs[0]?.origin ?? trip.fromHub) : endTz(first.from) ?? airportTz(trip.fromHub)) : airportTz(trip.fromHub);
     const start = w ? w.depUtc : deadlineUtc({ dateKey: trip.outboundDate, hhmm: '00:00' }, trip.fromHub);
     if (start <= nowMs || (best && best.start <= start)) continue;
-    best = { trip, start, tz: w ? tz : airportTz(trip.fromHub) };
+    best = { trip, start, tz: w ? tz : airportTz(trip.fromHub), first };
   }
   if (!best) return null;
   const startKey = utcToLocal(best.start, best.tz).dateKey;
@@ -351,6 +351,7 @@ export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string |
     tripId: best.trip.id,
     title: d <= 0 ? 'Your next trip is later today' : d === 1 ? 'Next trip tomorrow' : `Next trip in ${d} days`,
     detail: `${best.trip.name} · ${dayLabel(startKey)}`,
+    listing: best.first?.kind === 'flight' ? listingChip(best.first, nowMs, listingHours, fmt) : null,
   };
 }
 

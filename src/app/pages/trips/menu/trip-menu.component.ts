@@ -77,7 +77,7 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
           </div>
           <app-share-entry [trip]="trip()" />
           @if (trip().calendarExportedAt) {
-            <p class="ui-sub tm__fine">Calendar file has a reminder to list {{ prefs.listingHours() }} hours before each flight.</p>
+            <p class="ui-sub tm__fine">Calendar file has your listing reminder before each flight. Export again after changing it in Settings.</p>
           }
         </section>
 

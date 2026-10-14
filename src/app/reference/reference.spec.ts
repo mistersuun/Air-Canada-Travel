@@ -210,6 +210,12 @@ describe('DestReferenceComponent', () => {
     cad.dispatchEvent(new Event('input'));
     f.detectChanges();
     expect(local.value).toBe('');
+    // Another destination starts over, closed.
+    f.componentRef.setInput('iso2', 'GB');
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    expect(el.querySelector('[data-converter]')).toBeNull();
   });
 
   it('shows the Airport block from airport-info.json, with its review date and source', async () => {
@@ -228,7 +234,7 @@ describe('DestReferenceComponent', () => {
     expect(el.querySelector('[data-terminal]')!.textContent).toContain('Terminal 2');
     expect(el.querySelectorAll('[data-to-city]')).toHaveLength(3);
     expect(el.querySelector('[data-airport]')!.textContent).toContain('reviewed 2026-10');
-    expect(el.querySelector('[data-lounge]')).toBeNull();
+    expect(el.querySelector('[data-lounge]')!.textContent).toContain('Maple Leaf Lounge: yes · Terminal 2B');
     setAirportInfo(null);
   });
 
@@ -256,6 +262,12 @@ describe('amount converter', () => {
     expect(parseAmount('abc')).toBeNull();
     expect(parseAmount('-3')).toBeNull();
     expect(parseAmount('.')).toBeNull();
+    expect(parseAmount('1,200')).toBe(1200);
+    expect(parseAmount('1,200.50')).toBe(1200.5);
+    expect(parseAmount('1.200,50')).toBe(1200.5);
+    expect(parseAmount('12,50')).toBe(12.5);
+    expect(parseAmount('1,234,567')).toBe(1234567);
+    expect(parseAmount(',5')).toBe(0.5);
   });
   it('converts both ways', () => {
     expect(convertAmount('10', 0.5, true)).toBe('5');

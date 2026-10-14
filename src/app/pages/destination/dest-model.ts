@@ -5,7 +5,7 @@
 import type { Coverage } from '../../data/schedule-index';
 import { isCovered } from '../../data/schedule-index';
 import { isRouteOnly, routeFact, routeFactDetail } from '../../data/route-network';
-import { aircraftName, aircraftWithSeats } from '../../utils/aircraft';
+import { aircraftName, aircraftCompact, shortAircraft } from '../../utils/aircraft';
 import {
   NO_OPTS, directItineraries, findItineraries, type ConnectOptions, type Itinerary,
 } from '../../utils/connections';
@@ -24,9 +24,7 @@ export const HORIZON_DAYS = 21;
 // ── Aircraft ────────────────────────────────────────────────────────────────
 
 /** 'Boeing 777-300ER' → '777-300ER', 'Airbus A330-300' → 'A330-300'. */
-export function shortAircraft(code: string | null | undefined): string {
-  return aircraftName(code).replace(/^(Airbus|Boeing|Bombardier|De Havilland|Embraer)\s+/, '');
-}
+export { shortAircraft };
 
 /** The most frequent value (ties: first seen), or null for an empty list. */
 export function mostFrequent<T>(xs: readonly T[]): T | null {
@@ -147,7 +145,7 @@ export function timelineItems(
     const offset = it.arrDayOffset ? ` ${it.arrDayOffset > 0 ? '+' : '−'}${Math.abs(it.arrDayOffset)}` : '';
     const sub = it.hubs.length
       ? `1 stop · ${it.hubs.join(' ')} · ${hm(it.totalMin)}`
-      : [aircraftWithSeats(first.aircraft), hm(it.totalMin)].filter(Boolean).join(' · ');
+      : [aircraftCompact(first.aircraft), hm(it.totalMin)].filter(Boolean).join(' · ');
     return {
       it,
       dateLabel: timelineDay(it.dateKey, today) + (soon ? ` · ${countdown(it.departUtc - nowMs)}` : ''),

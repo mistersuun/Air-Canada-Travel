@@ -1,6 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { currencyCode } from '../pages/destination/currency';
-import { AirportInfoService, airportInfo, cityOptionLabel, terminalLabel } from '../places/airport-info';
+import { AirportInfoService, airportInfo, cityOptionLabel, loungeLabel, terminalLabel } from '../places/airport-info';
 import {
   advisoryQuiet, advisoryUpdated, convertAmount, fxLine, fxRate, holidayKey, holidayName, holidayNote, shortDate, upcomingHolidays,
 } from './reference';
@@ -45,7 +45,7 @@ import { ReferenceService } from './reference.service';
       <div class="ap" data-airport>
         <p class="r ap__h"><b>Airport</b> · {{ airportCode() }}</p>
         @if (terminal(); as t) { <p class="r" data-terminal>Air Canada: {{ t }}</p> }
-        @if (ap.mapleLeafLounge !== null) { <p class="r" data-lounge>Maple Leaf Lounge: {{ ap.mapleLeafLounge ? 'yes' : 'no' }}</p> }
+        @if (lounge(); as l) { <p class="r" data-lounge>{{ l }}</p> }
         @for (o of ap.toCity; track o.note) {
           <p class="r tn" data-to-city>{{ label(o) }}</p>
         }
@@ -90,30 +90,36 @@ export class DestReferenceComponent {
   private readonly airports = inject(AirportInfoService);
   protected readonly airport = computed(() => airportInfo(this.airportCode()));
   protected readonly terminal = computed(() => { const a = this.airport(); return a ? terminalLabel(a) : ''; });
+  protected readonly lounge = computed(() => { const a = this.airport(); return a ? loungeLabel(a) : ''; });
   protected readonly label = cityOptionLabel;
 
   protected readonly convOpen = signal(false);
-  protected readonly cad = signal('');
-  protected readonly local = signal('');
   protected readonly code = computed(() => currencyCode(this.iso2()) ?? '');
   private readonly rate = computed(() => fxRate(currencyCode(this.iso2()), this.ref.fx()));
+  /** What was typed and in which field; the other side is derived, so it follows the rate when it loads. */
+  private readonly typed = signal<{ side: 'cad' | 'local'; text: string }>({ side: 'cad', text: '' });
+  protected readonly cad = computed(() => this.side('cad'));
+  protected readonly local = computed(() => this.side('local'));
+
+  private side(which: 'cad' | 'local'): string {
+    const t = this.typed();
+    if (t.side === which) return t.text;
+    const r = this.rate();
+    return r ? convertAmount(t.text, r, which === 'local') : '';
+  }
 
   constructor() {
     void this.ref.ensureLoaded();
     void this.airports.ensureLoaded();
+    // A different destination (another currency) starts a fresh converter.
+    effect(() => {
+      this.iso2();
+      untracked(() => { this.typed.set({ side: 'cad', text: '' }); this.convOpen.set(false); });
+    });
   }
 
-  protected onCad(v: string): void {
-    this.cad.set(v);
-    const r = this.rate();
-    if (r) this.local.set(convertAmount(v, r, true));
-  }
-
-  protected onLocal(v: string): void {
-    this.local.set(v);
-    const r = this.rate();
-    if (r) this.cad.set(convertAmount(v, r, false));
-  }
+  protected onCad(v: string): void { this.typed.set({ side: 'cad', text: v }); }
+  protected onLocal(v: string): void { this.typed.set({ side: 'local', text: v }); }
 
   protected readonly advisory = computed(() => this.ref.advisories()?.get((this.iso2() ?? '').toUpperCase()) ?? null);
   protected readonly quiet = computed(() => { const a = this.advisory(); return !!a && advisoryQuiet(a); });

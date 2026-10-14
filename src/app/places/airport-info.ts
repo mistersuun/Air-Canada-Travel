@@ -16,6 +16,9 @@ export interface AirportInfo {
   singleTerminal: boolean;
   /** true / false only where certain; null otherwise. */
   mapleLeafLounge: boolean | null;
+  /** The lounge is closed for now (loungeNote says until when). */
+  loungeClosed: boolean;
+  loungeNote: string;
   toCity: readonly CityOption[];
   source: string;
   reviewed: string;
@@ -47,6 +50,8 @@ export function decodeAirportInfo(raw: unknown): AirportInfoIndex | null {
       terminals,
       singleTerminal: a['singleTerminal'] === true,
       mapleLeafLounge: typeof a['mapleLeafLounge'] === 'boolean' ? a['mapleLeafLounge'] : null,
+      loungeClosed: a['loungeClosed'] === true,
+      loungeNote: typeof a['loungeNote'] === 'string' ? a['loungeNote'] : '',
       toCity,
       source: typeof a['source'] === 'string' ? a['source'] : '',
       reviewed: typeof a['reviewed'] === 'string' ? a['reviewed'] : '',
@@ -69,10 +74,10 @@ export function setAirportInfo(i: AirportInfoIndex | null): void {
   loaded.set(i);
 }
 
-/** Minutes of the quickest known way from the airport to the city centre, or null. */
-export function fastestToCityMin(code: string | null | undefined): number | null {
-  const opts = airportInfo(code)?.toCity;
-  return opts?.length ? Math.min(...opts.map(o => o.min)) : null;
+/** The quickest known train, metro or bus from the airport to the city centre (never a taxi), or null. */
+export function fastestTransit(code: string | null | undefined): CityOption | null {
+  const opts = airportInfo(code)?.toCity.filter(o => o.mode !== 'taxi') ?? [];
+  return opts.length ? opts.reduce((a, b) => (b.min < a.min ? b : a)) : null;
 }
 
 /** 'Terminal 1', 'Terminals 1 and 3', 'Domestic and International terminals', 'Single terminal', or '' when unknown. */
@@ -84,6 +89,13 @@ export function terminalLabel(i: AirportInfo): string {
     return `${names} ${i.terminals.length > 1 ? 'terminals' : 'terminal'}`;
   }
   return i.singleTerminal ? 'Single terminal' : '';
+}
+
+/** 'Maple Leaf Lounge: yes', 'Maple Leaf Lounge closed until early 2027', or '' when unknown. */
+export function loungeLabel(i: AirportInfo): string {
+  if (i.mapleLeafLounge === null) return '';
+  if (i.loungeClosed) return `Maple Leaf Lounge closed${i.loungeNote ? ` ${i.loungeNote}` : ''}`;
+  return `Maple Leaf Lounge: ${i.mapleLeafLounge ? 'yes' : 'no'}${i.loungeNote ? ` · ${i.loungeNote}` : ''}`;
 }
 
 const MODE_WORD: Record<CityMode, string> = { train: 'Train', bus: 'Bus', metro: 'Metro', taxi: 'Taxi' };

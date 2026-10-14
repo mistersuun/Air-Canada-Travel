@@ -28,7 +28,7 @@ describe('ListingNotifierService', () => {
     localStorage.setItem(LISTING_SEEN_KEY, String(OPENS - 3_600_000));
     const s = TestBed.inject(ListingNotifierService);
     expect(s.check(OPENS + 3_600_000)).toBe(1);
-    expect(shown).toHaveBeenCalledWith('Listing open for AC834', expect.objectContaining({ tag: expect.stringContaining('listing-') }));
+    expect(shown).toHaveBeenCalledWith('Listing open for AC834', expect.objectContaining({ tag: expect.stringMatching(/^listing-.+-0$/) }));
     expect(s.check(OPENS + 7_200_000)).toBe(0);
   });
 

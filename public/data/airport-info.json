@@ -68,7 +68,7 @@
    "toCity": [
     {
      "mode": "bus",
-     "min": 35,
+     "min": 40,
      "note": "Route 300 to downtown"
     },
     {
@@ -100,6 +100,8 @@
   },
   "YWG": {
    "singleTerminal": true,
+   "mapleLeafLounge": true,
+   "loungeNote": "By gate 9; not for transborder flights",
    "toCity": [
     {
      "mode": "taxi",
@@ -118,11 +120,13 @@
   "YOW": {
    "singleTerminal": true,
    "mapleLeafLounge": true,
+   "loungeClosed": true,
+   "loungeNote": "for renovation, reopening planned Nov 2026",
    "toCity": [
     {
-     "mode": "bus",
-     "min": 40,
-     "note": "OC Transpo bus and O-Train to downtown"
+     "mode": "train",
+     "min": 57,
+     "note": "O-Train Line 4, then Lines 2 and 1 to Rideau"
     },
     {
      "mode": "taxi",
@@ -136,6 +140,8 @@
   "YHZ": {
    "singleTerminal": true,
    "mapleLeafLounge": true,
+   "loungeClosed": true,
+   "loungeNote": "until early 2027",
    "toCity": [
     {
      "mode": "taxi",
@@ -144,8 +150,8 @@
     },
     {
      "mode": "bus",
-     "min": 55,
-     "note": "Airport shuttle bus to downtown"
+     "min": 45,
+     "note": "MetroX 320 to downtown"
     }
    ],
    "source": "Halifax Stanfield International Airport public pages",
@@ -153,6 +159,7 @@
   },
   "YQB": {
    "singleTerminal": true,
+   "mapleLeafLounge": false,
    "toCity": [
     {
      "mode": "taxi",
@@ -170,6 +177,7 @@
   },
   "YTZ": {
    "singleTerminal": true,
+   "mapleLeafLounge": false,
    "toCity": [
     {
      "mode": "bus",
@@ -189,6 +197,7 @@
    "terminals": [
     "B"
    ],
+   "mapleLeafLounge": true,
    "toCity": [
     {
      "mode": "taxi",
@@ -207,9 +216,9 @@
   "BOS": {
    "toCity": [
     {
-     "mode": "metro",
-     "min": 15,
-     "note": "Blue Line from Airport station to downtown"
+     "mode": "bus",
+     "min": 25,
+     "note": "SL1 bus (free) to South Station"
     },
     {
      "mode": "taxi",
@@ -221,6 +230,10 @@
    "reviewed": "2026-10"
   },
   "EWR": {
+   "terminals": [
+    "A"
+   ],
+   "mapleLeafLounge": true,
    "toCity": [
     {
      "mode": "train",
@@ -237,6 +250,10 @@
    "reviewed": "2026-10"
   },
   "SFO": {
+   "terminals": [
+    "2"
+   ],
+   "mapleLeafLounge": true,
    "toCity": [
     {
      "mode": "train",
@@ -267,6 +284,8 @@
    "terminals": [
     "2"
    ],
+   "mapleLeafLounge": true,
+   "loungeNote": "Terminal 2B",
    "toCity": [
     {
      "mode": "train",
@@ -291,6 +310,7 @@
    "terminals": [
     "6"
    ],
+   "mapleLeafLounge": true,
    "toCity": [
     {
      "mode": "bus",
@@ -461,6 +481,7 @@
    "terminals": [
     "3"
    ],
+   "mapleLeafLounge": false,
    "toCity": [
     {
      "mode": "train",
@@ -480,6 +501,8 @@
    "terminals": [
     "1"
    ],
+   "mapleLeafLounge": true,
+   "loungeNote": "Terminal 1, Concourse B",
    "toCity": [
     {
      "mode": "train",
@@ -553,6 +576,7 @@
    "terminals": [
     "1"
    ],
+   "mapleLeafLounge": false,
    "toCity": [
     {
      "mode": "train",

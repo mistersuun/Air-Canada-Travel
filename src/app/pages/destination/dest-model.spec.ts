@@ -97,7 +97,7 @@ describe('upcoming and timelineItems', () => {
     expect(a.dateLabel).toBe('Today, Oct 1 · in 10h 10m');
     expect(a.time).toBe('22:10');
     expect(a.detail).toBe('AC864 · arrives 10:00 +1');
-    expect(a.sub).toBe(`A330-300 · about 297 seats · ${hm(its[0].totalMin)}`);
+    expect(a.sub).toBe(`A330-300 · 297 seats · ${hm(its[0].totalMin)}`);
     expect(b.dateLabel).toBe('Fri, Oct 2');
     expect(timelineItems(its, '2026-10-01', NOON, '12h', false)[0]).toMatchObject({
       dateLabel: 'Today, Oct 1', time: '10:10 PM', detail: 'AC864 · arrives 10:00 AM +1',

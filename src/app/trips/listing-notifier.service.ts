@@ -8,8 +8,8 @@ export const LISTING_SEEN_KEY = 'ac.listing-seen.v1';
 
 /**
  * A local notification when a flight's listing window opened since the app was
- * last open. Only where the Notifications permission is already granted (this
- * never asks), only on app open, and nothing leaves the device: no push, no
+ * last check. Only where the Notifications permission is already granted (this
+ * never asks), only on app open and whenever the app comes back to the foreground, and nothing leaves the device: no push, no
  * server. Listing stays the traveller's own step.
  */
 @Injectable({ providedIn: 'root' })
@@ -29,9 +29,9 @@ export class ListingNotifierService {
     try { store?.setItem(LISTING_SEEN_KEY, String(nowMs)); } catch { /* ignore */ }
     if (this.trips.readOnly() || !this.granted()) return 0;
     const opened = listingOpenedSince(this.trips.trips(), since, nowMs, this.prefs.listingHours());
-    for (const { trip, leg } of opened) {
-      const ref = leg.refs[0];
-      this.show(`Listing open for ${ref.flightNumber}`, `${airportName(ref.origin)} → ${airportName(ref.dest)} · ${trip.name}. Listing is your own step.`, `listing-${leg.id}`);
+    for (const { trip, leg, refIndex } of opened) {
+      const ref = leg.refs[refIndex];
+      this.show(`Listing open for ${ref.flightNumber}`, `${airportName(ref.origin)} → ${airportName(ref.dest)} · ${trip.name}. Listing is your own step.`, `listing-${leg.id}-${refIndex}`);
     }
     return opened.length;
   }

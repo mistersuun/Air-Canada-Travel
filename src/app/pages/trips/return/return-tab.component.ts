@@ -12,6 +12,7 @@ import type { Itinerary } from '../../../utils/connections';
 import { WEEKDAY_SHORT, isDateKey, weekdayIndex } from '../../../utils/time';
 import { MissChainComponent } from './miss-chain.component';
 import { buildReturnView, groundToGateway, triesLabel } from './return-model';
+import { TriesMeterComponent } from './tries-meter.component';
 import { placeName } from '../../../trips/engine/today';
 
 /** Parses a datetime-local value ('2026-10-13T22:00') into a homeBy, or null. */
@@ -32,13 +33,14 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
 @Component({
   selector: 'app-return-tab',
   standalone: true,
-  imports: [IconComponent, ProvenanceTagComponent, GlassSheetComponent, DestPhotoComponent, MissChainComponent],
+  imports: [IconComponent, ProvenanceTagComponent, GlassSheetComponent, DestPhotoComponent, MissChainComponent, TriesMeterComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let v = view();
     <div class="rt">
       <header class="rt__ctx">
         <h2 class="ui-h3">Getting home</h2>
+        @if (v.gateway) { <app-tries-meter class="rt__meter" [count]="v.flyTries" /> }
         <p class="ui-sub tn" data-context>{{ v.context }}
           @if (v.defaultGateway && v.gateway !== v.defaultGateway) {
             · <button type="button" class="ui-link rt__reset" data-reset (click)="useAirport(null)">Back to {{ city(v.defaultGateway) }}</button>
@@ -122,6 +124,7 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
     .rt { display: grid; gap: 12px; }
     .rt__ctx { padding: 2px 2px 0; }
     .rt__ctx p { margin-top: 1px; font-size: 12.5px; }
+    .rt__meter { margin-top: 4px; }
     .rt__card { padding: 16px; }
     .rt__dl { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 2px; }
     .rt__chg { flex: none; min-height: 40px; }

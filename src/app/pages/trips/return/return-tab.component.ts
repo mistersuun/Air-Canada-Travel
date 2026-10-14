@@ -1,3 +1,4 @@
+import { lastStopPlace } from '../../../trips/stops';
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { IconComponent } from '../../../components/shared/icons.component';
@@ -99,7 +100,7 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
         }
       } @else {
         <p class="note" data-nogw><app-icon name="info" [size]="16" />
-          <span>No airport near {{ trip().goal.name }} was found in our schedule data, so there are no flights home to count.</span></p>
+          <span>No airport near {{ lastName() }} was found in our schedule data, so there are no flights home to count.</span></p>
       }
     </div>
 
@@ -174,6 +175,7 @@ export class ReturnTabComponent {
   });
   protected readonly view = computed(() =>
     buildReturnView(this.trip(), this.state.connect(), this.state.timeFormat(), this.fromCode()));
+  protected readonly lastName = computed(() => lastStopPlace(this.trip()).name);
   protected readonly homeName = computed(() => hubDisplayName(this.trip().homeAirport));
 
   protected readonly sheetOpen = signal(false);

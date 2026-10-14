@@ -2,7 +2,7 @@
  * Backup export / import (spec §1.2): one JSON file with the trips and the
  * flight log. Import merges by id; the newer updatedAt wins.
  */
-import { FlightLog, Outcome, Trip, TripsFile, TRIPS_SCHEMA, instanceKey } from './model';
+import { FlightLog, Outcome, Trip, TripsFile, TRIPS_SCHEMA, FLIGHTLOG_SCHEMA, instanceKey } from './model';
 import { migrateFlightLog, sanitizeTrip } from './storage';
 
 export const BACKUP_KIND = 'routes-backup';
@@ -10,7 +10,7 @@ export const BACKUP_KIND = 'routes-backup';
 export function exportBackup(trips: TripsFile, log: FlightLog, now: number): string {
   return JSON.stringify({
     kind: BACKUP_KIND,
-    schema: 1,
+    schema: TRIPS_SCHEMA,
     exportedAt: new Date(now).toISOString(),
     trips: trips.trips,
     flightlog: log,
@@ -80,7 +80,7 @@ export function mergeBackup(
   return {
     trips: [...byId.values()],
     log: {
-      schema: 1,
+      schema: FLIGHTLOG_SCHEMA,
       notes: mergeById(current.log.notes, incoming.log.notes),
       outcomes: mergeOutcomes(current.log.outcomes, incoming.log.outcomes),
       dismissed: [...new Set([...current.log.dismissed, ...incoming.log.dismissed])],

@@ -186,7 +186,7 @@ export const SEVILLE_TRIP: Trip = {
 };
 
 /** The TripsFile form QA seeds into localStorage['ac.trips.v1']. */
-export const SEVILLE_TRIPS_FILE: TripsFile = { schema: 1, trips: [SEVILLE_TRIP] };
+export const SEVILLE_TRIPS_FILE: TripsFile = { schema: 2, trips: [SEVILLE_TRIP] };
 
 /** A deep copy, so specs can mutate freely. */
 export function sevilleTrip(): Trip {

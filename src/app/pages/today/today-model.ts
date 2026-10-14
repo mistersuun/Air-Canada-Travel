@@ -8,6 +8,7 @@
  * no odds, "not found in our schedule data" rather than "no flights", and
  * listing is always the traveller's own step.
  */
+import { currentStop } from '../../trips/stops';
 import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
 import { networkNoteFor } from '../../data/route-network';
@@ -317,7 +318,7 @@ export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripI
   return {
     tripId: trip.id,
     eyebrow: `${trip.name} · ${dayLabel(todayKey)}`,
-    title: n >= 1 ? `Day ${n} in ${trip.goal.name}` : `On your way to ${trip.goal.name}`,
+    title: stopTitle(trip, todayKey, n),
     next: nextLeg(trip, nowMs, fmt),
     homeBy: {
       label: `Home by ${dayLabel(trip.homeBy.dateKey)}, ${formatClock(trip.homeBy.hhmm, fmt)}${zone}`,
@@ -326,6 +327,13 @@ export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripI
     quiet: startedToday ? 'Nothing else today.' : 'Nothing is scheduled today.',
     fact: goalFact(trip, nowMs),
   };
+}
+
+/** 'Day 3 in Lisbon': counts from arriving at the stop you are in (the goal until a later stop begins). */
+function stopTitle(trip: Trip, todayKey: string, goalDay: number): string {
+  const stop = currentStop(trip, todayKey);
+  if (stop.id !== 'goal') return `Day ${diffDays(stop.arriveDate, todayKey) + 1} in ${stop.place.name}`;
+  return goalDay >= 1 ? `Day ${goalDay} in ${trip.goal.name}` : `On your way to ${trip.goal.name}`;
 }
 
 export interface UpcomingTripView { tripId: string; title: string; detail: string }

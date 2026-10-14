@@ -16,7 +16,7 @@
 import { InjectionToken } from '@angular/core';
 import { isDateKey, isValidTimeZone } from '../utils/time';
 import {
-  Alternate, FLIGHTLOG_CORRUPT_KEY, FLIGHTLOG_KEY, FlightLeg, FlightLog, FlightRef, GROUND_MODES, GroundLeg,
+  Alternate, FLIGHTLOG_CORRUPT_KEY, FLIGHTLOG_SCHEMA, Stop, FLIGHTLOG_KEY, FlightLeg, FlightLog, FlightRef, GROUND_MODES, GroundLeg,
   GroundMode, GroundTimes, LEG_STATUSES, LegEnd, LegStatus, LoadNote, OUTCOME_KINDS, Outcome, OutcomeKind,
   PendingChange, Place, PrepState, TRIPS_CORRUPT_KEY, TRIPS_KEY, TRIPS_SCHEMA, Trip, TripLeg, TripsFile,
   emptyFlightLog, emptyTripsFile,
@@ -231,6 +231,16 @@ function sanitizeChange(raw: unknown): PendingChange | null {
   };
 }
 
+export function sanitizeStop(raw: unknown): Stop | null {
+  const r = obj(raw);
+  const id = r && nonEmpty(r['id'], 40);
+  const place = r && sanitizePlace(r['place']);
+  const arrive = r && dateKey(r['arriveDate']);
+  if (!r || !id || !place || !arrive) return null;
+  const leave = dateKey(r['leaveDate']);
+  return { id, place, arriveDate: arrive, ...(leave && leave >= arrive ? { leaveDate: leave } : {}) };
+}
+
 /** Coerces anything into a valid Trip, or null when it cannot be one. Never throws. */
 export function sanitizeTrip(raw: unknown): Trip | null {
   try {
@@ -257,6 +267,9 @@ export function sanitizeTrip(raw: unknown): Trip | null {
     const legs = arr(r['legs']).slice(0, 60).map(sanitizeLeg).filter((l): l is TripLeg => !!l);
     const legIds = new Set<string>();
     const uniqueLegs = legs.filter(l => !legIds.has(l.id) && legIds.add(l.id));
+    const stopIds = new Set<string>();
+    const stops = arr(r['stops']).slice(0, 12).map(sanitizeStop)
+      .filter((x): x is Stop => !!x && !stopIds.has(x.id) && !!stopIds.add(x.id));
     const now = new Date(0).toISOString();
     const createdAt = iso(r['createdAt']) ?? now;
     const shared = obj(r['sharedFrom']);
@@ -267,6 +280,7 @@ export function sanitizeTrip(raw: unknown): Trip | null {
       createdAt,
       updatedAt: iso(r['updatedAt']) ?? createdAt,
       goal,
+      ...(stops.length ? { stops } : {}),
       party: {
         count: int(p['count'], 1, 9, 1),
         stayTogether: typeof p['stayTogether'] === 'boolean' ? p['stayTogether'] : true,
@@ -359,10 +373,10 @@ export function migrateTrips(raw: unknown): { file: TripsFile; readOnly: boolean
 export function migrateFlightLog(raw: unknown): { file: FlightLog; readOnly: boolean } {
   const r = obj(raw);
   const schema = schemaOf(r);
-  const readOnly = schema !== null && schema > TRIPS_SCHEMA;
+  const readOnly = schema !== null && schema > FLIGHTLOG_SCHEMA;
   return {
     file: {
-      schema: TRIPS_SCHEMA,
+      schema: FLIGHTLOG_SCHEMA,
       notes: uniqueById(arr(r?.['notes']).map(sanitizeLoadNote).filter((n): n is LoadNote => !!n)),
       outcomes: uniqueById(arr(r?.['outcomes']).map(sanitizeOutcome).filter((o): o is Outcome => !!o)),
       dismissed: [...new Set(arr(r?.['dismissed']).filter((k): k is string => typeof k === 'string').map(k => k.slice(0, 80)))].slice(-500),
@@ -419,7 +433,9 @@ export function tripsLossy(raw: unknown, file: TripsFile): boolean {
   if (trips.length > file.trips.length) return true;
   const rawLegs = trips.reduce<number>((n, t) => n + count(obj(t)?.['legs']), 0);
   const legs = file.trips.reduce((n, t) => n + t.legs.length, 0);
-  return rawLegs > legs;
+  if (rawLegs > legs) return true;
+  const rawStops = trips.reduce<number>((n, t) => n + count(obj(t)?.['stops']), 0);
+  return rawStops > file.trips.reduce((n, t) => n + (t.stops?.length ?? 0), 0);
 }
 
 /** True when sanitising dropped a load note or an outcome. */

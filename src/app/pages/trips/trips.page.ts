@@ -1,5 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { GlassSheetComponent } from '../../ui/glass-sheet.component';
+import { PlaceSearchComponent } from '../../places/ui/place-search.component';
+import { logbookPath } from '../../extras/links';
+import type { Place } from '../../trips/model';
+import { reachPath } from '../../ui/links';
+import { airportTz } from '../../utils/airports';
+import { todayKey } from '../../utils/time';
+import { reachDep } from '../home/home-model';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
@@ -26,11 +34,25 @@ export const STARRED_PREVIEW = 3;
 @Component({
   selector: 'app-trips-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, TripCardComponent, OutcomePromptComponent, ComingUpBannerComponent, DestRowComponent, TripIdeasComponent],
+  imports: [RouterLink, IconComponent, GlassSheetComponent, PlaceSearchComponent, TripCardComponent, OutcomePromptComponent, ComingUpBannerComponent, DestRowComponent, TripIdeasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page tp">
-      <h1 class="ui-h1 tp__ttl">Trips</h1>
+      <div class="tp__hd">
+        <h1 class="ui-h1 tp__ttl">Trips</h1>
+        <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-new-trip aria-haspopup="dialog" (click)="newOpen.set(true)">
+          + New trip</button>
+      </div>
+      <nav class="tp__links" aria-label="Saved and logbook">
+        <a routerLink="/saved" [queryParams]="state.globalParams()" data-link-saved>Saved</a>
+        <a [routerLink]="logbookLink" [queryParams]="state.globalParams()" data-link-logbook>Logbook</a>
+      </nav>
+      @if (newOpen()) {
+        <app-glass-sheet title="New trip" [open]="true" (closed)="newOpen.set(false)">
+          <p class="ui-sub tp__np">Where do you want to go? You pick the flight on the next screen.</p>
+          <app-place-search label="Search a city or airport" (picked)="startFrom($event)" />
+        </app-glass-sheet>
+      }
       <app-coming-up-banner />
 
       @if (trips.readOnly()) {
@@ -98,6 +120,11 @@ export const STARRED_PREVIEW = 3;
   styles: [`
     :host { display: block; }
     .tp { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; gap: 12px; }
+    .tp__hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .tp__hd .ui-btn { min-height: 44px; flex: none; }
+    .tp__links { display: flex; gap: 18px; margin: -4px 2px 0; }
+    .tp__links a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; color: var(--ink-2); }
+    .tp__np { margin: 0 0 10px; }
     .tp__ttl { font-size: 30px; margin: 6px 2px 2px; }
     .note { display: flex; gap: 10px; align-items: flex-start; padding: 11px 12px; border-radius: 14px; font-size: 13px; }
     .note app-icon { flex: none; margin-top: 1px; }
@@ -137,6 +164,9 @@ export class TripsPage {
   protected readonly state = inject(AppStateService);
   protected readonly trips = inject(TripsService);
   protected readonly destPath = destPath;
+  private readonly router = inject(Router);
+  protected readonly logbookLink = logbookPath();
+  protected readonly newOpen = signal(false);
 
   protected readonly active = this.trips.activeTrips;
   protected readonly past = this.trips.pastTrips;
@@ -163,6 +193,22 @@ export class TripsPage {
     ];
     return rows.slice(0, STARRED_PREVIEW);
   });
+
+  /**
+   * A place was picked: a place Air Canada flies to goes to its destination page ("Start a trip to ..."),
+   * any other to the reach flow, which has "Start this trip".
+   */
+  protected startFrom(place: Place): void {
+    this.newOpen.set(false);
+    if (place.acCode) {
+      void this.router.navigate(destPath(place.acCode), { queryParams: this.state.globalParams() });
+      return;
+    }
+    const today = todayKey(airportTz(this.state.hub()), this.state.nowMs());
+    void this.router.navigate(reachPath(place.id), {
+      queryParams: { ...this.state.globalParams(), dep: reachDep(this.state.selectedDateKey(), today) },
+    });
+  }
 
   protected exportNow(): void {
     const r = this.trips.downloadBackup();

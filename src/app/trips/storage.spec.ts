@@ -28,7 +28,7 @@ describe('trips storage', () => {
   });
 
   it('works with storage blocked or absent', () => {
-    expect(loadTrips(new BlockedStorage())).toEqual({ file: { schema: 1, trips: [] }, readOnly: false });
+    expect(loadTrips(new BlockedStorage())).toEqual({ file: { schema: 2, trips: [] }, readOnly: false });
     expect(saveTrips(new BlockedStorage(), SEVILLE_TRIPS_FILE)).toBe(false);
     expect(loadTrips(null).file.trips).toEqual([]);
     expect(saveTrips(null, SEVILLE_TRIPS_FILE)).toBe(false);
@@ -39,7 +39,7 @@ describe('trips storage', () => {
     const s = new MemoryStorage();
     s.setItem(TRIPS_KEY, '{"schema":1,"trips":[');
     const r = loadTrips(s);
-    expect(r).toEqual({ file: { schema: 1, trips: [] }, readOnly: false });
+    expect(r).toEqual({ file: { schema: 2, trips: [] }, readOnly: false });
     expect(s.getItem(TRIPS_CORRUPT_KEY)).toBe('{"schema":1,"trips":[');
   });
 
@@ -66,7 +66,7 @@ describe('trips storage', () => {
 
   it('shows data from a newer app read-only', () => {
     const s = new MemoryStorage();
-    s.setItem(TRIPS_KEY, JSON.stringify({ schema: 2, trips: [SEVILLE_TRIP] }));
+    s.setItem(TRIPS_KEY, JSON.stringify({ schema: 3, trips: [SEVILLE_TRIP] }));
     const r = loadTrips(s);
     expect(r.readOnly).toBe(true);
     expect(r.file.trips).toHaveLength(1);

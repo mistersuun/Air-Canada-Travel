@@ -563,3 +563,102 @@ def test_broken_required_feed_still_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(bg, "CORRIDORS", [corridor()])
     with pytest.raises(KeyError):
         bg.main(["--offline", "--cache", str(cache), "--only", "t", "--out", str(tmp_path / "g.json"), "--today", "2026-10-02"])
+
+
+# ── A pinned stop gone from a required feed: that corridor only ────────────
+
+GEO_STOPS = """stop_id,stop_name,parent_station,stop_lat,stop_lon
+A,Origin,,50.0530,8.5700
+A1,Origin platform 1,A,50.0531,8.5701
+B,Destination,,50.9430,6.9587
+C,Elsewhere,,50.1068,8.6628
+"""
+
+
+def test_missing_pin_with_broken_dict_leaves_only_that_corridor_out():
+    z = feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0", extra={"stops.txt": GEO_STOPS})
+    good = corridor()
+    gone = corridor(key="FFF-2", a={"stops": ["350706"], "name": "Airport", "tz": "Europe/Berlin", "near": [50.053, 8.570]})
+    broken: dict[str, str] = {}
+    runs = bg.load_feed(z, [good, gone], LO, HI, broken)
+    assert set(runs) == {"AAA-1"}
+    assert bg.build_corridor(good, runs["AAA-1"], TODAY)["out"]["wk"] == [[480, 60, 0]]
+    # Names the missing id and the feed's stations near the pinned place (top-level stops only).
+    assert "350706" in broken["FFF-2"] and 'A "Origin" (0.0 km)' in broken["FFF-2"]
+    assert "A1" not in broken["FFF-2"] and '"Elsewhere"' not in broken["FFF-2"]
+
+
+def test_stations_near_lists_closest_parents_within_the_radius():
+    stops = {"A": "", "A1": "A", "B": "", "C": ""}
+    names = {"A": "Fernbahnhof", "A1": "Gleis 4", "B": "Regionalbahnhof", "C": "Hbf"}
+    coords = {"A": (50.0531, 8.5702), "A1": (50.0531, 8.5702), "B": (50.0512, 8.5714), "C": (50.1068, 8.6628)}
+    assert bg.stations_near(stops, names, coords, [50.0530, 8.5698]) == [
+        'A "Fernbahnhof" (0.0 km)', 'B "Regionalbahnhof" (0.2 km)']
+    assert 8.8 < bg.km((50.0530, 8.5698), (50.1068, 8.6628)) < 9.1  # airport to Frankfurt Hbf
+
+
+def _two_corridor_run(tmp_path, monkeypatch, prev_valid_to):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    _write_zip(cache / "t.zip", feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0"))
+    monkeypatch.setitem(bg.FEEDS, "t", {"name": "T", "url": "", "page": "", "licence": "CC BY 4.0",
+                                        "licenceUrl": bg.CC_BY, "credit": "T"})  # required, not optional
+    gone = corridor(key="FFF-2", b={"stops": ["2678"], "name": "Köln Hbf", "tz": "Europe/Madrid"})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor(), gone])
+    out = tmp_path / "ground.json"
+    out.write_text(bg.encode(bg.assemble({"FFF-2": entry("t", prev_valid_to)}, {"t": "2026-09-01"}, None, set(), TODAY)))
+    problems = tmp_path / "problems.md"
+    rc = bg.main(["--offline", "--cache", str(cache), "--only", "t", "--out", str(out), "--today", "2026-10-02",
+                  "--problems", str(problems)])
+    return rc, json.loads(out.read_text()), problems
+
+
+def test_main_keeps_previous_entry_of_a_corridor_with_a_missing_pin(tmp_path, monkeypatch, capsys):
+    rc, doc, problems = _two_corridor_run(tmp_path, monkeypatch, "2026-10-26")
+    assert rc == 0
+    assert doc["corridors"]["AAA-1"]["out"]["wk"] == [[480, 60, 0]]      # the healthy corridor is rebuilt
+    assert doc["corridors"]["FFF-2"]["out"]["validTo"] == "2026-10-26"  # the broken one keeps its old data
+    assert "t" in doc["sources"]
+    assert "::warning title=Ground corridor left out::FFF-2: FFF-2 (Köln Hbf): pinned stop(s) not in the feed: 2678" \
+        in capsys.readouterr().out
+    report = problems.read_text()
+    assert "**FFF-2**" in report and "2678" in report and "Previous timetable kept until 2026-10-26" in report
+    assert "AAA-1" not in report
+
+
+def test_main_drops_a_corridor_with_a_missing_pin_and_no_valid_previous_entry(tmp_path, monkeypatch):
+    rc, doc, problems = _two_corridor_run(tmp_path, monkeypatch, "2026-09-30")  # expired before today
+    assert rc == 0
+    assert set(doc["corridors"]) == {"AAA-1"}
+    assert "Dropped (no valid previous timetable)" in problems.read_text()
+
+
+def test_main_removes_a_stale_problems_file_when_every_pin_resolves(tmp_path, monkeypatch):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    _write_zip(cache / "t.zip", feed("T1,08:00:00,08:00:00,A,1,0,0\nT1,09:00:00,09:00:00,B,2,0,0"))
+    monkeypatch.setitem(bg.FEEDS, "t", {"name": "T", "url": "", "page": "", "licence": "x", "licenceUrl": "", "credit": "T"})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor()])
+    problems = tmp_path / "problems.md"
+    problems.write_text("old")
+    assert bg.main(["--offline", "--cache", str(cache), "--only", "t", "--out", str(tmp_path / "g.json"),
+                    "--today", "2026-10-02", "--problems", str(problems)]) == 0
+    assert not problems.exists()
+
+
+def test_required_feed_with_no_stops_still_fails_loudly(tmp_path, monkeypatch):
+    # Every pin missing because stops.txt is empty is a broken feed, not broken corridors.
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    _write_zip(cache / "t.zip", feed("T1,08:00:00,08:00:00,A,1,0,0", extra={"stops.txt": "stop_id,stop_name,parent_station"}))
+    monkeypatch.setitem(bg.FEEDS, "t", {"name": "T", "url": "", "page": "", "licence": "x", "licenceUrl": "", "credit": "T"})
+    monkeypatch.setattr(bg, "CORRIDORS", [corridor()])
+    with pytest.raises(ValueError, match="no stops"):
+        bg.main(["--offline", "--cache", str(cache), "--only", "t", "--out", str(tmp_path / "g.json"), "--today", "2026-10-02"])
+
+
+def test_fra_pins_are_the_current_gtfs_de_ids_with_a_near_hint():
+    c = next(x for x in bg.CORRIDORS if x["key"] == "FRA-2886242")
+    assert c["a"]["stops"] == ["296266"] and c["b"]["stops"] == ["265963"]
+    assert bg.km(tuple(c["a"]["near"]), (50.0530, 8.5698)) < 0.2  # Frankfurt Flughafen Fernbahnhof
+    assert bg.km(tuple(c["b"]["near"]), (50.9430, 6.9587)) < 0.2  # Köln Hbf

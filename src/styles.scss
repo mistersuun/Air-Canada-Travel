@@ -242,15 +242,15 @@ img, svg { display: block; }
 .ui-page {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 12px) var(--gutter) var(--tabbar-space);
+  padding: calc(env(safe-area-inset-top) + 12px) max(var(--gutter), env(safe-area-inset-right)) var(--tabbar-space) max(var(--gutter), env(safe-area-inset-left));
   &--bare { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
 
   @media (min-width: 720px) {
-    padding: 0 24px 40px;
+    padding: 0 max(24px, env(safe-area-inset-right)) 40px max(24px, env(safe-area-inset-left));
     &--bare { padding-bottom: 40px; }
   }
   @media (min-width: 1024px) {
-    padding: 0 48px 48px;
+    padding: 0 max(48px, env(safe-area-inset-right)) 48px max(48px, env(safe-area-inset-left));
     &--bare { padding-bottom: 48px; }
   }
 }

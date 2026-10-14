@@ -114,7 +114,7 @@ async function checkSchedules() {
     return;
   }
   await self.registration.showNotification('Schedules updated', {
-    body: 'Open to check your trips.', tag: SYNC_TAG, icon: '/icons/icon-192x192.png', data: { url: '/trips' },
+    body: 'Open to check your trips.', tag: SYNC_TAG, icon: '/icons/v2/icon-192x192.png', data: { url: '/trips' },
   });
 }
 

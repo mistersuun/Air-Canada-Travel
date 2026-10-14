@@ -8,6 +8,7 @@
       "resources": {
         "files": [
           "/favicon.ico",
+          "/favicon-v2.ico",
           "/index.html",
           "/manifest.webmanifest",
           "/icon.svg",
@@ -72,8 +73,9 @@
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/icons/*",
+          "/icons/**",
           "/apple-touch-icon.png",
+          "/apple-touch-icon-v2.png",
           "/**/*.+(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"
         ]
       }

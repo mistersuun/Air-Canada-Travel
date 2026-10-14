@@ -63,6 +63,12 @@ describe('catalogue', () => {
     expect(mismatched).toEqual([]);
   });
 
+  it('French typography: no-break space before ":" and inside « », none before ? ! ;', () => {
+    const fr = catalogue('fr');
+    const bad = (Object.keys(EN) as MsgKey[]).filter(k => /[^\u00a0\u202f}]:(?!\{)| :|[ \u00a0\u202f][?!;]|«(?![\u00a0\u202f])|(?<![\u00a0\u202f])»/.test(fr[k]));
+    expect(bad).toEqual([]);
+  });
+
   it('writes no ICU apostrophe quoting and no straight double quotes in French', () => {
     // Apostrophes are plain text here; French quotes are « ».
     const fr = catalogue('fr');

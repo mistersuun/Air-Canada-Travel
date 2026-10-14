@@ -52,14 +52,31 @@ function sourceFiles(path: string): string[] {
 export function scanTemplate(template: string): { offset: number; text: string }[] {
   const out: { offset: number; text: string }[] = [];
   const blank = (s: string) => s.replace(/[^\n]/g, ' ');
-  let src = template.replace(/<!--[\s\S]*?-->/g, blank).replace(/\{\{[\s\S]*?\}\}/g, blank);
+  const noComments = template.replace(/<!--[\s\S]*?-->/g, blank);
+  // English inside bindings and interpolations ({{ c ? 'Show more' : … }}, [title]="'Close'").
+  const LIT = /'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"/g;
+  const NON_UI_BINDING = /^(class|style|ngClass|ngStyle|routerLink|href|id|attr\.(data-|role|href|id|for))/;
+  const scanExpr = (expr: string, base: number) => {
+    for (const m of expr.matchAll(LIT)) {
+      const s = m[1] ?? m[2];
+      if (/\b(?:t|tIn|tOr)\(\s*$/.test(expr.slice(0, m.index))) continue; // the key itself
+      if (/^[\w-]+(\.[\w-]+)+$/.test(s)) continue; // a key or dotted id
+      if (/[A-Z][a-z]{2,}|[A-Za-z]{2,}\s+[a-z]{2,}/.test(s)) out.push({ offset: base + m.index!, text: s });
+    }
+  };
+  for (const m of noComments.matchAll(/\{\{([\s\S]*?)\}\}/g)) scanExpr(m[1], m.index! + 2);
+  for (const m of noComments.matchAll(/\s\[([\w.-]+)\]="([^"]*)"/g)) {
+    if (!NON_UI_BINDING.test(m[1])) scanExpr(m[2], m.index! + m[0].indexOf('"') + 1);
+  }
+  let src = noComments.replace(/\{\{[\s\S]*?\}\}/g, blank);
   for (const m of src.matchAll(CHECKED_ATTRS)) {
     if (/[A-Za-z]{2,}/.test(m[2])) out.push({ offset: m.index!, text: `${m[1]}="${m[2]}"` });
   }
   src = src
     .replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, blank)
-    .replace(/@(?:if|else if|for|switch|case|defer|let)\s*\((?:[^()]|\([^()]*\))*\)/g, blank)
-    .replace(/@(?:else|default|empty|placeholder|loading|error)\b/g, blank)
+    .replace(/@let\s+\w+\s*=[^;]*;/g, blank)
+    .replace(/@(?:if|else if|for|switch|case|defer|placeholder|loading)\s*\((?:[^()]|\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\))*\)/g, blank)
+    .replace(/@(?:else|default|empty|placeholder|loading|error|defer)\b/g, blank)
     .replace(/&[a-z]+;|&#\d+;/g, blank);
   for (const m of src.matchAll(/[^\s{}]+(?:[ \t]+[^\s{}]+)*/g)) {
     const words = m[0].match(/[A-Za-z]{2,}/g)?.filter(w => !ALLOWED_WORDS.has(w)) ?? [];
@@ -119,6 +136,15 @@ describe('i18n guard: scanner', () => {
       <a class="logo">Routes</a> <!-- a comment with words -->
       <span>Nonstop &amp; more</span>`).map(f => f.text.replace(/\s+/g, ' '));
     expect(found).toEqual(['aria-label="Close"', 'Where to?', 'Nonstop more']);
+  });
+
+  it('flags English literals inside bindings and interpolations, and skips @let and nested @if', () => {
+    const found = scanTemplate(`
+      <span [title]="'Close sheet'" [class.on]="'is on'">{{ c ? 'Show more' : t('a.b') }}</span>
+      @let ic = iconOf(a);
+      @if (f(g(h(x)))) { <i>{{ ic }}</i> }
+      @defer { <b></b> } @placeholder (minimum 500ms) { <b></b> }`).map(f => f.text);
+    expect(found).toEqual(['Show more', 'Close sheet']);
   });
 
   it('flags English prose in code, not keys, imports, styles, errors or ignored lines', () => {

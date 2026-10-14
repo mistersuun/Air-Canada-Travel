@@ -28,6 +28,11 @@ export function shortDay(key: string): string {
   return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+/** 'Wednesday, October 7' / 'mercredi 7 octobre'. */
+export function longDay(key: string): string {
+  return formatKey(key, { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
 /** True when the date is outside the hub's published window (null bounds = open). */
 export function isOutside(key: string, coverage: Coverage | null | undefined): boolean {
   if (!coverage) return false;

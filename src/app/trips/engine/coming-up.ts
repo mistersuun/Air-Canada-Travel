@@ -16,7 +16,8 @@ export const COMING_UP_DAYS = 7;
 export const BADGE_WINDOW_HOURS = 72;
 const LIVE: readonly string[] = ['planned', 'listed', 'checkedIn'];
 
-export interface ComingUp { tripId: string; days: number; text: string; actions: string[] }
+/** `head` is the first line ('Seville in 4 days'); `text` is head and actions on one line. */
+export interface ComingUp { tripId: string; days: number; text: string; head: string; actions: string[] }
 
 interface Next { leg: FlightLeg; depUtc: number; days: number }
 
@@ -80,7 +81,8 @@ export function comingUp(trips: Trip[], _log: FlightLog, nowMs: number): ComingU
   const dest = placeName(next.leg.refs[next.leg.refs.length - 1].dest);
   const where = next.leg.role === 'outbound' ? (trip.goal.name || dest) : next.leg.role === 'return' ? `Home to ${dest}` : dest;
   const when = next.days === 1 ? 'tomorrow' : `in ${next.days} days`;
-  return { tripId: trip.id, days: next.days, actions, text: [`${where} ${when}`, ...actions].join(' · ') };
+  const head = `${where} ${when}`;
+  return { tripId: trip.id, days: next.days, actions, head, text: [head, ...actions].join(' · ') };
 }
 
 /**

@@ -39,6 +39,16 @@ const CONNECT_OPTIONS: SegOption[] = [
   { value: 'connect', label: '+ Connections' },
 ];
 
+const LEGEND_KEY = 'ac.legend.strip.v1';
+
+function readLegendSeen(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(LEGEND_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 interface ListRow {
   code: string;
   meta: string;
@@ -100,6 +110,12 @@ interface ListRow {
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
                           [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
+          @if (!legendSeen()) {
+            <p class="legend" data-legend>
+              <span>A dot under a day means a nonstop flies that day. Blue marks today.</span>
+              <button type="button" class="legend__x" (click)="dismissLegend()">Got it</button>
+            </p>
+          }
           <div class="xrow">
             <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder ›</a>
             <app-surprise-sheet [entries]="results()" [timeFormat]="state.timeFormat()" />
@@ -167,7 +183,9 @@ interface ListRow {
               }
             </div>
             @for (r of nonstop(); track r.code) {
-              <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()" />
+              <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()">
+                @if (r.tag) { <span trailing class="ui-tag tn" [class]="'ui-tag--' + r.tag.tone" data-ends>{{ r.tag.text }}</span> }
+              </app-dest-row>
             } @empty {
               <p class="none ui-sub">No nonstop flights {{ state.selectedDateKey() ? 'on this day' : 'this week' }}.</p>
             }
@@ -235,6 +253,12 @@ interface ListRow {
       box-shadow: 0 0 0 2px var(--bg);
     }
     .conn { align-self: center; }
+    .legend {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 0;
+      font-size: 12.5px; color: var(--ink-2);
+    }
+    .legend__x { flex: none; position: relative; padding: 4px 8px; font-weight: 600; color: var(--blue); }
+    .legend__x::after { content: ''; position: absolute; inset: -8px -4px; }
     .strip { margin-top: 14px; }
 
     .sec { margin-top: 40px; }
@@ -310,6 +334,17 @@ export class HomePage {
       const d = findDestination(c);
       return d && d.code !== this.state.hub() ? [{ code: d.code, city: d.city }] : [];
     }));
+
+  /** The week-strip legend shows until dismissed once (per device). */
+  protected readonly legendSeen = signal(readLegendSeen());
+  protected dismissLegend(): void {
+    this.legendSeen.set(true);
+    try {
+      globalThis.localStorage?.setItem(LEGEND_KEY, '1');
+    } catch {
+      // Storage blocked: the legend returns next visit.
+    }
+  }
 
   protected readonly connectOptions = CONNECT_OPTIONS;
   protected readonly dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -424,9 +459,17 @@ export class HomePage {
   readonly nonstop = computed<ListRow[]>(() => {
     const short = this.narrow();
     const fmt = this.state.timeFormat();
+    // Routes in "Seasonal & ending soon" that end (not pause) carry an 'ends Oct 23' tag.
+    const ending = new Map(this.seasonal().filter(ev => ev.kind === 'ends').map(ev => [ev.code, ev.label]));
     return this.nonstopAll()
       .slice(0, this.nonstopOpen() ? undefined : this.listLimit())
-      .map(e => ({ code: e.destination.code, small: e.destination.code, meta: rowMeta(e, fmt, short), dots: entryDots(e) }));
+      .map(e => {
+        const ends = ending.get(e.destination.code);
+        return {
+          code: e.destination.code, small: e.destination.code, meta: rowMeta(e, fmt, short), dots: entryDots(e),
+          tag: ends ? { text: ends.replace('Ends', 'ends'), tone: 'amber' as const } : undefined,
+        };
+      });
   });
 
   /** Rows shown in Nonstop / Connections before "All N" (fewer on phones). */

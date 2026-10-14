@@ -66,6 +66,22 @@ describe('HomePage', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows the week-strip legend until it is dismissed, and remembers that', async () => {
+    configure();
+    localStorage.removeItem('ac.legend.strip.v1');
+    const a = await render();
+    expect(a.el.querySelector('[data-legend]')?.textContent).toContain('A dot under a day');
+    a.el.querySelector<HTMLButtonElement>('.legend__x')!.click();
+    await a.stable();
+    expect(a.el.querySelector('[data-legend]')).toBeNull();
+    expect(localStorage.getItem('ac.legend.strip.v1')).toBe('1');
+    TestBed.resetTestingModule();
+    configure();
+    const b = await render();
+    expect(b.el.querySelector('[data-legend]')).toBeNull();
+    localStorage.removeItem('ac.legend.strip.v1');
+  });
+
   it('curated mode: greeting, title, picks, nonstop rows and dots for the week strip', async () => {
     configure();
     const { el, text } = await render();

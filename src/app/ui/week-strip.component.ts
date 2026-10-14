@@ -18,6 +18,8 @@ export interface StripDay {
   label: string;
   today: boolean;
   outside: boolean;
+  /** Before today: shown dimmed, like the calendar's past days. */
+  past: boolean;
 }
 
 /** Horizontal swipe distance (px) that changes the week on touch. */
@@ -53,7 +55,7 @@ export const SWIPE_PX = 50;
               [style.left]="'calc(5px + ' + max0(activeIndex()) + ' * (100% - 10px) / 7)'"></span>
         @for (d of days(); track d.key) {
           <button type="button" class="d" [class.on]="selectedDateKey() === d.key" [class.is-today]="d.today"
-                  [class.is-out]="d.outside" [attr.aria-pressed]="selectedDateKey() === d.key"
+                  [class.is-out]="d.outside" [class.is-past]="d.past" [attr.aria-pressed]="selectedDateKey() === d.key"
                   [attr.aria-label]="d.label" [attr.title]="d.outside ? outsideTitle() : null"
                   (click)="onDay(d.key)">
             <span class="dow">{{ d.dow }}</span>
@@ -112,7 +114,8 @@ export const SWIPE_PX = 50;
     .d b { font-size: 18px; font-weight: 650; }
     .dt { display: block; width: 4px; height: 4px; border-radius: 50%; margin: 3px auto 0; background: transparent; }
     .dt.is-on { background: var(--teal); }
-    .d.is-out b { color: var(--ink-3); }
+    .d.is-out b, .d.is-past:not(.on) b { color: var(--ink-3); }
+    .d.is-past:not(.on) .dt.is-on { opacity: .45; }
     .d.on { color: #FFFFFF; }
     .d.on .dow { color: #FFFFFF; }
     .d.on .dt.is-on { background: #FFFFFF; }
@@ -169,7 +172,7 @@ export class WeekStripComponent {
       let label = `${WEEKDAY_LONG[i]}, ${formatKey(key, { month: 'long', day: 'numeric', year: 'numeric' })}`;
       if (key === today) label += ', today';
       if (outside) label += ', outside published schedules';
-      return { key, dow: WEEKDAY_SHORT[i], date: +key.slice(8), label, today: key === today, outside };
+      return { key, dow: WEEKDAY_SHORT[i], date: +key.slice(8), label, today: key === today, outside, past: key < today };
     });
   });
 

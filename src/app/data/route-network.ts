@@ -17,6 +17,7 @@
  * app still starts), and setRouteNetworkSource()/resetRouteNetworkSource()
  * for specs.
  */
+import { FETCH_TIMEOUT_BIG_MS, fetchWithTimeout } from '../utils/fetch-timeout';
 import { registerExtraAirports } from '../utils/airports';
 import { getSchedulesForRoute } from './schedule-index';
 
@@ -154,7 +155,7 @@ export function installRouteNetwork(file: RouteNetworkFile): void {
  */
 export async function loadRouteNetwork(
   url: string = ROUTE_NETWORK_URL,
-  fetchFn: typeof fetch = (...a) => fetch(...a),
+  fetchFn: typeof fetch = (u, init) => fetchWithTimeout(u, init, FETCH_TIMEOUT_BIG_MS),
 ): Promise<boolean> {
   try {
     const res = await fetchFn(url);

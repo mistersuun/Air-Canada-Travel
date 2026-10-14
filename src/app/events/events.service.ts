@@ -1,14 +1,15 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { AppStateService } from '../state/app-state.service';
 import { type EventsResult, type EventsWindow, eventsUrl, parseEvents, windowKey } from './events';
+import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 /** How the endpoint is called; specs replace it. Resolves to the HTTP status and parsed JSON (null when not JSON). */
 export const EVENTS_FETCH = new InjectionToken<(url: string) => Promise<{ status: number; body: unknown }>>('EVENTS_FETCH', {
   providedIn: 'root',
   factory: () => async (url: string) => {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
     let body: unknown = null;
-    try { body = await res.json(); } catch { /* not JSON: treated as unavailable */ }
+    try { body = await res.json(); } catch (err) { if (isAbortError(err)) throw err; /* not JSON: treated as unavailable */ }
     return { status: res.status, body };
   },
 });

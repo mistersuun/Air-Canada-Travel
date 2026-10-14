@@ -128,8 +128,8 @@ export class AppStateService {
   readonly nowMs = signal(this.now());
 
   // ── Data load ─────────────────────────────────────────────────────────────
-  /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. */
-  readonly dataLoad = signal<'ok' | 'failed'>('ok');
+  /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. 'loading' when startup gave up waiting and it is still coming. */
+  readonly dataLoad = signal<'ok' | 'loading' | 'failed'>('ok');
   private retrying = false;
 
   // ── Shell UI state ────────────────────────────────────────────────────────
@@ -343,6 +343,11 @@ export class AppStateService {
 
   reloadPage(): void {
     this.win?.location.reload();
+  }
+
+  /** Startup stopped waiting for the data: the app renders while it keeps loading. */
+  reportDataPending(): void {
+    if (this.dataLoad() === 'ok') this.dataLoad.set('loading');
   }
 
   /** Records the startup load (app initializer). */

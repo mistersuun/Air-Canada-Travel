@@ -18,6 +18,7 @@ import {
 import { provideServiceWorker } from '@angular/service-worker';
 import { loadSchedules } from './data/schedule-index';
 import { loadRouteNetwork } from './data/route-network';
+import { startupLoad } from './startup';
 import { routes } from './app.routes';
 import { reloadOnChunkError } from './state/pwa-update.service';
 import { PhotoService } from './state/photo.service';
@@ -68,10 +69,9 @@ export const appConfig: ApplicationConfig = {
       const extras = inject(PwaExtrasService);
       extras.init();
       const photos = inject(PhotoService);
-      return Promise.all([loadSchedules(), loadRouteNetwork(), photos.load()]).then(([schedulesOk]) => {
-        state.reportDataLoad(schedulesOk);
-        extras.announceSchedules();
-      });
+      // Raced against a budget so a slow network cannot hold the first render;
+      // see startupLoad for what happens to the loads that finish later.
+      return startupLoad(state, loadSchedules(), Promise.all([loadRouteNetwork(), photos.load()]), () => extras.announceSchedules());
     }),
     provideServiceWorker('sw.js', {
       enabled: !isDevMode(),

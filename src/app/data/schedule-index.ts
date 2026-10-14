@@ -17,6 +17,8 @@
  * Nothing in here knows about destinations or time zones; see utils/.
  */
 
+import { FETCH_TIMEOUT_BIG_MS, fetchWithTimeout } from '../utils/fetch-timeout';
+
 /** One published schedule row: a flight on some weekdays between two dates. */
 export interface FlightSchedule {
   fromDate: string;
@@ -227,7 +229,7 @@ export function schedulesLoaded(): boolean {
  */
 export async function loadSchedules(
   url: string = SCHEDULES_URL,
-  fetchFn: typeof fetch = (...a) => fetch(...a),
+  fetchFn: typeof fetch = (u, init) => fetchWithTimeout(u, init, FETCH_TIMEOUT_BIG_MS),
 ): Promise<boolean> {
   try {
     const res = await fetchFn(url);

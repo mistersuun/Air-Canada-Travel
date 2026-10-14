@@ -2,6 +2,7 @@ import { Injectable, InjectionToken, inject, signal, untracked } from '@angular/
 import { NOW } from '../state/app-state.service';
 import { findDestination, findHub } from '../utils/airports';
 import { FORECAST_DAYS, parseForecast, type DayForecast } from './forecast';
+import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 export const FORECAST_ORIGIN = 'https://api.open-meteo.com';
 const CACHE_MS = 3 * 60 * 60 * 1000;
@@ -29,14 +30,15 @@ export function forecastUrl(places: readonly { lat: number; lng: number }[]): st
 export const FORECAST_FETCH = new InjectionToken<(url: string) => Promise<unknown>>('FORECAST_FETCH', {
   providedIn: 'root',
   factory: () => async (url: string) => {
-    const res = await fetch(url, { credentials: 'omit', referrerPolicy: 'no-referrer' });
+    const res = await fetchWithTimeout(url, { credentials: 'omit', referrerPolicy: 'no-referrer' });
     if (!res.ok) {
       if (res.status >= 500) throw new Error(`forecast: HTTP ${res.status}`);
       return null;
     }
     try {
       return await res.json();
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) throw err;
       return null;
     }
   },

@@ -436,6 +436,17 @@ describe('AppStateService', () => {
       expect(state.dataInfo().staleTag).toBe('No schedules after Mar 31');
     });
 
+    it('reportDataPending shows loading, and a later report replaces it', () => {
+      const { state } = setup();
+      state.reportDataPending();
+      expect(state.dataLoad()).toBe('loading');
+      state.reportDataLoad(true);
+      expect(state.dataLoad()).toBe('ok');
+      state.reportDataLoad(false);
+      state.reportDataPending();
+      expect(state.dataLoad()).toBe('failed');
+    });
+
     it('dataLoad starts ok; a retry that succeeds clears a failure and reloads the page', async () => {
       const { state } = setup();
       expect(state.dataLoad()).toBe('ok');

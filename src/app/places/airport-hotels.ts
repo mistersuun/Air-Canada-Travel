@@ -1,4 +1,5 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
+import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 /**
  * Hotels near the airports, from public/data/airport-hotels.json (built by
@@ -71,7 +72,7 @@ export function hotelMapUrl(h: AirportHotel): string {
 export const AIRPORT_HOTELS_FETCH = new InjectionToken<() => Promise<unknown>>('AIRPORT_HOTELS_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
-    const res = await fetch(AIRPORT_HOTELS_URL);
+    const res = await fetchWithTimeout(AIRPORT_HOTELS_URL);
     if (!res.ok) {
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
       if (res.status >= 500 || offline) throw new Error(`airport-hotels.json: HTTP ${res.status}`);
@@ -79,7 +80,8 @@ export const AIRPORT_HOTELS_FETCH = new InjectionToken<() => Promise<unknown>>('
     }
     try {
       return await res.json();
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) throw err;
       return null;
     }
   },

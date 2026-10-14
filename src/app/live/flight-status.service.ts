@@ -52,7 +52,7 @@ export class FlightStatusService {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) { this.mark(key); return; }
     this.inflight.add(key);
     try {
-      const url = `${STATUS_ENDPOINT}?ident=${encodeURIComponent(ident)}&origin=${encodeURIComponent(origin)}&dep=${encodeURIComponent(depIso(depUtc))}`;
+      const url = `${STATUS_ENDPOINT}?ident=${encodeURIComponent(ident.trim().toUpperCase())}&origin=${encodeURIComponent(origin.trim().toUpperCase())}&dep=${encodeURIComponent(depIso(depUtc))}`;
       const { status, body } = await this.fetcher(url);
       const parsed = status === 200 ? parseStatus(body) : null;
       if (parsed) {

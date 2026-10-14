@@ -125,6 +125,9 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
       display: block; width: 100%; text-align: left; padding: 0 0 12px; min-width: 0; color: var(--ink);
       border-radius: 10px; min-height: 44px;
     }
+    /* Rows that open something show a chevron. */
+    a.tl__b, button.tl__b { position: relative; padding-right: 22px; }
+    a.tl__b::after, button.tl__b::after { content: '›'; position: absolute; right: 4px; top: 2px; font-size: 18px; line-height: 1.2; color: var(--ink-3); }
     a.tl__b:hover .tl__t, button.tl__b:hover .tl__t { color: var(--blue); }
     .tl__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
     .tl__t { font-weight: 650; font-size: 14px; line-height: 1.35; min-width: 0; }

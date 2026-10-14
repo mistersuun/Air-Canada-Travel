@@ -15,6 +15,7 @@ import { hubDisplayName, supOffset } from '../../ui/format';
 import { airportTz, findDestination, findHub } from '../../utils/airports';
 import { deadlineUtc, departuresHome } from '../../trips/engine/homeby';
 import { legWindow, refArrUtc } from '../../trips/engine/legs';
+import { listingChip } from '../../trips/engine/listing';
 import type { ConnectOptions } from '../../utils/connections';
 import { MINUTE_MS, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
 import {
@@ -42,6 +43,8 @@ export interface LegRow {
   provenance: Provenance | null;
   /** Replaced or done with: shown dimmed. */
   done: boolean;
+  /** 'Listing open' / 'Listing opens Thu 14:30' for a Planned flight whose window is open or about to open. */
+  listing?: { label: string; open: boolean } | null;
 }
 
 export const MODE_LABEL: Record<GroundMode, string> = {
@@ -231,8 +234,13 @@ function groundRow(leg: GroundLeg, fmt: TimeFormat): LegRow {
 }
 
 /** The timeline rows, in trip order. */
-export function legRows(trip: Trip, fmt: TimeFormat = '24h'): LegRow[] {
-  return trip.legs.map(l => (l.kind === 'flight' ? flightRow(trip, l, fmt) : groundRow(l, fmt)));
+export function legRows(trip: Trip, fmt: TimeFormat = '24h', listing?: { nowMs: number; hours: number }): LegRow[] {
+  return trip.legs.map(l => {
+    if (l.kind !== 'flight') return groundRow(l, fmt);
+    const row = flightRow(trip, l, fmt);
+    const chip = listing ? listingChip(l, listing.nowMs, listing.hours, fmt) : null;
+    return chip ? { ...row, listing: { label: chip.label, open: chip.open } } : row;
+  });
 }
 
 /** 'Home, Montréal'. */

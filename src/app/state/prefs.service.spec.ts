@@ -18,12 +18,17 @@ describe('sanitizePrefs', () => {
   it('keeps valid fields and drops invalid ones independently', () => {
     const p = sanitizePrefs({
       hub: 'YVR', region: 'Mars', showConnections: false, theme: 'neon', timeFormat: '12h',
-      minConnect: 90, maxLayover: 7, allowOvernight: 'yes', favourites: ['LHR', 'XXX', 'LHR', 42, 'ATH', 'PBI'],
+      minConnect: 90, maxLayover: 7, allowOvernight: 'yes', listingHours: 72, favourites: ['LHR', 'XXX', 'LHR', 42, 'ATH', 'PBI'],
     });
     expect(p).toEqual({
       hub: 'YVR', region: 'All', showConnections: false, theme: 'auto', timeFormat: '12h',
-      minConnect: 90, maxLayover: 360, allowOvernight: false, favourites: ['LHR', 'ATH', 'DJT'], lastBackupAt: null,
+      minConnect: 90, maxLayover: 360, allowOvernight: false, listingHours: 72, favourites: ['LHR', 'ATH', 'DJT'], lastBackupAt: null,
     });
+  });
+
+  it('defaults the listing window to 48h and rejects other values', () => {
+    expect(DEFAULT_PREFS.listingHours).toBe(48);
+    expect(sanitizePrefs({ listingHours: 5 }).listingHours).toBe(48);
   });
 
   it('accepts the Starred pseudo-region', () => {

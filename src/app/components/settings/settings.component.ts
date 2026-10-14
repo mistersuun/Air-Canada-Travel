@@ -9,6 +9,7 @@ import {
 } from '../../state/prefs.service';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
 import { SegComponent, SegOption } from '../../ui/seg.component';
+import { LISTING_HOURS_OPTIONS } from '../../trips/engine/listing';
 import { hubDisplayName } from '../../ui/format';
 import { IconComponent } from '../shared/icons.component';
 import { DataCreditsComponent } from '../../places/ui/data-credits.component';
@@ -82,6 +83,12 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
             <span class="nm">Maximum layover</span>
             <app-seg stretch ariaLabel="Maximum layover" data-setting="max" [options]="maxOptions"
                      [value]="'' + p().maxLayover" (valueChange)="prefs.update({ maxLayover: +$event! })" />
+          </div>
+          <div class="field">
+            <span class="nm">Listing reminder</span>
+            <app-seg stretch ariaLabel="Listing reminder, hours before departure" data-setting="listing" [options]="listingOptions"
+                     [value]="'' + p().listingHours" (valueChange)="prefs.update({ listingHours: +$event! })" />
+            <span class="hint">When a flight shows Listing open, and the calendar reminder. Check your own pass rules.</span>
           </div>
           <label class="row" for="settings-overnight">
             <span class="row__tx"><span class="nm">Overnight connections</span><span class="hint">Allow a layover that crosses midnight at the hub</span></span>
@@ -204,6 +211,7 @@ export class SettingsComponent {
   ];
   protected readonly minOptions: SegOption[] = MIN_CONNECT_OPTIONS.map(m => ({ value: String(m), label: `${m}m` }));
   protected readonly maxOptions: SegOption[] = MAX_LAYOVER_OPTIONS.map(m => ({ value: String(m), label: `${m / 60}h` }));
+  protected readonly listingOptions: SegOption[] = LISTING_HOURS_OPTIONS.map(h => ({ value: String(h), label: `${h}h` }));
 
   protected display(code: string): string {
     return hubDisplayName(code);

@@ -43,6 +43,16 @@ describe('trips-model', () => {
     expect(countdown(t, yul('2026-10-13', '22:01')).text).toBe('Done');
   });
 
+  it('adds a listing chip to a planned flight whose window is open', () => {
+    const t = sevilleTrip();
+    (t.legs[0] as FlightLeg).status = 'planned';
+    const out = (r: ReturnType<typeof legRows>) => r.map(x => x.listing?.label ?? null);
+    expect(out(legRows(t))).toEqual([null, null, null, null]);
+    const rows = legRows(t, '24h', { nowMs: yul('2026-10-07', '12:00'), hours: 48 });
+    expect(rows[0].listing).toEqual({ label: 'Listing open', open: true });
+    expect(legRows(t, '24h', { nowMs: yul('2026-10-07', '12:00'), hours: 24 })[0].listing?.open).toBe(false);
+  });
+
   it('builds the g2 timeline rows with status and provenance', () => {
     const rows = legRows(sevilleTrip());
     expect(rows.map(r => r.title)).toEqual([

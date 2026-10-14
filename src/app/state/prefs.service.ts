@@ -2,6 +2,7 @@ import { DOCUMENT, Injectable, InjectionToken, computed, effect, inject, signal 
 import { DESTINATIONS, HUBS, REGIONS } from '../data/destinations';
 import { STARRED_REGION } from '../utils/routes';
 import type { ConnectOptions } from '../utils/connections';
+import { DEFAULT_LISTING_HOURS, LISTING_HOURS_OPTIONS } from '../trips/engine/listing';
 
 /**
  * User preferences, persisted as JSON in localStorage['ac.prefs.v1'].
@@ -28,6 +29,8 @@ export interface Prefs {
   /** Maximum same-day layover, minutes. */
   maxLayover: number;
   allowOvernight: boolean;
+  /** Hours before departure the listing reminder opens (chip, notification, calendar file). */
+  listingHours: number;
   /** Starred destination codes, in the order they were starred. */
   favourites: string[];
   /** When trips were last exported (ISO), or null. Drives the backup reminder. */
@@ -50,6 +53,7 @@ export const DEFAULT_PREFS: Readonly<Prefs> = Object.freeze({
   minConnect: 60,
   maxLayover: 360,
   allowOvernight: false,
+  listingHours: DEFAULT_LISTING_HOURS,
   favourites: [] as string[],
   lastBackupAt: null,
 }) as Readonly<Prefs>;
@@ -95,6 +99,7 @@ export function sanitizePrefs(raw: unknown): Prefs {
     minConnect: MIN_CONNECT_OPTIONS.includes(r['minConnect'] as number) ? (r['minConnect'] as number) : d.minConnect,
     maxLayover: MAX_LAYOVER_OPTIONS.includes(r['maxLayover'] as number) ? (r['maxLayover'] as number) : d.maxLayover,
     allowOvernight: typeof r['allowOvernight'] === 'boolean' ? r['allowOvernight'] : d.allowOvernight,
+    listingHours: LISTING_HOURS_OPTIONS.includes(r['listingHours'] as number) ? (r['listingHours'] as number) : d.listingHours,
     favourites: favs,
     lastBackupAt: typeof r['lastBackupAt'] === 'string' && !Number.isNaN(Date.parse(r['lastBackupAt']))
       ? new Date(r['lastBackupAt']).toISOString() : d.lastBackupAt,
@@ -143,6 +148,7 @@ export class PrefsService {
   readonly showConnections = computed(() => this.state().showConnections);
   readonly theme = computed(() => this.state().theme);
   readonly timeFormat = computed(() => this.state().timeFormat);
+  readonly listingHours = computed(() => this.state().listingHours);
   readonly favourites = computed(() => this.state().favourites, {
     equal: (a, b) => a.length === b.length && a.every((c, i) => c === b[i]),
   });

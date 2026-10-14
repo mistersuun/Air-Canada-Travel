@@ -1,7 +1,7 @@
 /**
  * Calendar export for a whole trip (spec §5.5). Every flight segment is a
  * TENTATIVE event ("Tentative standby · AC834 YUL→MAD") with a listing
- * reminder 48h before; ground legs are timed when the user saved real times,
+ * reminder (48h before by default; a setting); ground legs are timed when the user saved real times,
  * else all-day "Estimated · Madrid → Seville train". Alternates are not
  * exported. A plan, not a booking: every description says so.
  */
@@ -11,6 +11,7 @@ import { escapeIcsText, foldIcsLine, icsUtc } from '../../utils/ics';
 import { addDays, toUtcMs } from '../../utils/time';
 import { FlightRef, GroundLeg, Trip, TripLeg } from '../model';
 import { endTz, refArrUtc, refDepUtc } from './legs';
+import { DEFAULT_LISTING_HOURS } from './listing';
 
 const CRLF = '\r\n';
 const PRODID = '-//Routes//Trip export//EN';
@@ -24,7 +25,7 @@ const MODE_LABEL: Record<GroundLeg['mode'], string> = {
   train: 'train', bus: 'bus', car: 'drive', ferry: 'ferry', flight: 'flight', other: 'trip',
 };
 
-function flightEvent(trip: Trip, ref: FlightRef, stamp: string, seq: number): string[] {
+function flightEvent(trip: Trip, ref: FlightRef, stamp: string, seq: number, listingHours: number): string[] {
   const label = `${ref.flightNumber} ${ref.origin}→${ref.dest}`;
   const plane = ref.aircraft ? ` · ${aircraftName(ref.aircraft)}` : '';
   const desc = [
@@ -47,7 +48,7 @@ function flightEvent(trip: Trip, ref: FlightRef, stamp: string, seq: number): st
     `DESCRIPTION:${escapeIcsText(desc)}`,
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
-    'TRIGGER:-PT48H',
+    `TRIGGER:-PT${listingHours}H`,
     `DESCRIPTION:${escapeIcsText(`List for ${ref.flightNumber} (check your pass rules)`)}`,
     'END:VALARM',
     'END:VEVENT',
@@ -84,7 +85,8 @@ function groundEvent(trip: Trip, leg: GroundLeg, stamp: string, seq: number): st
   return out;
 }
 
-export function buildTripIcs(trip: Trip, now: number): string {
+/** `listingHours`: how long before each flight the listing reminder fires (Settings, default 48). */
+export function buildTripIcs(trip: Trip, now: number, listingHours = DEFAULT_LISTING_HOURS): string {
   const stamp = icsUtc(now);
   const seq = Math.max(0, Math.floor(now / 1000) - SEQUENCE_EPOCH_S);
   const lines = [
@@ -97,7 +99,7 @@ export function buildTripIcs(trip: Trip, now: number): string {
   ];
   for (const leg of trip.legs) {
     if (SKIP.includes(leg.status)) continue;
-    if (leg.kind === 'flight') for (const ref of leg.refs) lines.push(...flightEvent(trip, ref, stamp, seq));
+    if (leg.kind === 'flight') for (const ref of leg.refs) lines.push(...flightEvent(trip, ref, stamp, seq, listingHours));
     else lines.push(...groundEvent(trip, leg, stamp, seq));
   }
   lines.push('END:VCALENDAR');

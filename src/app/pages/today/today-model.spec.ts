@@ -307,6 +307,8 @@ describe('today model: ground legs and days between flights (Seville fixture)', 
     expect(later.next?.title).toBe('Next: AC813 home · Tue Oct 13 11:25 LIS time');
     expect(later.next?.detail).toMatch(/^Not listed yet · leaves in /);
     expect(later.homeBy.countdown).toBe('tomorrow');
+    expect(later.next?.listing).toMatchObject({ label: 'Listing open', open: true });
+    expect(midTripView([trip], toUtcMs('2026-10-12', '20:00', 'Europe/Madrid'), '24h', null, 12)!.next?.listing).toMatchObject({ open: false });
     expect(midTripView([trip], MID_TRIP, '24h', 'nope')).toBeNull();
   });
 

@@ -27,6 +27,12 @@ describe('buildTripIcs', () => {
     expect(seq(NOW)).toBeLessThan(2 ** 31);
   });
 
+  it('uses the listing hours setting for the reminder', () => {
+    const ics = buildTripIcs(sevilleTrip(), NOW, 72);
+    expect(ics.match(/TRIGGER:-PT72H/g)).toHaveLength(2);
+    expect(ics).not.toContain('PT48H');
+  });
+
   it('exports ground legs: all-day when estimated, timed when saved; no alternates', () => {
     const ics = unfold(buildTripIcs(sevilleTrip(), NOW));
     expect(ics).toContain('SUMMARY:Estimated · Madrid → Seville train');

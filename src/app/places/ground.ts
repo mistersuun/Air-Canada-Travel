@@ -12,6 +12,7 @@ import { hubDisplayName } from '../ui/format';
 import { findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
 import { MINUTE_MS, toUtcMs, addDays, hhmmToMin, minToHhmm, todayKey, utcToLocal } from '../utils/time';
+import { fastestToCityMin } from './airport-info';
 import { CORRIDORS, Corridor, corridorTransferMin } from './corridors';
 import {
   DAY_KIND_LABEL, Departure, TimetableDir, dayKind, departuresOn, groundTimetables, nextDeparture, timetableFor,
@@ -206,12 +207,15 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKe
   if (islandOf(from) !== islandOf(to)) return unknownGround();
 
   const roadKm = greatCircleKm(from, to) * ROAD_FACTOR;
-  const exitMin = isAirport(from) ? HEURISTIC_EXIT_MIN : 0;
+  // A known airport-to-city time (airport-info.json) replaces the flat exit allowance.
+  const typical = isAirport(from) ? fastestToCityMin(('code' in from ? from.code : undefined) ?? null) : null;
+  const exitMin = isAirport(from) ? typical ?? HEURISTIC_EXIT_MIN : 0;
+  const exitLabel = typical ? 'Airport to city centre (typical)' : 'Passport and exit';
   if (roadKm < CAR_MAX_KM) {
     const ride = round5((roadKm / CAR_KMH) * 60);
     return {
       mode: 'car', label: `Taxi or transit about ${aboutDuration(ride)}`, rideMin: ride, exitMin,
-      exitLabel: exitMin ? 'Passport and exit' : '', totalMin: exitMin + ride, frequency: null, lastDepLocal: null,
+      exitLabel: exitMin ? exitLabel : '', totalMin: exitMin + ride, frequency: null, lastDepLocal: null,
       shortFlightToo: false, source: 'heuristic', provenance: 'estimated',
     };
   }
@@ -221,7 +225,7 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKe
     mode: 'bus',
     label: `Bus or train about ${aboutDuration(ride)}${far ? ', or a short flight' : ''}`,
     rideMin: ride, exitMin,
-    exitLabel: exitMin ? 'Passport, exit, get to the station' : '',
+    exitLabel: exitMin ? (typical ? exitLabel : 'Passport, exit, get to the station') : '',
     totalMin: exitMin + ride, frequency: null, lastDepLocal: null,
     shortFlightToo: far, source: 'heuristic', provenance: 'estimated',
   };

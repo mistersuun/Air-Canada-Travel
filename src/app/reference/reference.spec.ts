@@ -4,8 +4,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { sevilleTrip } from '../trips/testing/seville-fixture';
 import { buildPrepChecklist, referenceItems } from '../places/prep';
 import {
-  decodeAdvisories, decodeFx, decodeHolidays, fxLine, holidayName, holidaysBetween, upcomingHolidays,
+  convertAmount, decodeAdvisories, decodeFx, decodeHolidays, fxLine, fxRate, holidayName, parseAmount, holidaysBetween, upcomingHolidays,
 } from './reference';
+import { AIRPORT_INFO_FETCH, setAirportInfo } from '../places/airport-info';
 import { REFERENCE_FETCH, ReferenceService, type ReferenceFile } from './reference.service';
 import { DestReferenceComponent } from './dest-reference.component';
 
@@ -183,12 +184,85 @@ describe('DestReferenceComponent', () => {
     expect(el.querySelector('[data-holiday]')!.textContent).toContain('Nov 2 · Day of the Dead (Día de Muertos) · Public holiday');
   });
 
+  it('taps the exchange-rate line open to a CAD ↔ local converter, offline', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [{ provide: REFERENCE_FETCH, useValue: async (n: ReferenceFile) => (n === 'fx' ? FX : null) }] });
+    const f = TestBed.createComponent(DestReferenceComponent);
+    f.componentRef.setInput('iso2', 'MX');
+    f.componentRef.setInput('todayKey', '2026-10-06');
+    await f.whenStable();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-converter]')).toBeNull();
+    (el.querySelector('[data-fx-toggle]') as HTMLButtonElement).click();
+    f.detectChanges();
+    const cad = el.querySelector('[data-conv-cad]') as HTMLInputElement;
+    const local = el.querySelector('[data-conv-local]') as HTMLInputElement;
+    cad.value = '10';
+    cad.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    expect(local.value).toBe('131');
+    local.value = '262';
+    local.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    expect(cad.value).toBe('20');
+    cad.value = 'abc';
+    cad.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    expect(local.value).toBe('');
+  });
+
+  it('shows the Airport block from airport-info.json, with its review date and source', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [
+      { provide: REFERENCE_FETCH, useValue: async () => null },
+      { provide: AIRPORT_INFO_FETCH, useValue: async () => JSON.parse(readFileSync('public/data/airport-info.json', 'utf8')) },
+    ] });
+    const f = TestBed.createComponent(DestReferenceComponent);
+    f.componentRef.setInput('iso2', 'GB');
+    f.componentRef.setInput('airportCode', 'LHR');
+    f.componentRef.setInput('todayKey', '2026-10-06');
+    await f.whenStable();
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-terminal]')!.textContent).toContain('Terminal 2');
+    expect(el.querySelectorAll('[data-to-city]')).toHaveLength(3);
+    expect(el.querySelector('[data-airport]')!.textContent).toContain('reviewed 2026-10');
+    expect(el.querySelector('[data-lounge]')).toBeNull();
+    setAirportInfo(null);
+  });
+
   it('level 0 is quiet; a missing country or file hides the line', async () => {
     const el = await render('ES', { advisories: ADV });
     expect(el.querySelector('[data-advisory]')!.classList.contains('is-quiet')).toBe(true);
     expect(el.querySelector('[data-fx]')).toBeNull();
     const none = await render('ES', {});
     expect(none.textContent!.trim()).toBe('');
+  });
+});
+
+describe('amount converter', () => {
+  const fx = decodeFx({ date: '2026-10-12', base: 'CAD', rates: { EUR: 0.5, JPY: 100 } })!;
+  it('finds usable rates only', () => {
+    expect(fxRate('EUR', fx)).toBe(0.5);
+    expect(fxRate('CAD', fx)).toBeNull();
+    expect(fxRate('XXX', fx)).toBeNull();
+    expect(fxRate(null, fx)).toBeNull();
+  });
+  it('parses typed amounts', () => {
+    expect(parseAmount('12,5')).toBe(12.5);
+    expect(parseAmount(' 1 200 ')).toBe(1200);
+    expect(parseAmount('')).toBeNull();
+    expect(parseAmount('abc')).toBeNull();
+    expect(parseAmount('-3')).toBeNull();
+    expect(parseAmount('.')).toBeNull();
+  });
+  it('converts both ways', () => {
+    expect(convertAmount('10', 0.5, true)).toBe('5');
+    expect(convertAmount('5', 0.5, false)).toBe('10');
+    expect(convertAmount('10', 100, true)).toBe('1000');
+    expect(convertAmount('1', 0.62712, true)).toBe('0.63');
+    expect(convertAmount('', 0.5, true)).toBe('');
   });
 });
 

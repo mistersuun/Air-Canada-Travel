@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { currencyCode } from '../pages/destination/currency';
+import { AirportInfoService, airportInfo, cityOptionLabel, terminalLabel } from '../places/airport-info';
 import {
-  advisoryQuiet, advisoryUpdated, fxLine, holidayKey, holidayName, holidayNote, shortDate, upcomingHolidays,
+  advisoryQuiet, advisoryUpdated, convertAmount, fxLine, fxRate, holidayKey, holidayName, holidayNote, shortDate, upcomingHolidays,
 } from './reference';
 import { ReferenceService } from './reference.service';
 
@@ -25,7 +26,31 @@ import { ReferenceService } from './reference.service';
       </p>
     }
     @if (fx(); as f) {
-      <p class="r tn" data-fx>{{ f.text }} · {{ f.source }}</p>
+      <p class="r tn" data-fx>
+        <button type="button" class="fxb" data-fx-toggle [attr.aria-expanded]="convOpen()" aria-controls="fx-conv" (click)="convOpen.set(!convOpen())">
+          {{ f.text }} · {{ f.source }}<span class="fxb__h"> · {{ convOpen() ? 'hide converter' : 'convert' }}</span>
+        </button>
+      </p>
+      @if (convOpen()) {
+        <div class="conv" id="fx-conv" data-converter role="group" aria-label="Currency converter">
+          <label class="conv__f"><span>CAD</span>
+            <input type="text" inputmode="decimal" autocomplete="off" data-conv-cad [value]="cad()" (input)="onCad($any($event.target).value)"></label>
+          <span class="conv__eq" aria-hidden="true">⇄</span>
+          <label class="conv__f"><span>{{ code() }}</span>
+            <input type="text" inputmode="decimal" autocomplete="off" data-conv-local [value]="local()" (input)="onLocal($any($event.target).value)"></label>
+        </div>
+      }
+    }
+    @if (airport(); as ap) {
+      <div class="ap" data-airport>
+        <p class="r ap__h"><b>Airport</b> · {{ airportCode() }}</p>
+        @if (terminal(); as t) { <p class="r" data-terminal>Air Canada: {{ t }}</p> }
+        @if (ap.mapleLeafLounge !== null) { <p class="r" data-lounge>Maple Leaf Lounge: {{ ap.mapleLeafLounge ? 'yes' : 'no' }}</p> }
+        @for (o of ap.toCity; track o.note) {
+          <p class="r tn" data-to-city>{{ label(o) }}</p>
+        }
+        <p class="r r--src">Typical times, not a timetable · reviewed {{ ap.reviewed }} · {{ ap.source }}</p>
+      </div>
     }
     @for (h of holidays(); track key(h)) {
       <p class="r tn" data-holiday><b>{{ short(h.date) }}</b> · {{ name(h) }} · {{ note(h) }}</p>
@@ -39,6 +64,18 @@ import { ReferenceService } from './reference.service';
     .r--adv { color: var(--ink); font-weight: 600; }
     .r--adv.is-quiet { color: var(--ink-3); font-weight: 400; font-size: 12.5px; }
     a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    .fxb { font: inherit; color: inherit; text-align: left; padding: 0; min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; }
+    .fxb__h { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; white-space: pre; }
+    .conv { display: flex; align-items: flex-end; gap: 8px; margin: 0 0 6px; }
+    .conv__f { display: grid; gap: 2px; flex: 1; min-width: 0; font-size: 12px; font-weight: 650; color: var(--ink-2); }
+    .conv__f input {
+      min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 12px; border-radius: 12px; font: inherit; font-size: 16px;
+      color: var(--ink); background: var(--surface); border: 1px solid var(--hair);
+    }
+    .conv__eq { flex: none; min-height: 44px; display: grid; place-items: center; color: var(--ink-3); }
+    .ap { display: grid; gap: 4px; margin-top: 6px; }
+    .ap__h b { color: var(--ink); font-weight: 650; }
+    .r--src { font-size: 12px; color: var(--ink-3); }
   `],
 })
 export class DestReferenceComponent {
@@ -47,9 +84,35 @@ export class DestReferenceComponent {
   readonly iso2 = input<string | null | undefined>(null);
   /** Today at the destination (yyyy-mm-dd). */
   readonly todayKey = input.required<string>();
+  /** The destination's airport code, for the Airport block. */
+  readonly airportCode = input<string | null | undefined>(null);
+
+  private readonly airports = inject(AirportInfoService);
+  protected readonly airport = computed(() => airportInfo(this.airportCode()));
+  protected readonly terminal = computed(() => { const a = this.airport(); return a ? terminalLabel(a) : ''; });
+  protected readonly label = cityOptionLabel;
+
+  protected readonly convOpen = signal(false);
+  protected readonly cad = signal('');
+  protected readonly local = signal('');
+  protected readonly code = computed(() => currencyCode(this.iso2()) ?? '');
+  private readonly rate = computed(() => fxRate(currencyCode(this.iso2()), this.ref.fx()));
 
   constructor() {
     void this.ref.ensureLoaded();
+    void this.airports.ensureLoaded();
+  }
+
+  protected onCad(v: string): void {
+    this.cad.set(v);
+    const r = this.rate();
+    if (r) this.local.set(convertAmount(v, r, true));
+  }
+
+  protected onLocal(v: string): void {
+    this.local.set(v);
+    const r = this.rate();
+    if (r) this.cad.set(convertAmount(v, r, false));
   }
 
   protected readonly advisory = computed(() => this.ref.advisories()?.get((this.iso2() ?? '').toUpperCase()) ?? null);

@@ -92,6 +92,33 @@ export function fxLine(code: string | null, fx: FxTable | null): { text: string;
   return { text: pair, source: `ECB, ${shortDate(fx.date, fx.date)}` };
 }
 
+/** The rate (units of `code` per 1 CAD) when a usable one exists, else null. */
+export function fxRate(code: string | null, fx: FxTable | null): number | null {
+  const rate = code && fx ? fx.rates.get(code) : undefined;
+  return rate && rate > 0 && code !== 'CAD' ? rate : null;
+}
+
+/** Parse what a person typed into an amount ('12.5', '12,5', ' 1 200 '); null when it is not a non-negative number. */
+export function parseAmount(text: string): number | null {
+  const t = text.trim().replace(/\s/g, '').replace(',', '.');
+  if (!t || !/^\d*\.?\d*$/.test(t) || t === '.') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** An amount for an input: two decimals under 100, else whole units; '' for null. */
+export function amountText(n: number | null): string {
+  if (n === null) return '';
+  const r = n >= 100 ? Math.round(n) : Math.round(n * 100) / 100;
+  return String(r);
+}
+
+/** CAD to local when `fromCad`, else local to CAD, at `rate` local units per CAD. */
+export function convertAmount(text: string, rate: number, fromCad: boolean): string {
+  const n = parseAmount(text);
+  return amountText(n === null ? null : fromCad ? n * rate : n / rate);
+}
+
 /** Whether a level is shown quietly: normal precautions and no regional advisory. */
 export function advisoryQuiet(a: Advisory): boolean {
   return a.level === 0 && !a.regional;

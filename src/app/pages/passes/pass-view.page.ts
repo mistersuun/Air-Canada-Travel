@@ -45,7 +45,7 @@ interface Slide {
  */
 export function fitSvg(svg: string): string {
   // The wrapper is the labelled role=img; the SVG itself is hidden from assistive tech.
-  return svg.replace(/<svg\b/, '<svg preserveAspectRatio="none" aria-hidden="true" focusable="false"');
+  return svg.replace(/<svg\b/, '<svg preserveAspectRatio="none" aria-hidden="true" focusable="false"'); // i18n-ignore
 }
 
 /** 'Montréal' style names for the route header (the code when unknown). */
@@ -347,9 +347,9 @@ export class PassViewPage {
   private readonly swapper = inject(PassSwapService);
 
   protected readonly moveOptions = computed(() => {
-    const t = this.trip();
-    if (!t) return [];
-    return [...flightLegs(t).map(l => ({ id: l.id, label: legOptionLabel(l) })), { id: '', label: t('passes.noLeg') }];
+    const tr = this.trip();
+    if (!tr) return [];
+    return [...flightLegs(tr).map(l => ({ id: l.id, label: legOptionLabel(l) })), { id: '', label: t('passes.noLeg') }];
   });
 
   private lock: { release(): Promise<void> } | null = null;
@@ -513,8 +513,8 @@ export class PassViewPage {
   }
 
   protected async move(p: PassRecord, legId: string): Promise<void> {
-    const t = this.trip();
-    const leg = t ? legById(t, legId || null) : null;
+    const tr = this.trip();
+    const leg = tr ? legById(tr, legId || null) : null;
     const refs = leg?.kind === 'flight' ? leg.refs : [];
     const ri = refs.findIndex(r => r.origin === p.from && r.dest === p.to);
     const err = await this.passes.relink(p.id, leg ? leg.id : null, leg ? Math.max(0, ri) : null, leg ? 'manual' : 'none');

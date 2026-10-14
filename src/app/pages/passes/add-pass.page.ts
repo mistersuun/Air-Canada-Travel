@@ -120,7 +120,7 @@ interface Decoded { drafts: PassDraft[]; images: Map<number, Blob | null>; sourc
 
         <div class="ui-card ap__priv">
           <app-icon name="lock" [size]="14" [strokeWidth]="2.2" />
-          <span>{{ priv()[0] }}<b>{{ priv()[1] }}</b>{{ priv()[2] }}</span>
+          <span>{{ priv()[0] }}<b>{{ t('passes.add.privacy.strong') }}</b>{{ priv()[1] }}</span>
         </div>
         <p class="ui-sub ap__any">{{ t('passes.add.anyAirline') }}</p>
       } @else {
@@ -548,11 +548,11 @@ export class AddPassPage {
   /** "Save the image as a file on this leg": FilesService, scoped to the leg the page came from (else the trip). */
   protected async saveAsFile(): Promise<void> {
     const file = this.lastFile();
-    const t = this.trip();
-    if (!file || !t) return;
+    const tr = this.trip();
+    if (!file || !tr) return;
     this.busy.set(true);
     const leg = this.hintLeg();
-    const res = await this.files.addFile(t.id, leg ? { kind: 'leg', legId: leg } : { kind: 'trip' }, file);
+    const res = await this.files.addFile(tr.id, leg ? { kind: 'leg', legId: leg } : { kind: 'trip' }, file);
     this.busy.set(false);
     if ('error' in res) {
       this.fileError.set(FILES_ERROR_TEXT[res.error]);
@@ -603,10 +603,10 @@ export class AddPassPage {
   }
 
   protected options(d: PassDraft): { id: string; label: string; fits: boolean }[] {
-    const t = this.trip();
-    if (!t) return [];
+    const tr = this.trip();
+    if (!tr) return [];
     const fits = new Set(d.candidates.map(c => c.legId));
-    const legs = flightLegs(t).map(l => ({ id: l.id, label: legOptionLabel(l), fits: fits.has(l.id) }));
+    const legs = flightLegs(tr).map(l => ({ id: l.id, label: legOptionLabel(l), fits: fits.has(l.id) }));
     // Candidates first (in match order), then the other flight legs.
     legs.sort((a, b) => Number(b.fits) - Number(a.fits));
     return [...legs, { id: '', label: t('passes.noLeg'), fits: false }];

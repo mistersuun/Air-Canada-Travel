@@ -28,6 +28,7 @@ import {
 } from './flight-model';
 import { historyFor, recordLine } from '../../trips/engine/track-record';
 import { LiveStatusComponent } from '../../live/live-status.component';
+import { FunFactCardComponent } from './fun-fact-card.component';
 import { FactsCardComponent } from './facts-card.component';
 import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
@@ -65,7 +66,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
-    FactsCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
+    FactsCardComponent, FunFactCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -144,6 +145,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             }
             @for (p of prompts(); track p.key) { <app-outcome-prompt [prompt]="p" /> }
           </div>
+          @if (ticket()) { <app-fun-fact-card class="ff" [code]="dest()" [hub]="hub()" [nowMs]="state.nowMs()" [city]="destCity()" /> }
         </div>
 
         <div class="right">
@@ -238,6 +240,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
     .more { margin-top: 10px; font-size: 13px; }
     .ret { padding: 16px; }
     .adds { display: grid; gap: 14px; margin-top: 18px; }
+    .ff { margin-top: 14px; }
     .pick { display: grid; gap: 8px; }
     .foot { margin: 22px 0 0; font-size: 12px; text-align: center; }
 

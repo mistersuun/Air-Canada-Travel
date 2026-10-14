@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { EventsCardComponent } from '../../events/events-card.component';
-import { RouterLink } from '@angular/router';
+import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { ClimateService } from '../../recs/climate.service';
-import { climateFor, typicalText } from '../../recs/climate';
+import { climateFor } from '../../recs/climate';
 import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { flightPath } from '../../ui/links';
@@ -21,13 +21,15 @@ import {
 @Component({
   selector: 'app-weekend-page',
   standalone: true,
-  imports: [RouterLink, DestRowComponent, ForecastLineComponent, EventsCardComponent],
+  imports: [IconComponent, DestRowComponent, ForecastLineComponent, EventsCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page wk">
       <header class="hd">
-        <a class="ui-link back" routerLink="/" [queryParams]="state.globalParams()">‹ Explore</a>
-        <h1 class="ui-h1 ttl">Weekend finder</h1>
+        <div class="top">
+          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <h1 class="ui-h1 ttl">Weekend finder</h1>
+        </div>
         <p class="ui-sub">Where can you go from {{ state.hub() }} and still be home on time?</p>
       </header>
 
@@ -72,15 +74,16 @@ import {
       } @else {
         <div class="ui-card list">
           @for (r of shown(); track r.o.code) {
-            <app-dest-row [code]="r.o.code" [small]="r.o.code" [meta]="r.meta" [link]="r.link" [queryParams]="r.query">
+            <app-dest-row [code]="r.o.code" [small]="r.o.code" [meta]="r.meta" wrapMeta [link]="r.link" [queryParams]="r.query">
               <span trailing class="wx">
-                @if (r.weather) { <span class="ui-tag ui-tag--neutral tn">{{ r.weather }}</span> }
+                @if (r.weather) { <span class="ui-tag ui-tag--neutral tn" [attr.aria-label]="r.weatherLabel">{{ r.weather }}</span> }
                 <app-forecast-line [code]="r.o.code" [dateKey]="r.arrKey" [plain]="true" />
               </span>
             </app-dest-row>
             <div class="evt">
-              <button type="button" class="ui-link evt__b" [attr.aria-expanded]="events() === r.o.code" [attr.aria-controls]="'evt-' + r.o.code"
-                      attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on</button>
+              <button type="button" class="evt__b" [attr.aria-expanded]="events() === r.o.code" [attr.aria-controls]="'evt-' + r.o.code"
+                      attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on in {{ cityOf(r.o.code) }}
+                <app-icon class="evt__c" [class.open]="events() === r.o.code" name="chevron-down" [size]="14" /></button>
               <div [id]="'evt-' + r.o.code">
                 @if (events() === r.o.code) { <app-events-card verbose [code]="r.o.code" [from]="r.arrKey" [to]="r.o.retKey" /> }
               </div>
@@ -90,18 +93,23 @@ import {
         @if (rows().length > shown().length) {
           <button type="button" class="ui-link more" (click)="all.set(true)">Show all {{ rows().length }}</button>
         }
-        <p class="ui-sub foot">Tries home are published flights that land by your deadline, counted from the schedules. Standby, so not guaranteed.</p>
+        <p class="ui-sub foot">A try home is a published flight that lands by your deadline, counted from the schedules. You would fly standby, so none of them is guaranteed.</p>
       }
     </div>
   `,
   styles: [`
     :host { display: block; }
     .hd { display: flex; flex-direction: column; gap: 6px; }
-    .back { align-self: flex-start; }
+    .top { display: flex; align-items: center; gap: 12px; }
     .ttl { font-size: 30px; }
-    .chips { display: flex; gap: 8px; margin-top: 16px; }
+    /* Fades the right edge (and leaves room to scroll the last chip clear of it) to show the row scrolls. */
+    .chips {
+      display: flex; gap: 8px; margin-top: 16px; padding-right: 32px;
+      -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+      mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent);
+    }
     .chip {
-      flex: none; padding: 8px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: var(--ink);
+      flex: none; min-height: 44px; padding: 8px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: var(--ink);
       background: var(--fill); border: 1px solid transparent;
     }
     .chip[aria-pressed='true'] { background: var(--ink); color: var(--bg); }
@@ -114,8 +122,15 @@ import {
     .sum { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
     .list { padding: 4px 14px; margin-top: 12px; }
     .note { padding: 18px; margin-top: 12px; font-size: 14px; color: var(--ink-2); }
-    .evt { padding: 0 0 8px 56px; }
-    .evt__b { font-size: 13px; padding: 2px 0; }
+    .evt { padding: 0 0 6px 58px; }
+    .evt__b {
+      display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin-top: -8px;
+      font-size: 12.5px; font-weight: 500; color: var(--ink-3); background: none; border: 0; padding: 0 8px 0 0; cursor: pointer;
+    }
+    .evt__c { display: inline-flex; transition: transform var(--dur-fast) var(--ease-out); }
+    .evt__c.open { transform: rotate(180deg); }
+    @media (prefers-reduced-motion: reduce) { .evt__c { transition: none; } }
+    .evt__b:hover { color: var(--blue); }
     .more { margin-top: 10px; padding: 6px 4px; }
     .foot { margin-top: 12px; padding: 0 4px; }
     @media (min-width: 720px) {
@@ -162,8 +177,10 @@ export class WeekendPage {
       const c = climateFor(index, o.code, month);
       return {
         o,
-        meta: `${findDestination(o.code)?.city ?? o.code} · ${weekendMeta(o, this.state.showConnections())}`,
-        weather: c ? typicalText(c) : null,
+        meta: weekendMeta(o, this.state.showConnections()),
+        // The month-only text ('Oct 19° / 12°') read as a date; say it is typical weather.
+        weather: c ? `Typical ${c.tmaxC}° / ${c.tminC}°` : null,
+        weatherLabel: c ? `Typical weather: high ${c.tmaxC}, low ${c.tminC} degrees` : null,
         arrKey: first.arrDateKey,
         link: flightPath(o.code, first.dateKey, first),
         query: { ...globals, ret: o.retKey },
@@ -180,6 +197,10 @@ export class WeekendPage {
     if (p === 'custom' && !this.custom()) this.custom.set(this.window());
     this.preset.set(p);
     this.all.set(false);
+  }
+
+  protected back(): void {
+    this.state.goBack(['/']);
   }
 
   protected cityOf(code: string): string {

@@ -161,12 +161,16 @@ export function weekendOptions(input: WeekendInput): WeekendOption[] {
   return out.sort(compareWeekend);
 }
 
-/** '3 out · 5 tries home · ~40h there'; with connections on and some tries needing one, '3 out · 2 nonstop tries · 5 with connections · ~40h there'. */
+/**
+ * '~40h there · 5 tries home · 3 out': time on the ground first, then the tries
+ * home; with connections on and some tries needing one, '~40h there · 2 nonstop
+ * tries · 5 with connections · 3 out'.
+ */
 export function weekendMeta(o: WeekendOption, showConnections = false): string {
   const t = o.tries.length;
-  const tail = `~${o.hoursThere}h there`;
-  if (showConnections && o.directTries < t) return `${o.out.length} out · ${o.directTries} nonstop ${o.directTries === 1 ? 'try' : 'tries'} · ${t} with connections · ${tail}`;
-  return `${o.out.length} out · ${t} ${t === 1 ? 'try' : 'tries'} home · ${tail}`;
+  const head = `~${o.hoursThere}h there`;
+  if (showConnections && o.directTries < t) return `${head} · ${o.directTries} nonstop ${o.directTries === 1 ? 'try' : 'tries'} · ${t} with connections · ${o.out.length} out`;
+  return `${head} · ${t} ${t === 1 ? 'try' : 'tries'} home · ${o.out.length} out`;
 }
 
 /** Why a window cannot be searched, or null. Dates and times are hub-local. */

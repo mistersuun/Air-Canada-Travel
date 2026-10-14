@@ -53,6 +53,8 @@ describe('CalendarPage', () => {
     expect([...lists[0].querySelectorAll('app-dest-row')].map(r => r.querySelector('small')?.textContent)).toEqual(['LHR']);
     expect(lists[0].querySelector('a')?.getAttribute('href')).toContain('/calendar/LHR');
     expect([...lists[1].querySelectorAll('small')].map(s => s.textContent)).toEqual(['ATH']);
+    expect([...lists[1].querySelectorAll('.az__h')].map(h => h.textContent)).toEqual(['A']);   // grouped by letter
+    expect(el.querySelector('[data-az]')).toBeNull();                                          // jump row only on the long list
     cmp.query.set('zzz');
     await stable();
     expect(el.querySelector('.ch__none')?.textContent).toContain('zzz');

@@ -18,12 +18,15 @@ import { factsView } from './flight-model';
   imports: [IconComponent, ProvenanceTagComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (!view().empty || records().length || view().holiday) {
     <section class="ui-card fc" aria-labelledby="fc-h" data-facts>
       <div class="fc__h">
         <h2 class="ui-label" id="fc-h">This day on this route</h2>
         <app-provenance-tag [value]="view().covered ? 'scheduled' : 'unknown'" />
       </div>
-      @if (view().covered) {
+      @if (view().empty) {
+        <p class="fc__unk" data-empty>No departures this day in our schedule data.</p>
+      } @else if (view().covered) {
         <dl class="ui-ess tn fc__ess">
           @for (t of view().tiles; track t.label) {
             <div><dt>{{ t.label }}</dt><dd>{{ t.value }}</dd></div>
@@ -42,6 +45,7 @@ import { factsView } from './flight-model';
         <p class="fc__note" data-holiday><app-icon name="calendar" [size]="16" /><span>{{ h }}</span></p>
       }
     </section>
+    }
   `,
   styles: [`
     :host { display: block; }

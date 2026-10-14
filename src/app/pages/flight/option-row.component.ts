@@ -49,7 +49,9 @@ import type { OptionRow } from './flight-model';
     .row:focus-visible { outline-offset: -2px; border-radius: 12px; }
     .th { width: 44px; height: 44px; flex: none; border-radius: var(--radius-thumb, 12px); }
     .tx { flex: 1; min-width: 0; display: block; }
-    .nm, .tm { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nm { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Times and flight numbers may take a second line rather than being cut off. */
+    .tm { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
     .nm { font-weight: 600; font-size: 15px; }
     .nm small { font-weight: 500; color: var(--ink-3); font-size: 12px; margin-left: 6px; }
     .tm { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }

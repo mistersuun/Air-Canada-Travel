@@ -4,6 +4,7 @@ import { findDestination } from '../utils/airports';
 import { isDateKey, formatKey } from '../utils/time';
 import { currentDestinationCode, isDestinationCode } from '../state/prefs.service';
 import { TripsService } from '../trips/trips.service';
+import { AppStateService } from '../state/app-state.service';
 
 /** Rebuild the current URL with `code` swapped for its canonical form. */
 function withCode(router: Router, route: ActivatedRouteSnapshot, code: string): RedirectCommand {
@@ -64,6 +65,15 @@ export const flightTitle: ResolveFn<string> = route => {
   const date = route.paramMap.get('date');
   const day = isDateKey(date) ? formatKey(date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
   return [d?.city ?? 'Flight', day, 'Routes'].filter(Boolean).join(' · ');
+};
+
+/**
+ * Unknown URLs: say so, then go Home. (Old shared links with ?dest= are
+ * handled on the Home route itself, so they never reach here.)
+ */
+export const unknownPage: CanActivateFn = route => {
+  if (!route.queryParams['dest']) inject(AppStateService).flash("That page doesn't exist");
+  return new RedirectCommand(inject(Router).createUrlTree(['/'], { queryParams: route.queryParams }), { replaceUrl: true });
 };
 
 /** `:id` must be a trip on this device; otherwise go to the Trips list. */

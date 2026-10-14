@@ -86,6 +86,12 @@ import { PhotoViewerComponent } from './photo-viewer.component';
               <div class="tf__day">
                 <h2 class="ui-label tn" [id]="secId(s.key) + '-h'">{{ s.title }}</h2>
                 @if (s.aside) { <span class="tf__muted">{{ s.aside }}</span> }
+                @if (!(s.passes.length || s.items.length || s.photos.length) && s.emptyLeg; as l) {
+                  <!-- A leg with nothing yet gets a small Add in its heading, not a full-width card per leg. -->
+                  <button type="button" class="tf__add" data-empty-leg [attr.aria-label]="'Add a pass or file for ' + s.title"
+                          (click)="openAdd({ kind: 'leg', legId: l.id })" [disabled]="readOnly()">
+                    <svg class="plus" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add</button>
+                }
               </div>
 
               @if (s.passes.length || s.items.length || s.photos.length) {
@@ -131,10 +137,6 @@ import { PhotoViewerComponent } from './photo-viewer.component';
                     </div>
                   }
                 </div>
-              } @else if (s.emptyLeg; as l) {
-                <button type="button" class="ui-card tf__empty" data-empty-leg (click)="openAdd({ kind: 'leg', legId: l.id })" [disabled]="readOnly()">
-                  <svg class="plus" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add a pass or file for this leg
-                </button>
               } @else if (s.key === 'trip') {
                 <button type="button" class="ui-card tf__empty" data-empty-trip (click)="openAdd({ kind: 'trip' })" [disabled]="readOnly()">
                   <svg class="plus" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add a confirmation, ticket, note or address
@@ -197,6 +199,11 @@ import { PhotoViewerComponent } from './photo-viewer.component';
     .switch:checked::after { transform: translateX(20px); }
     .tf__sec { scroll-margin-top: 16px; }
     .tf__day { margin: 20px 4px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .tf__add {
+      display: inline-flex; align-items: center; gap: 5px; min-height: 44px; margin: -14px 0 -14px auto; padding: 0 6px;
+      font-size: 13px; font-weight: 600; color: var(--blue);
+    }
+    .tf__add:disabled { opacity: .55; cursor: default; }
     .tf__day h2 { margin: 0; font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tf__card { margin-top: 8px; padding: 2px 14px; }
     .row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--hair); min-width: 0; color: var(--ink); text-decoration: none; }

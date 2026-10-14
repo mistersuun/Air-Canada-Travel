@@ -123,7 +123,7 @@ import { formatKey } from '../../utils/time';
   styles: [`
     :host { display: block; }
     .lb { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; }
-    .lb__head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .lb__head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 12px; margin-bottom: 4px; }
     .lb__head h1 { margin: 0; text-align: center; }
     .lb__lbl { margin: 22px 4px 8px; font-size: 10.5px; }
     .lb__empty { padding: 16px; margin-top: 12px; display: grid; gap: 4px; }

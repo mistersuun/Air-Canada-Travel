@@ -37,7 +37,10 @@ const TABS: readonly SegOption[] = [
   template: `
     <div class="ui-page sv">
       <header class="hd">
-        <h1 class="ui-h1 ttl">Saved @if (count()) {<span class="ct tn" aria-label="{{ count() }} saved">{{ count() }}</span>}</h1>
+        <div class="top">
+          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <h1 class="ui-h1 ttl">Saved @if (count()) {<span class="ct tn" aria-label="{{ count() }} saved">{{ count() }}</span>}</h1>
+        </div>
         @if (count()) {
           <app-seg class="seg" stretch [options]="tabs" [value]="view()" (valueChange)="setTab($event)" ariaLabel="Saved view" />
         }
@@ -105,6 +108,7 @@ const TABS: readonly SegOption[] = [
   styles: [`
     :host { display: block; }
     .hd { display: flex; flex-direction: column; gap: 12px; }
+    .top { display: flex; align-items: center; gap: 12px; }
     .ttl { font-size: 30px; display: flex; align-items: baseline; gap: 10px; }
     .ct { font-size: 17px; font-weight: 600; color: var(--ink-3); letter-spacing: 0; }
     .seg { width: 100%; }
@@ -151,6 +155,11 @@ const TABS: readonly SegOption[] = [
 export class SavedPage {
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
+
+  /** Saved is reached from Trips or Home, so back falls to Trips. */
+  protected back(): void {
+    this.state.goBack(['/trips']);
+  }
 
   /** ?tab= (bound by the router): 'watching', else Upcoming. */
   readonly tab = input<string>();

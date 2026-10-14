@@ -290,10 +290,10 @@ img, svg { display: block; }
   }
 }
 
-// 40px circle button. On photos by default; --glass off photos.
+// 44px circle button (the minimum tap size). On photos by default; --glass off photos.
 .ui-circ {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border-radius: 50%;
   display: inline-grid;
@@ -348,7 +348,11 @@ img, svg { display: block; }
   &--red { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red-ink); }
   &--neutral { background: var(--fill); color: var(--ink-2); }
 }
-button.ui-tag { cursor: pointer; }
+button.ui-tag { cursor: pointer; position: relative; }
+button.ui-tag::after { content: ''; position: absolute; inset: -9px -3px; }   // 44px tap area
+// Text-link buttons ("Show more", "Show all"): a 44px tap area without moving the layout.
+button.ui-link { position: relative; }
+button.ui-link::after { content: ''; position: absolute; inset: -12px -6px; }
 
 // ---- Buttons ----------------------------------------------------------------------
 .ui-btn {
@@ -372,7 +376,8 @@ button.ui-tag { cursor: pointer; }
   &--dark { background: var(--ink); color: var(--bg); }
   &--ghost { background: var(--fill); color: var(--ink); }
   &--block { display: flex; width: 100%; }
-  &--sm { padding: 9px 14px; font-size: 13.5px; border-radius: 12px; }
+  // Looks small, taps 44px tall: the pseudo-element extends the hit area.
+  &--sm { position: relative; padding: 9px 14px; font-size: 13.5px; border-radius: 12px; &::after { content: ''; position: absolute; inset: -5px 0; } }
 }
 
 // ---- Search field ---------------------------------------------------------------------
@@ -405,6 +410,7 @@ button.ui-tag { cursor: pointer; }
   &:focus-within { box-shadow: 0 0 0 2px var(--blue); }
   .f {
     position: relative;
+    &::after { content: ''; position: absolute; inset: -3px; }   // 44px tap area
     margin-left: auto;
     flex: none;
     width: 38px;

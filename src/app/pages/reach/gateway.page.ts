@@ -21,6 +21,7 @@ import {
   readReachParams, reachQueryParams, segmentLine, startTripFromGateway,
 } from './reach-model';
 import { reachPlace } from './reach-place';
+import { reachTitle } from './reach-title';
 
 /**
  * One gateway door to door (/reach/:place/:code, mockup g1 bottom): the
@@ -132,9 +133,12 @@ import { reachPlace } from './reach-place';
               </section>
 
               <div class="ui-card card acts">
-                <button type="button" class="ui-btn ui-btn--ghost" [disabled]="!itin()" (click)="start(true)">{{ found() }}</button>
-                <button type="button" class="ui-btn" [disabled]="!itin()" (click)="start(false)">Start this trip</button>
+                <button type="button" class="ui-btn ui-btn--ghost" [attr.aria-disabled]="!itin() || null" [attr.aria-describedby]="itin() ? null : 'gw-why'" (click)="start(true)">{{ found() }}</button>
+                <button type="button" class="ui-btn" [attr.aria-disabled]="!itin() || null" [attr.aria-describedby]="itin() ? null : 'gw-why'" (click)="start(false)">Start this trip</button>
               </div>
+              @if (!itin()) {
+                <p id="gw-why" class="ui-sub foot">Pick a day with a flight first{{ g.nextDateKey ? ', for example ' + day(g.nextDateKey) : '' }}.</p>
+              }
               <p class="ui-sub foot">Listing stays your own step. Trains and buses here are timetables or estimates until you save the one you found.</p>
             } @else {
               <section class="ui-card card" role="status">
@@ -156,7 +160,7 @@ import { reachPlace } from './reach-place';
       position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 12px); left: 16px; right: 16px;
       display: flex; justify-content: space-between;
     }
-    .hero .ui-circ { width: 44px; height: 44px; }
+    .hero .ui-circ { width: 44px; height: 44px; background: rgba(0, 0, 0, .42); border-color: rgba(255, 255, 255, .45); box-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
     .star[aria-pressed='true'] { color: #FFFFFF; background: var(--red); border-color: color-mix(in srgb, var(--red) 60%, #FFFFFF); }
     .credit {
       position: absolute; z-index: 2; right: 14px; bottom: 44px; max-width: calc(100% - 28px);
@@ -166,6 +170,7 @@ import { reachPlace } from './reach-place';
     .credit a { color: inherit; }
 
     .body {
+      min-height: calc(100dvh - 246px);
       position: relative; z-index: 1; margin-top: -34px; padding: 18px var(--gutter) calc(32px + env(safe-area-inset-bottom));
       border-radius: 30px 30px 0 0; background: var(--glass); border: 1px solid var(--glass-b); border-bottom: 0;
       -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
@@ -210,7 +215,7 @@ import { reachPlace } from './reach-place';
       .gw { max-width: 600px; margin: 0 auto; padding: 24px 0 48px; }
       .hero { height: 300px; border-radius: var(--radius-photo); }
       .hero__bar { top: 16px; }
-      .body { margin-top: -40px; border-radius: var(--radius-card); border-bottom: 1px solid var(--glass-b); padding: 22px 24px 24px; box-shadow: var(--shadow); }
+      .body { min-height: 0; margin-top: -40px; border-radius: var(--radius-card); border-bottom: 1px solid var(--glass-b); padding: 22px 24px 24px; box-shadow: var(--shadow); }
     }
   `],
 })
@@ -222,6 +227,7 @@ export class GatewayPage {
 
   constructor() {
     void inject(GroundTimetableService).ensureLoaded();
+    reachTitle(this.placeName);
   }
 
   readonly place = input<string>('');
@@ -365,7 +371,7 @@ export class GatewayPage {
     const g = this.picked();
     const it = this.itin();
     const place = this.placeObj();
-    if (!g || !it || !place) return;
+    if (!g || !it || !place) return;   // aria-disabled buttons land here
     const { tripId, groundLegId } = startTripFromGateway(this.trips, {
       place, params: this.p(), gateway: g, itinerary: it, others: this.result().gateways,
     });

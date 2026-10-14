@@ -20,6 +20,7 @@ import { calendarPath, flightPath } from '../../ui/links';
 import { hubDisplayName, itinKey, prettyFlight, tzDiffLabel } from '../../ui/format';
 import { tap } from '../../ui/haptics';
 import { getDestinationCodes } from '../../data/schedule-index';
+import { seasonEvent } from '../home/home-model';
 import { dailyFact } from './fun-facts';
 import { currencyName } from './currency';
 import {
@@ -123,6 +124,7 @@ const AC_URL = 'https://www.aircanada.com/';
             <span class="ui-tag ui-tag--neutral">{{ s.season }}</span>
           </div>
           @if (s.meta) { <p class="ui-sub tn meta m-only">{{ s.meta }}</p> }
+          @if (seasonTag(); as st) { <p class="season"><span class="ui-tag ui-tag--amber" data-season>{{ st }}</span></p> }
           <app-dest-weather-line [code]="code()" [dateKey]="climateDay()" />
         </div>
         @if (next(); as n) {
@@ -295,7 +297,7 @@ const AC_URL = 'https://www.aircanada.com/';
     :host { display: block; min-height: 100dvh; background: var(--bg); }
 
     /* ── Hero ─────────────────────────────────────────────────────────── */
-    .hero { position: relative; height: 380px; overflow: hidden; background: var(--fill); }
+    .hero { position: relative; height: min(380px, 40vh); min-height: 240px; overflow: hidden; background: var(--fill); }
     .hero__img { position: absolute; inset: 0; }
     .hero::after {
       content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -305,6 +307,8 @@ const AC_URL = 'https://www.aircanada.com/';
       position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 12px); left: 16px; right: 16px;
       display: flex; justify-content: space-between;
     }
+    /* A dark scrim behind the circle buttons keeps them visible on bright photos in light and dark. */
+    .hero .ui-circ { background: rgba(0, 0, 0, .42); border-color: rgba(255, 255, 255, .45); box-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
     .hero__acts { display: flex; gap: 8px; }
     .star.pop { animation: ui-pop 240ms var(--ease-out); }
     .star[aria-pressed='true'] { color: #FFFFFF; background: var(--red); border-color: color-mix(in srgb, var(--red) 60%, #FFFFFF); }
@@ -323,6 +327,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .city { font-size: 34px; font-weight: 650; letter-spacing: -.025em; line-height: 1.12; min-width: 0; overflow-wrap: anywhere; }
     .code { font-size: 24px; color: var(--ink-3); flex: none; }
     .meta { margin-top: 2px; }
+    .season { margin-top: 8px; }
     .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .next { display: flex; flex-direction: column; align-items: flex-end; text-align: right; border-radius: 14px; }
     .next__when { font-size: 30px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
@@ -376,7 +381,7 @@ const AC_URL = 'https://www.aircanada.com/';
     @media (min-width: 720px) {
       .m-only { display: none !important; }
       .handle { display: none; }
-      .hero { height: 360px; }
+      .hero { height: 360px; min-height: 0; }
       .hero__bar { top: 22px; left: 32px; right: 32px; }
       .hero__acts { gap: 10px; }
       .credit { right: 28px; bottom: 104px; max-width: 60%; }
@@ -574,6 +579,13 @@ export class DestinationPage {
   // ── Header ────────────────────────────────────────────────────────────────
   protected readonly summary = computed(() =>
     destSummary(this.state.hub(), this.code(), this.state.weekStartKey(), this.outDirect().length ? this.outDirect() : this.outVia()));
+  /** 'Seasonal · last nonstop Oct 23' when the nonstop is about to end or pause (same rule as Home's "Seasonal & ending soon"). */
+  protected readonly seasonTag = computed(() => {
+    const ev = seasonEvent(this.state.hub(), this.code(), this.outToday());
+    if (!ev || ev.kind === 'starts') return null;
+    const d = formatKey(ev.dateKey, { month: 'short', day: 'numeric' });
+    return ev.kind === 'pauses' ? `Seasonal · pauses after ${d}` : `Seasonal · last nonstop ${d}`;
+  });
   protected readonly next = computed(() => nextDeparture(this.outList()[0], this.outToday(), this.state.timeFormat()));
 
   // ── States ────────────────────────────────────────────────────────────────

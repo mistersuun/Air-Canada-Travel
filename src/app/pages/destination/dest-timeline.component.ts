@@ -48,7 +48,7 @@ import type { TimelineItem } from './dest-model';
     :host { display: block; }
     li { list-style: none; }
     .you { margin-left: 8px; }
-    .more { display: inline-block; margin: 6px 0 0 26px; font-size: 13.5px; padding: 4px 0; }
+    .more { display: inline-block; margin: 6px 0 0 26px; font-size: 13.5px; padding: 12px 0; }
   `],
 })
 export class DestTimelineComponent {

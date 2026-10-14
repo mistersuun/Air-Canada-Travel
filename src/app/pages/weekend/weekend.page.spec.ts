@@ -44,7 +44,7 @@ describe('WeekendPage', () => {
     const rows = [...el.querySelectorAll('a.row')];
     expect(rows.length).toBe(5);
     expect(rows[0].textContent).toContain('LGA');
-    expect(rows[0].textContent).toMatch(/\d+ out · .*~\d+h there/);
+    expect(rows[0].textContent!.replace(/\u00A0/g, ' ')).toMatch(/~\d+h there · .*\d+ out/);
     const href = rows[0].getAttribute('href')!;
     expect(href).toMatch(/^\/flight\/LGA\/2026-10-09\/AC\d+/);
     expect(href).toMatch(/ret=2026-10-1[01]/);

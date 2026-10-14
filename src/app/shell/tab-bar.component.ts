@@ -21,7 +21,7 @@ export const TABS: readonly Tab[] = [
  * Mobile floating tab bar (< 720px): a glass pill 26px above the bottom.
  * The active tab is an ink pill with its label; the others are icons.
  * Settings opens the sheet. Hidden on detail pages (/to, /flight, /calendar,
- * /trips/:id, /today, /reach), which show back buttons instead.
+ * /trips/:id, /today, /reach, /saved, /weekend, /g/:id), which show back buttons instead.
  */
 @Component({
   selector: 'app-tab-bar',

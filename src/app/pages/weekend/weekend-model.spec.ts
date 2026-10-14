@@ -124,9 +124,9 @@ describe('weekend ranking', () => {
     const o = weekendOption(input(), 'LGA')!;
     expect(o.directTries).toBe(o.tries.filter(it => it.legs.length === 1).length);
     const connected = { ...o, directTries: 2, tries: o.tries.slice(0, 5) };
-    expect(weekendMeta(connected, true)).toMatch(/^\d+ out · 2 nonstop tries · 5 with connections · ~\d+h there$/);
-    expect(weekendMeta(connected, false)).toMatch(/^\d+ out · 5 tries home · ~\d+h there$/);
-    expect(weekendMeta({ ...connected, directTries: 5 }, true)).toMatch(/5 tries home/);
+    expect(weekendMeta(connected, true).replace(/\u00A0/g, " ")).toMatch(/^~\d+h there · 2 nonstop · 5 with connections$/);
+    expect(weekendMeta(connected, false).replace(/\u00A0/g, " ")).toMatch(/^~\d+h there · 5 tries home · \d+ out$/);
+    expect(weekendMeta({ ...connected, directTries: 5 }, true).replace(/\u00A0/g, " ")).toMatch(/5 tries home/);
   });
 
   it('computes only for the codes given and never for the hub', () => {
@@ -145,8 +145,8 @@ describe('weekend ranking', () => {
 
   it('words the card meta line as facts and counts', () => {
     const o = weekendOption(input(), 'FLL')!;
-    expect(weekendMeta(o)).toBe('3 out · 3 tries home · ~39h there');
-    expect(weekendMeta({ ...o, out: [o.out[0]], tries: [o.tries[0]], hoursThere: 5 })).toBe('1 out · 1 try home · ~5h there');
+    expect(weekendMeta(o).replace(/\u00A0/g, " ")).toBe('~39h there · 3 tries home · 3 out');
+    expect(weekendMeta({ ...o, out: [o.out[0]], tries: [o.tries[0]], hoursThere: 5 }).replace(/\u00A0/g, " ")).toBe('~5h there · 1 try home · 1 out');
   });
 });
 

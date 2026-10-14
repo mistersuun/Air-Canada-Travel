@@ -43,7 +43,7 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
     <h1 class="sr-only">Route map</h1>
     <div class="box" [style.left.px]="box().x" [style.top.px]="box().y" [style.width.px]="box().w" [style.height.px]="box().h">
       <app-route-map #rmap class="map" interactive view="fit" [hub]="state.hub()" [points]="points()"
-                     [highlight]="hot()" [labels]="labels()" [center]="frame().center" [zoom]="frame().zoom"
+                     [highlight]="hot()" [labels]="labels()" [center]="frame().center" [zoom]="frame().zoom" [viewport]="viewport()"
                      (pointClick)="pick($event, false)" (pointHover)="hovered.set($event)" />
     </div>
 
@@ -274,7 +274,8 @@ export class MapPage {
   private readonly visible = computed<Rect>(() => {
     const { w, h } = this.size();
     if (w < SHEET_QUERY_PX) {
-      const top = 64;
+      // The search bar floats over the map; frame from just under it so no empty band is left above the routes.
+      const top = 56;
       return { x: 0, y: top, w, h: Math.max(80, h - sheetHeight(h) - top) };
     }
     const left = w >= 1024 ? 32 + 380 : 24 + 340;
@@ -283,6 +284,13 @@ export class MapPage {
   });
 
   protected readonly box = computed(() => mapBox(this.size(), this.visible()));
+
+  /** The visible part of the map in its own pixels, for the off-screen route hints. */
+  protected readonly viewport = computed(() => {
+    const v = this.visible();
+    const b = this.box();
+    return { x: v.x - b.x, y: v.y - b.y, w: v.w, h: v.h };
+  });
 
   protected readonly frame = computed(
     () => {
@@ -298,7 +306,7 @@ export class MapPage {
         focus = listed.filter(i => i === focusItem || near.has(i.code)).map(i => [i.lng, i.lat] as LngLat);
       }
       const vis = this.visible();
-      const inset = this.size().w < SHEET_QUERY_PX ? { x: 64, y: 36 } : { x: 96, y: 56 };
+      const inset = this.size().w < SHEET_QUERY_PX ? { x: 48, y: 24 } : { x: 96, y: 56 };
       return frameView(hubLL, all, focus, this.box(), { w: vis.w, h: vis.h }, inset);
     },
     { equal: (a, b) => a.zoom === b.zoom && a.center[0] === b.center[0] && a.center[1] === b.center[1] },

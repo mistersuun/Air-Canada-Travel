@@ -25,8 +25,8 @@ describe('nav-model', () => {
     expect(navSection('/calendar/CUN')).toBe('calendar');
     expect(['/to/LIS', '/flight/LIS/2026-10-01/AC812', '/calendar', '/calendar/CUN'].every(isDetailPath)).toBe(true);
     expect(['/trips/abc', '/trips/abc/recover', '/trips/import', '/today', '/reach/gn-1', '/reach/gn-1/MAD'].every(isDetailPath)).toBe(true);
-    expect(['/profile', '/trips/abc/files', '/trips/abc/passes/add', '/trips/abc/pass/p1', '/trips/abc/share', '/trips/abc/recap', '/logbook'].every(isDetailPath)).toBe(true);
-    expect(['/', '/map', '/saved', '/trips'].some(isDetailPath)).toBe(false);
+    expect(['/profile', '/trips/abc/files', '/trips/abc/passes/add', '/trips/abc/pass/p1', '/trips/abc/share', '/trips/abc/recap', '/logbook', '/saved', '/weekend', '/g/abc'].every(isDetailPath)).toBe(true);
+    expect(['/', '/map', '/trips'].some(isDetailPath)).toBe(false);
     expect(hidesTopNav('/to/LIS')).toBe(true);
     expect(hidesTopNav('/flight/LIS/2026-10-01')).toBe(false);
     expect(['/', '/saved', '/flight/LIS/2026-10-01'].every(hasSkywash)).toBe(true);

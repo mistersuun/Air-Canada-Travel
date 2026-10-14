@@ -243,6 +243,8 @@ export function dayShort(key: string): string {
 export interface FactTile { label: string; value: string }
 export interface FactsView {
   covered: boolean;
+  /** Covered, but no departures that day: nothing to tabulate. */
+  empty: boolean;
   tiles: FactTile[];
   /** Neutral holiday note ('Canadian Thanksgiving weekend (Mon Oct 12). Often busy, check loads.'). */
   holiday: string | null;
@@ -253,16 +255,17 @@ export interface FactsView {
  * day, as plain counts and times (never odds). Outside coverage: no tiles.
  */
 export function factsView(f: ScheduleFacts, holiday: string | null, fmt: TimeFormat = '24h'): FactsView {
-  if (!f.covered) return { covered: false, tiles: [], holiday };
+  if (!f.covered) return { covered: false, empty: false, tiles: [], holiday };
   const n = f.departures.length;
   const times = f.departures.slice(0, 3).map(d => formatClock(d.depLocal, fmt)).join(', ') + (n > 3 ? ', …' : '');
   const aircraft = f.aircraft.slice(0, 2).map(a => (a.count > 1 ? `${a.name} ×${a.count}` : a.name)).join(', ');
   const next = f.nextDay;
   return {
     covered: true,
+    empty: n === 0,
     holiday,
-    tiles: [
-      { label: 'Departures', value: n ? `${n} · ${times}` : 'None in our schedule data' },
+    tiles: n === 0 ? [] : [
+      { label: 'Departures', value: `${n} · ${times}` },
       { label: 'Last one', value: f.last ? `${prettyFlight(f.last.flightNumber)} ${formatClock(f.last.depLocal, fmt)}` : '—' },
       { label: 'Aircraft', value: aircraft || '—' },
       {

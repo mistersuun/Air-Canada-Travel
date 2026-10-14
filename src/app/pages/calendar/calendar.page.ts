@@ -12,7 +12,7 @@ import { findDestination } from '../../utils/airports';
 import { monthKeys } from '../../utils/time';
 import { coverageHubFor } from '../../utils/week';
 import {
-  chooserRows, clampKey, monthRange, moveKey, nextSelection, pickable, selectLabel, type CalField,
+  chooserRows, clampKey, monthRange, moveKey, nextSelection, pickable, selectLabel, type CalField, type ChooserRow,
 } from './cal-model';
 import { CalMonthComponent } from './cal-month.component';
 
@@ -118,9 +118,19 @@ const EAGER_MONTHS = 3;
         }
         @if (chooser().all.length) {
           <h2 class="ui-sec-h ch__h"><span class="ui-h3">All nonstop destinations</span></h2>
+          @if (showIndex()) {
+            <nav class="az" aria-label="Jump to a letter" data-az>
+              @for (g of groups(); track g.letter) {
+                <button type="button" class="az__b" (click)="jumpTo(g.letter)">{{ g.letter }}</button>
+              }
+            </nav>
+          }
           <div class="ui-card ch__l">
-            @for (r of chooser().all; track r.code) {
-              <app-dest-row [code]="r.code" [small]="r.code" [meta]="r.meta" [link]="calendarPath(r.code)" />
+            @for (g of groups(); track g.letter) {
+              <h3 class="az__h" [id]="'az-' + g.letter" tabindex="-1">{{ g.letter }}</h3>
+              @for (r of g.rows; track r.code) {
+                <app-dest-row [code]="r.code" [small]="r.code" [meta]="r.meta" [link]="calendarPath(r.code)" />
+              }
             }
           </div>
         }
@@ -145,6 +155,21 @@ const EAGER_MONTHS = 3;
     .ch__h { margin: 22px 0 10px; }
     .ch__l { padding: 4px 14px; }
     .ch__none { margin-top: 22px; text-align: center; }
+    /* A–Z jump row: sticks under the top while the long list scrolls. */
+    .az {
+      position: sticky; top: 0; z-index: 3; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+      margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px 36px 4px var(--gutter);
+      background: var(--bg); border-bottom: 1px solid var(--hair);
+      -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    }
+    .az::-webkit-scrollbar { display: none; }
+    .az__b { flex: none; min-width: 36px; min-height: 44px; font-size: 14px; font-weight: 650; color: var(--blue); border-radius: 10px; }
+    .az__h {
+      margin: 0; padding: 14px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--ink-3);
+      scroll-margin-top: 60px;
+    }
+    .az__h:first-child { padding-top: 8px; }
 
     /* ── Picker (mobile: full-bleed --surface) ── */
     .pk, .ch { position: relative; }
@@ -155,7 +180,7 @@ const EAGER_MONTHS = 3;
       padding: calc(env(safe-area-inset-top) + 14px) 18px 0;
     }
     .tb__t { white-space: nowrap; }
-    .lnk { color: var(--blue); font-size: 15px; padding: 6px 0; min-width: 56px; text-align: left; }
+    .lnk { color: var(--blue); font-size: 15px; padding: 6px 0; min-width: 56px; min-height: 44px; text-align: left; }
     .lnk--b { font-weight: 600; text-align: right; }
     .lnk:disabled { color: var(--ink-3); cursor: default; }
     .flds { display: flex; gap: 10px; padding: 14px 18px 10px; }
@@ -231,6 +256,27 @@ export class CalendarPage {
   readonly chooser = computed(() =>
     chooserRows(this.state.hub(), this.state.favourites(), this.state.todayKey(), this.query()),
   );
+
+  /** The "All" list grouped by first letter (accents folded), for the A–Z jump row. */
+  protected readonly groups = computed(() => {
+    const out: { letter: string; rows: ChooserRow[] }[] = [];
+    for (const r of this.chooser().all) {
+      const l = (r.city.normalize('NFD').replace(/[\u0300-\u036f]/g, '').charAt(0) || '#').toUpperCase();
+      const last = out[out.length - 1];
+      if (last?.letter === l) last.rows.push(r);
+      else out.push({ letter: l, rows: [r] });
+    }
+    return out;
+  });
+  /** The jump row only helps on the long list, not while searching. */
+  protected readonly showIndex = computed(() => !this.query().trim() && this.chooser().all.length > 24);
+
+  protected jumpTo(letter: string): void {
+    const el = this.host.nativeElement.querySelector<HTMLElement>(`#az-${letter}`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'start', behavior: matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    el.focus({ preventScroll: true });
+  }
 
   // ── Picker ──
   readonly dest = computed(() => findDestination(this.code()));

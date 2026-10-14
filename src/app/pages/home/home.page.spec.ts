@@ -66,6 +66,22 @@ describe('HomePage', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows the week-strip legend until it is dismissed, and remembers that', async () => {
+    configure();
+    localStorage.removeItem('ac.legend.strip.v1');
+    const a = await render();
+    expect(a.el.querySelector('[data-legend]')?.textContent).toContain('A dot under a day');
+    a.el.querySelector<HTMLButtonElement>('.legend__x')!.click();
+    await a.stable();
+    expect(a.el.querySelector('[data-legend]')).toBeNull();
+    expect(localStorage.getItem('ac.legend.strip.v1')).toBe('1');
+    TestBed.resetTestingModule();
+    configure();
+    const b = await render();
+    expect(b.el.querySelector('[data-legend]')).toBeNull();
+    localStorage.removeItem('ac.legend.strip.v1');
+  });
+
   it('curated mode: greeting, title, picks, nonstop rows and dots for the week strip', async () => {
     configure();
     const { el, text } = await render();
@@ -413,7 +429,7 @@ describe('HomePage · Places (cities AC does not fly to)', () => {
     expect(citiesFetches).toBe(1);
     const rows = [...el.querySelectorAll('.prow')];
     expect(rows[0].querySelector('.pnm')!.textContent).toBe('Seville');
-    expect(rows[0].querySelector('.psub')!.textContent).toBe("Spain · Not in our schedule data");
+    expect(rows[0].querySelector('.psub')!.textContent).toBe("Andalusia, Spain · Find ways to get there");
     expect(rows[0].getAttribute('href')).toMatch(/^\/reach\/gn-2510911\?.*dep=2026-10-14/);
     expect(el.querySelector('#rl-places')!.textContent).toBe('Places');
     expect(el.textContent).not.toContain('No destinations match');

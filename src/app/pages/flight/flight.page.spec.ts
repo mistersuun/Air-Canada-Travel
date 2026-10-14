@@ -169,8 +169,14 @@ describe('FlightPage', () => {
     expect(chips.find(c => c.getAttribute('aria-pressed') === 'true')!.textContent!.trim()).toBe('7 nights');
     chips[0].click();
     expect(a.nav).toHaveBeenCalledWith([], { queryParams: { nights: 2, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
+    expect(a.el.querySelector('app-return-panel .stepper')).toBeNull();   // a preset covers 7 nights
+    a.el.querySelector<HTMLButtonElement>('app-return-panel [data-other]')!.click();
+    a.fixture.detectChanges();
     a.el.querySelector<HTMLButtonElement>('button[aria-label="One night more"]')!.click();
     expect(a.nav).toHaveBeenLastCalledWith([], { queryParams: { nights: 8, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
+    a.fixture.componentRef.setInput('nights', '8');
+    a.fixture.detectChanges();
+    expect(a.el.querySelector('app-return-panel .stepper')).not.toBeNull();   // stays open after stepping
 
     TestBed.resetTestingModule();
     configure();

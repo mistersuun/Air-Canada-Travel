@@ -130,7 +130,8 @@ export function labelNeighbours(items: readonly MapItem[], code: string | null, 
  * What the overview frames: the nonstops (connections would always zoom out
  * to the whole world), and of those only the nearest three quarters when
  * there are more than eight, so a few long-haul outliers (Sydney, Tokyo) do
- * not shrink the busy part of the map to a speck. Falls back to everything.
+ * not shrink the busy part of the map to a speck. The outliers that fall
+ * outside the frame get an edge indicator on the map. Falls back to everything.
  */
 export function overviewItems(items: readonly MapItem[]): MapItem[] {
   const direct = items.filter(i => i.kind === 'direct');

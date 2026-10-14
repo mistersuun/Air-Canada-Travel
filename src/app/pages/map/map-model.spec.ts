@@ -125,14 +125,14 @@ describe('labelNeighbours and overviewItems', () => {
     expect(labelNeighbours(more, 'DEL')).toEqual([]);
   });
 
-  it('frames every nonstop, long-haul included, and no connections', () => {
+  it('frames the nonstops, dropping the farthest quarter when there are many', () => {
     expect(overviewItems(more).map(i => i.code)).not.toContain('DEL');
     expect(overviewItems(more)).toHaveLength(7);
     const many = mapItems(['LHR', 'BOS', 'KEF', 'LGA', 'EWR', 'CDG', 'AMS', 'FCO', 'NRT', 'SYD'].map(c => direct(c, [1, 0, 0, 0, 0, 0, 0])), YUL, false);
     const ov = overviewItems(many).map(i => i.code);
-    expect(ov).toHaveLength(10);
-    expect(ov).toContain('SYD');
-    expect(ov).toContain('NRT');
+    expect(ov).toHaveLength(8);
+    expect(ov).not.toContain('SYD');
+    expect(ov).not.toContain('NRT');
     const conn = mapItems([connecting('DEL', 900)], YUL, true);
     expect(overviewItems(conn)).toHaveLength(1);
   });

@@ -5,10 +5,10 @@ import {
 import { Router, RouterLink, type Params } from '@angular/router';
 import { AppStateService } from '../../state/app-state.service';
 import { ShareService } from '../../state/share.service';
-import { findDestination } from '../../utils/airports';
+import { airportTz, findDestination } from '../../utils/airports';
 import { allItineraries, findAlternatives, type Itinerary } from '../../utils/connections';
 import { buildIcs, downloadIcs, icsFilename } from '../../utils/ics';
-import { addDays, diffDays, formatKey, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
+import { addDays, diffDays, formatKey, isDateKey, todayKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
 import { seasonEvent } from '../home/home-model';
 import { IconComponent } from '../../components/shared/icons.component';
@@ -217,8 +217,8 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
     .ctx { text-align: center; margin: 0 0 12px; font-size: 12.5px; }
     .strip { display: block; margin-bottom: 12px; }
     .pk { margin-bottom: 14px; }
-    .pk-why { margin: -8px 0 14px; font-size: 12.5px; }
-    .pk:has(+ .pk-why) { margin-bottom: 8px; }
+    .pk:has(+ .pk-why) { margin-bottom: 6px; }
+    .pk-why { margin: 0 0 14px; font-size: 12.5px; }
     .state { padding: 22px; display: grid; gap: 8px; justify-items: start; }
     .state h2, .state p { margin: 0; }
     .state .ui-btn { margin-top: 6px; }
@@ -307,7 +307,7 @@ export class FlightPage {
 
   protected readonly pickOptions = computed<SegOption[]>(() => [
     { value: 'earliest', label: 'EARLIEST', disabled: !this.itineraries().length },
-    { value: 'nonstop', label: 'NONSTOP', disabled: !pickOf(this.itineraries(), 'nonstop') },
+    { value: 'nonstop', label: 'NONSTOP', disabled: !pickOf(this.itineraries(), 'nonstop'), describedBy: this.nonstopWhy() ? 'pk-why' : undefined },
     { value: 'fastest', label: 'FASTEST', disabled: !this.itineraries().length },
   ]);
 
@@ -315,8 +315,9 @@ export class FlightPage {
   protected readonly nonstopWhy = computed(() => {
     if (this.outside() || !this.itineraries().length || pickOf(this.itineraries(), 'nonstop')) return null;
     const day = formatKey(this.dateKey(), { weekday: 'short' });
-    const ev = seasonEvent(this.hub(), this.dest(), this.state.todayKey());
-    if (ev && ev.kind !== 'starts' && ev.dateKey >= this.state.todayKey()) {
+    // Hub-local today, the same clock as Home's "Seasonal & ending soon", so the dates agree.
+    const ev = seasonEvent(this.hub(), this.dest(), todayKey(airportTz(this.hub()), this.state.nowMs()));
+    if (ev?.kind === 'ends' && this.dateKey() > ev.dateKey) {
       return `No nonstop on ${day} · last one ${formatKey(ev.dateKey, { month: 'short', day: 'numeric' })}`;
     }
     const next = nextFlightDate(this.hub(), this.dest(), this.dateKey(), false);

@@ -168,8 +168,10 @@ export function weekendOptions(input: WeekendInput): WeekendOption[] {
 export function weekendMeta(o: WeekendOption, showConnections = false): string {
   const t = o.tries.length;
   const head = `~${o.hoursThere}h there`;
-  if (showConnections && o.directTries < t) return `${head} · ${o.directTries} nonstop · ${t} with connections · ${o.out.length} out`;
-  return `${head} · ${t} ${t === 1 ? 'try' : 'tries'} home · ${o.out.length} out`;
+  // Non-breaking spaces keep each fact whole when the line wraps.
+  const nb = (s: string) => s.replace(/ /g, '\u00A0');
+  if (showConnections && o.directTries < t) return `${nb(head)} · ${nb(`${o.directTries} nonstop`)} · ${nb(`${t} with connections`)}`;
+  return `${nb(head)} · ${nb(`${t} ${t === 1 ? 'try' : 'tries'} home`)} · ${nb(`${o.out.length} out`)}`;
 }
 
 /** Why a window cannot be searched, or null. Dates and times are hub-local. */

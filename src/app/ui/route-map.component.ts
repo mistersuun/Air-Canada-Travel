@@ -88,6 +88,12 @@ export const DRAG_PX = 4;
           <path class="plane__p" transform="translate(-7 -7) scale(.58) rotate(90 12 12)" d="M21.5 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13.5 19v-5.5l8 2.5Z" />
         </g>
       }
+      @for (h of edgeHints(); track h.code) {
+        <g class="edge" [attr.transform]="'translate(' + h.x + ' ' + h.y + ')'" data-edge>
+          <path class="edge__a" [attr.transform]="'rotate(' + h.angle + ')'" d="M-5 -5 L5 0 L-5 5 Z" />
+          <text class="mlab" [attr.x]="h.left ? 9 : -9" y="4" [attr.text-anchor]="h.left ? 'start' : 'end'">{{ h.code }}</text>
+        </g>
+      }
       @if (hubXY(); as o) {
         @if (pulse()) { <circle class="pulse" [attr.cx]="o[0]" [attr.cy]="o[1]" r="9" /> }
         <circle class="hub" [attr.cx]="o[0]" [attr.cy]="o[1]" r="4.5" />
@@ -116,6 +122,7 @@ export const DRAG_PX = 4;
     .dotp.hot { stroke: var(--red); }
     .hit { fill: transparent; cursor: pointer; }
     .mlab { font-size: 11px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--sea); stroke-width: 3px; pointer-events: none; }
+    .edge__a { fill: var(--blue); opacity: .8; }
     .hub { fill: var(--blue); stroke: var(--surface); stroke-width: 2; }
     .pulse {
       fill: var(--blue); opacity: .25; pointer-events: none;
@@ -144,6 +151,8 @@ export class RouteMapComponent {
   readonly animate = input(true, { transform: booleanAttribute });
   /** 0..1 along the great circle from the hub to the highlighted destination: shows a static plane there (an estimate). */
   readonly progress = input<number | null>(null);
+  /** The part of the map the person can see, in the map's own pixels. With it, routes outside it get an arrow and code at its edge. */
+  readonly viewport = input<{ x: number; y: number; w: number; h: number } | null>(null);
 
   readonly pointClick = output<string>();
   readonly pointHover = output<string | null>();
@@ -273,6 +282,29 @@ export class RouteMapComponent {
         // ~6.5px per character at 11px bold: flip the label to the left of the dot when it would leave the SVG.
         return { code: d.code, x: d.x, y: d.y, text, anchorEnd: d.x + 7 + text.length * 6.5 > this.w() - 4 };
       });
+  });
+
+  /** Arrow and code at the viewport edge for each nonstop that is off-screen. */
+  protected readonly edgeHints = computed(() => {
+    const v = this.viewport();
+    if (!v) return [];
+    const m = 16;
+    const cx = v.x + v.w / 2;
+    const cy = v.y + v.h / 2;
+    const out: { code: string; x: number; y: number; angle: number; left: boolean }[] = [];
+    for (const d of this.drawn()) {
+      if (d.kind !== 'direct') continue;
+      const inside = d.x >= v.x && d.x <= v.x + v.w && d.y >= v.y && d.y <= v.y + v.h;
+      if (inside) continue;
+      const dx = d.x - cx;
+      const dy = d.y - cy;
+      const k = Math.min((v.w / 2 - m) / Math.max(Math.abs(dx), 1e-6), (v.h / 2 - m) / Math.max(Math.abs(dy), 1e-6));
+      const x = round(cx + dx * k);
+      const y = round(cy + dy * k);
+      out.push({ code: d.code, x, y, angle: Math.round(Math.atan2(dy, dx) * 180 / Math.PI), left: dx < 0 });
+    }
+    // Several routes can share a direction: show the first few, nudged apart.
+    return out.slice(0, 8).map((h, i, all) => ({ ...h, y: h.y + (all.slice(0, i).filter(o => Math.abs(o.x - h.x) < 40 && Math.abs(o.y - h.y) < 14).length) * 14 }));
   });
 
   protected readonly hubXY = computed(() => {

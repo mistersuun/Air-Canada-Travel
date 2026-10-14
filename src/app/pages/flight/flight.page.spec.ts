@@ -174,6 +174,9 @@ describe('FlightPage', () => {
     a.fixture.detectChanges();
     a.el.querySelector<HTMLButtonElement>('button[aria-label="One night more"]')!.click();
     expect(a.nav).toHaveBeenLastCalledWith([], { queryParams: { nights: 8, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
+    a.fixture.componentRef.setInput('nights', '8');
+    a.fixture.detectChanges();
+    expect(a.el.querySelector('app-return-panel .stepper')).not.toBeNull();   // stays open after stepping
 
     TestBed.resetTestingModule();
     configure();

@@ -353,9 +353,6 @@ button.ui-tag::after { content: ''; position: absolute; inset: -9px -3px; }   //
 // Text-link buttons ("Show more", "Show all"): a 44px tap area without moving the layout.
 button.ui-link { position: relative; }
 button.ui-link::after { content: ''; position: absolute; inset: -12px -6px; }
-// Add to any small control: <button class="ui-hit"> gets a 44px tap area.
-.ui-hit { position: relative; }
-.ui-hit::after { content: ''; position: absolute; inset: -7px -2px; }
 
 // ---- Buttons ----------------------------------------------------------------------
 .ui-btn {

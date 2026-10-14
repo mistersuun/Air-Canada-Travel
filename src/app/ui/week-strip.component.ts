@@ -133,7 +133,7 @@ export const SWIPE_PX = 50;
       position: relative; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
       color: var(--ink-2); background: var(--fill);
     }
-    .cap__nav::after { content: ''; position: absolute; inset: -6px; }
+    .cap__nav::after { content: ''; position: absolute; inset: -6px -2px; }
     .cap__nav:disabled { opacity: .4; cursor: default; }
     .cap__nav:hover:not(:disabled) { color: var(--ink); }
     .picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }

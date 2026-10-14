@@ -6,6 +6,8 @@ export interface SegOption {
   label: string;
   disabled?: boolean;
   icon?: IconName;
+  /** id of an element that explains the option (why it is disabled). */
+  describedBy?: string;
 }
 
 /**
@@ -32,7 +34,7 @@ export interface SegOption {
     <div class="seg" [class.ui-glass]="glass()" role="group" [attr.aria-label]="ariaLabel() || null">
       @for (o of options(); track o.value) {
         <button #btn type="button" class="seg__b" [class.on]="o.value === value()"
-                [attr.aria-pressed]="o.value === value()" [disabled]="o.disabled || null"
+                [attr.aria-pressed]="o.value === value()" [attr.aria-describedby]="o.describedBy || null" [disabled]="o.disabled || null"
                 [attr.tabindex]="$index === tabStop() ? 0 : -1"
                 (click)="pick(o)" (keydown)="onKey($event, $index)">
           @if (o.icon) { <app-icon [name]="o.icon" [size]="16" /> }

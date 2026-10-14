@@ -1,5 +1,4 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, computed, effect, inject, input, signal } from '@angular/core';
-import { Title } from '@angular/platform-browser';
+import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { HUBS } from '../../data/destinations';
@@ -16,6 +15,7 @@ import { airportTz } from '../../utils/airports';
 import { todayKey } from '../../utils/time';
 import { GatewayRow, ReachParams, dayLabel, formatHome, gatewayRow, parseHome, readReachParams, reachQueryParams } from './reach-model';
 import { reachPlace } from './reach-place';
+import { reachTitle } from './reach-title';
 
 const SORT_OPTIONS: SegOption[] = [
   { value: 'onward', label: 'Shorter onward trip' },
@@ -219,9 +219,9 @@ type Editing = 'dep' | 'home' | 'hub';
     .chip::after { content: ''; position: absolute; inset: -9px -4px; }
     .chip:hover { color: var(--ink); }
     .sort { margin-top: 12px; }
-    .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 2px 10px; }
+    .head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 22px 2px 10px; }
     .h { font-size: 19px; margin: 0; }
-    .nn { font-size: 13px; text-align: right; }
+    .nn { font-size: 13px; text-align: right; white-space: nowrap; }
     .list { padding: 4px 14px; }
     .row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hair); min-width: 0; color: var(--ink); }
     .row:last-child { border-bottom: 0; }
@@ -273,12 +273,7 @@ export class ReachPage {
 
   constructor() {
     void inject(GroundTimetableService).ensureLoaded();
-    // The route title can't know a place name that loads later.
-    const title = inject(Title);
-    effect(() => {
-      const name = this.placeName();
-      if (name) title.setTitle(`${name} · Reach · Routes`);
-    });
+    reachTitle(this.placeName);
   }
 
   /** Route param ('gn-2510911') and query keys (withComponentInputBinding). */

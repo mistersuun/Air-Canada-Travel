@@ -76,11 +76,11 @@ import {
           @for (r of shown(); track r.o.code) {
             <app-dest-row [code]="r.o.code" [small]="r.o.code" [meta]="r.meta" wrapMeta [link]="r.link" [queryParams]="r.query">
               <span trailing class="wx">
-                @if (r.weather) { <span class="ui-tag ui-tag--neutral tn" [attr.aria-label]="r.weatherLabel">{{ r.weather }}</span> }
-                <app-forecast-line [code]="r.o.code" [dateKey]="r.arrKey" [plain]="true" />
+                @if (r.weather) { <span class="ui-tag ui-tag--neutral tn"><span class="ui-visually-hidden">Typical weather: </span>{{ r.weather }}</span> }
               </span>
             </app-dest-row>
             <div class="evt">
+              <app-forecast-line class="evt__f" [code]="r.o.code" [dateKey]="r.arrKey" [plain]="true" />
               <button type="button" class="evt__b" [attr.aria-expanded]="events() === r.o.code" [attr.aria-controls]="'evt-' + r.o.code"
                       attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on
                 <app-icon class="evt__c" [class.open]="events() === r.o.code" name="chevron-down" [size]="14" /></button>
@@ -123,9 +123,10 @@ import {
     .list { padding: 4px 14px; margin-top: 12px; }
     .note { padding: 18px; margin-top: 12px; font-size: 14px; color: var(--ink-2); }
     .evt { padding: 0 0 6px 58px; }
+    .evt__f { display: block; margin-top: -4px; font-size: 12px; color: var(--ink-2); }
     .evt__b {
-      display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin-top: -8px;
-      font-size: 12.5px; font-weight: 500; color: var(--ink-3); background: none; border: 0; padding: 0 8px 0 0; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin-top: 0;
+      font-size: 12.5px; font-weight: 500; color: var(--ink-2); background: none; border: 0; padding: 0 8px 0 0; cursor: pointer;
     }
     .evt__c { display: inline-flex; transition: transform var(--dur-fast) var(--ease-out); }
     .evt__c.open { transform: rotate(180deg); }
@@ -178,9 +179,8 @@ export class WeekendPage {
       return {
         o,
         meta: weekendMeta(o, this.state.showConnections()),
-        // The month-only text ('Oct 19° / 12°') read as a date; say it is typical weather.
-        weather: c ? `Typical ${c.tmaxC}° / ${c.tminC}°` : null,
-        weatherLabel: c ? `Typical weather: high ${c.tmaxC}, low ${c.tminC} degrees` : null,
+        // The month-only text ('Oct 19° / 12°') read as a date; the chip is just the temperatures, with "Typical weather" for screen readers.
+        weather: c ? `${c.tmaxC}° / ${c.tminC}°` : null,
         arrKey: first.arrDateKey,
         link: flightPath(o.code, first.dateKey, first),
         query: { ...globals, ret: o.retKey },

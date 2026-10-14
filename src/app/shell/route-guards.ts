@@ -72,7 +72,7 @@ export const flightTitle: ResolveFn<string> = route => {
  * handled on the Home route itself, so they never reach here.)
  */
 export const unknownPage: CanActivateFn = route => {
-  inject(AppStateService).flash("That page doesn't exist");
+  if (!route.queryParams['dest']) inject(AppStateService).flash("That page doesn't exist");
   return new RedirectCommand(inject(Router).createUrlTree(['/'], { queryParams: route.queryParams }), { replaceUrl: true });
 };
 

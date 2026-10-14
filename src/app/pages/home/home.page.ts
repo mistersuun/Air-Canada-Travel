@@ -183,9 +183,7 @@ interface ListRow {
               }
             </div>
             @for (r of nonstop(); track r.code) {
-              <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()">
-                @if (r.tag) { <span trailing class="ui-tag tn" [class]="'ui-tag--' + r.tag.tone" data-ends>{{ r.tag.text }}</span> }
-              </app-dest-row>
+              <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()" wrapMeta />
             } @empty {
               <p class="none ui-sub">No nonstop flights {{ state.selectedDateKey() ? 'on this day' : 'this week' }}.</p>
             }
@@ -466,9 +464,10 @@ export class HomePage {
       .slice(0, this.nonstopOpen() ? undefined : this.listLimit())
       .map(e => {
         const ends = ending.get(e.destination.code);
+        // 'Ends Oct 23' leads the meta line (same wording as the seasonal section), so the name stays whole.
+        const meta = rowMeta(e, fmt, short);
         return {
-          code: e.destination.code, small: e.destination.code, meta: rowMeta(e, fmt, short), dots: entryDots(e),
-          tag: ends ? { text: ends.replace('Ends', 'ends'), tone: 'amber' as const } : undefined,
+          code: e.destination.code, small: e.destination.code, meta: ends ? `${ends} · ${meta}` : meta, dots: entryDots(e),
         };
       });
   });

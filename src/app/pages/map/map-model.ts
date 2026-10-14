@@ -127,13 +127,17 @@ export function labelNeighbours(items: readonly MapItem[], code: string | null, 
 }
 
 /**
- * What the overview frames: every nonstop (connections would always zoom out
- * to the whole world), so long-haul routes to Asia and the Pacific stay on
- * screen instead of running off the edge. Falls back to everything.
+ * What the overview frames: the nonstops (connections would always zoom out
+ * to the whole world), and of those only the nearest three quarters when
+ * there are more than eight, so a few long-haul outliers (Sydney, Tokyo) do
+ * not shrink the busy part of the map to a speck. The outliers that fall
+ * outside the frame get an edge indicator on the map. Falls back to everything.
  */
 export function overviewItems(items: readonly MapItem[]): MapItem[] {
   const direct = items.filter(i => i.kind === 'direct');
-  return direct.length ? direct : [...items];
+  if (!direct.length) return [...items];
+  if (direct.length <= 8) return direct;
+  return [...direct].sort((a, b) => a.km - b.km).slice(0, Math.ceil(direct.length * 0.75));
 }
 
 /** True when nothing in the shown week (or selected day) is published yet. */

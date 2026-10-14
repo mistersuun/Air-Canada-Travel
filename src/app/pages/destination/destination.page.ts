@@ -583,7 +583,8 @@ export class DestinationPage {
   protected readonly seasonTag = computed(() => {
     const ev = seasonEvent(this.state.hub(), this.code(), this.outToday());
     if (!ev || ev.kind === 'starts') return null;
-    return `Seasonal · last nonstop ${formatKey(ev.dateKey, { month: 'short', day: 'numeric' })}`;
+    const d = formatKey(ev.dateKey, { month: 'short', day: 'numeric' });
+    return ev.kind === 'pauses' ? `Seasonal · pauses after ${d}` : `Seasonal · last nonstop ${d}`;
   });
   protected readonly next = computed(() => nextDeparture(this.outList()[0], this.outToday(), this.state.timeFormat()));
 

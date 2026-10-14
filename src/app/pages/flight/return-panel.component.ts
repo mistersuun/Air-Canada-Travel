@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { allItineraries, NO_OPTS, type ConnectOptions, type Itinerary } from '../../utils/connections';
 import type { Coverage } from '../../data/schedule-index';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -33,9 +33,9 @@ interface Nearby {
   template: `
     <div class="nights" role="group" aria-label="Nights at destination">
       @for (n of presets; track n) {
-        <button type="button" class="chip" [attr.aria-pressed]="shownNights() === n" (click)="nightsChange.emit(n)">{{ n }} nights</button>
+        <button type="button" class="chip" [attr.aria-pressed]="shownNights() === n" (click)="otherOpen.set(false); nightsChange.emit(n)">{{ n }} nights</button>
       }
-      <button type="button" class="chip" data-other [attr.aria-pressed]="isCustom() || otherOpen()" [attr.aria-expanded]="showStepper()"
+      <button type="button" class="chip" data-other [attr.aria-pressed]="isCustom()" [attr.aria-expanded]="showStepper()"
               (click)="otherOpen.set(!otherOpen())">Other</button>
       @if (showStepper()) {
       <div class="stepper" [class.is-on]="isCustom()">
@@ -135,7 +135,8 @@ export class ReturnPanelComponent {
     this.fromCalendar() ? this.ret()! : addDays(this.outbound().arrDateKey, this.nights()));
 
   /** The stepper hides behind "Other" while a preset chip covers the stay. */
-  protected readonly otherOpen = linkedSignal<number, boolean>({ source: () => this.shownNights(), computation: () => false });
+  /** Opened by the Other chip, closed by a preset chip; stepping nights leaves it alone. */
+  protected readonly otherOpen = signal(false);
   protected readonly showStepper = computed(() => this.isCustom() || this.otherOpen());
 
   protected readonly shownNights = computed(() => diffDays(this.outbound().arrDateKey, this.retDate()));

@@ -158,8 +158,10 @@ const EAGER_MONTHS = 3;
     /* A–Z jump row: sticks under the top while the long list scrolls. */
     .az {
       position: sticky; top: 0; z-index: 3; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
-      margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px var(--gutter);
+      margin: 0 calc(-1 * var(--gutter)) 8px; padding: 4px 36px 4px var(--gutter);
       background: var(--bg); border-bottom: 1px solid var(--hair);
+      -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
     }
     .az::-webkit-scrollbar { display: none; }
     .az__b { flex: none; min-width: 36px; min-height: 44px; font-size: 14px; font-weight: 650; color: var(--blue); border-radius: 10px; }

@@ -107,7 +107,7 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
     .rp__title { min-width: 0; text-align: center; }
     .rp__title h1 { margin: 0; }
     .rp__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rp__sp { width: 40px; flex: none; }
+    .rp__sp { width: 44px; flex: none; }
     .rp__empty { display: grid; justify-items: center; gap: 8px; margin-top: 24px; padding: 28px 22px; text-align: center; }
     .rp__empty h2, .rp__empty p { margin: 0; }
     .rp__empty .ui-btn { margin-top: 6px; }

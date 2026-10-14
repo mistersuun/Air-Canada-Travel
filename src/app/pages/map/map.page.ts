@@ -43,7 +43,7 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
     <h1 class="sr-only">Route map</h1>
     <div class="box" [style.left.px]="box().x" [style.top.px]="box().y" [style.width.px]="box().w" [style.height.px]="box().h">
       <app-route-map #rmap class="map" interactive view="fit" [hub]="state.hub()" [points]="points()"
-                     [highlight]="hot()" [labels]="labels()" [center]="frame().center" [zoom]="frame().zoom"
+                     [highlight]="hot()" [labels]="labels()" [center]="frame().center" [zoom]="frame().zoom" [viewport]="viewport()"
                      (pointClick)="pick($event, false)" (pointHover)="hovered.set($event)" />
     </div>
 
@@ -284,6 +284,13 @@ export class MapPage {
   });
 
   protected readonly box = computed(() => mapBox(this.size(), this.visible()));
+
+  /** The visible part of the map in its own pixels, for the off-screen route hints. */
+  protected readonly viewport = computed(() => {
+    const v = this.visible();
+    const b = this.box();
+    return { x: v.x - b.x, y: v.y - b.y, w: v.w, h: v.h };
+  });
 
   protected readonly frame = computed(
     () => {

@@ -1,13 +1,14 @@
 import { ChangeDetectionStrategy, Component, output } from '@angular/core';
 import { IconComponent, type IconName } from '../../components/shared/icons.component';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
+import { type MsgKey, t } from '../../i18n/t';
 
 export type PlansChangedChoice = 'pick' | 'dates' | 'drop';
 
-const CHOICES: { value: PlansChangedChoice; icon: IconName; title: string; detail: string }[] = [
-  { value: 'pick', icon: 'retry', title: 'Pick another flight', detail: 'What you can still reach from here, starting now' },
-  { value: 'dates', icon: 'calendar', title: 'Change dates', detail: 'Your home-by deadline and return tries' },
-  { value: 'drop', icon: 'close', title: 'Drop this trip', detail: 'Moves it to Past trips. You can undo it.' },
+const CHOICES: { value: PlansChangedChoice; icon: IconName; title: MsgKey; detail: MsgKey }[] = [
+  { value: 'pick', icon: 'retry', title: 'today.plans.pick', detail: 'today.plans.pick.detail' },
+  { value: 'dates', icon: 'calendar', title: 'today.plans.dates', detail: 'today.plans.dates.detail' },
+  { value: 'drop', icon: 'close', title: 'today.plans.drop', detail: 'today.plans.drop.detail' },
 ];
 
 /**
@@ -22,12 +23,12 @@ const CHOICES: { value: PlansChangedChoice; icon: IconName; title: string; detai
   imports: [GlassSheetComponent, IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet title="Plans changed" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet [title]="t('today.plansChanged')" [open]="true" (closed)="closed.emit()">
       <div class="pc">
         @for (c of choices; track c.value) {
           <button type="button" class="pc__row" [class.is-drop]="c.value === 'drop'" [attr.data-choice]="c.value" (click)="choose.emit(c.value)">
             <span class="pc__ic" aria-hidden="true"><app-icon [name]="c.icon" [size]="18" /></span>
-            <span class="pc__txt"><b>{{ c.title }}</b><small>{{ c.detail }}</small></span>
+            <span class="pc__txt"><b>{{ t(c.title) }}</b><small>{{ t(c.detail) }}</small></span>
             <app-icon class="pc__chev" name="chevron-right" [size]="16" />
           </button>
         }
@@ -50,6 +51,7 @@ const CHOICES: { value: PlansChangedChoice; icon: IconName; title: string; detai
   `],
 })
 export class PlansChangedSheetComponent {
+  protected readonly t = t;
   protected readonly choices = CHOICES;
   readonly choose = output<PlansChangedChoice>();
   readonly closed = output<void>();

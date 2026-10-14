@@ -6,7 +6,7 @@
 import { Injectable, Injector, Signal, inject, signal } from '@angular/core';
 import { AppStateService } from '../state/app-state.service';
 import { FILES_STORE, FilesStore } from './files-store';
-import { FilesStatus, VERSION_CHANGE_NOTICE } from './model';
+import { FilesStatus, versionChangeNotice } from './model';
 import { requestPersist } from './quota';
 
 @Injectable({ providedIn: 'root' })
@@ -64,6 +64,6 @@ export class FilesDb {
 
   private versionChanged(): void {
     this.statusState.set('error');
-    this.flash(VERSION_CHANGE_NOTICE);
+    this.flash(versionChangeNotice());
   }
 }

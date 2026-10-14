@@ -14,12 +14,13 @@ import { newId } from '../trips/ids';
 import type { Trip } from '../trips/model';
 import { TripsService } from '../trips/trips.service';
 import { NewPass, PassRecord } from './model';
+import { t } from '../i18n/t';
 
 const DAY_MS = 864e5;
 
 /** "1 boarding pass removed after your trip" / "2 boarding passes …". */
 export function removedAfterTripText(n: number): string {
-  return `${n} boarding ${n === 1 ? 'pass' : 'passes'} removed after your trip`;
+  return t('passes.removedAfterTrip', { n });
 }
 
 /** The passes whose trip ended (home-by deadline + 24 h) and that are set to delete after the trip. */
@@ -151,8 +152,8 @@ export class PassesService {
     await store.deletePass(id);
     this.list.update(l => l.filter(p => p.id !== id));
     await this.refreshSizes(store);
-    this.db.flash('Pass deleted', {
-      label: 'Undo',
+    this.db.flash(t('passes.deleted'), {
+      label: t('common.undo'),
       run: () => void this.restore(rec, image),
     });
   }

@@ -3,6 +3,7 @@ import { IconComponent } from '../../components/shared/icons.component';
 import type { Attachment } from '../../files/model';
 import { formatBytes } from '../../files/quota';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
+import { t } from '../../i18n/t';
 
 /**
  * A section's photos, one at a time, read from this phone (offline):
@@ -14,17 +15,17 @@ import { GlassSheetComponent } from '../../ui/glass-sheet.component';
   imports: [GlassSheetComponent, IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet #sheet [title]="current()?.title ?? 'Photo'" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet #sheet [title]="current()?.title ?? t('files.photo')" [open]="true" (closed)="closed.emit()">
       @if (current(); as p) {
         <figure class="pv">
           @if (urls()[p.blobId ?? '']; as src) {
             <img class="pv__img" [src]="src" [alt]="p.title" data-viewer-img>
           } @else {
-            <div class="pv__img pv__img--empty">Loading…</div>
+            <div class="pv__img pv__img--empty">{{ t('files.loading') }}</div>
           }
           <figcaption class="pv__cap tn">
-            <span>{{ index() + 1 }} of {{ photos().length }} · {{ size() }}</span>
-            <button type="button" class="ui-circ ui-circ--glass pv__more" aria-label="Photo actions" data-viewer-more
+            <span>{{ t('files.photoCount', { i: index() + 1, n: photos().length }) }} · {{ size() }}</span>
+            <button type="button" class="ui-circ ui-circ--glass pv__more" [attr.aria-label]="t('files.photoActions')" data-viewer-more
                     (click)="more.emit(p); sheet.close()">
               <app-icon name="more" [size]="18" />
             </button>
@@ -33,10 +34,10 @@ import { GlassSheetComponent } from '../../ui/glass-sheet.component';
         @if (photos().length > 1) {
           <div class="pv__nav">
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-prev [disabled]="index() === 0" (click)="go(-1)">
-              <app-icon name="chevron-left" [size]="16" />Previous
+              <app-icon name="chevron-left" [size]="16" />{{ t('files.previous') }}
             </button>
             <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-next [disabled]="index() >= photos().length - 1" (click)="go(1)">
-              Next<app-icon name="chevron-right" [size]="16" />
+              {{ t('common.next') }}<app-icon name="chevron-right" [size]="16" />
             </button>
           </div>
         }
@@ -54,6 +55,7 @@ import { GlassSheetComponent } from '../../ui/glass-sheet.component';
   `],
 })
 export class PhotoViewerComponent {
+  protected readonly t = t;
   readonly photos = input.required<Attachment[]>();
   readonly start = input(0);
   /** blobId → object URL (the page owns and revokes them). */

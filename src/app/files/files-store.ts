@@ -14,7 +14,7 @@ export const STORES = { attachments: 'attachments', passes: 'passes', blobs: 'bl
 /** Thrown by a write on a read-only store (a newer app version wrote the database). */
 export class ReadOnlyStoreError extends Error {
   constructor() {
-    super('The files database was written by a newer version of the app');
+    super('The files database was written by a newer version of the app'); // i18n-ignore
     this.name = 'ReadOnlyStoreError';
   }
 }
@@ -260,7 +260,7 @@ export class MemoryFilesStore implements FilesStore {
     if (!blob || this.opts.quotaBytes === undefined) return;
     let used = 0;
     for (const b of this.blobs.values()) if (b.id !== blob.id) used += b.bytes;
-    if (used + blob.bytes > this.opts.quotaBytes) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+    if (used + blob.bytes > this.opts.quotaBytes) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError'); // i18n-ignore
   }
 }
 

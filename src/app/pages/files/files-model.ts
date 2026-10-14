@@ -11,6 +11,7 @@ import type { IconName } from '../../components/shared/icons.component';
 import type { Trip, TripLeg } from '../../trips/model';
 import { addDays } from '../../utils/time';
 import { MODE_ICON, dayLabel, flightNumbers, refsRoute } from '../trips/trips-model';
+import { type MsgKey, t } from '../../i18n/t';
 
 /** The leg's travel day (local at its origin). */
 export function legDay(leg: TripLeg): string {
@@ -46,7 +47,7 @@ export interface ScopeOption { key: string; label: string; scope: AttachmentScop
 
 /** Whole trip, each leg ('AC834 YUL → MAD · Thu Oct 8'), then each day of the trip ('Sat Oct 10'). */
 export function scopeOptions(trip: Trip): ScopeOption[] {
-  const out: ScopeOption[] = [{ key: 'trip', label: 'Whole trip', scope: { kind: 'trip' } }];
+  const out: ScopeOption[] = [{ key: 'trip', label: t('files.wholeTrip'), scope: { kind: 'trip' } }];
   for (const l of liveLegs(trip)) {
     const scope: AttachmentScope = { kind: 'leg', legId: l.id };
     out.push({ key: scopeKey(scope), label: `${legTitle(l)} · ${dayLabel(legDay(l))}`, scope });
@@ -90,8 +91,7 @@ export interface FileSection {
 export function passMeta(passes: readonly PassRecord[]): string {
   const n = passes.length;
   const seats = [...new Set(passes.map(p => p.seat).filter((s): s is string => !!s))];
-  const count = n === 1 ? '1 pass' : `${n} passes`;
-  return seats.length ? `${count} · seat ${seats.join(', ')}` : count;
+  return seats.length ? t('passes.countSeat', { n, seats: seats.join(', ') }) : t('passes.count', { n });
 }
 
 function passGroups(passes: readonly PassRecord[], legIds: readonly string[]): PassGroup[] {
@@ -142,7 +142,7 @@ export function fileSections(trip: Trip, attachments: readonly Attachment[], pas
   // Passes kept with the trip (no leg, or a leg that no longer exists) form one row.
   const loose = ownPasses.filter(p => !p.legId || !legs.has(p.legId) || !legDay(legs.get(p.legId)!));
   const tripPassGroups: PassGroup[] = loose.length ? [{ legId: null, firstId: loose[0].id, count: loose.length, meta: passMeta(loose) }] : [];
-  sections.push(section('trip', null, 'Whole trip', tripPassGroups, tripItems, null, { kind: 'trip' }));
+  sections.push(section('trip', null, t('files.wholeTrip'), tripPassGroups, tripItems, null, { kind: 'trip' }));
 
   const days = [...new Set([...legsByDay.keys(), ...dayItems.keys()])].sort();
   for (const d of days) {
@@ -162,7 +162,7 @@ function section(key: string, dateKey: string | null, title: string, passes: Pas
                  emptyLeg: TripLeg | null, target: AttachmentScope): FileSection {
   const photos = all.filter(a => a.kind === 'image');
   const items = all.filter(a => a.kind !== 'image');
-  const aside = photos.length ? (photos.length === 1 ? '1 photo' : `${photos.length} photos`) : null;
+  const aside = photos.length ? t('files.photos', { n: photos.length }) : null;
   return { key, dateKey, title, aside, passes, items, photos, emptyLeg, target };
 }
 
@@ -179,18 +179,18 @@ export function photoTiles<T>(photos: readonly T[]): { shown: T[]; more: number 
 export function itemMeta(a: Attachment): string {
   if (a.kind === 'note' || a.kind === 'address') return a.text ?? '';
   const size = formatBytes(a.bytes);
-  if (a.kind === 'pdf') return a.pages ? `PDF · ${a.pages} ${a.pages === 1 ? 'page' : 'pages'} · ${size}` : `PDF · ${size}`;
-  if (a.kind === 'image') return `Photo · ${size}`;
+  if (a.kind === 'pdf') return a.pages ? t('files.meta.pdfPages', { n: a.pages, size }) : t('files.meta.pdf', { size });
+  if (a.kind === 'image') return t('files.meta.photo', { size });
   return `${fileTypeLabel(a.mime)} · ${size}`;
 }
 
 function fileTypeLabel(mime: string | null): string {
   const sub = (mime ?? '').split('/')[1] ?? '';
   const known: Record<string, string> = {
-    'plain': 'Text', 'html': 'Web page', 'zip': 'ZIP', 'vnd.apple.pkpass': 'Wallet pass', 'calendar': 'Calendar',
+    'plain': t('files.type.text'), 'html': t('files.type.web'), 'zip': 'ZIP', 'vnd.apple.pkpass': t('files.type.wallet'), 'calendar': t('files.type.calendar'),
     'msword': 'Word', 'vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
   };
-  return known[sub] ?? 'File';
+  return known[sub] ?? t('files.type.file');
 }
 
 export type IconTone = 'pass' | 'pdf' | 'photo' | 'note' | 'ground' | 'file';
@@ -211,7 +211,10 @@ export function itemIcon(a: Attachment, trip: Trip | null): { name: IconName; to
 export type UsageCat = 'passes' | 'pdfs' | 'photos' | 'notes' | 'other';
 export interface UsageBar { cat: UsageCat; label: string; text: string; pct: number }
 
-const CAT_LABEL: Record<UsageCat, string> = { passes: 'Passes', pdfs: 'PDFs', photos: 'Photos', notes: 'Notes', other: 'Other' };
+/** The legend label of a category, in the UI language. */
+function catLabel(c: UsageCat): string {
+  return t(`files.cat.${c}` as MsgKey);
+}
 
 /**
  * The stacked bar and its legend. Every category present is listed with its
@@ -226,8 +229,8 @@ export function usageBars(u: UsageSummary, present: Record<UsageCat, number>): U
     const pct = total > 0 ? (bytes / total) * 100 : 0;
     return {
       cat: c,
-      label: CAT_LABEL[c],
-      text: c === 'notes' ? CAT_LABEL[c] : `${CAT_LABEL[c]} ${formatBytes(bytes)}`,
+      label: catLabel(c),
+      text: c === 'notes' ? catLabel(c) : `${catLabel(c)} ${formatBytes(bytes)}`,
       pct: c === 'notes' ? 2 : Math.max(pct, bytes > 0 ? 1 : 0),
     };
   });
@@ -247,8 +250,8 @@ export function categoryCounts(attachments: readonly Attachment[], passCount: nu
 
 /** '9 files · 14.2 MB', '1 file · 0 B', 'No files yet'. */
 export function usageTitle(count: number, bytes: number): string {
-  if (!count) return 'No files yet';
-  return `${count} ${count === 1 ? 'file' : 'files'} · ${formatBytes(bytes)}`;
+  if (!count) return t('files.none');
+  return t('files.usage.title', { n: count, size: formatBytes(bytes) });
 }
 
 /** Bytes of these passes' images, each stored image counted once. */
@@ -268,7 +271,7 @@ export function isIos(nav: { userAgent?: string; platform?: string; maxTouchPoin
 /** The keep-your-files note: null when the browser keeps them (persisted, or installed). */
 export function persistNote(info: { persisted: boolean | null; installed: boolean } | null, ios: boolean): string | null {
   if (!info || info.persisted !== false || info.installed) return null;
-  return ios ? 'On iPhone, add Routes to your Home Screen so these files are kept.' : 'Your browser may clear these if space runs low.';
+  return t(ios ? 'files.persist.ios' : 'files.persist.other');
 }
 
 /** The scroll target id of a section. */

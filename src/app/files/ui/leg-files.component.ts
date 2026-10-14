@@ -7,6 +7,7 @@ import { AppStateService } from '../../state/app-state.service';
 import type { Trip, TripLeg } from '../../trips/model';
 import { FilesService } from '../files.service';
 import type { Attachment } from '../model';
+import { t } from '../../i18n/t';
 
 /** Rows shown in the leg sheet before "See all". */
 export const LEG_FILES_MAX = 3;
@@ -24,10 +25,10 @@ export const LEG_FILES_MAX = 3;
   template: `
     <section class="lf" aria-labelledby="lf-h" data-leg-files>
       <div class="lf__h">
-        <h3 class="ui-h3" id="lf-h">Files</h3>
+        <h3 class="ui-h3" id="lf-h">{{ t('files.title') }}</h3>
         @if (items().length) {
           <a class="lf__all" [routerLink]="filesLink()" [queryParams]="dayQuery()" data-see-all>
-            {{ items().length > max ? 'See all ' + items().length : 'All trip files' }}
+            {{ items().length > max ? t('files.seeAll', { n: items().length }) : t('files.allTripFiles') }}
           </a>
         }
       </div>
@@ -50,7 +51,7 @@ export const LEG_FILES_MAX = 3;
       }
       <label class="lf__add" [class.is-off]="busy()">
         <svg class="plus" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-        {{ busy() ? 'Saving…' : 'Add a file' }}
+        {{ busy() ? t('files.saving') : t('files.addFile') }}
         <input type="file" multiple class="ui-visually-hidden" data-leg-add [disabled]="busy()" (change)="add($event)">
       </label>
       @if (error(); as e) { <p class="lf__err" role="alert">{{ e }}</p> }
@@ -93,6 +94,7 @@ export class LegFilesComponent {
   readonly trip = input.required<Trip>();
   readonly leg = input.required<TripLeg>();
 
+  protected readonly t = t;
   protected readonly max = LEG_FILES_MAX;
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -146,6 +148,6 @@ export class LegFilesComponent {
       n++;
     }
     this.busy.set(false);
-    if (n) this.state.flash(n === 1 ? 'Saved to this leg' : `${n} files saved to this leg`);
+    if (n) this.state.flash(t('files.savedToLeg', { n }));
   }
 }

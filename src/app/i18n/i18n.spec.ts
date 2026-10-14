@@ -20,6 +20,8 @@ const SAME_IN_FRENCH: ReadonlySet<string> = new Set<MsgKey>([
   'home.destinations', 'home.week.destinations', 'home.badge.at', 'home.filter.sort.az', 'home.chips.via',
   // trips (chunk A)
   'trips.mode.train', 'trips.modeLabel.train', 'trips.tab.plan', 'trips.leg.mode', 'trips.leg.note', 'trips.off.trains', 'trips.off.photos',
+  'today.mode.train', 'passes.add.photo', 'passes.add.pdf', 'passes.add.date',
+  'files.photos', 'files.photo', 'files.note', 'files.meta.pdfPages', 'files.meta.pdf', 'files.meta.photo', 'files.cat.photos', 'files.cat.notes',
 ]);
 
 afterEach(() => setLocale('en'));

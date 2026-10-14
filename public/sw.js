@@ -23,6 +23,7 @@ var SHARE_PATH = '/share-in';
 var SYNC_CACHE = 'ac-sched-check';
 var SYNC_TAG = 'schedule-check';
 var SEEN_KEY = '/__sched-seen';
+var TEXT_KEY = '/__notify-text';
 var MAX_AGE_MS = 60 * 60 * 1000;
 var MAX_FILES = 5;
 var MAX_BYTES = 25 * 1024 * 1024;
@@ -121,6 +122,18 @@ async function readSeen() {
   return res ? res.text() : null;
 }
 
+/** The notification wording in the app's language, posted by the page (English until it has). */
+async function readNotifyText() {
+  var fallback = { title: 'Schedules updated', body: 'Open to check your trips.' };
+  try {
+    var cache = await caches.open(SYNC_CACHE);
+    var res = await cache.match(TEXT_KEY);
+    var saved = res ? await res.json() : null;
+    if (saved && typeof saved.title === 'string' && typeof saved.body === 'string' && saved.title && saved.body) return saved;
+  } catch (e) { /* use the English text */ }
+  return fallback;
+}
+
 async function writeSeen(value) {
   var cache = await caches.open(SYNC_CACHE);
   await cache.put(SEEN_KEY, new Response(value));
@@ -156,8 +169,9 @@ async function checkSchedules() {
     clients.forEach(function (c) { c.postMessage({ type: 'ac:schedules-updated', generatedAt: current }); });
     return;
   }
-  await self.registration.showNotification('Schedules updated', {
-    body: 'Open to check your trips.', tag: SYNC_TAG, icon: '/icons/v2/icon-192x192.png', data: { url: '/trips' },
+  var text = await readNotifyText();
+  await self.registration.showNotification(text.title, {
+    body: text.body, tag: SYNC_TAG, icon: '/icons/v2/icon-192x192.png', data: { url: '/trips' },
   });
 }
 
@@ -168,6 +182,10 @@ self.addEventListener('periodicsync', function (event) {
 /** The app reports the schedules it has loaded, so we never notify about what the user already sees. */
 self.addEventListener('message', function (event) {
   var d = event.data;
+  if (d && d.type === 'ac:notify-text' && typeof d.title === 'string' && typeof d.body === 'string') {
+    event.waitUntil(caches.open(SYNC_CACHE).then(function (c) { return c.put(TEXT_KEY, new Response(JSON.stringify({ title: d.title.slice(0, 120), body: d.body.slice(0, 240) }))); }).catch(function () { /* best effort */ }));
+    return;
+  }
   if (d && d.type === 'ac:schedules-seen' && typeof d.generatedAt === 'string') {
     event.waitUntil(readSeen().then(function (prev) { if (!prev || d.generatedAt > prev) return writeSeen(d.generatedAt); }).catch(function () { /* best effort */ }));
   }

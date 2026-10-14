@@ -129,6 +129,15 @@ describe('public/sw.js', () => {
     expect(sw.shown[0].opts.data).toEqual({ url: '/trips' });
   });
 
+  it('shows the wording the page last posted, English until then', async () => {
+    const sw = boot();
+    await sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'A' } });
+    await sw.fire('message', { data: { type: 'ac:notify-text', title: 'Horaires mis à jour', body: 'Ouvrez pour vérifier vos voyages.' } });
+    await sw.fire('periodicsync', { tag: 'schedule-check' });
+    expect(sw.shown[0].title).toBe('Horaires mis à jour');
+    expect(sw.shown[0].opts.body).toBe('Ouvrez pour vérifier vos voyages.');
+  });
+
   it('tells an open window instead of notifying', async () => {
     const sw = boot();
     sw.setWindows(1);

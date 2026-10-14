@@ -5,7 +5,8 @@ import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { passPath } from '../../extras/links';
 import { FilesService } from '../../files/files.service';
-import { Attachment, AttachmentScope, MEMORY_WARNING } from '../../files/model';
+import { Attachment, AttachmentScope, memoryWarning } from '../../files/model';
+import { t } from '../../i18n/t';
 import { PassesService } from '../../passes/passes.service';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
@@ -36,45 +37,45 @@ import { PhotoViewerComponent } from './photo-viewer.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare tf">
-      @if (trip(); as t) {
+      @if (trip(); as tr) {
         <header class="tf__head">
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('files.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
           <div class="tf__title">
-            <h1 class="ui-h3">Files</h1>
-            <p class="tf__sub">{{ t.name }}</p>
+            <h1 class="ui-h3">{{ t('files.title') }}</h1>
+            <p class="tf__sub">{{ tr.name }}</p>
           </div>
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Add a file" data-add [disabled]="readOnly()"
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('files.addFile')" data-add [disabled]="readOnly()"
                   (click)="openAdd({ kind: 'trip' })">
             <svg class="plus" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
           </button>
         </header>
 
-        <section class="ui-card tf__use" aria-label="Storage on this phone" data-usage>
+        <section class="ui-card tf__use" [attr.aria-label]="t('files.storage')" data-usage>
           <div class="tf__use-h">
             <h2 class="ui-h3 tn" data-usage-title>{{ title() }}</h2>
-            <span class="tf__muted">on this phone</span>
+            <span class="tf__muted">{{ t('files.onThisPhone') }}</span>
           </div>
           @if (bars().length) {
             <div class="tf__bar" aria-hidden="true">
               @for (b of bars(); track b.cat) { <i [class]="'c-' + b.cat" [style.flex-grow]="b.pct"></i> }
             </div>
-            <ul class="tf__legend tn" aria-label="By kind" data-legend>
+            <ul class="tf__legend tn" [attr.aria-label]="t('files.byKind')" data-legend>
               @for (b of bars(); track b.cat) { <li><i [class]="'c-' + b.cat" aria-hidden="true"></i>{{ b.text }}</li> }
             </ul>
           }
           <label class="tf__sw" for="tf-backup">
-            <span><b>Include in backup export</b>
-              <span class="tf__muted" data-backup-state>{{ files.prefs().includeInBackup ? 'On · passes are never included' : 'Off · passes are never shared' }}</span>
+            <span><b>{{ t('files.includeExport') }}</b>
+              <span class="tf__muted" data-backup-state>{{ files.prefs().includeInBackup ? t('files.backupOn') : t('files.backupOff') }}</span>
             </span>
             <input id="tf-backup" type="checkbox" role="switch" class="switch" data-backup
                    [checked]="files.prefs().includeInBackup" (change)="setBackup($event)">
           </label>
           @if (status() === 'memory') {
-            <p class="tf__warn" role="status" data-memory>{{ memoryWarning }}</p>
+            <p class="tf__warn" role="status" data-memory>{{ memoryWarning() }}</p>
           } @else if (status() === 'readOnly') {
-            <p class="tf__warn" role="status">Files were saved by a newer version of the app. You can open them, but changes won't be kept.</p>
+            <p class="tf__warn" role="status">{{ t('files.readOnlyNote') }}</p>
           } @else if (status() === 'error') {
-            <p class="tf__warn" role="status">Files couldn't be opened on this browser right now. Reload to try again.</p>
+            <p class="tf__warn" role="status">{{ t('files.openFailed') }}</p>
           } @else if (keepNote(); as n) {
             <p class="tf__note" data-persist>{{ n }}</p>
           }
@@ -88,19 +89,19 @@ import { PhotoViewerComponent } from './photo-viewer.component';
                 @if (s.aside) { <span class="tf__muted">{{ s.aside }}</span> }
                 @if (!(s.passes.length || s.items.length || s.photos.length) && s.emptyLeg; as l) {
                   <!-- A leg with nothing yet gets a small Add in its heading, not a full-width card per leg. -->
-                  <button type="button" class="tf__add" data-empty-leg [attr.aria-label]="'Add a pass or file for ' + s.title"
+                  <button type="button" class="tf__add" data-empty-leg [attr.aria-label]="t('files.addForLeg', { title: s.title })"
                           (click)="openAdd({ kind: 'leg', legId: l.id })" [disabled]="readOnly()">
-                    <svg class="plus" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add</button>
+                    <svg class="plus" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>{{ t('files.add') }}</button>
                 }
               </div>
 
               @if (s.passes.length || s.items.length || s.photos.length) {
                 <div class="ui-card tf__card">
                   @for (g of s.passes; track g.firstId) {
-                    <a class="row" [routerLink]="pass(t.id, g.firstId)" data-passes>
+                    <a class="row" [routerLink]="pass(tr.id, g.firstId)" data-passes>
                       <span class="fic fic--pass"><app-icon name="barcode" [size]="19" /></span>
-                      <span class="rt"><b>Boarding passes</b><span class="m tn">{{ g.meta }}</span></span>
-                      <span class="lock"><app-icon name="lock" [size]="12" [strokeWidth]="2.2" />Not shared</span>
+                      <span class="rt"><b>{{ t('files.boardingPasses') }}</b><span class="m tn">{{ g.meta }}</span></span>
+                      <span class="lock"><app-icon name="lock" [size]="12" [strokeWidth]="2.2" />{{ t('passes.notShared') }}</span>
                     </a>
                   }
                   @if (s.photos.length) {
@@ -108,14 +109,14 @@ import { PhotoViewerComponent } from './photo-viewer.component';
                     <div class="thumbs" data-thumbs>
                       @for (p of tiles.shown; track p.id; let i = $index) {
                         <button type="button" class="thumb" appLongPress #lp="appLongPress" (longPress)="menuFor.set(p)"
-                                [attr.aria-label]="p.title + ', photo ' + (i + 1) + ' of ' + s.photos.length"
+                                [attr.aria-label]="t('files.photoOf', { title: p.title, i: i + 1, n: s.photos.length })"
                                 (click)="lp.took() || view(s.photos, i)">
                           @if (urls()[p.blobId ?? '']; as src) { <img [src]="src" alt="" loading="lazy" decoding="async"> }
                         </button>
                       }
                       @if (tiles.more) {
                         <button type="button" class="thumb thumb--more tn" data-more-photos
-                                [attr.aria-label]="'Show ' + tiles.more + ' more photos'" (click)="view(s.photos, tiles.shown.length)">+{{ tiles.more }}</button>
+                                [attr.aria-label]="t('files.morePhotos', { n: tiles.more })" (click)="view(s.photos, tiles.shown.length)">+{{ tiles.more }}</button>
                       }
                     </div>
                   }
@@ -131,7 +132,7 @@ import { PhotoViewerComponent } from './photo-viewer.component';
                         }
                         <span class="rt"><b>{{ a.title }}</b><span class="m tn" [class.m--wrap]="a.kind === 'note'">{{ meta(a) }}</span></span>
                       </button>
-                      <button type="button" class="row__more" [attr.aria-label]="'More for ' + a.title" data-item-more (click)="menuFor.set(a)">
+                      <button type="button" class="row__more" [attr.aria-label]="t('files.moreFor', { title: a.title })" data-item-more (click)="menuFor.set(a)">
                         <app-icon name="more" [size]="18" />
                       </button>
                     </div>
@@ -139,21 +140,21 @@ import { PhotoViewerComponent } from './photo-viewer.component';
                 </div>
               } @else if (s.key === 'trip') {
                 <button type="button" class="ui-card tf__empty" data-empty-trip (click)="openAdd({ kind: 'trip' })" [disabled]="readOnly()">
-                  <svg class="plus" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>Add a confirmation, ticket, note or address
+                  <svg class="plus" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>{{ t('files.addFirst') }}
                 </button>
               }
             </section>
           }
-          <p class="tf__foot">On this phone only. Opens offline. Boarding passes are never in share links or backups.</p>
+          <p class="tf__foot">{{ t('files.foot') }}</p>
         } @else {
-          <p class="tf__foot" role="status">Opening files on this phone…</p>
+          <p class="tf__foot" role="status">{{ t('files.opening') }}</p>
         }
 
         @if (adding(); as sc) {
-          <app-add-file-sheet [trip]="t" [scope]="sc" (closed)="adding.set(null)" />
+          <app-add-file-sheet [trip]="tr" [scope]="sc" (closed)="adding.set(null)" />
         }
         @if (menuFor(); as a) {
-          <app-file-item-sheet [item]="a" [trip]="t" (closed)="menuFor.set(null)" (view)="viewOne($event)" />
+          <app-file-item-sheet [item]="a" [trip]="tr" (closed)="menuFor.set(null)" (view)="viewOne($event)" />
         }
         @if (viewing(); as v) {
           <app-photo-viewer [photos]="v.photos" [start]="v.index" [urls]="urls()" (closed)="viewing.set(null)" (more)="menuLater($event)" />
@@ -169,7 +170,7 @@ import { PhotoViewerComponent } from './photo-viewer.component';
     .tf__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tf__muted { font-size: 13px; color: var(--ink-2); font-weight: 400; }
     .tf__use { padding: 16px; display: grid; gap: 0; }
-    .tf__use-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .tf__use-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; }
     .tf__use-h h2 { margin: 0; }
     .tf__bar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--fill); margin-top: 12px; }
     .tf__bar i { display: block; height: 100%; flex-basis: 0; min-width: 3px; }
@@ -258,7 +259,8 @@ export class TripFilesPage {
   /** ?day=<dateKey>: scrolls to that day. */
   readonly day = input<string | undefined>(undefined);
 
-  protected readonly memoryWarning = MEMORY_WARNING;
+  protected readonly t = t;
+  protected readonly memoryWarning = memoryWarning;
   protected readonly loaded = signal(false);
   protected readonly adding = signal<AttachmentScope | null>(null);
   protected readonly menuFor = signal<Attachment | null>(null);
@@ -334,9 +336,9 @@ export class TripFilesPage {
   }
 
   protected openLabel(a: Attachment): string {
-    if (a.kind === 'address') return `${a.title}, ${a.text ?? ''}. Open in Maps`;
-    if (a.kind === 'note') return `${a.title}: ${a.text ?? ''}`;
-    return `Open ${a.title}, ${itemMeta(a)}`;
+    if (a.kind === 'address') return t('files.openAddress', { title: a.title, text: a.text ?? '' });
+    if (a.kind === 'note') return t('files.noteLabel', { title: a.title, text: a.text ?? '' });
+    return t('files.openFile', { title: a.title, meta: itemMeta(a) });
   }
 
   protected openAdd(scope: AttachmentScope): void {

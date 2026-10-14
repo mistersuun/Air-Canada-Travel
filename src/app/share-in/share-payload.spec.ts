@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  SHARE_FAILED_TEXT, SHARE_TOO_LARGE_TEXT, actionsFor, backgroundChecksSupport, noteTextFrom, noteTitleFrom, sharedKind, stashKey, validShareId,
+  shareFailedText, shareTooLargeText, actionsFor, backgroundChecksSupport, noteTextFrom, noteTitleFrom, sharedKind, stashKey, validShareId,
 } from './share-payload';
 
 describe('sharedKind', () => {
@@ -43,8 +43,8 @@ describe('note text and title', () => {
 
 describe('share limits', () => {
   it('has clear texts for a failed and an oversized share', () => {
-    expect(SHARE_FAILED_TEXT).toMatch(/Try again/);
-    expect(SHARE_TOO_LARGE_TEXT).toMatch(/25 MB/);
+    expect(shareFailedText()).toMatch(/Try again/);
+    expect(shareTooLargeText()).toMatch(/25 MB/);
   });
 });
 

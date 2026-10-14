@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { seedOnboarded, watchErrors } from './helpers';
 
-// Day-of flows on a seeded trip. Dates are relative to the moment the test runs, so the suite never ages out.
+// Day-of flows on a seeded trip. Dates are relative to "now", and the page clock is pinned to midday in
+// Toronto on the day the test runs, so nothing here depends on the time of day (or crosses midnight).
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -36,19 +37,27 @@ function flightLeg(id: string, role: 'outbound' | 'return', status: string, orig
   };
 }
 
+/** Pins the page clock to midday at Montréal on today's date there; returns that instant. */
+async function pinNoon(page: Page): Promise<number> {
+  const noon = Date.parse(`${localAt(Date.now(), 'America/Toronto').dateKey}T16:00:00Z`);
+  await page.clock.install({ time: noon });
+  return noon;
+}
+
 async function seedTrip(page: Page, trip: Record<string, unknown>): Promise<void> {
   await page.addInitScript(t => {
     try {
-      localStorage.setItem('ac.trips.v1', JSON.stringify({ schema: 1, trips: [t] }));
+      // Only the first load: a reload must see what the page itself saved.
+      if (!localStorage.getItem('ac.trips.v1')) localStorage.setItem('ac.trips.v1', JSON.stringify({ schema: 1, trips: [t] }));
     } catch {
       // Storage blocked: the test fails on its own assertions.
     }
   }, trip);
 }
 
-test('Today: a flight leaving within the hour, "I didn\'t board" opens Still reachable with options', async ({ page }) => {
+test('Today: a flight leaving in 20 minutes, "I didn\'t board" opens Still reachable with options', async ({ page }) => {
   await seedOnboarded(page);
-  const now = Date.now();
+  const now = await pinNoon(page);
   const trip = baseTrip('e2eflight1', now + 5 * DAY);
   trip['legs'] = [flightLeg('leg-out', 'outbound', 'listed', 'YUL', 'MAD', 'AC834', now + 3 * HOUR, 'America/Toronto')];
   await seedTrip(page, trip);
@@ -66,7 +75,7 @@ test('Today: a flight leaving within the hour, "I didn\'t board" opens Still rea
 
 test('Today: a train leg planned for today is shown, and "I made it" marks it done', async ({ page }) => {
   await seedOnboarded(page);
-  const now = Date.now();
+  const now = await pinNoon(page);
   const trip = baseTrip('e2eground1', now + 5 * DAY);
   const today = localAt(now, 'Europe/Madrid').dateKey;
   trip['legs'] = [
@@ -86,30 +95,39 @@ test('Today: a train leg planned for today is shown, and "I made it" marks it do
   await expect(page.getByRole('button', { name: 'I made it' })).toBeVisible();
   await expect(page.getByText('Nothing planned today')).toHaveCount(0);
   await page.getByRole('button', { name: 'I made it' }).click();
-  await expect(page.locator('[data-final]')).toContainText('marked Boarded');
+  await expect(page.locator('[data-final]')).toContainText('marked done');
+  // Undo puts it back; marking again survives a reload.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByRole('button', { name: 'I made it' })).toBeVisible();
+  await page.getByRole('button', { name: 'I made it' }).click();
+  await expect(page.locator('[data-final]')).toContainText('marked done');
+  await page.reload();
+  await expect(page.locator('[data-final]')).toContainText('marked done');
   expect(problems).toEqual([]);
 });
 
 test('Today: a trip day with nothing scheduled shows the day, the way home and a link to the trip', async ({ page }) => {
   await seedOnboarded(page);
-  const now = Date.now();
+  const now = await pinNoon(page);
   const trip = baseTrip('e2emid0001', now + 5 * DAY);
   trip['legs'] = [
     flightLeg('leg-out', 'outbound', 'boarded', 'YUL', 'MAD', 'AC834', now - 2 * DAY, 'America/Toronto'),
     flightLeg('leg-ret', 'return', 'planned', 'MAD', 'YUL', 'AC835', now + 4 * DAY, 'Europe/Madrid'),
   ];
   await seedTrip(page, trip);
+  const problems = await watchErrors(page);
   await page.goto('/today');
   await expect(page.locator('[data-midtrip]')).toContainText('in Seville');
   await expect(page.locator('[data-next]')).toContainText('AC835 home');
-  await expect(page.locator('[data-home-by]')).toContainText('days to go');
+  await expect(page.locator('[data-home-by]')).toContainText('in 5 days');
   await page.locator('[data-open-trip]').click();
   await expect(page).toHaveURL(/\/trips\/e2emid0001/);
+  expect(problems).toEqual([]);
 });
 
 test('the trip Return tab renders for a seeded trip', async ({ page }) => {
   await seedOnboarded(page);
-  const now = Date.now();
+  const now = await pinNoon(page);
   const trip = baseTrip('e2eret0001', now + 5 * DAY);
   trip['legs'] = [
     flightLeg('leg-out', 'outbound', 'boarded', 'YUL', 'MAD', 'AC834', now - 2 * DAY, 'America/Toronto'),

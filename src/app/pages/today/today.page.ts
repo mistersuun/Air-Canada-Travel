@@ -15,7 +15,7 @@ import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component'
 import { recoverPath, tripPath, tripQuery, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
 import { type TodayTarget, groundTodayView, midTripView, resolveGroundToday, resolveToday, statusForTick, todayView, upcomingTripView } from './today-model';
-import type { IconName } from '../../components/shared/icons.component';
+import { MODE_ICON } from '../trips/trips-model';
 import { TodayTimelineComponent } from './today-timeline.component';
 import { TodayInAirComponent } from './in-air.component';
 import { LiveStatusComponent } from '../../live/live-status.component';
@@ -143,7 +143,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
           </div>
         } @else {
           <div class="ui-card td__done" data-final>
-            <p><b>{{ g.title }} marked {{ statusLabel(g.status) }}.</b></p>
+            <p tabindex="-1" data-final-msg><b>{{ g.title }} marked done.</b></p>
             <div class="td__done-acts">
               <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="planLink(g.tripId)">Open trip</a>
             </div>
@@ -153,7 +153,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
       } @else if (mid(); as m) {
         <p class="ui-label td__eyebrow">{{ m.eyebrow }}</p>
         <h1 class="td__title" data-midtrip>{{ m.title }}</h1>
-        <p class="ui-sub td__mid-sub">Nothing is scheduled today.</p>
+        <p class="ui-sub td__mid-sub" data-quiet>{{ m.quiet }}</p>
         @if (m.next; as n) {
           <section class="ui-card td__left" aria-label="Next leg" data-next>
             <span class="td__ct"><b class="tn">{{ n.title }}</b><small>{{ n.detail }}</small></span>
@@ -294,9 +294,15 @@ export class TodayPage {
   });
 
   /** A ground leg today (train, bus, car, ferry), when no flight is up. */
+  /** The ground leg marked done here; kept on screen so the page doesn't jump to another leg. */
+  private readonly heldGround = signal<{ target: TodayTarget; trip: string | undefined; leg: string | undefined } | null>(null);
+
   protected readonly ground = computed(() => {
     if (this.view()) return null;
-    const t = resolveGroundToday(this.trips.trips(), this.state.nowMs(), this.trip(), this.leg());
+    const h = this.heldGround();
+    const t = h && h.trip === this.trip() && h.leg === this.leg()
+      ? h.target
+      : resolveGroundToday(this.trips.trips(), this.state.nowMs(), this.trip(), this.leg());
     const trip = t ? this.trips.trips().find(x => x.id === t.tripId) : null;
     return t && trip ? groundTodayView({ trip, legId: t.legId, nowMs: this.state.nowMs(), fmt: this.prefs.timeFormat() }) : null;
   });
@@ -306,7 +312,7 @@ export class TodayPage {
     this.view() || this.ground() ? null : midTripView(this.trips.trips(), this.state.nowMs(), this.prefs.timeFormat(), this.trip()));
 
   protected readonly upcoming = computed(() =>
-    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs()));
+    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs(), this.trip()));
 
   protected readonly tripLink = computed(() => {
     const v = this.view();
@@ -314,7 +320,7 @@ export class TodayPage {
   });
 
   protected depUtc = refDepUtc;
-  protected icon = (mode: string): IconName => (mode === 'train' || mode === 'bus' || mode === 'car' || mode === 'plane' ? mode : mode === 'flight' ? 'plane' : 'pin');
+  protected icon = (mode: keyof typeof MODE_ICON) => MODE_ICON[mode] ?? 'pin';
   protected planLink = tripPath;
   protected planQuery = (legId: string) => tripQuery('plan', legId);
 
@@ -322,9 +328,11 @@ export class TodayPage {
   protected madeIt(tripId: string, legId: string): void {
     const before = this.trips.trip(tripId)?.legs.find(l => l.id === legId)?.status;
     if (!before) return;
+    this.heldGround.set({ target: { tripId, legId }, trip: this.trip(), leg: this.leg() });
     this.trips.setLegStatus(tripId, legId, 'boarded');
     success();
     this.state.flash('Marked done', { label: 'Undo', run: () => this.trips.setLegStatus(tripId, legId, before) });
+    this.focusAfterRender('[data-final-msg], [data-made-it]');
   }
 
   /** Where "Cancelled" points: Recover, or the Return tab for a return leg. */

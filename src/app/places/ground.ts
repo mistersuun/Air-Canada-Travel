@@ -12,7 +12,8 @@ import { hubDisplayName } from '../ui/format';
 import { findDestination, findHub } from '../utils/airports';
 import { greatCircleKm } from '../utils/geo';
 import { MINUTE_MS, toUtcMs, addDays, hhmmToMin, minToHhmm, todayKey, utcToLocal } from '../utils/time';
-import { CORRIDORS, Corridor, corridorTransferMin } from './corridors';
+import { fastestTransit } from './airport-info';
+import { CORRIDORS, CORRIDOR_EXIT_MIN, Corridor, corridorTransferMin } from './corridors';
 import {
   DAY_KIND_LABEL, Departure, TimetableDir, dayKind, departuresOn, groundTimetables, nextDeparture, timetableFor,
   typicalRide,
@@ -206,7 +207,8 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKe
   if (islandOf(from) !== islandOf(to)) return unknownGround();
 
   const roadKm = greatCircleKm(from, to) * ROAD_FACTOR;
-  const exitMin = isAirport(from) ? HEURISTIC_EXIT_MIN : 0;
+  const fromAirport = isAirport(from);
+  const exitMin = fromAirport ? HEURISTIC_EXIT_MIN : 0;
   if (roadKm < CAR_MAX_KM) {
     const ride = round5((roadKm / CAR_KMH) * 60);
     return {
@@ -217,12 +219,15 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKe
   }
   const ride = round5((roadKm / BUS_KMH) * 60);
   const far = roadKm / ROAD_FACTOR > SHORT_FLIGHT_KM;
+  // To a station: passport and exit, then the airport's own train, metro or bus (never a taxi) when airport-info.json knows it.
+  const transit = fromAirport ? fastestTransit(('code' in from ? from.code : undefined) ?? null) : null;
+  const busExit = transit ? CORRIDOR_EXIT_MIN + transit.min : exitMin;
   return {
     mode: 'bus',
     label: `Bus or train about ${aboutDuration(ride)}${far ? ', or a short flight' : ''}`,
-    rideMin: ride, exitMin,
-    exitLabel: exitMin ? 'Passport, exit, get to the station' : '',
-    totalMin: exitMin + ride, frequency: null, lastDepLocal: null,
+    rideMin: ride, exitMin: busExit,
+    exitLabel: !fromAirport ? '' : transit ? `Passport, exit, then ${transit.note} (about ${transit.min} min)` : 'Passport, exit, get to the station',
+    totalMin: busExit + ride, frequency: null, lastDepLocal: null,
     shortFlightToo: far, source: 'heuristic', provenance: 'estimated',
   };
 }

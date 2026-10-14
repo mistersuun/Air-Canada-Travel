@@ -1,4 +1,5 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
+import { AirportInfoService } from './airport-info';
 import { GroundTimetables, decodeGround, groundTimetables, setGroundTimetables } from './timetable';
 import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
@@ -42,6 +43,7 @@ export type GroundTimetableStatus = 'idle' | 'loading' | 'ready' | 'missing';
 @Injectable({ providedIn: 'root' })
 export class GroundTimetableService {
   private readonly fetcher = inject(GROUND_FETCH);
+  private readonly airports = inject(AirportInfoService);
   private readonly statusSig = signal<GroundTimetableStatus>('idle');
   private pending: Promise<void> | null = null;
 
@@ -54,6 +56,7 @@ export class GroundTimetableService {
    * network error goes back to 'idle' so a later call tries again. Never rejects.
    */
   ensureLoaded(): Promise<void> {
+    void this.airports.ensureLoaded();   // typical airport-to-city minutes for the exit estimate
     if (this.statusSig() === 'ready' || this.statusSig() === 'missing') return Promise.resolve();
     this.pending ??= (async () => {
       this.statusSig.set('loading');

@@ -12,6 +12,7 @@ import { ShellShortcutsDirective } from './shell/shortcuts';
 import { TabBarComponent } from './shell/tab-bar.component';
 import { TopNavComponent } from './shell/top-nav.component';
 import { TripsService } from './trips/trips.service';
+import { ListingNotifierService } from './trips/listing-notifier.service';
 import { hasSkywash, isPassView } from './shell/nav-model';
 
 interface ToastView {
@@ -93,6 +94,11 @@ export class AppComponent {
   private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
   private readonly badge = inject(AppBadgeService);   // keeps the app-icon badge in step
+  private readonly listing = inject(ListingNotifierService);
+
+  constructor() {
+    this.listing.check(this.state.nowMs());   // local notification only if permission was already granted
+  }
 
   protected skipToMain(e: Event, main: HTMLElement): void {
     e.preventDefault();
@@ -138,6 +144,7 @@ export class AppComponent {
     }
     if (this.pwa.reloadOnResume(this.state.path())) return;
     this.state.refreshToday();
+    this.listing.check(this.state.nowMs());
     this.pwa.check();
     this.trips.checkChanges();
   }

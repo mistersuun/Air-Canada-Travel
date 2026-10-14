@@ -5,6 +5,7 @@ import { SCHEDULES_URL, getCoverage, getSchedulesMeta, scheduleVersion } from '.
 import { PhotoService } from '../../../state/photo.service';
 import { AppStateService } from '../../../state/app-state.service';
 import { buildTripIcs, tripIcsFilename } from '../../../trips/engine/trip-ics';
+import { PrefsService } from '../../../state/prefs.service';
 import type { Trip } from '../../../trips/model';
 import { TripsService } from '../../../trips/trips.service';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
@@ -64,7 +65,7 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
             <app-icon name="calendar" [size]="16" /> Export to calendar
           </button>
           @if (trip().calendarExportedAt) {
-            <p class="ui-sub tm__fine">Calendar file has a reminder to list 48 hours before each flight.</p>
+            <p class="ui-sub tm__fine">Calendar file has your listing reminder before each flight. Export again after changing it in Settings.</p>
           }
         </section>
 
@@ -96,6 +97,7 @@ import { offlineFlash, offlineItems, offlineReportLabel, warmOffline, type Offli
 export class TripMenuComponent {
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
+  protected readonly prefs = inject(PrefsService);
   private readonly photos = inject(PhotoService);
   private readonly doc = inject(DOCUMENT);
   private readonly sw = inject(SwUpdate, { optional: true });
@@ -174,7 +176,7 @@ export class TripMenuComponent {
 
   protected calendar(): void {
     const t = this.trip();
-    const ok = downloadIcs(buildTripIcs(t, this.state.nowMs()), tripIcsFilename(t), this.doc);
+    const ok = downloadIcs(buildTripIcs(t, this.state.nowMs(), this.prefs.listingHours()), tripIcsFilename(t), this.doc);
     if (!ok) {
       this.state.flash('Could not create the calendar file');
       return;

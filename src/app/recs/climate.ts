@@ -103,3 +103,47 @@ export function wetDaysText(min: number, max: number = min): string {
   if (min === max) return `${min} wet ${min === 1 ? 'day' : 'days'}`;
   return `${min}\u2013${max} wet days`;
 }
+
+/** Lows below this suggest a warm layer. */
+export const WARM_LAYER_BELOW_C = 10;
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+export interface PackingFact { id: string; title: string }
+
+/**
+ * Packing suggestions phrased from the typical monthly numbers of the trip's
+ * months ("Rain jacket \u2014 wet on about 12 of 31 days in Oct", "Warm layer \u2014
+ * lows around 4\u00b0 in Nov"). Facts from the data with the month named, never a
+ * forecast. Empty when the code has no normals or nothing stands out.
+ */
+export function packingFacts(
+  index: ClimateIndex | null | undefined,
+  code: string | null | undefined,
+  months: readonly number[],
+): PackingFact[] {
+  const rows = months.map(m => climateFor(index, code, m)).filter((c): c is ClimateMonth => !!c);
+  if (!rows.length) return [];
+  const by = (f: (c: ClimateMonth) => number, pick: 'max' | 'min') =>
+    rows.reduce((a, b) => (pick === 'max' ? (f(b) > f(a) ? b : a) : (f(b) < f(a) ? b : a)));
+  const mon = (c: ClimateMonth) => MONTH_SHORT[c.month - 1];
+  const out: PackingFact[] = [];
+  const wet = by(c => c.wetDays, 'max');
+  if (wet.wetDays >= WET_DAYS_RAIN) {
+    // Below freezing the wet days are snow as much as rain.
+    const what = wet.tmaxC <= 0 ? 'Waterproof layer \u2014 rain or snow' : 'Rain jacket \u2014 wet';
+    out.push({ id: 'pack:rain', title: `${what} on about ${wet.wetDays} of ${DAYS_IN_MONTH[wet.month - 1]} days in ${mon(wet)}` });
+  }
+  const cold = by(c => c.tmaxC, 'min');
+  if (cold.tmaxC < COLD_BELOW_C) {
+    out.push({ id: 'pack:coat', title: `Winter coat \u2014 highs only around ${cold.tmaxC}\u00b0 in ${mon(cold)}` });
+  }
+  const low = by(c => c.tminC, 'min');
+  if (low.tminC < WARM_LAYER_BELOW_C) {
+    out.push({ id: 'pack:warm', title: `Warm layer \u2014 lows around ${low.tminC}\u00b0 in ${mon(low)}` });
+  }
+  const hot = by(c => c.tmaxC, 'max');
+  if (hot.tmaxC >= HOT_FROM_C) {
+    out.push({ id: 'pack:sun', title: `Sun protection \u2014 highs around ${hot.tmaxC}\u00b0 in ${mon(hot)}` });
+  }
+  return out;
+}

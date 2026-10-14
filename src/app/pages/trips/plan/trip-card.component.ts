@@ -5,6 +5,7 @@ import { IconComponent } from '../../../components/shared/icons.component';
 import { GroupService } from '../../../group/group.service';
 import { AvatarChipComponent } from '../../../group/ui/avatar-chip.component';
 import { AppStateService } from '../../../state/app-state.service';
+import { PrefsService } from '../../../state/prefs.service';
 import type { Trip } from '../../../trips/model';
 import { LegStatusTagComponent } from '../../../trips/ui/leg-status-tag.component';
 import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.component';
@@ -96,7 +97,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
         @if (r.status) { <app-leg-status-tag [status]="r.status" /> }
         @else if (r.provenance) { <app-provenance-tag [value]="r.provenance" /> }
       </span>
-      <span class="tl__m tn">{{ r.meta }}@if (r.status && r.provenance) {<span class="ui-visually-hidden"> · </span><app-provenance-tag class="tl__pv" [value]="r.provenance" />}</span>
+      <span class="tl__m tn">{{ r.meta }}@if (r.listing && mode() === 'link') {<span class="tl__lst ui-tag" [class.ui-tag--teal]="r.listing.open" [class.ui-tag--neutral]="!r.listing.open" data-listing>{{ r.listing.label }}</span>}@if (r.status && r.provenance) {<span class="ui-visually-hidden"> · </span><app-provenance-tag class="tl__pv" [value]="r.provenance" />}</span>
     </ng-template>
   `,
   styles: [`
@@ -144,6 +145,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     .tl__top > :last-child { flex: none; }
     .tl__m { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
     .tl__pv { margin-left: 6px; vertical-align: 1px; }
+    .tl__lst { margin-left: 6px; font-size: 10.5px; padding: 1px 7px; vertical-align: 1px; }
     .tl__pv ::ng-deep .ui-tag { font-size: 10.5px; padding: 1px 7px; }
     .is-done .tl__t { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--ink-3); }
     .is-done .tl__ic b { background: var(--fill); color: var(--ink-3); }
@@ -167,6 +169,7 @@ export class TripCardComponent {
     const r = this.groups.forTrip(this.trip().id);
     return r ? (r.names?.length ? r.names : [r.name]).filter(Boolean).slice(0, 4) : [];
   });
+  private readonly prefs = inject(PrefsService);
 
   readonly trip = input.required<Trip>();
   /** 'link': legs and the goal link to the trip; 'button': legs emit legPick; 'static': read only. */
@@ -180,7 +183,7 @@ export class TripCardComponent {
   protected readonly cdTitle = computed(() => (/sleeps$/.test(this.cd().text) ? `${this.cd().text} to ${this.trip().goal.name}` : this.cd().text));
   protected readonly dates = computed(() => tripDatesLabel(this.trip(), this.state.timeFormat()));
   protected readonly partyText = computed(() => partyLabel(this.trip().party));
-  protected readonly rows = computed(() => legRows(this.trip(), this.state.timeFormat()));
+  protected readonly rows = computed(() => legRows(this.trip(), this.state.timeFormat(), { nowMs: this.state.nowMs(), hours: this.prefs.listingHours() }));
   protected readonly home = computed(() => homeLabel(this.trip()));
   protected readonly summary = computed(() => compactSummary(this.trip()));
   protected readonly tripLink = computed(() => tripPath(this.trip().id));

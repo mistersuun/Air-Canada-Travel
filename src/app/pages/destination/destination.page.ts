@@ -271,7 +271,7 @@ const AC_URL = 'https://www.aircanada.com/';
             <div><span class="ic"><app-icon name="sun" [size]="16" /></span><span>Season</span><b>{{ s.season }}</b></div>
             <div><span class="ic"><app-icon name="plane" [size]="16" /></span><span>Aircraft</span><b>{{ s.aircraftShort || '—' }}</b></div>
           </div>
-          <app-dest-reference [iso2]="dest()?.iso2" [todayKey]="climateDay()" />
+          <app-dest-reference [iso2]="dest()?.iso2" [airportCode]="code()" [todayKey]="climateDay()" />
           <app-dest-climate [code]="code()" [dateKey]="climateDay()" />
           <app-dest-forecast [code]="code()" [dateKey]="climateDay()" />
           <app-events-card [code]="code()" [from]="eventsFrom()" [to]="eventsTo()" />

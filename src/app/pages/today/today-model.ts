@@ -22,6 +22,7 @@ import { partOfDay } from '../reach/reach-model';
 import { shortAircraftName } from '../../trips/engine/facts';
 import { MODE_LABEL, groundRide } from '../trips/trips-model';
 import { endTz, legStartUtc, legWindow, refArrUtc, refDepUtc, sortLegs } from '../../trips/engine/legs';
+import { DEFAULT_LISTING_HOURS, listingChip } from '../../trips/engine/listing';
 import { findDestination, findHub } from '../../utils/airports';
 import { getDestinationCodes } from '../../data/schedule-index';
 import { dailyFact } from '../destination/fun-facts';
@@ -241,7 +242,7 @@ export interface MidTripView {
   eyebrow: string;          // 'Seville trip · Wed Oct 14'
   title: string;            // 'Day 2 in Seville' | 'On your way to Seville'
   /** The next open leg, with where it stands. */
-  next: { title: string; detail: string } | null;
+  next: { title: string; detail: string; listing?: { label: string; open: boolean } | null } | null;
   /** 'Home by Mon Oct 19, 22:00' and '5 days to go'. */
   homeBy: { label: string; countdown: string };
   /** 'Nothing else today.' when a leg started today, else 'Nothing is scheduled today.' */
@@ -265,7 +266,7 @@ function arrival(trip: Trip, tz: string): { dateKey: string; utc: number | null 
   return { dateKey: utcToLocal(utc, tz).dateKey, utc };
 }
 
-function nextLeg(trip: Trip, nowMs: number, fmt: TimeFormat): MidTripView['next'] {
+function nextLeg(trip: Trip, nowMs: number, fmt: TimeFormat, listingHours: number): MidTripView['next'] {
   const leg = sortLegs(trip.legs).find(l => !isFinalStatus(l.status) && (l.kind === 'ground' || l.refs.length > 0) && legStartUtc(l, trip.legs) > nowMs);
   if (!leg) return null;
   if (leg.kind === 'flight') {
@@ -275,6 +276,7 @@ function nextLeg(trip: Trip, nowMs: number, fmt: TimeFormat): MidTripView['next'
     return {
       title: `Next: ${ref.flightNumber}${home} · ${dayLabel(ref.dateKey)} ${formatClock(ref.depLocal, fmt)} ${zoneLabel(ref.origin)}`,
       detail: `${state} · ${leavesLabel(refDepUtc(ref), nowMs, airportTz(ref.origin))}`,
+      listing: listingChip(leg, nowMs, listingHours, fmt),
     };
   }
   const day = leg.userTimes?.depDateKey ?? leg.dateKey;
@@ -298,7 +300,7 @@ function goalFact(trip: Trip, nowMs: number): string | null {
  * the goal, the next leg, the home-by countdown and (when one applies) a fact
  * about the destination. The trip with the nearest home-by time wins.
  */
-export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripId?: string | null): MidTripView | null {
+export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripId?: string | null, listingHours = DEFAULT_LISTING_HOURS): MidTripView | null {
   const trip = trips
     .filter(t => (!tripId || t.id === tripId) && tripUnderWay(t, nowMs))
     .sort((a, b) => deadlineUtc(a.homeBy, a.homeAirport) - deadlineUtc(b.homeBy, b.homeAirport))[0];
@@ -318,7 +320,7 @@ export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripI
     tripId: trip.id,
     eyebrow: `${trip.name} · ${dayLabel(todayKey)}`,
     title: n >= 1 ? `Day ${n} in ${trip.goal.name}` : `On your way to ${trip.goal.name}`,
-    next: nextLeg(trip, nowMs, fmt),
+    next: nextLeg(trip, nowMs, fmt, listingHours),
     homeBy: {
       label: `Home by ${dayLabel(trip.homeBy.dateKey)}, ${formatClock(trip.homeBy.hhmm, fmt)}${zone}`,
       countdown: homeByCountdown(trip, nowMs),
@@ -328,11 +330,11 @@ export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripI
   };
 }
 
-export interface UpcomingTripView { tripId: string; title: string; detail: string }
+export interface UpcomingTripView { tripId: string; title: string; detail: string; listing?: { label: string; open: boolean } | null }
 
 /** The nearest trip that has not started: 'Next trip in 5 days' with its name and first date (the first leg's own start day). */
-export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string | null): UpcomingTripView | null {
-  let best: { trip: Trip; start: number; tz: string } | null = null;
+export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string | null, fmt: TimeFormat = '24h', listingHours = DEFAULT_LISTING_HOURS): UpcomingTripView | null {
+  let best: { trip: Trip; start: number; tz: string; first: TripLeg | undefined } | null = null;
   for (const trip of trips) {
     if (trip.archived || (tripId && trip.id !== tripId)) continue;
     const first = sortLegs(trip.legs.filter(l => l.status !== 'abandoned'))[0];
@@ -340,7 +342,7 @@ export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string |
     const tz = first ? (first.kind === 'flight' ? airportTz(first.refs[0]?.origin ?? trip.fromHub) : endTz(first.from) ?? airportTz(trip.fromHub)) : airportTz(trip.fromHub);
     const start = w ? w.depUtc : deadlineUtc({ dateKey: trip.outboundDate, hhmm: '00:00' }, trip.fromHub);
     if (start <= nowMs || (best && best.start <= start)) continue;
-    best = { trip, start, tz: w ? tz : airportTz(trip.fromHub) };
+    best = { trip, start, tz: w ? tz : airportTz(trip.fromHub), first };
   }
   if (!best) return null;
   const startKey = utcToLocal(best.start, best.tz).dateKey;
@@ -349,6 +351,7 @@ export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string |
     tripId: best.trip.id,
     title: d <= 0 ? 'Your next trip is later today' : d === 1 ? 'Next trip tomorrow' : `Next trip in ${d} days`,
     detail: `${best.trip.name} · ${dayLabel(startKey)}`,
+    listing: best.first?.kind === 'flight' ? listingChip(best.first, nowMs, listingHours, fmt) : null,
   };
 }
 

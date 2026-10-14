@@ -41,7 +41,8 @@
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/data/cities.json"
+          "/data/cities.json",
+          "/data/airport-info.json"
         ]
       }
     },

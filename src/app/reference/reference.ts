@@ -92,6 +92,49 @@ export function fxLine(code: string | null, fx: FxTable | null): { text: string;
   return { text: pair, source: `ECB, ${shortDate(fx.date, fx.date)}` };
 }
 
+/** The rate (units of `code` per 1 CAD) when a usable one exists, else null. */
+export function fxRate(code: string | null, fx: FxTable | null): number | null {
+  const rate = code && fx ? fx.rates.get(code) : undefined;
+  return rate && rate > 0 && code !== 'CAD' ? rate : null;
+}
+
+/**
+ * Parse what a person typed: '12.5', '12,5' (one comma and 1-2 digits is a decimal), '1,200' (a comma
+ * before exactly three digits is thousands), '1,200.50' and '1.200,50' (the last separator is the
+ * decimal), spaces ignored. Null when it is not a non-negative number.
+ */
+export function parseAmount(text: string): number | null {
+  let t = text.trim().replace(/\s/g, '');
+  if (!t || /[^\d.,]/.test(t)) return null;
+  const lastDot = t.lastIndexOf('.');
+  const lastComma = t.lastIndexOf(',');
+  if (lastDot >= 0 && lastComma >= 0) {
+    const dec = lastDot > lastComma ? '.' : ',';
+    const grp = dec === '.' ? ',' : '.';
+    t = t.split(grp).join('').replace(dec, '.');
+  } else if (lastComma >= 0) {
+    const after = t.length - lastComma - 1;
+    const single = t.indexOf(',') === lastComma;
+    t = single && after !== 3 ? t.replace(',', '.') : t.split(',').join('');
+  }
+  if (!/^\d*\.?\d*$/.test(t) || t === '.' || !t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** An amount for an input: two decimals under 100, else whole units; '' for null. */
+export function amountText(n: number | null): string {
+  if (n === null) return '';
+  const r = n >= 100 ? Math.round(n) : Math.round(n * 100) / 100;
+  return String(r);
+}
+
+/** CAD to local when `fromCad`, else local to CAD, at `rate` local units per CAD. */
+export function convertAmount(text: string, rate: number, fromCad: boolean): string {
+  const n = parseAmount(text);
+  return amountText(n === null ? null : fromCad ? n * rate : n / rate);
+}
+
 /** Whether a level is shown quietly: normal precautions and no regional advisory. */
 export function advisoryQuiet(a: Advisory): boolean {
   return a.level === 0 && !a.regional;

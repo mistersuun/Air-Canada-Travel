@@ -4,7 +4,7 @@ import { buildPrepChecklist } from '../places/prep';
 import type { FlightLeg } from '../trips/model';
 import { sevilleTrip } from '../trips/testing/seville-fixture';
 import { climateHighlights, DestClimateComponent } from '../pages/destination/dest-climate.component';
-import { decodeClimate, climateFor, monthsBetween, typicalForMonths, wetDaysText } from './climate';
+import { decodeClimate, climateFor, monthsBetween, packingFacts, typicalForMonths, wetDaysText } from './climate';
 import { CLIMATE_FETCH } from './climate.service';
 import { CLIMATE_FIXTURE } from './testing/climate-fixture';
 
@@ -45,6 +45,37 @@ describe('typicalForMonths', () => {
   it('is null without normals', () => {
     expect(typicalForMonths(idx, 'XXX', [1])).toBeNull();
     expect(typicalForMonths(null, 'LIS', [1])).toBeNull();
+  });
+});
+
+describe('packingFacts', () => {
+  const mk = (tmax: number, tmin: number, wet: number) => decodeClimate({
+    v: 1, attribution: '', period: '',
+    codes: { AAA: { tmax: Array(12).fill(tmax), tmin: Array(12).fill(tmin), precip: Array(12).fill(50), wet: Array(12).fill(wet) } },
+  })!;
+
+  it('phrases rain, warm layer and heat from the typical numbers, naming the month', () => {
+    expect(packingFacts(mk(12, 4, 12), 'AAA', [10]).map(p => p.title)).toEqual([
+      'Rain jacket — wet on about 12 of 31 days in Oct',
+      'Warm layer — lows around 4° in Oct',
+    ]);
+    expect(packingFacts(mk(33, 24, 3), 'AAA', [7])).toEqual([{ id: 'pack:sun', title: 'Sun protection — highs around 33° in Jul' }]);
+    expect(packingFacts(mk(2, -5, 3), 'AAA', [1]).map(p => p.id)).toEqual(['pack:coat', 'pack:warm']);
+    expect(packingFacts(mk(-3, -10, 12), 'AAA', [1])[0].title).toBe('Waterproof layer \u2014 rain or snow on about 12 of 31 days in Jan');
+  });
+
+  it('says nothing for mild weather or an unknown code', () => {
+    expect(packingFacts(mk(22, 14, 4), 'AAA', [5])).toEqual([]);
+    expect(packingFacts(mk(12, 4, 12), 'ZZZ', [10])).toEqual([]);
+    expect(packingFacts(null, 'AAA', [10])).toEqual([]);
+  });
+
+  it('become non-critical prep items after the typical-weather line', () => {
+    const trip = { ...sevilleTrip(), goal: { ...sevilleTrip().goal, acCode: 'AAA' } };
+    const items = buildPrepChecklist(trip, mk(12, 4, 12));
+    const ids = items.map(i => i.id).filter(id => /^(weather|pack):/.test(id));
+    expect(ids).toEqual(['weather:typical', 'pack:rain', 'pack:warm']);
+    expect(items.find(i => i.id === 'pack:warm')).toMatchObject({ critical: false, detail: 'Typical for these months, not a forecast' });
   });
 });
 

@@ -156,7 +156,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
         <p class="ui-sub td__mid-sub" data-quiet>{{ m.quiet }}</p>
         @if (m.next; as n) {
           <section class="ui-card td__left" aria-label="Next leg" data-next>
-            <span class="td__ct"><b class="tn">{{ n.title }}</b><small>{{ n.detail }}</small></span>
+            <span class="td__ct"><b class="tn">{{ n.title }}</b><small>{{ n.detail }}@if (n.listing; as l) { · <span data-listing [class.td__lst-open]="l.open">{{ l.label }}</span>}</small></span>
           </section>
         }
         <section class="ui-card td__left" aria-label="Home by" data-home-by>
@@ -172,6 +172,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
           @if (upcoming(); as u) {
             <h1 class="td__title" data-upcoming>{{ u.title }}</h1>
             <p class="ui-sub">{{ u.detail }}. On a day you travel, this page shows your flight or ride and what's left to do.</p>
+            @if (u.listing; as l) { <p class="ui-sub" data-listing [class.td__lst-open]="l.open">{{ l.label }}</p> }
             <a class="ui-btn ui-btn--dark" [routerLink]="planLink(u.tripId)">Open trip</a>
           } @else {
             <h1 class="td__title">Nothing planned today</h1>
@@ -229,6 +230,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
     .td__ct { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
     .td__ct b { font-size: 15px; font-weight: 600; }
     .td__ct small { font-size: 12.5px; color: var(--ink-2); }
+    .td__lst-open { font-weight: 650; color: var(--teal-ink, var(--ink)); }
     .td__backup {
       display: flex; gap: 12px; align-items: center; width: 100%; margin-top: 14px; padding: 14px 16px; text-align: left; color: var(--ink);
     }
@@ -309,10 +311,10 @@ export class TodayPage {
 
   /** A day of a trip under way with nothing scheduled. */
   protected readonly mid = computed(() =>
-    this.view() || this.ground() ? null : midTripView(this.trips.trips(), this.state.nowMs(), this.prefs.timeFormat(), this.trip()));
+    this.view() || this.ground() ? null : midTripView(this.trips.trips(), this.state.nowMs(), this.prefs.timeFormat(), this.trip(), this.prefs.listingHours()));
 
   protected readonly upcoming = computed(() =>
-    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs(), this.trip()));
+    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs(), this.trip(), this.prefs.timeFormat(), this.prefs.listingHours()));
 
   protected readonly tripLink = computed(() => {
     const v = this.view();

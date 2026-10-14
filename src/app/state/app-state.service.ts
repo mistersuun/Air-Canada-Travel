@@ -6,7 +6,7 @@ import { NavigationEnd, NavigationStart, Params, Router } from '@angular/router'
 import { HUBS, Hub } from '../data/destinations';
 import { Coverage, getCoverage, loadSchedules } from '../data/schedule-index';
 import { loadRouteNetwork } from '../data/route-network';
-import { findDestination, findHub } from '../utils/airports';
+import { airportTz, findDestination, findHub } from '../utils/airports';
 import { summarizeWeek } from '../utils/connections';
 import { EMPTY_FILTERS, Filters, RouteEntry, SortKey, activeFilterCount, computeRoutes, hubStats } from '../utils/routes';
 import { WEEKDAY_SHORT, addDays, dateKey, diffDays, formatKey, isDateKey, todayKey, weekStartKey, weekdayIndex } from '../utils/time';
@@ -106,10 +106,8 @@ export class AppStateService {
   private readonly win = this.doc.defaultView;
 
   // ── Inputs ────────────────────────────────────────────────────────────────
-  readonly todayKey = signal(todayKey(undefined, this.now()));
   private readonly hubOverride = signal<string | null>(null);
   private readonly regionOverride = signal<string | null>(null);
-  readonly weekStartKey = signal(weekStartKey(this.todayKey()));
   readonly selectedDateKey = signal<string | null>(null);
   readonly query = signal('');
   readonly sort = signal<SortKey>('az');
@@ -126,6 +124,15 @@ export class AppStateService {
 
   /** Epoch ms, refreshed every COUNTDOWN_TICK_MS while the document is visible. */
   readonly nowMs = signal(this.now());
+
+  /**
+   * Today's date at the selected hub (its time zone, not the device's), like the pages that
+   * read hubToday: a phone in Tokyo showing YVR is on YVR's date. Follows the hub and the clock.
+   */
+  readonly todayKey = computed(() => todayKey(airportTz(this.hub()), this.nowMs()));
+  readonly weekStartKey = signal(weekStartKey(this.todayKey()));
+  /** The day the week was last rolled forward for. */
+  private rolledFor = this.todayKey();
 
   // ── Data load ─────────────────────────────────────────────────────────────
   /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. 'loading' when startup gave up waiting and it is still coming. */
@@ -299,6 +306,12 @@ export class AppStateService {
   constructor() {
     this.applyUrl(parseUrlState(this.platformLocation.search ?? ''));
     this.path.set(this.platformLocation.pathname || '/');
+
+    // A different hub can mean a different date: roll an untouched week forward without waiting for the next tick.
+    effect(() => {
+      this.todayKey();
+      untracked(() => this.rollWeek());
+    });
 
     effect(() => {
       const params = this.globalParams();
@@ -524,9 +537,14 @@ export class AppStateService {
   /** Recompute today (tab became visible, possibly after midnight) and roll the week forward if untouched. */
   refreshToday(): void {
     this.nowMs.set(this.now());
-    const t = todayKey(undefined, this.now());
-    if (t === this.todayKey()) return;
-    this.todayKey.set(t);
+    this.rollWeek();
+  }
+
+  /** Moves an untouched week forward when the hub's date changed (midnight there, or another hub chosen). */
+  private rollWeek(): void {
+    const t = this.todayKey();
+    if (t === this.rolledFor) return;
+    this.rolledFor = t;
     if (!this.navigated) {
       const current = weekStartKey(t);
       if (this.weekStartKey() < current) {

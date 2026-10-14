@@ -45,7 +45,11 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     return s;
   };
 
+  /** Moves the clock after render (see refreshToday). */
+  let clockOverride: number | undefined;
+
   async function render(url = '/'): Promise<void> {
+    clockOverride = undefined;
     window.history.replaceState(null, '', url);
     tripsStorage ??= new MemoryStorage();
     TestBed.configureTestingModule({
@@ -55,7 +59,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
         { provide: PlatformLocation, useClass: BrowserPlatformLocation },
         { provide: PREFS_STORAGE, useValue: prefsStorage() },
         { provide: TRIPS_STORAGE, useValue: tripsStorage },
-        { provide: NOW, useValue: () => NOW_MS },
+        { provide: NOW, useValue: () => clockOverride ?? NOW_MS },
         { provide: SwUpdate, useValue: { isEnabled: true, versionUpdates, unrecoverable, checkForUpdate } },
       ],
     });
@@ -289,7 +293,8 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
 
   it('tapping the stale tag shows its detail as a notice', async () => {
     await render();
-    state.todayKey.set('2027-03-20');
+    clockOverride = Date.parse('2027-03-20T17:00:00Z');
+    state.refreshToday();
     await settle();
     el.querySelector<HTMLButtonElement>('app-top-nav button.ui-tag')!.click();
     await settle();

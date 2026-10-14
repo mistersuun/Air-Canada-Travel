@@ -51,7 +51,8 @@ describe('DestinationPage day labels (device in Tokyo)', () => {
   it('really runs with the device already on Oct 2', () => {
     expect(new Date(NOW_MS).getTimezoneOffset()).toBe(-540);
     expect(dateKey(new Date(NOW_MS))).toBe('2026-10-02');
-    expect(TestBed.inject(AppStateService).todayKey()).toBe('2026-10-02');
+    // ...but the app's "today" is the hub's (Montréal), still Oct 1.
+    expect(TestBed.inject(AppStateService).todayKey()).toBe('2026-10-01');
   });
 
   it("labels departures by the hub's day and returns by the destination's day", async () => {

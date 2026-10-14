@@ -1,6 +1,6 @@
 import { Routes, UrlMatchResult, UrlSegment } from '@angular/router';
 import {
-  destTitle, flightTitle, knownDestination, knownTrip, legacyDestRedirect, tripTitle, validDate,
+  destTitle, flightTitle, knownDestination, knownTrip, legacyDestRedirect, tripTitle, unknownPage, validDate,
 } from './shell/route-guards';
 
 /**
@@ -157,5 +157,5 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/reach/gateway.page').then(m => m.GatewayPage),
     title: 'Reach · Routes',
   },
-  { path: '**', redirectTo: '' },
+  { path: '**', canActivate: [unknownPage], children: [] },
 ];

@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DOCUMENT, computed, effect, inject, input, signal } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { HUBS } from '../../data/destinations';
@@ -272,6 +273,12 @@ export class ReachPage {
 
   constructor() {
     void inject(GroundTimetableService).ensureLoaded();
+    // The route title can't know a place name that loads later.
+    const title = inject(Title);
+    effect(() => {
+      const name = this.placeName();
+      if (name) title.setTitle(`${name} · Reach · Routes`);
+    });
   }
 
   /** Route param ('gn-2510911') and query keys (withComponentInputBinding). */

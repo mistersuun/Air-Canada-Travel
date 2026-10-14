@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
+import { Title } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent, IconName } from '../../components/shared/icons.component';
 import { airportEnd, arrivalAtGoal, onwardLinks, placeEnd } from '../../places/ground';
@@ -132,9 +133,12 @@ import { reachPlace } from './reach-place';
               </section>
 
               <div class="ui-card card acts">
-                <button type="button" class="ui-btn ui-btn--ghost" [disabled]="!itin()" (click)="start(true)">{{ found() }}</button>
-                <button type="button" class="ui-btn" [disabled]="!itin()" (click)="start(false)">Start this trip</button>
+                <button type="button" class="ui-btn ui-btn--ghost" [disabled]="!itin()" aria-describedby="gw-why" (click)="start(true)">{{ found() }}</button>
+                <button type="button" class="ui-btn" [disabled]="!itin()" aria-describedby="gw-why" (click)="start(false)">Start this trip</button>
               </div>
+              @if (!itin()) {
+                <p id="gw-why" class="ui-sub foot">Pick a day with a flight first{{ g.nextDateKey ? ', for example ' + day(g.nextDateKey) : '' }}.</p>
+              }
               <p class="ui-sub foot">Listing stays your own step. Trains and buses here are timetables or estimates until you save the one you found.</p>
             } @else {
               <section class="ui-card card" role="status">
@@ -222,6 +226,12 @@ export class GatewayPage {
 
   constructor() {
     void inject(GroundTimetableService).ensureLoaded();
+    // The route title can't know a place name that loads later.
+    const title = inject(Title);
+    effect(() => {
+      const name = this.placeName();
+      if (name) title.setTitle(`${name} · Reach · Routes`);
+    });
   }
 
   readonly place = input<string>('');

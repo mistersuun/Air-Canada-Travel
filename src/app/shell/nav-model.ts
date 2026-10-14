@@ -11,9 +11,13 @@ export function navSection(path: string): NavSection {
   return 'explore'; // '/', /to/*, /flight/*, /reach/*
 }
 
-/** Detail pages show their own back button instead of the mobile tab bar. */
+/**
+ * Detail pages show their own back button instead of the mobile tab bar:
+ * pages reached from somewhere else (Explore → weekend, Trips/Home → saved,
+ * a shared link → g/:id), not tab roots.
+ */
 export function isDetailPath(path: string): boolean {
-  return /^\/(to|flight|calendar|today|reach|profile|logbook)(\/|$)/.test(path) || /^\/trips\/[^/]+/.test(path);
+  return /^\/(to|flight|calendar|today|reach|profile|logbook|saved|weekend|g)(\/|$)/.test(path) || /^\/trips\/[^/]+/.test(path);
 }
 
 /** The desktop top nav is replaced by the destination hero's own buttons. */

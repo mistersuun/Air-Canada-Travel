@@ -1,8 +1,9 @@
-import { DOCUMENT, Injectable, inject } from '@angular/core';
+import { DOCUMENT, Injectable, Injector, effect, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { getSchedulesMeta } from '../data/schedule-index';
 import { PwaUpdateService } from '../state/pwa-update.service';
 import { ShareInboxService } from './share-inbox.service';
+import { t } from '../i18n/t';
 
 interface LaunchParams { files?: { getFile(): Promise<File> }[] }
 interface LaunchQueueLike { setConsumer(cb: (p: LaunchParams) => void): void }
@@ -14,6 +15,7 @@ interface LaunchQueueLike { setConsumer(cb: (p: LaunchParams) => void): void }
  *    launchQueue and are routed to /share-in like a share.
  *  - Tells the worker which schedules this tab loaded, so a background check
  *    does not announce what the user already sees.
+ *  - Posts the notification wording (in the UI language) for the worker to keep.
  *  - When the worker says schedules changed while a window is open, asks
  *    ngsw to look for the new version (the usual "Reload" toast follows).
  */
@@ -23,6 +25,7 @@ export class PwaExtrasService {
   private readonly router = inject(Router);
   private readonly inbox = inject(ShareInboxService);
   private readonly pwa = inject(PwaUpdateService);
+  private readonly injector = inject(Injector);
 
   init(): void {
     const win = this.win;
@@ -42,6 +45,11 @@ export class PwaExtrasService {
     sw.addEventListener('message', e => {
       if ((e.data as { type?: unknown } | null)?.type === 'ac:schedules-updated') this.pwa.check();
     });
+    // The worker cannot import t(): it keeps the notification wording the page last posted, in the UI language.
+    effect(() => {
+      const msg = { type: 'ac:notify-text', title: t('shareIn.notify.title'), body: t('shareIn.notify.body') };
+      void sw.ready.then(reg => reg.active?.postMessage(msg)).catch(() => undefined);
+    }, { injector: this.injector });
   }
 
   /** Call once the schedules have loaded. */

@@ -9,11 +9,12 @@ import { BarcodeService } from '../../passes/barcode.service';
 import { isBcbp } from '../../passes/decode-core';
 import { ShareInboxService } from '../../share-in/share-inbox.service';
 import {
-  SHARE_FAILED_TEXT, SHARE_TOO_LARGE_TEXT, type SharedKind, actionsFor, noteTextFrom, noteTitleFrom, sharedKind,
+  shareFailedText, shareTooLargeText, type SharedKind, actionsFor, noteTextFrom, noteTitleFrom, sharedKind,
 } from '../../share-in/share-payload';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
 import { tripPath } from '../../ui/links';
+import { t } from '../../i18n/t';
 
 interface Row { file: File; kind: SharedKind; passLike: boolean | null }
 
@@ -31,41 +32,41 @@ interface Row { file: File; kind: SharedKind; passLike: boolean | null }
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page si">
-      <h1 class="ui-h2">Add to a trip</h1>
+      <h1 class="ui-h2">{{ t('shareIn.title') }}</h1>
       @if (loading()) {
-        <p class="ui-sub" role="status">Opening what you shared…</p>
+        <p class="ui-sub" role="status">{{ t('shareIn.opening') }}</p>
       } @else if (!hasContent()) {
         <div class="ui-card si__empty" data-empty>
           @if (problem()) { <p data-problem><b>{{ problemText() }}</b></p> }
-          @else { <p><b>Nothing to add.</b> This share has expired or was already used.</p> }
-          <a class="ui-btn ui-btn--dark ui-btn--sm" routerLink="/trips">My trips</a>
+          @else { <p><b>{{ t('shareIn.nothing') }}</b> {{ t('shareIn.nothing.hint') }}</p> }
+          <a class="ui-btn ui-btn--dark ui-btn--sm" routerLink="/trips">{{ t('shareIn.myTrips') }}</a>
         </div>
       } @else if (!trips().length) {
         <div class="ui-card si__empty" data-no-trips>
-          <p><b>You have no trips yet.</b> Start a trip first, then share again.</p>
-          <a class="ui-btn ui-btn--dark ui-btn--sm" routerLink="/">Find a flight</a>
+          <p><b>{{ t('shareIn.noTrips') }}</b> {{ t('shareIn.noTrips.hint') }}</p>
+          <a class="ui-btn ui-btn--dark ui-btn--sm" routerLink="/">{{ t('shareIn.findFlight') }}</a>
         </div>
       } @else {
         <label class="ui-card si__trip">
-          <span class="ui-label">Trip</span>
+          <span class="ui-label">{{ t('shareIn.trip') }}</span>
           <select data-trip [value]="tripId()" (change)="tripId.set($any($event.target).value)">
-            @for (t of trips(); track t.id) { <option [value]="t.id" [selected]="t.id === tripId()">{{ t.name }}</option> }
+            @for (tr of trips(); track tr.id) { <option [value]="tr.id" [selected]="tr.id === tripId()">{{ tr.name }}</option> }
           </select>
         </label>
 
         @for (r of rows(); track $index) {
           <section class="ui-card si__item" [attr.data-kind]="r.kind">
             <h2 class="ui-h3">{{ r.file.name }}</h2>
-            @if (r.passLike) { <p class="ui-sub" data-pass-like>This looks like a boarding pass.</p> }
+            @if (r.passLike) { <p class="ui-sub" data-pass-like>{{ t('shareIn.passLike') }}</p> }
             <div class="si__acts">
               @if (actions(r.kind).pass) {
                 <button type="button" class="ui-btn ui-btn--sm" [class.ui-btn--dark]="r.passLike" [class.ui-btn--ghost]="!r.passLike"
-                        data-add-pass (click)="addPass(r)">Add boarding pass</button>
+                        data-add-pass (click)="addPass(r)">{{ t('passes.add') }}</button>
               }
               <button type="button" class="ui-btn ui-btn--sm" [class.ui-btn--dark]="!r.passLike" [class.ui-btn--ghost]="r.passLike"
-                      data-save-file [disabled]="busy()" (click)="saveFile(r)">Save to trip files</button>
+                      data-save-file [disabled]="busy()" (click)="saveFile(r)">{{ t('shareIn.saveFile') }}</button>
               @if (actions(r.kind).note) {
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-save-note [disabled]="busy()" (click)="saveFileNote(r)">Save as a note</button>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-save-note [disabled]="busy()" (click)="saveFileNote(r)">{{ t('shareIn.saveNote') }}</button>
               }
             </div>
           </section>
@@ -73,16 +74,16 @@ interface Row { file: File; kind: SharedKind; passLike: boolean | null }
 
         @if (text()) {
           <section class="ui-card si__item" data-text>
-            <h2 class="ui-h3">{{ item()?.title || 'Shared text' }}</h2>
+            <h2 class="ui-h3">{{ item()?.title || t('shareIn.sharedText') }}</h2>
             <pre class="si__txt">{{ text() }}</pre>
             <div class="si__acts">
-              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-save-text [disabled]="busy()" (click)="saveText()">Save as a note</button>
+              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-save-text [disabled]="busy()" (click)="saveText()">{{ t('shareIn.saveNote') }}</button>
             </div>
           </section>
         }
         @if (error()) { <p class="si__err" role="alert">{{ error() }}</p> }
-        <p class="ui-sub si__priv">Stays on this device. Nothing is uploaded.</p>
-        <button type="button" class="ui-btn ui-btn--ghost" data-dismiss (click)="dismiss()">Not now</button>
+        <p class="ui-sub si__priv">{{ t('shareIn.privacy') }}</p>
+        <button type="button" class="ui-btn ui-btn--ghost" data-dismiss (click)="dismiss()">{{ t('shareIn.notNow') }}</button>
       }
     </div>
   `,
@@ -97,6 +98,7 @@ interface Row { file: File; kind: SharedKind; passLike: boolean | null }
   `],
 })
 export class ShareInPage {
+  protected readonly t = t;
   /** ?id= from the service worker's redirect; absent for desktop File Handling. */
   readonly id = input<string | undefined>(undefined);
 
@@ -113,7 +115,7 @@ export class ShareInPage {
   protected readonly problem = signal<'failed' | 'too-large' | null>(null);
   protected readonly problemText = computed(() => {
     const p = this.problem();
-    return p === 'too-large' ? SHARE_TOO_LARGE_TEXT : p === 'failed' ? SHARE_FAILED_TEXT : '';
+    return p === 'too-large' ? shareTooLargeText() : p === 'failed' ? shareFailedText() : '';
   });
   protected readonly item = this.inbox.item;
   protected readonly rows = signal<Row[]>([]);
@@ -187,7 +189,7 @@ export class ShareInPage {
       this.error.set(FILES_ERROR_TEXT[res.error]);
       return;
     }
-    this.done(id, 'Saved to trip files');
+    this.done(id, t('shareIn.savedFile'));
   }
 
   protected async saveFileNote(r: Row): Promise<void> {
@@ -212,7 +214,7 @@ export class ShareInPage {
       this.error.set(FILES_ERROR_TEXT[res.error]);
       return;
     }
-    this.done(id, 'Saved as a note');
+    this.done(id, t('shareIn.savedNote'));
   }
 
   private done(tripId: string, message: string): void {

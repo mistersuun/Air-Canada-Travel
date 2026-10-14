@@ -1,15 +1,14 @@
 /**
  * Logbook milestones: plain factual badges ("First transatlantic", "10
  * airports") with the date they were earned. Computed from the boarded
- * flights every time, oldest first, so they never drift from the log. No
+ * flights every time, oldest first (red-eye lives in the logbook's Marks), so they never drift from the log. No
  * points, levels or streaks; an unearned milestone is simply absent.
  */
 import { type BoardedFlight, airportInfo } from './logbook';
-import { isRedEye } from './stamps';
 
 export type MilestoneId =
   | 'transatlantic' | 'transpacific' | 'airports10' | 'airports25' | 'countries5' | 'countries10'
-  | 'km10k' | 'km50k' | 'km100k' | 'redEye';
+  | 'km10k' | 'km50k' | 'km100k';
 
 export interface Milestone {
   id: MilestoneId;
@@ -25,7 +24,7 @@ export interface Milestone {
 const ATLANTIC_W = -30;
 const PACIFIC_E = 100;
 
-/** One end in the Americas, the other in Europe or Africa. */
+/** One end in the Americas, the other in Europe, Africa or the Middle East. */
 export function isTransatlantic(origin: string, dest: string): boolean {
   const a = airportInfo(origin);
   const b = airportInfo(dest);
@@ -54,7 +53,7 @@ const COUNTRY_STEPS: [MilestoneId, number][] = [['countries5', 5], ['countries10
 const LABELS: Record<MilestoneId, string> = {
   transatlantic: 'First transatlantic', transpacific: 'First transpacific',
   airports10: '10 airports', airports25: '25 airports', countries5: '5 countries', countries10: '10 countries',
-  km10k: '10,000 km', km50k: '50,000 km', km100k: '100,000 km', redEye: 'First red-eye',
+  km10k: '10,000 km', km50k: '50,000 km', km100k: '100,000 km'
 };
 
 /** Label for an id. */
@@ -64,7 +63,7 @@ export function milestoneLabel(id: MilestoneId): string {
 
 /** Earned milestones, in the order they were earned. */
 export function milestones(flights: readonly BoardedFlight[]): Milestone[] {
-  const sorted = [...flights].sort((a, b) => a.dateKey.localeCompare(b.dateKey) || a.key.localeCompare(b.key));
+  const sorted = [...flights].sort((a, b) => a.dateKey.localeCompare(b.dateKey) || (a.depLocal ?? '').localeCompare(b.depLocal ?? '') || a.key.localeCompare(b.key));
   const out: Milestone[] = [];
   const got = new Set<MilestoneId>();
   const add = (id: MilestoneId, f: BoardedFlight, detail: string): void => {
@@ -79,7 +78,6 @@ export function milestones(flights: readonly BoardedFlight[]): Milestone[] {
     const route = `${f.origin} → ${f.dest}`;
     if (isTransatlantic(f.origin, f.dest)) add('transatlantic', f, route);
     if (isTranspacific(f.origin, f.dest)) add('transpacific', f, route);
-    if (isRedEye(f)) add('redEye', f, route);
     for (const c of [f.origin, f.dest]) {
       const a = airportInfo(c);
       if (!a) continue;

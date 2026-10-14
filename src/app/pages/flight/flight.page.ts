@@ -145,7 +145,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             }
             @for (p of prompts(); track p.key) { <app-outcome-prompt [prompt]="p" /> }
           </div>
-          @if (ticket()) { <app-fun-fact-card class="ff" [code]="dest()" [hub]="hub()" [nowMs]="state.nowMs()" [city]="destCity()" /> }
+          @if (ticket() && !departed()) { <app-fun-fact-card class="ff" [code]="dest()" [hub]="hub()" [nowMs]="state.nowMs()" [city]="destCity()" /> }
         </div>
 
         <div class="right">
@@ -307,6 +307,8 @@ export class FlightPage {
 
   readonly chosen = computed(() => choose(this.itineraries(), this.flight(), this.pick()));
   readonly current = computed(() => this.chosen().it);
+  /** The shown flight has already left (the fun fact is for waiting, not for looking back). */
+  protected readonly departed = computed(() => { const it = this.current(); return !!it && it.departUtc <= this.state.nowMs(); });
 
   protected readonly pickOptions = computed<SegOption[]>(() => [
     { value: 'earliest', label: 'EARLIEST', disabled: !this.itineraries().length },

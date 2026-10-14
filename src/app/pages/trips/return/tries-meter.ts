@@ -1,7 +1,8 @@
 import { returnBoarded } from '../../../logbook/logbook';
 import type { Trip } from '../../../trips/model';
 import type { ConnectOptions } from '../../../utils/connections';
-import { buildReturnView } from './return-model';
+import { type HomeByPlan, homeByPlan } from '../../../trips/engine/homeby';
+import { returnFlyKey, returnGateway } from './return-model';
 
 /** Plane icons shown before the count turns into "+N". */
 export const METER_MAX = 6;
@@ -29,12 +30,28 @@ export function triesMeter(n: number): TriesMeter {
 }
 
 /**
- * Tries home still left on a trip (the Return tab's count for the day the
- * return flies); null once the way home is boarded or when there is no
- * airport to count from.
+ * Tries home still left on a trip: the flights home from the return day on
+ * that have not departed yet and still beat the deadline (the Return tab's
+ * count, minus the ones already gone). Null once the way home is boarded,
+ * when there is no airport to count from, or when the schedules do not cover
+ * every day (so "none left" is never claimed on missing data).
  */
-export function triesHomeLeft(trip: Trip, connect: ConnectOptions): number | null {
+export function triesHomeLeft(trip: Trip, connect: ConnectOptions, nowMs: number): number | null {
   if (returnBoarded(trip)) return null;
-  const v = buildReturnView(trip, connect);
-  return v.gateway ? v.flyTries : null;
+  const gateway = returnGateway(trip);
+  if (!gateway) return null;
+  const flyKey = returnFlyKey(trip);
+  const plan = homeByPlan(gateway, trip.homeAirport, trip.homeBy, flyKey, connect);
+  if (!plan.covered) return null;
+  return triesLeftInPlan(plan, flyKey, nowMs);
+}
+
+/** Tries on `flyKey` or later that have not departed at `nowMs`. */
+export function triesLeftInPlan(plan: Pick<HomeByPlan, 'days'>, flyKey: string, nowMs: number): number {
+  let n = 0;
+  for (const d of plan.days) {
+    if (d.dateKey < flyKey) continue;
+    n += d.tries.filter(t => t.itinerary.departUtc > nowMs).length;
+  }
+  return n;
 }

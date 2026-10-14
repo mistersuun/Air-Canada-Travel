@@ -6,6 +6,7 @@ import type { TravelProfile, TripLength, TripStyle } from '../../recs/model';
 import { MAX_USUAL_ITEMS, TRIP_STYLES, USUAL_SUGGESTIONS } from '../../recs/profile';
 import { DAY_LETTERS, LENGTH_OPTIONS, toggled } from '../../recs/profile-options';
 import { ProfileService } from '../../recs/profile.service';
+import { clearDismissedFacts, dismissedFacts } from '../flight/fun-fact';
 import { AppStateService } from '../../state/app-state.service';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { WEEKDAY_LONG } from '../../utils/time';
@@ -94,6 +95,13 @@ export const DEFAULT_MAX_HOURS = 7;
           </div>
           <span class="hint">Any lets ideas include a train or bus past the airport.</span>
         </div>
+        @if (hiddenFacts() > 0) {
+          <div class="srow">
+            <div class="srow__tx"><span class="fl__t">Fun facts on flight pages</span>
+              <span class="hint">You hid them for {{ hiddenFacts() }} {{ hiddenFacts() === 1 ? 'destination' : 'destinations' }}.</span></div>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-facts-again (click)="showFactsAgain()">Show again</button>
+          </div>
+        }
       </div>
 
       <h2 class="ui-label pf__lbl" id="pf-days">Days I can usually leave or come back</h2>
@@ -254,6 +262,13 @@ export const DEFAULT_MAX_HOURS = 7;
   `],
 })
 export class ProfilePage {
+  protected readonly hiddenFacts = signal(dismissedFacts().size);
+
+  protected showFactsAgain(): void {
+    clearDismissedFacts();
+    this.hiddenFacts.set(0);
+  }
+
   protected readonly profile = inject(ProfileService);
   private readonly state = inject(AppStateService);
   private readonly router = inject(Router);

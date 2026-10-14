@@ -175,7 +175,9 @@ export class TripCardComponent {
   protected readonly summary = computed(() => compactSummary(this.trip()));
   protected readonly tripLink = computed(() => tripPath(this.trip().id));
 
-  protected readonly tries = computed(() => (this.showTries() ? triesHomeLeft(this.trip(), this.state.connect()) : null));
+  /** The minute: the count need not recompute on every clock tick. */
+  private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / 60_000) * 60_000);
+  protected readonly tries = computed(() => (this.showTries() ? triesHomeLeft(this.trip(), this.state.connect(), this.nowMin()) : null));
 
   protected readonly noReturn = computed(() => this.trip().legs.length > 0 && needsReturn(this.trip()));
 

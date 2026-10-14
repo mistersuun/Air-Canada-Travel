@@ -4,7 +4,7 @@ import type { Trip } from '../trips/model';
 import { sevilleTrip } from '../trips/testing/seville-fixture';
 import { CARD_MIN_H } from './trip-card';
 import {
-  DEFAULT_RECAP_OPTIONS, RECAP_PHOTO_H, coverRect, recapDates, recapExtras, recapFilename, recapHead, recapLayout,
+  DEFAULT_RECAP_OPTIONS, drawRecap, RECAP_PHOTO_H, coverRect, recapDates, recapExtras, recapFilename, recapHead, recapLayout,
   renderRecapCard,
 } from './recap-card';
 import { flagFromIso2 as flagEmoji } from '../utils/flags';
@@ -168,5 +168,25 @@ describe('recap extras', () => {
       });
       expect(blob.type).toBe('image/png');
     }
+  });
+});
+
+describe('flag fallback', () => {
+  it('offers ISO codes alongside the emoji', () => {
+    const x = recapExtras(done(), { allTrips: [done()] });
+    expect(x.flagCodes).toContain('CA');
+    expect(x.flagCodes).toMatch(/^[A-Z]{2}( · [A-Z]{2})*$/);
+  });
+  it('draws the codes, not the emoji, where flags do not render in colour', () => {
+    const texts: string[] = [];
+    const ctx = stubCanvas(texts, nodePng)(8, 8).getContext('2d') as unknown as Parameters<typeof drawRecap>[0];
+    const layout = recapLayout(recapHead(done(), DEFAULT_RECAP_OPTIONS, false));
+    const flags = layout.blocks.find(b => b.kind === 'flags');
+    expect(flags).toBeDefined();
+    drawRecap(ctx, layout, null, null, false);
+    expect(texts).toContain(flags!.kind === 'flags' ? flags!.codes : '');
+    texts.length = 0;
+    drawRecap(ctx, layout, null, null, true);
+    expect(texts).toContain(flags!.kind === 'flags' ? flags!.text : '');
   });
 });

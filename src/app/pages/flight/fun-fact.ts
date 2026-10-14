@@ -36,3 +36,12 @@ export function dismissFact(code: string): Set<string> {
   }
   return next;
 }
+
+/** Undo every dismissal ("Show fun facts again" in Settings). */
+export function clearDismissedFacts(): void {
+  try {
+    globalThis.localStorage?.removeItem(KEY);
+  } catch {
+    /* storage blocked */
+  }
+}

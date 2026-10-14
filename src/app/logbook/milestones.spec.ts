@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { BoardedFlight } from './logbook';
 import { isTransatlantic, isTranspacific, milestones } from './milestones';
-import { loadSeen, saveSeen, unseen } from './seen';
+import { canStoreSeen, loadSeen, saveSeen, unseen } from './seen';
 
 let n = 0;
 function fl(origin: string, dest: string, dateKey = '2026-10-08', over: Partial<BoardedFlight> = {}): BoardedFlight {
@@ -31,14 +31,14 @@ describe('milestones', () => {
     expect(milestones([])).toEqual([]);
     expect(ids([fl('YYZ', 'YUL')])).toEqual([]);
   });
-  it('earns first crossings and red-eye with the date of that flight', () => {
+  it('earns first crossings with the date of that flight (red-eye is a Mark, not a milestone)', () => {
     const f = [
       fl('YYZ', 'LIS', '2026-03-01', { depLocal: '22:30', arrDateKey: '2026-03-02' }),
       fl('YVR', 'HND', '2026-05-01'),
     ];
     const m = milestones(f);
     expect(m.map(x => [x.id, x.dateKey])).toEqual([
-      ['transatlantic', '2026-03-01'], ['redEye', '2026-03-01'], ['transpacific', '2026-05-01'],
+      ['transatlantic', '2026-03-01'], ['transpacific', '2026-05-01'],
     ]);
     expect(m[0].flightKey).toBe(f[0].key);
   });
@@ -57,6 +57,14 @@ describe('milestones', () => {
   });
 });
 
+describe('same-day ordering', () => {
+  it('breaks date ties by departure time', () => {
+    const a = fl('YYZ', 'YUL', '2026-01-01', { km: 6000, depLocal: '18:00' });
+    const b = fl('YUL', 'YYZ', '2026-01-01', { km: 6000, depLocal: '08:00' });
+    expect(milestones([a, b])[0].flightKey).toBe(a.key);
+  });
+});
+
 describe('seen tracking', () => {
   afterEach(() => localStorage.clear());
   it('round-trips and merges ids', () => {
@@ -65,9 +73,15 @@ describe('seen tracking', () => {
     saveSeen(['b', 'a']);
     expect([...loadSeen()!].sort()).toEqual(['a', 'b']);
   });
+  it('does not persist an empty list, and blocked storage stays calm', () => {
+    saveSeen([]);
+    expect(loadSeen()).toBeNull();
+    expect(unseen(['a'], null, false).size).toBe(0);
+    expect(canStoreSeen()).toBe(true);
+  });
   it('animates only unseen ids; a first visit stays calm unless there is one', () => {
-    expect([...unseen(['a', 'b'], new Set(['a']))]).toEqual(['b']);
-    expect(unseen(['a', 'b'], null).size).toBe(0);
-    expect([...unseen(['a'], null)]).toEqual(['a']);
+    expect([...unseen(['a', 'b'], new Set(['a']), true)]).toEqual(['b']);
+    expect(unseen(['a', 'b'], null, true).size).toBe(0);
+    expect([...unseen(['a'], null, true)]).toEqual(['a']);
   });
 });

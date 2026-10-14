@@ -198,12 +198,18 @@ export interface ReturnView {
   plan: HomeByPlan | null;
 }
 
+/** The day the return flies: the active return leg's date, else the deadline date. */
+export function returnFlyKey(trip: Trip): string {
+  const leg = activeReturnLeg(trip);
+  return leg ? leg.refs[0].dateKey : trip.homeBy.dateKey;
+}
+
 /** Everything the Return tab shows. `from` overrides the gateway (the destination page asks about its own airport). */
 export function buildReturnView(trip: Trip, connect: ConnectOptions, fmt: TimeFormat = '24h', from?: string): ReturnView {
   const leg = activeReturnLeg(trip);
   const gateway = from ?? returnGateway(trip);
   const gatewayCity = gateway ? placeName(gateway) : trip.goal.name;
-  const flyKey = leg ? leg.refs[0].dateKey : trip.homeBy.dateKey;
+  const flyKey = returnFlyKey(trip);
   const prev = addDays(flyKey, -1);
   const startKey = prev >= trip.outboundDate ? prev : null;
   const plan = gateway ? homeByPlan(gateway, trip.homeAirport, trip.homeBy, startKey ?? flyKey, connect) : null;

@@ -13,6 +13,7 @@ import { WEEKDAY_SHORT, isDateKey, weekdayIndex } from '../../../utils/time';
 import { MissChainComponent } from './miss-chain.component';
 import { buildReturnView, groundToGateway, triesLabel } from './return-model';
 import { TriesMeterComponent } from './tries-meter.component';
+import { triesLeftInPlan } from './tries-meter';
 import { placeName } from '../../../trips/engine/today';
 
 /** Parses a datetime-local value ('2026-10-13T22:00') into a homeBy, or null. */
@@ -40,7 +41,7 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
     <div class="rt">
       <header class="rt__ctx">
         <h2 class="ui-h3">Getting home</h2>
-        @if (v.gateway) { <app-tries-meter class="rt__meter" [count]="v.flyTries" /> }
+        @if (left() !== null) { <app-tries-meter class="rt__meter" [count]="left()!" /> }
         <p class="ui-sub tn" data-context>{{ v.context }}
           @if (v.defaultGateway && v.gateway !== v.defaultGateway) {
             · <button type="button" class="ui-link rt__reset" data-reset (click)="useAirport(null)">Back to {{ city(v.defaultGateway) }}</button>
@@ -174,6 +175,12 @@ export class ReturnTabComponent {
   private readonly fromCode = computed(() => {
     const f = this.from();
     return f && /^[A-Z]{3}$/.test(f) && f !== this.trip().homeAirport ? f : undefined;
+  });
+  /** Tries home still to depart, for the header meter; null when schedules do not cover every day. */
+  protected readonly left = computed(() => {
+    const v = this.view();
+    const nowMin = Math.floor(this.state.nowMs() / 60_000) * 60_000;
+    return v.plan && v.covered ? triesLeftInPlan(v.plan, v.flyKey, nowMin) : null;
   });
   protected readonly view = computed(() =>
     buildReturnView(this.trip(), this.state.connect(), this.state.timeFormat(), this.fromCode()));

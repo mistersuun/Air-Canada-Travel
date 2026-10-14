@@ -16,9 +16,25 @@ export function loadSeen(): Set<string> | null {
   }
 }
 
-export function saveSeen(ids: Iterable<string>): void {
+/** True when localStorage can be written (it throws or is absent in private windows and some previews). */
+export function canStoreSeen(): boolean {
   try {
-    globalThis.localStorage?.setItem(KEY, JSON.stringify([...new Set([...(loadSeen() ?? []), ...ids])]));
+    const ls = globalThis.localStorage;
+    if (!ls) return false;
+    ls.setItem(KEY + '.probe', '1');
+    ls.removeItem(KEY + '.probe');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Remembers ids as seen. An empty list is never written, so "nothing stored yet" stays distinguishable. */
+export function saveSeen(ids: Iterable<string>): void {
+  const add = [...ids];
+  if (!add.length) return;
+  try {
+    globalThis.localStorage?.setItem(KEY, JSON.stringify([...new Set([...(loadSeen() ?? []), ...add])]));
   } catch {
     /* storage blocked */
   }
@@ -27,9 +43,11 @@ export function saveSeen(ids: Iterable<string>): void {
 /**
  * The ids to animate. `seen` null means nothing was ever stored: a whole
  * existing history should not all stamp at once, so only a lone id animates
- * (a first boarded flight). With storage blocked nothing animates either way.
+ * (a first boarded flight). When storage cannot be written nothing animates,
+ * since the same stamps would otherwise ink in on every visit.
  */
-export function unseen(ids: readonly string[], seen: ReadonlySet<string> | null): Set<string> {
+export function unseen(ids: readonly string[], seen: ReadonlySet<string> | null, storable: boolean): Set<string> {
+  if (!storable) return new Set();
   if (seen === null) return new Set(ids.length === 1 ? ids : []);
   return new Set(ids.filter(i => !seen.has(i)));
 }

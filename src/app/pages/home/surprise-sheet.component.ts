@@ -12,11 +12,10 @@ import { destPath } from '../../ui/links';
 import { PhotoCardComponent } from '../../ui/photo-card.component';
 import { MapPoint, RouteMapComponent } from '../../ui/route-map.component';
 import type { RouteEntry } from '../../utils/routes';
-import { shareText } from '../../share/share-out';
-import { SHARE_ENV } from '../share/trip-share.page';
+import { SHARE_ENV, shareText } from '../../share/share-out';
 import { airportTz } from '../../utils/airports';
 import { MINUTE_MS, todayKey } from '../../utils/time';
-import { presetWindow, weekendOptions, type WeekendOption } from '../weekend/weekend-model';
+import { presetWindow, weekendOptions, windowProblem, type WeekendOption } from '../weekend/weekend-model';
 import {
   FLICK_COUNT, dareText, flickSequence, loadRecent, rememberPick, surpriseCandidates, surpriseLine, surpriseMeta, surprisePick,
   weekendEntries,
@@ -54,7 +53,7 @@ const FLICK_MS = 1200;
             <app-route-map [hub]="state.hub()" [points]="points()" [highlight]="shown()" [animate]="animateMap()" view="world" [padding]="10" [pulse]="false" />
           </div>
           @if (empty()) {
-            <p class="none ui-sub" data-surprise-empty>Nothing in your filters works for this weekend.</p>
+            <p class="none ui-sub" data-surprise-empty>{{ weekendWhy() ?? 'Nothing in your filters works for this weekend.' }}</p>
           }
           <div class="out">
             <p class="ui-visually-hidden" aria-live="polite">{{ settled() ? line() : '' }}</p>
@@ -134,13 +133,18 @@ export class SurpriseSheetComponent {
   /** Restrict picks to the Weekend finder's feasible destinations for this weekend. */
   protected readonly weekend = signal(false);
 
+  /** The minute: the weekend search need not rerun on every clock tick. */
+  private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / MINUTE_MS) * MINUTE_MS);
+  private readonly weekendWindow = computed(() => presetWindow('this', todayKey(airportTz(this.state.hub()), this.nowMin())));
+  /** Why this weekend cannot be searched (past, beyond the schedules), or null. */
+  protected readonly weekendWhy = computed(() =>
+    this.weekend() ? windowProblem(this.weekendWindow(), this.state.hub(), this.nowMin()) : null);
+
   /** The Weekend finder's options for this weekend (same engine), only worked out once the toggle is on. */
   private readonly weekendOpts = computed<WeekendOption[]>(() => {
-    if (!this.weekend()) return [];
-    const hub = this.state.hub();
-    const today = todayKey(airportTz(hub), this.state.nowMs());
+    if (!this.weekend() || this.weekendWhy()) return [];
     return weekendOptions({
-      hub, nowMs: Math.floor(this.state.nowMs() / MINUTE_MS) * MINUTE_MS, window: presetWindow('this', today),
+      hub: this.state.hub(), nowMs: this.nowMin(), window: this.weekendWindow(),
       connect: this.state.connect(), showConnections: this.state.showConnections(),
       codes: this.entries().map(e => e.destination.code),
     });

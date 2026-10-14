@@ -7,13 +7,12 @@ import { recapLine, returnBoarded, tripRecap } from '../../logbook/logbook';
 import {
   DEFAULT_RECAP_OPTIONS, type RecapOptions, loadDestPhoto, recapFilename, renderRecapCard,
 } from '../../share/recap-card';
-import { downloadBlob, shareImage } from '../../share/share-out';
+import { SHARE_ENV, downloadBlob, shareImage } from '../../share/share-out';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
 import type { Trip } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { tripPath } from '../../ui/links';
-import { SHARE_ENV } from './trip-share.page';
 
 /** Draws the recap (the real canvas renderer by default; specs stub it). */
 export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions) => Promise<Blob>>('RECAP_RENDERER', {

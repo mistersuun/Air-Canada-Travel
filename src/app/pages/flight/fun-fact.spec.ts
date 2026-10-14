@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { destinationFact, dismissFact, dismissedFacts } from './fun-fact';
+import { clearDismissedFacts, destinationFact, dismissFact, dismissedFacts } from './fun-fact';
 
 describe('flight page fun fact', () => {
   afterEach(() => localStorage.clear());
@@ -19,5 +19,10 @@ describe('flight page fun fact', () => {
     dismissFact('lis');
     expect(dismissedFacts().has('LIS')).toBe(true);
     expect(dismissedFacts().has('CDG')).toBe(false);
+  });
+  it('can show them all again', () => {
+    dismissFact('LIS');
+    clearDismissedFacts();
+    expect(dismissedFacts().size).toBe(0);
   });
 });

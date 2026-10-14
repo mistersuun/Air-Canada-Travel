@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { IconComponent } from '../../components/shared/icons.component';
-import { aroundEarthLabel, boardedFlights, statsOf, type DetailResolver } from '../../logbook/logbook';
+import { scheduleDetail } from '../../logbook/resolve';
+import { aroundEarthLabel, boardedFlights, statsOf } from '../../logbook/logbook';
 import { milestones } from '../../logbook/milestones';
-import { loadSeen, saveSeen, unseen } from '../../logbook/seen';
+import { canStoreSeen, loadSeen, saveSeen, unseen } from '../../logbook/seen';
 import { achievements, inspirationStamps, placeStamps, stampAngle } from '../../logbook/stamps';
 import { AppStateService } from '../../state/app-state.service';
 import { PrefsService } from '../../state/prefs.service';
-import { resolveRef } from '../../trips/engine/legs';
 import { TripsService } from '../../trips/trips.service';
 import { hubDisplayName } from '../../ui/format';
 import { airportName } from '../../utils/airports';
@@ -186,13 +186,7 @@ export class LogbookPage {
   private readonly state = inject(AppStateService);
   private readonly prefs = inject(PrefsService);
 
-  /** Times and equipment for an outcome, from the schedules when they still list the flight. */
-  private readonly resolve: DetailResolver = f => {
-    const i = resolveRef({ ...f, depLocal: '', arrLocal: '', arrDateKey: f.dateKey, aircraft: null });
-    return i ? { aircraft: i.aircraft ?? null, depLocal: i.depLocal, arrLocal: i.arrLocal, arrDateKey: i.arrDateKey } : null;
-  };
-
-  private readonly flights = computed(() => boardedFlights({ outcomes: this.trips.outcomes() }, this.trips.trips(), this.resolve));
+  private readonly flights = computed(() => boardedFlights({ outcomes: this.trips.outcomes() }, this.trips.trips(), scheduleDetail));
   protected readonly stats = computed(() => statsOf(this.flights()));
   protected readonly earth = computed(() => aroundEarthLabel(this.stats().aroundEarth));
   protected readonly stamps = computed(() => placeStamps(this.flights()));
@@ -208,9 +202,11 @@ export class LogbookPage {
     effect(() => {
       const ids = [...this.stamps().map(x => 'stamp:' + x.code), ...this.earned().map(m => 'ms:' + m.id)];
       untracked(() => {
+        if (!ids.length) return;
         const seen = loadSeen();
-        if (first) this.fresh.set(unseen(ids, seen));
-        else this.fresh.set(new Set([...this.fresh(), ...unseen(ids, seen)]));
+        const storable = canStoreSeen();
+        if (first) this.fresh.set(unseen(ids, seen, storable));
+        else this.fresh.set(new Set([...this.fresh(), ...unseen(ids, seen, storable)]));
         first = false;
         saveSeen(ids);
       });

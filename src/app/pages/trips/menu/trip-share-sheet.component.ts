@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DOCUMENT, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { t, type MsgKey } from '../../../i18n/t';
 import { AppStateService } from '../../../state/app-state.service';
 import type { Trip } from '../../../trips/model';
 import { TripsService } from '../../../trips/trips.service';
@@ -6,7 +7,7 @@ import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { GroupSectionComponent } from '../../../group/ui/group-section.component';
 import { ShareEntryComponent } from '../../../share/ui/share-entry.component';
 
-const TOO_LARGE = 'This trip is too large to share as a link · use Export trips in Settings';
+const TOO_LARGE: MsgKey = 'trips.share.tooLarge';
 
 /**
  * The one Share sheet. Three labelled choices, each saying exactly what it
@@ -20,27 +21,27 @@ const TOO_LARGE = 'This trip is too large to share as a link · use Export trips
   imports: [GlassSheetComponent, GroupSectionComponent, ShareEntryComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet [title]="'Share ' + trip().name" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet [title]="t('trips.share.title', { name: trip().name })" [open]="true" (closed)="closed.emit()">
       <div class="ts">
         <app-group-section [trip]="trip()" [startOpen]="startGroup()" />
 
         <section class="grp" data-share>
           <div>
-            <h3 class="ui-h3">Snapshot link</h3>
-            <p class="ui-sub" data-snapshot-desc>A read-only copy that does not update. Includes your notes on legs, "If we split up" and your load notes, so only send it to people you trust with them. Changes need a new link.</p>
+            <h3 class="ui-h3">{{ t('trips.share.snapshot') }}</h3>
+            <p class="ui-sub" data-snapshot-desc>{{ t('trips.share.snapshotDesc') }}</p>
           </div>
           <label class="split">
-            <span class="ui-label">If we split up</span>
-            <textarea rows="2" maxlength="400" placeholder="Where you meet, who books the room…" data-split
+            <span class="ui-label">{{ t('trips.share.split') }}</span>
+            <textarea rows="2" maxlength="400" [placeholder]="t('trips.share.splitPh')" data-split
                       [value]="trip().party.splitNote" (change)="saveSplit($any($event.target).value)"></textarea>
           </label>
-          <button type="button" class="ui-btn ui-btn--sm ui-btn--dark ts__copy" data-copy (click)="copyLink()" [disabled]="busy()">Copy snapshot link</button>
+          <button type="button" class="ui-btn ui-btn--sm ui-btn--dark ts__copy" data-copy (click)="copyLink()" [disabled]="busy()">{{ t('trips.share.copy') }}</button>
         </section>
 
         <section class="grp" data-share-image>
           <div>
-            <h3 class="ui-h3">Image or text</h3>
-            <p class="ui-sub">A picture or plain text of the plan, to post or message. Shows flights and times, and "If we split up" only if you choose to. Never your leg notes.</p>
+            <h3 class="ui-h3">{{ t('trips.share.image') }}</h3>
+            <p class="ui-sub">{{ t('trips.share.imageDesc') }}</p>
           </div>
           <app-share-entry [trip]="trip()" />
         </section>
@@ -61,6 +62,7 @@ const TOO_LARGE = 'This trip is too large to share as a link · use Export trips
   `],
 })
 export class TripShareSheetComponent {
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly doc = inject(DOCUMENT);
@@ -111,7 +113,7 @@ export class TripShareSheetComponent {
   protected copyLink(): Promise<void> {
     const ready = this.link();
     if (ready === 'too-large') {
-      this.state.flash(TOO_LARGE);
+      this.state.flash(t(TOO_LARGE));
       return Promise.resolve();
     }
     // Normal case: the link is ready, so share/copy start synchronously inside the tap.
@@ -128,16 +130,16 @@ export class TripShareSheetComponent {
       return this.busyWhile(async () => {
         try {
           await nav.clipboard.write([new win.ClipboardItem!({ 'text/plain': text })]);
-          this.state.flash('Link copied');
+          this.state.flash(t('trips.share.copied'));
         } catch {
-          this.state.flash(this.link() === 'too-large' ? TOO_LARGE : 'Could not copy the link');
+          this.state.flash(t(this.link() === 'too-large' ? TOO_LARGE : 'trips.share.copyFailed'));
         }
       });
     }
     return this.busyWhile(async () => {
       await this.building;
       const l = this.link();
-      if (l === 'too-large') this.state.flash(TOO_LARGE);
+      if (l === 'too-large') this.state.flash(t(TOO_LARGE));
       else if (l) await this.deliver(l.url);
     });
   }
@@ -157,7 +159,7 @@ export class TripShareSheetComponent {
     return this.busyWhile(async () => {
       if (nav?.share) {
         try {
-          await nav.share({ title: this.trip().name, text: `${this.trip().name}: our standby plan`, url });
+          await nav.share({ title: this.trip().name, text: t('trips.share.text', { name: this.trip().name }), url });
           return;
         } catch (e) {
           if ((e as DOMException)?.name === 'AbortError') return;
@@ -166,9 +168,9 @@ export class TripShareSheetComponent {
       try {
         if (!nav?.clipboard) throw new Error('no clipboard');
         await nav.clipboard.writeText(url);
-        this.state.flash('Link copied');
+        this.state.flash(t('trips.share.copied'));
       } catch {
-        this.state.flash('Could not copy the link');
+        this.state.flash(t('trips.share.copyFailed'));
       }
     });
   }

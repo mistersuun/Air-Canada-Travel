@@ -6,6 +6,7 @@
  * no ratings. Every count is from published schedules ("Scheduled"); days
  * outside the published window make the counts "Unknown".
  */
+import { t } from '../../../i18n/t';
 import { HUBS } from '../../../data/destinations';
 import { airportEnd, groundEstimate, placeEnd } from '../../../places/ground';
 import { gatewaysNear, homeOptionsByAirport } from '../../../places/reach';
@@ -19,7 +20,7 @@ import { GROUND_BEFORE_DEPARTURE_MIN } from '../../../trips/engine/legs';
 import { airportTz } from '../../../utils/airports';
 import { prettyFlight } from '../../../ui/format';
 import type { ConnectOptions, Itinerary } from '../../../utils/connections';
-import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../../utils/time';
+import { MINUTE_MS, addDays, formatClock, formatKey, utcToLocal, weekdayIndex, weekdayLong, weekdayShort } from '../../../utils/time';
 import type { FlightInstance } from '../../../utils/week';
 
 /** A ground leg starting this close to the last stop starts at it. */
@@ -30,7 +31,7 @@ export const OTHER_AIRPORTS_MAX = 3;
 
 /** 'Tue Oct 13'. */
 export function dayLabel(key: string): string {
-  return `${WEEKDAY_SHORT[weekdayIndex(key)]} ${formatKey(key, { month: 'short', day: 'numeric' })}`;
+  return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
 }
 
 /** 'Oct 12'. */
@@ -40,12 +41,12 @@ export function monthDay(key: string): string {
 
 /** 'Home by Tue Oct 13, 22:00'. */
 export function deadlineLabel(trip: Trip, fmt: TimeFormat = '24h'): string {
-  return `Home by ${dayLabel(trip.homeBy.dateKey)}, ${formatClock(trip.homeBy.hhmm, fmt)}`;
+  return t('trips.ret.homeBy', { day: dayLabel(trip.homeBy.dateKey), time: formatClock(trip.homeBy.hhmm, fmt) });
 }
 
 /** '2 tries', '1 try'. */
 export function triesLabel(n: number): string {
-  return `${n} ${n === 1 ? 'try' : 'tries'}`;
+  return t('trips.ret.tries', { n });
 }
 
 /**
@@ -125,7 +126,7 @@ export function groundToGateway(trip: Trip, it: Itinerary): Omit<GroundLeg, 'id'
 /** "AC813 and AC811", "AC813, AC811 and AC1". */
 export function joinFlights(list: readonly string[]): string {
   if (list.length <= 1) return list[0] ?? '';
-  return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+  return t('trips.stopNames', { list: list.slice(0, -1).join(', '), last: list[list.length - 1] });
 }
 
 export interface OtherAirportRow {
@@ -147,12 +148,12 @@ function dayFlightsText(flights: readonly FlightInstance[], named: Set<string>):
     seen.add(k);
     return true;
   });
-  if (!uniq.length) return 'none in our schedule data';
+  if (!uniq.length) return t('trips.ret.none');
   const text = uniq.length === 1
     ? (named.has(`${uniq[0].flightNumber}|${uniq[0].dest}`)
-      ? `${prettyFlight(uniq[0].flightNumber)} only`
-      : `${prettyFlight(uniq[0].flightNumber)} to ${uniq[0].dest} only`)
-    : uniq.map(f => `${prettyFlight(f.flightNumber)} to ${f.dest}`).join(', ');
+      ? t('trips.ret.only', { flight: prettyFlight(uniq[0].flightNumber) })
+      : t('trips.ret.toOnly', { flight: prettyFlight(uniq[0].flightNumber), dest: uniq[0].dest }))
+    : uniq.map(f => t('trips.ret.to', { flight: prettyFlight(f.flightNumber), dest: f.dest })).join(', ');
   for (const k of seen) named.add(k);
   return text;
 }
@@ -178,7 +179,7 @@ export function otherAirportsHome(trip: Trip, gateway: string | null, dateKeys: 
   for (const opt of homeOptionsByAirport(codes, [...home], [...dateKeys])) {
     if (!opt.days.some(d => d.flights.some(f => !f.estimated))) continue;
     const named = new Set<string>();
-    const text = opt.days.map(d => `${WEEKDAY_SHORT[weekdayIndex(d.dateKey)]}: ${dayFlightsText(d.flights, named)}`).join(' · ');
+    const text = opt.days.map(d => t('trips.ret.dayLine', { day: weekdayShort(weekdayIndex(d.dateKey)), flights: dayFlightsText(d.flights, named) })).join(' · ');
     rows.push({ code: opt.code, city: placeName(opt.code), text });
     if (rows.length >= OTHER_AIRPORTS_MAX) break;
   }
@@ -235,8 +236,10 @@ export function buildReturnView(trip: Trip, connect: ConnectOptions, fmt: TimeFo
     const day = plan.days.find(d => d.dateKey === startKey);
     const nums = [...new Set((day?.tries ?? []).map(t => prettyFlight(t.itinerary.legs[0].flightNumber)).filter(Boolean))];
     if (nums.length) {
-      info = `Being in ${gatewayCity} by ${WEEKDAY_LONG[weekdayIndex(startKey)]} morning adds ${joinFlights(nums)} on ${monthDay(startKey)}: `
-        + `${triesLabel(startTries)} before the deadline instead of ${flyTries}.`;
+      info = t('trips.ret.info', {
+        city: gatewayCity, day: weekdayLong(weekdayIndex(startKey)), flights: joinFlights(nums), date: monthDay(startKey),
+        tries: triesLabel(startTries), n: flyTries,
+      });
     }
   }
 
@@ -244,14 +247,14 @@ export function buildReturnView(trip: Trip, connect: ConnectOptions, fmt: TimeFo
     gateway,
     defaultGateway: returnGateway(trip),
     gatewayCity,
-    context: gateway ? `${trip.name} · from ${gatewayCity}` : trip.name,
+    context: gateway ? t('trips.ret.context', { name: trip.name, city: gatewayCity }) : trip.name,
     deadline: deadlineLabel(trip, fmt),
     hasReturn: !!leg,
     flyKey,
     startKey,
     flyTries,
     startTries,
-    chainTitle: `If you try ${WEEKDAY_LONG[weekdayIndex(flyKey)]}`,
+    chainTitle: t('trips.ret.chain', { day: weekdayLong(weekdayIndex(flyKey)) }),
     steps: plan ? missOneChain(plan, flyKey) : [],
     info,
     others: otherAirportsHome(trip, gateway, startKey ? [startKey, flyKey] : [flyKey]),

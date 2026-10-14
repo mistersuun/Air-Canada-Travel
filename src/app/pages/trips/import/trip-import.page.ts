@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { PlatformLocation } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { t } from '../../../i18n/t';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { AppStateService } from '../../../state/app-state.service';
 import type { SharedTripPreview } from '../../../trips/model';
@@ -26,20 +27,20 @@ type ImportState = 'loading' | 'invalid' | 'ready';
   template: `
     <div class="ui-page ui-page--bare ti">
       <header class="ti__head">
-        <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="notNow()"><app-icon name="arrow-left" [size]="18" /></button>
-        <h1 class="ui-h3">Shared plan</h1>
+        <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('trips.detail.back')" (click)="notNow()"><app-icon name="arrow-left" [size]="18" /></button>
+        <h1 class="ui-h3">{{ t('trips.model.sharedPlan') }}</h1>
         <span class="ti__sp" aria-hidden="true"></span>
       </header>
 
       @switch (status()) {
         @case ('loading') {
-          <p class="ui-sub ti__msg" role="status">Opening the plan…</p>
+          <p class="ui-sub ti__msg" role="status">{{ t('trips.imp.opening') }}</p>
         }
         @case ('invalid') {
           <div class="ui-card ti__bad" data-invalid>
-            <h2 class="ui-h3">This link could not be read</h2>
-            <p class="ui-sub">It may be cut short. Ask for the link again, and open it in full.</p>
-            <a class="ui-btn ui-btn--dark" [routerLink]="tripsPath()" [queryParams]="state.globalParams()">Go to Trips</a>
+            <h2 class="ui-h3">{{ t('trips.imp.badTitle') }}</h2>
+            <p class="ui-sub">{{ t('trips.imp.badText') }}</p>
+            <a class="ui-btn ui-btn--dark" [routerLink]="tripsPath()" [queryParams]="state.globalParams()">{{ t('trips.imp.goTrips') }}</a>
           </div>
         }
         @default {
@@ -48,18 +49,18 @@ type ImportState = 'loading' | 'invalid' | 'ready';
             <app-trip-card [trip]="p.trip" mode="static" />
             @if (p.trip.party.splitNote) {
               <div class="ui-card ti__split">
-                <div class="ui-label">If we split up</div>
+                <div class="ui-label">{{ t('trips.share.split') }}</div>
                 <p>{{ p.trip.party.splitNote }}</p>
               </div>
             }
             @if (p.notes.length) {
-              <p class="ui-sub ti__notes">Includes {{ p.notes.length }} load {{ p.notes.length === 1 ? 'note' : 'notes' }}.</p>
+              <p class="ui-sub ti__notes">{{ t('trips.imp.notes', { n: p.notes.length }) }}</p>
             }
             <div class="ti__acts">
-              <button type="button" class="ui-btn ui-btn--ghost" data-not-now (click)="notNow()">Not now</button>
-              <button type="button" class="ui-btn" data-save (click)="save()">Save to my trips</button>
+              <button type="button" class="ui-btn ui-btn--ghost" data-not-now (click)="notNow()">{{ t('trips.imp.notNow') }}</button>
+              <button type="button" class="ui-btn" data-save (click)="save()">{{ t('trips.imp.save') }}</button>
             </div>
-            <p class="ui-sub ti__fine">Saved on this device only. Changes need a new share.</p>
+            <p class="ui-sub ti__fine">{{ t('trips.imp.fine') }}</p>
           }
         }
       }
@@ -83,6 +84,7 @@ type ImportState = 'loading' | 'invalid' | 'ready';
   `],
 })
 export class TripImportPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly trips = inject(TripsService);
   private readonly router = inject(Router);
@@ -113,7 +115,7 @@ export class TripImportPage {
     const p = this.preview();
     if (!p) return;
     const trip = this.trips.saveShared(p);
-    this.state.flash(`Saved ${trip.name} to your trips`);
+    this.state.flash(t('trips.imp.saved', { name: trip.name }));
     void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams(), replaceUrl: true });
   }
 

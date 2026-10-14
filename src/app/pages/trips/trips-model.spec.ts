@@ -34,7 +34,7 @@ describe('trips-model', () => {
 
   it('counts down to the outbound: days, tomorrow, today, under way, done', () => {
     const t = sevilleTrip();
-    expect(countdown(t, NOW)).toEqual({ text: '7 sleeps', tone: 'blue' });
+    expect(countdown(t, NOW)).toEqual({ text: '7 sleeps', tone: 'blue', sleeps: true });
     expect(countdown(t, yul('2026-10-05', '12:00')).text).toBe('3 sleeps');
     expect(countdown(t, yul('2026-09-30', '12:00')).text).toBe('In 8 days');
     expect(countdown(t, yul('2026-10-07', '12:00')).text).toBe('Tomorrow');

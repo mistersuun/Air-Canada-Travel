@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { t } from '../../../i18n/t';
 import type { Trip } from '../../../trips/model';
 import { TripsService } from '../../../trips/trips.service';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
@@ -13,20 +14,20 @@ import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
   imports: [GlassSheetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet title="Travellers" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet [title]="t('trips.party.title')" [open]="true" (closed)="closed.emit()">
       <div class="ps">
         <div class="ps__row">
-          <span class="ps__tx"><span class="nm">Travelling</span><span class="hint">Everyone on the same standby list</span></span>
+          <span class="ps__tx"><span class="nm">{{ t('trips.party.travelling') }}</span><span class="hint">{{ t('trips.party.travellingHint') }}</span></span>
           <span class="step">
-            <button type="button" class="ui-circ ui-circ--glass" aria-label="One fewer traveller" [disabled]="trip().party.count <= 1"
+            <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('trips.party.fewer')" [disabled]="trip().party.count <= 1"
                     (click)="setCount(trip().party.count - 1)">−</button>
             <b class="tn" aria-live="polite" data-count>{{ trip().party.count }}</b>
-            <button type="button" class="ui-circ ui-circ--glass" aria-label="One more traveller" [disabled]="trip().party.count >= 9"
+            <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('trips.party.more')" [disabled]="trip().party.count >= 9"
                     (click)="setCount(trip().party.count + 1)">+</button>
           </span>
         </div>
         <label class="ps__row" for="party-together">
-          <span class="ps__tx"><span class="nm">Stay together</span><span class="hint">Only take a flight with seats for everyone</span></span>
+          <span class="ps__tx"><span class="nm">{{ t('trips.party.stay') }}</span><span class="hint">{{ t('trips.party.stayHint') }}</span></span>
           <input id="party-together" type="checkbox" role="switch" class="switch" [checked]="trip().party.stayTogether"
                  [disabled]="trip().party.count <= 1" (change)="setTogether($any($event.target).checked)">
         </label>
@@ -57,6 +58,7 @@ import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
   `],
 })
 export class PartySheetComponent {
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
   readonly trip = input.required<Trip>();
   readonly closed = output<void>();

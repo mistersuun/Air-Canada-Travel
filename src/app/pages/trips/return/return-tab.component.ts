@@ -1,6 +1,7 @@
 import { lastStopPlace } from '../../../trips/stops';
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { t } from '../../../i18n/t';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { AppStateService } from '../../../state/app-state.service';
 import { hubDisplayName } from '../../../ui/format';
@@ -10,7 +11,7 @@ import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.compone
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { DestPhotoComponent } from '../../../ui/dest-photo.component';
 import type { Itinerary } from '../../../utils/connections';
-import { WEEKDAY_SHORT, isDateKey, weekdayIndex } from '../../../utils/time';
+import { isDateKey, weekdayIndex, weekdayShort } from '../../../utils/time';
 import { MissChainComponent } from './miss-chain.component';
 import { buildReturnView, groundToGateway, triesLabel } from './return-model';
 import { TriesMeterComponent } from './tries-meter.component';
@@ -41,32 +42,32 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
     @let v = view();
     <div class="rt">
       <header class="rt__ctx">
-        <h2 class="ui-h3">Getting home</h2>
+        <h2 class="ui-h3">{{ t('trips.ret.gettingHome') }}</h2>
         @if (left() !== null) { <app-tries-meter class="rt__meter" [count]="left()!" /> }
         <p class="ui-sub tn" data-context>{{ v.context }}
           @if (v.defaultGateway && v.gateway !== v.defaultGateway) {
-            · <button type="button" class="ui-link rt__reset" data-reset (click)="useAirport(null)">Back to {{ city(v.defaultGateway) }}</button>
+            · <button type="button" class="ui-link rt__reset" data-reset (click)="useAirport(null)">{{ t('trips.ret.backTo', { city: city(v.defaultGateway) }) }}</button>
           }
         </p>
       </header>
 
-      <section class="ui-card rt__card" aria-label="Deadline">
-        <div class="ui-label">Deadline</div>
+      <section class="ui-card rt__card" [attr.aria-label]="t('trips.ret.deadline')">
+        <div class="ui-label">{{ t('trips.ret.deadline') }}</div>
         <div class="rt__dl">
           <span class="ui-h3 tn" data-deadline>{{ v.deadline }}</span>
           <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm rt__chg" data-change
-                  [disabled]="trips.readOnly()" (click)="openSheet()">Change</button>
+                  [disabled]="trips.readOnly()" (click)="openSheet()">{{ t('trips.edit.change') }}</button>
         </div>
         @if (v.gateway) {
           <div class="rt__stats tn">
-            <div class="rt__stat" data-fly><b>{{ tries(v.flyTries) }}</b><small>if you fly {{ wd(v.flyKey) }}</small></div>
+            <div class="rt__stat" data-fly><b>{{ tries(v.flyTries) }}</b><small>{{ t('trips.ret.ifFly', { day: wd(v.flyKey) }) }}</small></div>
             @if (v.startKey && v.startTries !== null) {
-              <div class="rt__stat" data-start><b>{{ tries(v.startTries) }}</b><small>if you start {{ wd(v.startKey) }}</small></div>
+              <div class="rt__stat" data-start><b>{{ tries(v.startTries) }}</b><small>{{ t('trips.ret.ifStart', { day: wd(v.startKey) }) }}</small></div>
             }
           </div>
           @if (!v.covered) {
             <p class="rt__unk" data-unknown><app-provenance-tag value="unknown" />
-              <span>Some of these days aren't in the published schedules yet, so there may be more tries.</span></p>
+              <span>{{ t('trips.ret.unknown') }}</span></p>
           }
         }
       </section>
@@ -77,7 +78,7 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
           <app-provenance-tag [value]="v.covered ? 'scheduled' : 'unknown'" />
         </div>
         <section class="ui-card rt__card" data-chain>
-          <app-miss-chain [steps]="v.steps" [actionLabel]="v.hasReturn || trips.readOnly() ? null : 'Use as return'"
+          <app-miss-chain [steps]="v.steps" [actionLabel]="v.hasReturn || trips.readOnly() ? null : t('trips.ret.useAsReturn')"
                           (pick)="useAsReturn($event)" />
         </section>
 
@@ -86,7 +87,7 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
         }
 
         @if (v.others.length) {
-          <div class="ui-sec-h rt__h"><h3 class="ui-h3">Other airports home</h3></div>
+          <div class="ui-sec-h rt__h"><h3 class="ui-h3">{{ t('trips.ret.others') }}</h3></div>
           <section class="ui-card rt__others">
             @for (o of v.others; track o.code) {
               <button type="button" class="rt__row" [attr.data-other]="o.code" (click)="useAirport(o.code)">
@@ -94,7 +95,7 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
                 <span class="rt__rt">
                   <span class="rt__nm"><b>{{ o.city }}</b>&ngsp;<span class="rt__code">{{ o.code }}</span></span>
                   <span class="ui-visually-hidden"> · </span><span class="rt__m tn">{{ o.text }}</span>
-                  <span class="ui-visually-hidden"> · count tries from {{ o.city }}</span>
+                  <span class="ui-visually-hidden"> · {{ t('trips.ret.countFrom', { city: o.city }) }}</span>
                 </span>
                 <app-icon class="rt__chev" name="chevron-right" [size]="16" />
               </button>
@@ -103,20 +104,20 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
         }
       } @else {
         <p class="note" data-nogw><app-icon name="info" [size]="16" />
-          <span>No airport near {{ lastName() }} was found in our schedule data, so there are no flights home to count.</span></p>
+          <span>{{ t('trips.ret.noAirport', { place: lastName() }) }}</span></p>
       }
     </div>
 
     @if (sheetOpen()) {
-      <app-glass-sheet title="Home by" [open]="true" (closed)="sheetOpen.set(false)">
+      <app-glass-sheet [title]="t('trips.ret.homeByTitle')" [open]="true" (closed)="sheetOpen.set(false)">
         <form class="ds" (submit)="$event.preventDefault(); saveDeadline()">
           <label class="ds__f">
-            <span class="ui-label">Deadline</span>
+            <span class="ui-label">{{ t('trips.ret.deadline') }}</span>
             <input type="datetime-local" class="ds__in" data-deadline-input [value]="draft()" [min]="minValue()"
                    (input)="draft.set($any($event.target).value)" required>
           </label>
-          <p class="ui-sub ds__hint">Local time in {{ homeName() }} ({{ trip().homeAirport }}). Tries count flights that land by then.</p>
-          <button type="submit" class="ui-btn ui-btn--dark ui-btn--block" data-save [disabled]="!parsed()">Save</button>
+          <p class="ui-sub ds__hint">{{ t('trips.ret.localTime', { city: homeName(), code: trip().homeAirport }) }}</p>
+          <button type="submit" class="ui-btn ui-btn--dark ui-btn--block" data-save [disabled]="!parsed()">{{ t('trips.leg.save') }}</button>
         </form>
       </app-glass-sheet>
     }
@@ -164,6 +165,7 @@ export function parseDeadline(value: string): { dateKey: string; hhmm: string } 
   `],
 })
 export class ReturnTabComponent {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   protected readonly trips = inject(TripsService);
 
@@ -201,7 +203,7 @@ export class ReturnTabComponent {
   }
 
   protected wd(key: string): string {
-    return WEEKDAY_SHORT[weekdayIndex(key)];
+    return weekdayShort(weekdayIndex(key));
   }
 
   protected city(code: string): string {
@@ -214,8 +216,8 @@ export class ReturnTabComponent {
   }
 
   protected openSheet(): void {
-    const t = this.trip();
-    this.draft.set(`${t.homeBy.dateKey}T${t.homeBy.hhmm}`);
+    const tr = this.trip();
+    this.draft.set(`${tr.homeBy.dateKey}T${tr.homeBy.hhmm}`);
     this.sheetOpen.set(true);
   }
 
@@ -228,16 +230,15 @@ export class ReturnTabComponent {
 
   /** Adds the flight as the return, plus an Estimated trip from the goal to that airport when one is needed. */
   protected useAsReturn(it: Itinerary): void {
-    const t = this.trip();
-    const ground = groundToGateway(t, it);
-    const legId = this.trips.addFlightLeg(t.id, it, 'return');
+    const tr = this.trip();
+    const ground = groundToGateway(tr, it);
+    const legId = this.trips.addFlightLeg(tr.id, it, 'return');
     if (!legId) return;
-    const groundId = ground ? this.trips.addGroundLeg(t.id, ground) : '';
+    const groundId = ground ? this.trips.addGroundLeg(tr.id, ground) : '';
     const num = it.legs.map(l => l.flightNumber).filter(Boolean).join(' + ');
-    const via = ground ? ` and the trip to ${placeName(it.origin)}` : '';
-    this.state.flash(`Added ${num}${via} as your return · Listing is still your step`, {
-      label: 'Undo',
-      run: () => this.trips.update(t.id, cur => ({ ...cur, legs: cur.legs.filter(l => l.id !== legId && l.id !== groundId) })),
+    this.state.flash(ground ? t('trips.ret.addedVia', { flight: num, city: placeName(it.origin) }) : t('trips.ret.added', { flight: num }), {
+      label: t('trips.undo'),
+      run: () => this.trips.update(tr.id, cur => ({ ...cur, legs: cur.legs.filter(l => l.id !== legId && l.id !== groundId) })),
     });
   }
 }

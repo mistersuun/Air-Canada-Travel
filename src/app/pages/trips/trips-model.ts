@@ -6,6 +6,7 @@
  * Estimated / Saved by you / Unknown), counts not odds, and "not found in our
  * schedule data" rather than "no flights".
  */
+import { t } from '../../i18n/t';
 import { networkNoteFor } from '../../data/route-network';
 import { countryName } from '../../places/place';
 import { aboutDuration, airportEnd, groundEstimate } from '../../places/ground';
@@ -17,9 +18,9 @@ import { deadlineUtc, departuresHome } from '../../trips/engine/homeby';
 import { legWindow, refArrUtc } from '../../trips/engine/legs';
 import { listingChip } from '../../trips/engine/listing';
 import type { ConnectOptions } from '../../utils/connections';
-import { MINUTE_MS, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
+import { MINUTE_MS, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex, weekdayShort } from '../../utils/time';
 import {
-  FlightLeg, FlightRef, GroundLeg, GroundMode, LegStatus, Party, Provenance, Trip, TripLeg, isFinalStatus,
+  FlightLeg, FlightRef, GroundLeg, GroundMode, LegStatus, Party, Provenance, Trip, TripLeg, isFinalStatus, labelMap,
 } from '../../trips/model';
 import type { IconName } from '../../components/shared/icons.component';
 
@@ -27,6 +28,8 @@ import type { IconName } from '../../components/shared/icons.component';
 export interface Countdown {
   text: string;              // '3 sleeps', 'In 32 days', 'Tomorrow', 'Today', 'Under way', 'Done'
   tone: 'blue' | 'teal' | 'neutral';
+  /** True for the '3 sleeps' form (2 to 7 days out). */
+  sleeps?: boolean;
 }
 
 /** One row of the trip timeline. */
@@ -47,9 +50,10 @@ export interface LegRow {
   listing?: { label: string; open: boolean } | null;
 }
 
-export const MODE_LABEL: Record<GroundMode, string> = {
-  train: 'Train', bus: 'Bus', car: 'Car', ferry: 'Ferry', flight: 'Flight', other: 'Ground',
-};
+export const MODE_LABEL: Record<GroundMode, string> = labelMap({
+  train: 'trips.modeLabel.train', bus: 'trips.modeLabel.bus', car: 'trips.modeLabel.car',
+  ferry: 'trips.modeLabel.ferry', flight: 'trips.modeLabel.flight', other: 'trips.modeLabel.other',
+});
 
 export const MODE_ICON: Record<GroundMode, IconName> = {
   train: 'train', bus: 'bus', car: 'car', ferry: 'pin', flight: 'plane', other: 'pin',
@@ -60,7 +64,7 @@ export const RETURN_REMINDER_DAYS = 14;
 
 /** 'Thu Oct 8'. */
 export function dayLabel(key: string): string {
-  return `${WEEKDAY_SHORT[weekdayIndex(key)]} ${formatKey(key, { month: 'short', day: 'numeric' })}`;
+  return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
 }
 
 /** 'Oct 20'. */
@@ -70,14 +74,13 @@ export function monthDay(key: string): string {
 
 /** 'Thu Oct 8 → home by Tue Oct 13, 22:00'. */
 export function tripDatesLabel(trip: Trip, fmt: TimeFormat = '24h'): string {
-  return `${dayLabel(trip.outboundDate)} → home by ${dayLabel(trip.homeBy.dateKey)}, ${formatClock(trip.homeBy.hhmm, fmt)}`;
+  return t('trips.model.dates', { start: dayLabel(trip.outboundDate), end: dayLabel(trip.homeBy.dateKey), time: formatClock(trip.homeBy.hhmm, fmt) });
 }
 
 /** '2 travellers · stay together', '2 travellers', '1 traveller'. */
 export function partyLabel(party: Party): string {
   const n = Math.max(1, party.count);
-  const who = `${n} ${n === 1 ? 'traveller' : 'travellers'}`;
-  return n > 1 && party.stayTogether ? `${who} · stay together` : who;
+  return t(n > 1 && party.stayTogether ? 'trips.party.together' : 'trips.party.travellers', { n });
 }
 
 /** First departure of the trip (or the outbound date at 00:00 home time when it has no legs yet). */
@@ -91,34 +94,34 @@ function tripStartUtc(trip: Trip): number {
 /** '3 sleeps' (2 to 7 days), 'In 32 days', 'Tomorrow', 'Today', 'Under way' (after the first departure), 'Done' (after the deadline). */
 export function countdown(trip: Trip, nowMs: number): Countdown {
   const deadline = deadlineUtc(trip.homeBy, trip.homeAirport);
-  if (nowMs > deadline) return { text: 'Done', tone: 'neutral' };
-  if (nowMs >= tripStartUtc(trip)) return { text: 'Under way', tone: 'teal' };
+  if (nowMs > deadline) return { text: t('common.done'), tone: 'neutral' };
+  if (nowMs >= tripStartUtc(trip)) return { text: t('trips.cd.underWay'), tone: 'teal' };
   const today = utcToLocal(nowMs, airportTz(trip.fromHub)).dateKey;
   const d = diffDays(today, trip.outboundDate);
-  if (d <= 0) return { text: 'Today', tone: 'blue' };
-  if (d === 1) return { text: 'Tomorrow', tone: 'blue' };
+  if (d <= 0) return { text: t('format.today'), tone: 'blue' };
+  if (d === 1) return { text: t('format.tomorrow'), tone: 'blue' };
   if (d <= 7) {
-    return { text: `${d} sleeps`, tone: 'blue' };
+    return { text: t('trips.cd.sleeps', { n: d }), tone: 'blue', sleeps: true };
   }
-  return { text: `In ${d} days`, tone: 'blue' };
+  return { text: t('trips.cd.inDays', { n: d }), tone: 'blue' };
 }
 
 /** 'home 8h before your deadline', 'home 45m before your deadline', 'lands after your deadline'. */
 export function deadlineNote(trip: Trip, ref: FlightRef): string | null {
   if (ref.dest !== trip.homeAirport) return null;
   const slack = Math.round((deadlineUtc(trip.homeBy, trip.homeAirport) - refArrUtc(ref)) / MINUTE_MS);
-  if (slack < 0) return 'lands after your deadline';
+  if (slack < 0) return t('trips.deadline.late');
   const h = Math.floor(slack / 60);
-  return `home ${h ? `${h}h` : `${slack}m`} before your deadline`;
+  return t('trips.deadline.home', { time: h ? t('format.hm.h', { h }) : t('format.hm.m', { m: slack }) });
 }
 
 function backupsLabel(n: number): string {
-  return n === 1 ? '1 backup' : `${n} backups`;
+  return t('trips.backups', { n });
 }
 
 /** The flight numbers of a leg: 'AC834', 'AC811 + AC422'. */
 export function flightNumbers(refs: readonly FlightRef[]): string {
-  return refs.map(r => (r.flightNumber === 'EST' ? 'estimated leg' : r.flightNumber)).join(' + ');
+  return refs.map(r => (r.flightNumber === 'EST' ? t('trips.model.estimatedLeg') : r.flightNumber)).join(' + ');
 }
 
 /** 'YUL → MAD', 'LIS → YYZ → YUL'. */
@@ -142,7 +145,7 @@ function flightRow(trip: Trip, leg: FlightLeg, fmt: TimeFormat): LegRow {
   const meta = [refsTimes(refs, fmt)];
   if (leg.provenance === 'unknown') {
     // Flown per the route network, but the schedules have no times for it.
-    meta.push(networkNoteFor(refs) ?? 'not found in our schedule data');
+    meta.push(networkNoteFor(refs) ?? t('trips.model.notFoundData'));
   }
   if (leg.alternates.length) meta.push(backupsLabel(leg.alternates.length));
   if (!isFinalStatus(leg.status) || leg.status === 'boarded') {
@@ -153,7 +156,7 @@ function flightRow(trip: Trip, leg: FlightLeg, fmt: TimeFormat): LegRow {
     id: leg.id,
     kind: 'flight',
     icon: 'plane',
-    title: first ? `${WEEKDAY_SHORT[weekdayIndex(first.dateKey)]} · ${refsRoute(refs)} · ${flightNumbers(refs)}` : 'Flight',
+    title: first ? `${weekdayShort(weekdayIndex(first.dateKey))} · ${refsRoute(refs)} · ${flightNumbers(refs)}` : t('trips.model.flight'),
     meta: meta.filter(Boolean).join(' · '),
     status: leg.status,
     provenance: leg.provenance,
@@ -183,7 +186,7 @@ export interface GroundRide {
  */
 export function groundRide(leg: GroundLeg): GroundRide {
   if (leg.provenance === 'unknown' || leg.estMinutes === null) {
-    return { label: 'Onward travel unknown', provenance: leg.provenance, exit: null };
+    return { label: t('trips.ground.unknown'), provenance: leg.provenance, exit: null };
   }
   const from = leg.from.code ? airportEnd(leg.from.code) ?? leg.from : leg.from;
   const g = groundEstimate(from, leg.to, { dateKey: leg.dateKey });
@@ -193,11 +196,11 @@ export function groundRide(leg: GroundLeg): GroundRide {
     return {
       label: g.label,
       provenance: scheduled ? 'scheduled' : leg.provenance,
-      exit: scheduled && g.exitMin > 0 ? { label: g.exitLabel || 'Airport exit and transfer', min: g.exitMin } : null,
+      exit: scheduled && g.exitMin > 0 ? { label: g.exitLabel || t('trips.ground.exit'), min: g.exitMin } : null,
     };
   }
   if (g.mode === leg.mode && g.totalMin === leg.estMinutes) return { label: g.label, provenance: leg.provenance, exit: null };
-  return { label: `${MODE_LABEL[leg.mode]} about ${aboutDuration(leg.estMinutes)}`, provenance: leg.provenance, exit: null };
+  return { label: t('trips.ground.about', { mode: MODE_LABEL[leg.mode], dur: aboutDuration(leg.estMinutes) }), provenance: leg.provenance, exit: null };
 }
 
 /** What an estimated ground leg says (see groundRide). */
@@ -210,22 +213,22 @@ function groundRow(leg: GroundLeg, fmt: TimeFormat): LegRow {
   let meta: string;
   let provenance: Provenance = leg.provenance;
   if (leg.provenance === 'saved' && leg.userTimes) {
-    const t = leg.userTimes;
-    const off = supOffset(diffDays(t.depDateKey, t.arrDateKey));
-    meta = `${MODE_LABEL[leg.mode]} ${formatClock(t.depLocal, fmt)} → ${formatClock(t.arrLocal, fmt)}${off}`;
+    const ut = leg.userTimes;
+    const off = supOffset(diffDays(ut.depDateKey, ut.arrDateKey));
+    meta = `${MODE_LABEL[leg.mode]} ${formatClock(ut.depLocal, fmt)} → ${formatClock(ut.arrLocal, fmt)}${off}`;
     if (leg.note.trim()) meta += ` · ${leg.note.trim()}`;
   } else if (leg.provenance === 'unknown' || leg.estMinutes === null) {
-    meta = 'Onward travel unknown · find it yourself';
+    meta = t('trips.ground.findYourself');
   } else {
     const ride = groundRide(leg);
-    meta = `${ride.label} · not booked`;
+    meta = t('trips.ground.notBooked', { label: ride.label });
     provenance = ride.provenance;
   }
   return {
     id: leg.id,
     kind: 'ground',
     icon: MODE_ICON[leg.mode] ?? 'pin',
-    title: `${WEEKDAY_SHORT[weekdayIndex(day)]} · ${leg.from.name} → ${leg.to.name}`,
+    title: `${weekdayShort(weekdayIndex(day))} · ${leg.from.name} → ${leg.to.name}`,
     meta,
     status: null,
     provenance,
@@ -251,7 +254,7 @@ export function needsReturn(trip: Trip): boolean {
 }
 
 export function homeLabel(trip: Trip): string {
-  return `Home, ${hubDisplayName(trip.homeAirport)}`;
+  return t('trips.model.home', { city: hubDisplayName(trip.homeAirport) });
 }
 
 /**
@@ -271,16 +274,16 @@ export function tripSubtitle(trip: Trip): string {
   const names = routeCountries(trip).filter(c => !home.has(c)).map(countryName).filter(Boolean);
   const where = names.length ? joinNames(names) : trip.goal.country;
   const n = Math.max(1, trip.party.count);
-  return [where, `${n} ${n === 1 ? 'traveller' : 'travellers'}`].filter(Boolean).join(' · ');
+  return [where, t('trips.party.travellers', { n })].filter(Boolean).join(' · ');
 }
 
 /** One-line summary for a compact card: '4 legs · 2 backups'. */
 export function compactSummary(trip: Trip): string {
   const legs = trip.legs.filter(l => l.status !== 'abandoned');
   const backups = trip.legs.reduce((n, l) => n + (l.kind === 'flight' ? l.alternates.length : 0), 0);
-  const parts = [legs.length === 1 ? '1 leg' : `${legs.length} legs`];
+  const parts = [t('trips.model.legs', { n: legs.length })];
   if (backups) parts.push(backupsLabel(backups));
-  if (!legs.length) return 'No legs yet';
+  if (!legs.length) return t('trips.model.noLegs');
   return parts.join(' · ');
 }
 
@@ -292,7 +295,7 @@ export function savedAtLabel(iso: string | null, homeAirport: string, fmt: TimeF
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return null;
   const local = utcToLocal(ms, airportTz(homeAirport));
-  return `Saved ${dayLabel(local.dateKey)}, ${formatClock(local.hhmm, fmt)}`;
+  return t('trips.model.savedAt', { day: dayLabel(local.dateKey), time: formatClock(local.hhmm, fmt) });
 }
 
 function cityOf(code: string): string {
@@ -341,8 +344,8 @@ export function offlineUntil(trip: Trip, coverageTo: string | null): string {
 /** 'Shared plan · Thu Oct 1'. */
 export function sharedLabel(iso: string, tz: string): string {
   const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return 'Shared plan';
-  return `Shared plan · ${dayLabel(utcToLocal(ms, tz).dateKey)}`;
+  if (Number.isNaN(ms)) return t('trips.model.sharedPlan');
+  return t('trips.model.sharedPlanDay', { day: dayLabel(utcToLocal(ms, tz).dateKey) });
 }
 
 /** The leg by id. */

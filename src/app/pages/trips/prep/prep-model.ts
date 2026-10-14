@@ -1,6 +1,7 @@
 /**
  * View-model for the trip Prep tab (mockup g7). Pure.
  */
+import { t } from '../../../i18n/t';
 import type { PrepItem } from '../../../places/prep';
 import type { LegStatus, Trip } from '../../../trips/model';
 
@@ -30,7 +31,7 @@ export function legIdOf(itemId: string): string {
 export function detailParts(item: PrepItem): { pre: string; link: { label: string; url: string } | null; post: string } {
   const detail = item.detail ?? '';
   if (!item.link) return { pre: detail, link: null, post: '' };
-  const lead = /^Official [^·]+?(?=\s·|$)/.exec(detail);
+  const lead = /^(?:Official|Page officielle|Site officiel)\b[^·]+?(?=\s·|$)/.exec(detail);
   if (lead) return { pre: '', link: { label: lead[0], url: item.link.url }, post: detail.slice(lead[0].length) };
   return { pre: detail ? `${detail} · ` : '', link: { label: item.link.label, url: item.link.url }, post: '' };
 }
@@ -45,7 +46,7 @@ export function prepRow(item: PrepItem): PrepRow {
 
 /** '2 of 5 done'. */
 export function doneLabel(items: readonly PrepItem[]): string {
-  return `${items.filter(i => i.done).length} of ${items.length} done`;
+  return t('trips.prep.done', { done: items.filter(i => i.done).length, n: items.length });
 }
 
 /**

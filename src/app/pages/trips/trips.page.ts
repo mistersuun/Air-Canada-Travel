@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { t, type MsgKey } from '../../i18n/t';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
 import { PlaceSearchComponent } from '../../places/ui/place-search.component';
 import { logbookPath } from '../../extras/links';
@@ -39,49 +40,49 @@ export const STARRED_PREVIEW = 3;
   template: `
     <div class="ui-page tp">
       <div class="tp__hd">
-        <h1 class="ui-h1 tp__ttl">Trips</h1>
+        <h1 class="ui-h1 tp__ttl">{{ t('trips.page.title') }}</h1>
         <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-new-trip aria-haspopup="dialog" (click)="newOpen.set(true)">
-          + New trip</button>
+          {{ t('trips.page.new') }}</button>
       </div>
-      <nav class="tp__links" aria-label="Saved and logbook">
-        <a routerLink="/saved" [queryParams]="state.globalParams()" data-link-saved>Saved</a>
-        <a [routerLink]="logbookLink" [queryParams]="state.globalParams()" data-link-logbook>Logbook</a>
+      <nav class="tp__links" [attr.aria-label]="t('trips.page.linksAria')">
+        <a routerLink="/saved" [queryParams]="state.globalParams()" data-link-saved>{{ t('trips.page.saved') }}</a>
+        <a [routerLink]="logbookLink" [queryParams]="state.globalParams()" data-link-logbook>{{ t('trips.page.logbook') }}</a>
       </nav>
       @if (newOpen()) {
-        <app-glass-sheet title="New trip" [open]="true" (closed)="newOpen.set(false)">
-          <p class="ui-sub tp__np">Where do you want to go? You pick the flight on the next screen.</p>
-          <app-place-search label="Search a city or airport" [destinationsOnly]="true" (picked)="startFrom($event)" />
+        <app-glass-sheet [title]="t('trips.page.newTitle')" [open]="true" (closed)="newOpen.set(false)">
+          <p class="ui-sub tp__np">{{ t('trips.page.newHint') }}</p>
+          <app-place-search [label]="t('trips.page.search')" [destinationsOnly]="true" (picked)="startFrom($event)" />
         </app-glass-sheet>
       }
       <app-coming-up-banner />
 
       @if (trips.readOnly()) {
         <p class="note note--blue"><app-icon name="info" [size]="16" />
-          <span>These trips were saved by a newer version of the app. They show here, but changes won't be kept.</span></p>
+          <span>{{ t('trips.page.newer') }}</span></p>
       }
 
       @if (trips.unsaved()) {
         <p class="note note--amber" data-unsaved role="status"><app-icon name="warning" [size]="16" />
-          <span>Couldn't save on this phone. Export a backup now. <button type="button" class="lnk" (click)="exportNow()">Export</button></span></p>
+          <span>{{ t(unsavedKey) }} <button type="button" class="lnk" (click)="exportNow()">{{ t('trips.export') }}</button></span></p>
       } @else if (trips.backupReminder(); as n) {
         <p class="note note--blue" data-backup-nudge><app-icon name="info" [size]="16" />
-          <span>{{ n }} <button type="button" class="lnk" (click)="exportNow()">Export now</button></span></p>
+          <span>{{ n }} <button type="button" class="lnk" (click)="exportNow()">{{ t('trips.page.exportNow') }}</button></span></p>
       }
 
       @if (active().length) {
-        @for (t of active(); track t.id; let first = $first) {
-          <app-trip-card [trip]="t" mode="link" [compact]="!first" showTries />
-          @if (first && warnFor(t)) {
+        @for (tr of active(); track tr.id; let first = $first) {
+          <app-trip-card [trip]="tr" mode="link" [compact]="!first" showTries />
+          @if (first && warnFor(tr)) {
             <p class="note note--amber" data-return-warning><app-icon name="warning" [size]="16" />
-              <span>Return leg not listed yet. Listing usually opens a few days before; check your pass rules.</span></p>
+              <span>{{ t('trips.page.returnWarn') }}</span></p>
           }
         }
       } @else {
         <div class="ui-card empty" data-empty>
           <span class="empty__ic"><app-icon name="suitcase" [size]="26" /></span>
-          <h2 class="ui-h3">No trips yet</h2>
-          <p class="ui-sub">Search a city on Explore, or open a destination and tap Start a trip.</p>
-          <a class="ui-btn ui-btn--dark" routerLink="/" [queryParams]="state.globalParams()">Explore destinations</a>
+          <h2 class="ui-h3">{{ t('trips.page.emptyTitle') }}</h2>
+          <p class="ui-sub">{{ t('trips.page.emptyText') }}</p>
+          <a class="ui-btn ui-btn--dark" routerLink="/" [queryParams]="state.globalParams()">{{ t('trips.page.explore') }}</a>
         </div>
       }
 
@@ -94,8 +95,8 @@ export const STARRED_PREVIEW = 3;
       @if (starredCount()) {
         <section class="sec" data-starred>
           <div class="ui-sec-h sec__h">
-            <h2 class="ui-h3">Starred places</h2>
-            <a routerLink="/saved" [queryParams]="state.globalParams()">All {{ starredCount() }}</a>
+            <h2 class="ui-h3">{{ t('trips.page.starred') }}</h2>
+            <a routerLink="/saved" [queryParams]="state.globalParams()">{{ t('trips.page.all', { n: starredCount() }) }}</a>
           </div>
           <div class="ui-card list">
             @for (r of starred(); track r.code) {
@@ -107,10 +108,10 @@ export const STARRED_PREVIEW = 3;
 
       @if (past().length) {
         <details class="past" data-past>
-          <summary><span class="ui-h3">Past trips</span><span class="ui-sub tn">{{ past().length }}</span><span class="chev" aria-hidden="true">›</span></summary>
+          <summary><span class="ui-h3">{{ t('trips.page.past') }}</span><span class="ui-sub tn">{{ past().length }}</span><span class="chev" aria-hidden="true">›</span></summary>
           <div class="past__l">
-            @for (t of past(); track t.id) {
-              <app-trip-card [trip]="t" mode="link" compact />
+            @for (tr of past(); track tr.id) {
+              <app-trip-card [trip]="tr" mode="link" compact />
             }
           </div>
         </details>
@@ -161,6 +162,8 @@ export const STARRED_PREVIEW = 3;
   `],
 })
 export class TripsPage {
+  protected readonly t = t;
+  protected readonly unsavedKey: MsgKey = 'trips.service.unsaved';
   protected readonly state = inject(AppStateService);
   protected readonly trips = inject(TripsService);
   protected readonly destPath = destPath;
@@ -186,9 +189,9 @@ export class TripsPage {
       ...up.items.map(u => ({ code: u.code, meta: rowMeta(u, today, fmt) })),
       ...up.rest.map(n => ({
         code: n.code,
-        meta: n.via ? `${n.country} · via ${n.via}`
+        meta: n.via ? `${n.country} · ${t('format.via', { hubs: n.via })}`
           : n.routeOnly ? `${n.country} · ${ROUTE_ONLY_NOTE}`
-          : `${n.country} · not found in our schedule data`,
+          : `${n.country} · ${t('trips.model.notFoundData')}`,
       })),
     ];
     return rows.slice(0, STARRED_PREVIEW);
@@ -201,7 +204,7 @@ export class TripsPage {
   protected startFrom(place: Place): void {
     this.newOpen.set(false);
     if (place.acCode && !findDestination(place.acCode)) {
-      this.state.flash('Trips start from a hub. Pick where you are going.');
+      this.state.flash(t('trips.page.fromHub'));
       return;
     }
     if (place.acCode) {
@@ -216,10 +219,10 @@ export class TripsPage {
 
   protected exportNow(): void {
     const r = this.trips.downloadBackup();
-    this.state.flash(r ? `Downloaded ${r.filename}` : 'Could not create the file on this browser.');
+    this.state.flash(r ? t('trips.data.downloaded', { name: r.filename }) : t('trips.data.noFile'));
   }
 
-  protected warnFor(t: Parameters<typeof returnNotListed>[0]): boolean {
-    return returnNotListed(t, this.state.nowMs());
+  protected warnFor(trip: Parameters<typeof returnNotListed>[0]): boolean {
+    return returnNotListed(trip, this.state.nowMs());
   }
 }

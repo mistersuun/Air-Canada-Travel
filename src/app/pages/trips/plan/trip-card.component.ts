@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, booleanAttribute, computed, inject, input, output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { t } from '../../../i18n/t';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { GroupService } from '../../../group/group.service';
 import { AvatarChipComponent } from '../../../group/ui/avatar-chip.component';
@@ -33,7 +34,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     <article class="ui-card tc" [class.is-compact]="compact()">
       <div class="tc__hd">
         <div class="tc__goal">
-          <div class="ui-label">Goal</div>
+          <div class="ui-label">{{ t('trips.card.goal') }}</div>
           @if (mode() === 'link') {
             <h2 class="ui-h2 tc__name"><a [routerLink]="tripLink()" [queryParams]="state.globalParams()">{{ heading() }}</a></h2>
           } @else {
@@ -43,7 +44,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
           @if (groupNames().length) {
             <p class="tc__grp" data-group-indicator>
               <span class="tc__grpav">@for (n of groupNames(); track $index) { <app-avatar-chip [name]="n" [showName]="false" /> }</span>
-              <span class="ui-sub">Group trip</span>
+              <span class="ui-sub">{{ t('trips.card.group') }}</span>
             </p>
           }
         </div>
@@ -51,20 +52,20 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
       </div>
 
       @if (compact()) {
-        <p class="ui-sub tc__sum">{{ partyText() }} · From {{ trip().fromHub }} · {{ summary() }}</p>
+        <p class="ui-sub tc__sum">{{ partyText() }} · {{ t('trips.card.from', { hub: trip().fromHub }) }} · {{ summary() }}</p>
         @if (tries() !== null) { <app-tries-meter class="tc__tries" [count]="tries()!" /> }
       } @else {
         <div class="tc__chips">
           @if (mode() === 'button') {
-            <button type="button" class="tc__chip" data-party (click)="partyPick.emit()">{{ partyText() }}<span class="ui-visually-hidden">, edit travellers</span></button>
+            <button type="button" class="tc__chip" data-party (click)="partyPick.emit()">{{ partyText() }}<span class="ui-visually-hidden">{{ t('trips.card.editTravellers') }}</span></button>
           } @else {
             <span class="tc__chip" data-party>{{ partyText() }}</span>
           }
-          <span class="tc__chip">From {{ trip().fromHub }}</span>
+          <span class="tc__chip">{{ t('trips.card.from', { hub: trip().fromHub }) }}</span>
           @if (tries() !== null) { <app-tries-meter class="tc__tries" [count]="tries()!" /> }
         </div>
 
-        <ol class="tl" aria-label="Legs">
+        <ol class="tl" [attr.aria-label]="t('trips.card.legs')">
           @for (r of rows(); track r.id) {
             <li class="tl__it" [class.is-ground]="r.kind === 'ground'" [class.is-done]="r.done" [attr.data-leg]="r.id">
               <span class="tl__ic" aria-hidden="true"><b><app-icon [name]="r.icon" [size]="12" [strokeWidth]="2.2" /></b><u></u></span>
@@ -85,11 +86,11 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
               }
             </li>
           } @empty {
-            <li class="tl__none ui-sub">No legs yet. Add a flight from a destination or a flight page.</li>
+            <li class="tl__none ui-sub">{{ t('trips.card.none') }}</li>
           }
           <li class="tl__end"><i aria-hidden="true"><app-icon name="home" [size]="12" [filled]="true" /></i><span>{{ home() }}</span>
             @if (noReturn() && mode() !== 'static') {
-              <a class="tl__ret ui-link" data-no-return [routerLink]="tripLink()" [queryParams]="returnQuery()">No return flight yet · see Return</a>
+              <a class="tl__ret ui-link" data-no-return [routerLink]="tripLink()" [queryParams]="returnQuery()">{{ t('trips.card.noReturn') }}</a>
             }
           </li>
         </ol>
@@ -166,6 +167,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
   `],
 })
 export class TripCardComponent {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly groups = inject(GroupService);
   /** Nicknames of the group this device started for the trip (on the trips list only). */
@@ -192,7 +194,7 @@ export class TripCardComponent {
   protected readonly cd = computed(() => countdown(this.trip(), this.state.nowMs()));
   /** The goal, or all stops ('Seville, Lisbon and Porto') on a multi-stop trip. */
   protected readonly heading = computed(() => isMultiStop(this.trip()) ? stopNames(this.trip()) : this.trip().goal.name);
-  protected readonly cdTitle = computed(() => (/sleeps$/.test(this.cd().text) ? `${this.cd().text} to ${this.trip().goal.name}` : this.cd().text));
+  protected readonly cdTitle = computed(() => (this.cd().sleeps ? t('trips.card.cdTitle', { text: this.cd().text, goal: this.trip().goal.name }) : this.cd().text));
   protected readonly dates = computed(() => tripDatesLabel(this.trip(), this.state.timeFormat()));
   protected readonly partyText = computed(() => partyLabel(this.trip().party));
   protected readonly rows = computed(() => legRows(this.trip(), this.state.timeFormat(), { nowMs: this.state.nowMs(), hours: this.prefs.listingHours() }));

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { t } from '../../../i18n/t';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { AppStateService } from '../../../state/app-state.service';
 import type { Trip } from '../../../trips/model';
@@ -30,7 +31,7 @@ import { TripEditComponent } from './trip-edit.component';
         @if (stopsLine(); as line) { <p class="ui-sub pt__stops tn" data-stops-line>{{ line }}</p> }
         @if (!trips.readOnly()) {
           <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost pt__edit" data-edit-toggle
-                  [attr.aria-pressed]="editing()" (click)="editing.set(!editing())">{{ editing() ? 'Done' : 'Edit' }}</button>
+                  [attr.aria-pressed]="editing()" (click)="editing.set(!editing())">{{ t(editing() ? 'common.done' : 'trips.plan.edit') }}</button>
         }
       </div>
       @if (editing() && !trips.readOnly()) {
@@ -41,7 +42,7 @@ import { TripEditComponent } from './trip-edit.component';
       @if (warnReturn()) {
         <p class="note note--amber" data-return-warning>
           <app-icon name="warning" [size]="16" />
-          <span>Return leg not listed yet. Listing usually opens a few days before; check your pass rules.</span>
+          <span>{{ t('trips.page.returnWarn') }}</span>
         </p>
       }
     </div>
@@ -65,6 +66,7 @@ import { TripEditComponent } from './trip-edit.component';
   `],
 })
 export class PlanTabComponent {
+  protected readonly t = t;
   private readonly router = inject(Router);
   private readonly state = inject(AppStateService);
   protected readonly trips = inject(TripsService);

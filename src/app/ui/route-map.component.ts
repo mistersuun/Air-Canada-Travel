@@ -80,7 +80,7 @@ export const DRAG_PX = 4;
                 (pointerleave)="pointHover.emit(null)"><title>{{ cityOf(p.code) }}</title></circle>
       }
       @for (l of labelled(); track l.code) {
-        <text class="mlab" [attr.x]="l.x + 7" [attr.y]="l.y - 6">{{ l.text }}</text>
+        <text class="mlab" [attr.x]="l.anchorEnd ? l.x - 7 : l.x + 7" [attr.y]="l.y - 6" [attr.text-anchor]="l.anchorEnd ? 'end' : 'start'">{{ l.text }}</text>
       }
       @if (marker(); as m) {
         <g class="plane" [attr.transform]="'translate(' + m.x + ' ' + m.y + ') rotate(' + m.angle + ')'" data-progress-plane>
@@ -268,7 +268,11 @@ export class RouteMapComponent {
     const want = new Set(this.labels());
     return this.drawn()
       .filter(d => want.has(d.code))
-      .map(d => ({ code: d.code, x: d.x, y: d.y, text: this.cityOf(d.code) }));
+      .map(d => {
+        const text = this.cityOf(d.code);
+        // ~6.5px per character at 11px bold: flip the label to the left of the dot when it would leave the SVG.
+        return { code: d.code, x: d.x, y: d.y, text, anchorEnd: d.x + 7 + text.length * 6.5 > this.w() - 4 };
+      });
   });
 
   protected readonly hubXY = computed(() => {

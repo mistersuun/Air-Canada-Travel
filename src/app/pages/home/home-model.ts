@@ -187,35 +187,38 @@ const KIND_WORD: Record<SeasonKind, string> = { starts: 'Starts', ends: 'Ends', 
  * Sorted by date, then city.
  */
 export function seasonEvents(hub: string, today: string, horizon = 45): SeasonEvent[] {
-  const last = addDays(today, horizon);
-  const soon = addDays(today, SEASON_SOON_DAYS - 1);
   const out: SeasonEvent[] = [];
   for (const code of getDestinationCodes(hub)) {
-    const dest = findDestination(code);
-    if (!dest) continue;
-    const first = nextFlightDate(hub, code, today);
-    if (!first || first > last) continue;
-    const next = flightsOn(hub, code, first)[0] ?? null;
-    if (first > soon) {
-      out.push({ code, kind: 'starts', dateKey: first, label: label('starts', first), next });
-      continue;
-    }
-    const to = getCoverage(coverageHubFor(hub, code)).to;
-    let d = first;
-    for (let i = 0; i < 400 && d <= last; i++) {
-      const n = nextFlightDate(hub, code, d, false);
-      if (n && diffDays(d, n) < SEASON_GAP_DAYS) {
-        d = n;
-        continue;
-      }
-      // A gap: either a resume inside the window, or nothing more published.
-      if (n && diffDays(d, n) <= SEASON_PAUSE_MAX_DAYS) out.push({ code, kind: 'pauses', dateKey: d, label: label('pauses', d), next });
-      else if (n || (to && diffDays(d, to) >= SEASON_GAP_DAYS)) out.push({ code, kind: 'ends', dateKey: d, label: label('ends', d), next });
-      break;
-    }
+    const ev = seasonEvent(hub, code, today, horizon);
+    if (ev) out.push(ev);
   }
   return out.sort((a, b) => a.dateKey.localeCompare(b.dateKey)
     || (findDestination(a.code)?.city ?? a.code).localeCompare(findDestination(b.code)?.city ?? b.code));
+}
+
+/** The season event of one route (see seasonEvents), or null. */
+export function seasonEvent(hub: string, code: string, today: string, horizon = 45): SeasonEvent | null {
+  const last = addDays(today, horizon);
+  const soon = addDays(today, SEASON_SOON_DAYS - 1);
+  if (!findDestination(code)) return null;
+  const first = nextFlightDate(hub, code, today);
+  if (!first || first > last) return null;
+  const next = flightsOn(hub, code, first)[0] ?? null;
+  if (first > soon) return { code, kind: 'starts', dateKey: first, label: label('starts', first), next };
+  const to = getCoverage(coverageHubFor(hub, code)).to;
+  let d = first;
+  for (let i = 0; i < 400 && d <= last; i++) {
+    const n = nextFlightDate(hub, code, d, false);
+    if (n && diffDays(d, n) < SEASON_GAP_DAYS) {
+      d = n;
+      continue;
+    }
+    // A gap: either a resume inside the window, or nothing more published.
+    if (n && diffDays(d, n) <= SEASON_PAUSE_MAX_DAYS) return { code, kind: 'pauses', dateKey: d, label: label('pauses', d), next };
+    if (n || (to && diffDays(d, to) >= SEASON_GAP_DAYS)) return { code, kind: 'ends', dateKey: d, label: label('ends', d), next };
+    break;
+  }
+  return null;
 }
 
 function label(kind: SeasonKind, key: string): string {

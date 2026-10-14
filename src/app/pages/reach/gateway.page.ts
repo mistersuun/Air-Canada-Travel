@@ -160,7 +160,7 @@ import { reachPlace } from './reach-place';
       position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 12px); left: 16px; right: 16px;
       display: flex; justify-content: space-between;
     }
-    .hero .ui-circ { width: 44px; height: 44px; }
+    .hero .ui-circ { width: 44px; height: 44px; background: rgba(0, 0, 0, .42); border-color: rgba(255, 255, 255, .45); box-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
     .star[aria-pressed='true'] { color: #FFFFFF; background: var(--red); border-color: color-mix(in srgb, var(--red) 60%, #FFFFFF); }
     .credit {
       position: absolute; z-index: 2; right: 14px; bottom: 44px; max-width: calc(100% - 28px);

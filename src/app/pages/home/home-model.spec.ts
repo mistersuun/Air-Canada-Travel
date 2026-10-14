@@ -6,7 +6,7 @@ import type { RouteEntry } from '../../utils/routes';
 import { toUtcMs } from '../../utils/time';
 import {
   coverageStatus, departsToday, editorsPicks, entryHasFlight, flightNumberQuery, focusDayIndex, nonstopByFrequency,
-  placeRows, reachDep, rowMeta, seasonEnd, seasonEvents, seasonMeta, withFlightMatches,
+  placeRows, reachDep, rowMeta, seasonEnd, seasonEvent, seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
 import type { CityHit } from '../../places/city-index';
 import { SEVILLE_PLACE } from '../../trips/testing/seville-fixture';
@@ -150,6 +150,11 @@ describe('home-model', () => {
         ...FIXTURE_META, coverageTo: '2026-10-20',
       });
       expect(seasonEvents('YUL', '2026-10-01')).toEqual([]);
+    });
+
+    it('seasonEvent gives the event of one route, or null', () => {
+      expect(seasonEvent('YUL', 'KEF', '2026-10-01')?.label).toBe('Ends Oct 22');
+      expect(seasonEvent('YUL', 'CUN', '2026-10-01')).toBeNull();
     });
 
     it('seasonMeta shows the next departure', () => {

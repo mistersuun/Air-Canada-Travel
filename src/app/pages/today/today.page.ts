@@ -12,9 +12,10 @@ import { LEG_STATUS_LABEL, type LegStatus, instanceKey } from '../../trips/model
 import { TripsService } from '../../trips/trips.service';
 import { LegStatusTagComponent } from '../../trips/ui/leg-status-tag.component';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
-import { recoverPath, tripUrl, tripsPath } from '../../ui/links';
+import { recoverPath, tripPath, tripQuery, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
-import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
+import { type TodayTarget, groundTodayView, midTripView, resolveGroundToday, resolveToday, statusForTick, todayView, upcomingTripView } from './today-model';
+import { MODE_ICON } from '../trips/trips-model';
 import { TodayTimelineComponent } from './today-timeline.component';
 import { TodayInAirComponent } from './in-air.component';
 import { LiveStatusComponent } from '../../live/live-status.component';
@@ -115,12 +116,68 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
           </button>
         }
         <p class="td__foot">Gate, delay and list numbers are your own notes. Listing stays your own step.</p>
+      } @else if (ground(); as g) {
+        <p class="ui-label td__eyebrow">{{ g.eyebrow }}</p>
+        <h1 class="td__title">{{ g.title }}</h1>
+
+        <section class="ui-card td__flight" aria-label="Your ride" data-ground>
+          <div class="td__row">
+            <span class="td__when">
+              <app-icon [name]="icon(g.mode)" [size]="26" />
+              @if (g.time) { <span class="td__time ui-cond tn">{{ g.time }}</span><span class="td__zone">{{ g.zone }}</span> }
+              @else { <span class="td__mode">{{ g.modeLabel }}</span> }
+            </span>
+            <span class="td__tags"><app-provenance-tag [value]="g.provenance" /></span>
+          </div>
+          <p class="td__sub tn">{{ g.sub }}</p>
+          @if (g.info) { <p class="td__sub" data-ground-info>{{ g.info }}</p> }
+          @if (g.note) { <p class="td__note">Your note: <b>{{ g.note }}</b></p> }
+        </section>
+
+        @if (!g.final) {
+          <div class="td__acts">
+            <button type="button" class="td__big ui-btn ui-btn--dark" data-made-it (click)="madeIt(g.tripId, g.legId)">
+              <app-icon name="check" [size]="18" [strokeWidth]="2.4" />I made it
+            </button>
+            <a class="td__big td__chg ui-btn ui-btn--ghost" data-ground-changed [routerLink]="planLink(g.tripId)" [queryParams]="planQuery(g.legId)">Plans changed</a>
+          </div>
+        } @else {
+          <div class="ui-card td__done" data-final>
+            <p tabindex="-1" data-final-msg><b>{{ g.title }} marked done.</b></p>
+            <div class="td__done-acts">
+              <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="planLink(g.tripId)">Open trip</a>
+            </div>
+          </div>
+        }
+        <p class="td__foot">Times marked Estimated are a guide, not a booking. Check the station board.</p>
+      } @else if (mid(); as m) {
+        <p class="ui-label td__eyebrow">{{ m.eyebrow }}</p>
+        <h1 class="td__title" data-midtrip>{{ m.title }}</h1>
+        <p class="ui-sub td__mid-sub" data-quiet>{{ m.quiet }}</p>
+        @if (m.next; as n) {
+          <section class="ui-card td__left" aria-label="Next leg" data-next>
+            <span class="td__ct"><b class="tn">{{ n.title }}</b><small>{{ n.detail }}</small></span>
+          </section>
+        }
+        <section class="ui-card td__left" aria-label="Home by" data-home-by>
+          <span class="td__ct"><b class="tn">{{ m.homeBy.label }}</b><small>{{ m.homeBy.countdown }}</small></span>
+        </section>
+        @if (m.fact) { <p class="td__foot" data-fact>{{ m.fact }}</p> }
+        <div class="td__acts">
+          <a class="ui-btn ui-btn--dark td__big" data-open-trip [routerLink]="planLink(m.tripId)">Open trip</a>
+        </div>
       } @else {
         <div class="td__empty" data-empty>
           <p class="ui-label">Today</p>
-          <h1 class="td__title">Nothing planned today</h1>
-          <p class="ui-sub">On a day you fly, this page shows your flight, what's left to do and your backups. It works offline.</p>
-          <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">Open Trips</a>
+          @if (upcoming(); as u) {
+            <h1 class="td__title" data-upcoming>{{ u.title }}</h1>
+            <p class="ui-sub">{{ u.detail }}. On a day you travel, this page shows your flight or ride and what's left to do.</p>
+            <a class="ui-btn ui-btn--dark" [routerLink]="planLink(u.tripId)">Open trip</a>
+          } @else {
+            <h1 class="td__title">Nothing planned today</h1>
+            <p class="ui-sub">On a day you fly, this page shows your flight, what's left to do and your backups. It works offline.</p>
+            <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">Open Trips</a>
+          }
         </div>
       }
     </div>
@@ -180,6 +237,8 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
       background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber-ink);
     }
     .td__foot { margin: 16px 2px 0; font-size: 12px; color: var(--ink-3); }
+    .td__mode { font-size: 24px; font-weight: 700; }
+    .td__mid-sub { margin: 6px 0 0; }
     .td__empty { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; padding-top: 8px; }
     .td__empty .ui-sub { margin: 0 0 6px; max-width: 46ch; }
     .td__empty .ui-label { margin: 0; }
@@ -234,12 +293,47 @@ export class TodayPage {
     });
   });
 
+  /** A ground leg today (train, bus, car, ferry), when no flight is up. */
+  /** The ground leg marked done here; kept on screen so the page doesn't jump to another leg. */
+  private readonly heldGround = signal<{ target: TodayTarget; trip: string | undefined; leg: string | undefined } | null>(null);
+
+  protected readonly ground = computed(() => {
+    if (this.view()) return null;
+    const h = this.heldGround();
+    const t = h && h.trip === this.trip() && h.leg === this.leg()
+      ? h.target
+      : resolveGroundToday(this.trips.trips(), this.state.nowMs(), this.trip(), this.leg());
+    const trip = t ? this.trips.trips().find(x => x.id === t.tripId) : null;
+    return t && trip ? groundTodayView({ trip, legId: t.legId, nowMs: this.state.nowMs(), fmt: this.prefs.timeFormat() }) : null;
+  });
+
+  /** A day of a trip under way with nothing scheduled. */
+  protected readonly mid = computed(() =>
+    this.view() || this.ground() ? null : midTripView(this.trips.trips(), this.state.nowMs(), this.prefs.timeFormat(), this.trip()));
+
+  protected readonly upcoming = computed(() =>
+    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs(), this.trip()));
+
   protected readonly tripLink = computed(() => {
     const v = this.view();
     return v ? ['/trips', v.tripId] : this.tripsLink;
   });
 
   protected depUtc = refDepUtc;
+  protected icon = (mode: keyof typeof MODE_ICON) => MODE_ICON[mode] ?? 'pin';
+  protected planLink = tripPath;
+  protected planQuery = (legId: string) => tripQuery('plan', legId);
+
+  /** "I made it" on a ground leg: sets it Boarded (done), with Undo. */
+  protected madeIt(tripId: string, legId: string): void {
+    const before = this.trips.trip(tripId)?.legs.find(l => l.id === legId)?.status;
+    if (!before) return;
+    this.heldGround.set({ target: { tripId, legId }, trip: this.trip(), leg: this.leg() });
+    this.trips.setLegStatus(tripId, legId, 'boarded');
+    success();
+    this.state.flash('Marked done', { label: 'Undo', run: () => this.trips.setLegStatus(tripId, legId, before) });
+    this.focusAfterRender('[data-final-msg], [data-made-it]');
+  }
 
   /** Where "Cancelled" points: Recover, or the Return tab for a return leg. */
   protected live(v: { tripId: string; legId: string; isReturn: boolean; ref: { origin: string } }) {

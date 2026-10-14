@@ -5,7 +5,8 @@
 import type { TripStyle, TravelProfile } from '../../recs/model';
 import type { RouteEntry } from '../../utils/routes';
 import type { FlightInstance } from '../../utils/week';
-import { WEEKDAY_SHORT, formatClock, weekdayIndex } from '../../utils/time';
+import { formatClock, weekdayIndex, weekdayShort } from '../../utils/time';
+import { t } from '../../i18n/t';
 import type { TimeFormat } from '../../state/prefs.service';
 import type { WeekendOption } from '../weekend/weekend-model';
 
@@ -93,7 +94,7 @@ export function nextDeparture(e: RouteEntry, nowMs: number): FlightInstance | nu
 /** 'nonstop Thu 21:40' (empty when there is no flight). */
 export function surpriseMeta(e: RouteEntry, nowMs: number, fmt: TimeFormat = '24h'): string {
   const f = nextDeparture(e, nowMs);
-  return f ? `nonstop ${WEEKDAY_SHORT[weekdayIndex(f.dateKey)]} ${formatClock(f.depLocal, fmt)}` : '';
+  return f ? t('home.surprise.meta', { weekday: weekdayShort(weekdayIndex(f.dateKey)), time: formatClock(f.depLocal, fmt) }) : '';
 }
 
 /** 'Porto · nonstop Thu 21:40'. */
@@ -116,11 +117,10 @@ export function weekendEntries(entries: readonly RouteEntry[], options: readonly
 export function dareText(e: RouteEntry, nowMs: number, fmt: TimeFormat, weekend: WeekendOption | null): string {
   const city = e.destination.city;
   if (weekend) {
-    const t = weekend.tries.length;
-    return `Dare you: ${city} this weekend? ~${weekend.hoursThere}h there, ${t} ${t === 1 ? 'try' : 'tries'} home`;
+    return t('home.surprise.dareWeekend', { city, hours: weekend.hoursThere, n: weekend.tries.length });
   }
   const m = surpriseMeta(e, nowMs, fmt);
-  return m ? `Dare you: ${city}? ${m}` : `Dare you: ${city}?`;
+  return m ? t('home.surprise.dareMeta', { city, meta: m }) : t('home.surprise.dareCity', { city });
 }
 
 // ── Recent picks (sessionStorage; every access guarded) ──────────────────────

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, output } from '@angular/core';
 import { Router } from '@angular/router';
 import { logbookPath } from '../../extras/links';
 import { HUBS } from '../../data/destinations';
@@ -11,6 +11,10 @@ import { GlassSheetComponent } from '../../ui/glass-sheet.component';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { LISTING_HOURS_OPTIONS } from '../../trips/engine/listing';
 import { hubDisplayName } from '../../ui/format';
+import { formatClock } from '../../utils/time';
+import { MsgKey, t } from '../../i18n/t';
+import { LANGUAGE_PREFS, LanguagePref } from '../../i18n/locale';
+import { LocaleService } from '../../i18n/locale.service';
 import { IconComponent } from '../shared/icons.component';
 import { DataCreditsComponent } from '../../places/ui/data-credits.component';
 import { SettingsBackgroundComponent } from './settings-background.component';
@@ -21,7 +25,10 @@ import { ClimateCreditComponent } from '../../recs/ui/climate-credit.component';
 import { GroundCreditComponent } from '../../places/ui/ground-credit.component';
 import { SettingsProfileComponent } from '../../recs/ui/settings-profile.component';
 
-const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+const THEME_LABEL: Record<ThemePref, MsgKey> = { auto: 'settings.theme.auto', light: 'settings.theme.light', dark: 'settings.theme.dark' };
+const LANGUAGE_LABEL: Record<LanguagePref, MsgKey> = {
+  auto: 'settings.language.auto', en: 'settings.language.en', fr: 'settings.language.fr',
+};
 
 /**
  * Settings sheet (app-glass-sheet: bottom sheet on mobile, centred card from
@@ -38,11 +45,11 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet #sheet title="Settings" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet #sheet [title]="t('settings.title')" [open]="true" (closed)="closed.emit()">
       <div class="st">
         <section class="grp">
           <label class="row" for="settings-hub">
-            <span class="row__tx"><span class="nm">Home airport</span><span class="hint">Where the app opens</span></span>
+            <span class="row__tx"><span class="nm">{{ t('settings.hub') }}</span><span class="hint">{{ t('settings.hubHint') }}</span></span>
             <span class="sel">
               <select id="settings-hub" [value]="p().hub" (change)="setHub($event)">
                 @for (h of hubs; track h.code) {
@@ -56,42 +63,48 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
 
         <section class="grp">
           <div class="field">
-            <span class="nm">Appearance</span>
-            <app-seg stretch ariaLabel="Appearance" data-setting="theme" [options]="themeOptions"
+            <span class="nm">{{ t('settings.language') }}</span>
+            <app-seg stretch [ariaLabel]="t('settings.language')" data-setting="language" [options]="languageOptions()"
+                     [value]="p().language" (valueChange)="setLanguage($event)" />
+            <span class="hint">{{ t('settings.languageHint') }}</span>
+          </div>
+          <div class="field">
+            <span class="nm">{{ t('settings.appearance') }}</span>
+            <app-seg stretch [ariaLabel]="t('settings.appearance')" data-setting="theme" [options]="themeOptions()"
                      [value]="p().theme" (valueChange)="setTheme($event)" />
           </div>
           <div class="field">
-            <span class="nm">Time format</span>
-            <app-seg stretch ariaLabel="Time format" data-setting="time" [options]="timeOptions"
+            <span class="nm">{{ t('settings.timeFormat') }}</span>
+            <app-seg stretch [ariaLabel]="t('settings.timeFormat')" data-setting="time" [options]="timeOptions()"
                      [value]="p().timeFormat" (valueChange)="setTime($event)" />
           </div>
         </section>
 
         <section class="grp">
-          <p class="ui-label">Connections</p>
+          <p class="ui-label">{{ t('settings.connections') }}</p>
           <label class="row" for="settings-connections">
-            <span class="row__tx"><span class="nm">Show connections</span><span class="hint">Include one-stop trips through a hub</span></span>
+            <span class="row__tx"><span class="nm">{{ t('settings.showConnections') }}</span><span class="hint">{{ t('settings.showConnectionsHint') }}</span></span>
             <input id="settings-connections" type="checkbox" role="switch" class="switch"
                    [checked]="p().showConnections" (change)="setConnections($event)">
           </label>
           <div class="field">
-            <span class="nm">Minimum connection</span>
-            <app-seg stretch ariaLabel="Minimum connection" data-setting="min" [options]="minOptions"
+            <span class="nm">{{ t('settings.minConnect') }}</span>
+            <app-seg stretch [ariaLabel]="t('settings.minConnect')" data-setting="min" [options]="minOptions()"
                      [value]="'' + p().minConnect" (valueChange)="prefs.update({ minConnect: +$event! })" />
           </div>
           <div class="field">
-            <span class="nm">Maximum layover</span>
-            <app-seg stretch ariaLabel="Maximum layover" data-setting="max" [options]="maxOptions"
+            <span class="nm">{{ t('settings.maxLayover') }}</span>
+            <app-seg stretch [ariaLabel]="t('settings.maxLayover')" data-setting="max" [options]="maxOptions()"
                      [value]="'' + p().maxLayover" (valueChange)="prefs.update({ maxLayover: +$event! })" />
           </div>
           <div class="field">
-            <span class="nm">Listing reminder</span>
-            <app-seg stretch ariaLabel="Listing reminder, hours before departure" data-setting="listing" [options]="listingOptions"
+            <span class="nm">{{ t('settings.listing') }}</span>
+            <app-seg stretch [ariaLabel]="t('settings.listingLabel')" data-setting="listing" [options]="listingOptions()"
                      [value]="'' + p().listingHours" (valueChange)="prefs.update({ listingHours: +$event! })" />
-            <span class="hint">When a flight shows Listing open, and the calendar reminder. A notification when it opens needs permission, granted under background checks below. Check your own pass rules.</span>
+            <span class="hint">{{ t('settings.listingHint') }}</span>
           </div>
           <label class="row" for="settings-overnight">
-            <span class="row__tx"><span class="nm">Overnight connections</span><span class="hint">Allow a layover that crosses midnight at the hub</span></span>
+            <span class="row__tx"><span class="nm">{{ t('settings.overnight') }}</span><span class="hint">{{ t('settings.overnightHint') }}</span></span>
             <input id="settings-overnight" type="checkbox" role="switch" class="switch"
                    [checked]="p().allowOvernight" (change)="setOvernight($event)">
           </label>
@@ -101,13 +114,13 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
 
         <section class="grp">
           <button type="button" class="row row--btn" data-logbook-row (click)="openLogbook()">
-            <span class="nm">Logbook</span><span class="chev" aria-hidden="true">›</span>
+            <span class="nm">{{ t('settings.logbook') }}</span><span class="chev" aria-hidden="true">›</span>
           </button>
           <button type="button" class="row row--btn" (click)="openShortcuts()">
-            <span class="nm">Keyboard shortcuts</span><span class="chev" aria-hidden="true">›</span>
+            <span class="nm">{{ t('settings.shortcuts') }}</span><span class="chev" aria-hidden="true">›</span>
           </button>
           <div class="info">
-            <span class="nm">Schedules</span>
+            <span class="nm">{{ t('settings.schedules') }}</span>
             <span class="hint tn">{{ state.dataInfo().updatedLabel }}</span>
             @if (state.dataInfo().staleTag !== null) {
               <button type="button" class="ui-tag ui-tag--amber" [attr.title]="state.dataInfo().staleDetail"
@@ -123,13 +136,13 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
 
         @if (photos.credits().length) {
           <details class="grp credits">
-            <summary class="row"><span class="nm">Photo credits</span><span class="chev" aria-hidden="true">›</span></summary>
+            <summary class="row"><span class="nm">{{ t('settings.photoCredits') }}</span><span class="chev" aria-hidden="true">›</span></summary>
             <ul class="cr">
               @for (p of photos.credits(); track p.code) {
                 <li>
                   <b>{{ p.code }}</b>
-                  <a [href]="p.credit.sourceUrl" target="_blank" rel="noopener">{{ p.credit.subject || 'Photo' }}</a>
-                  by
+                  <a [href]="p.credit.sourceUrl" target="_blank" rel="noopener">{{ p.credit.subject || t('settings.photo') }}</a>
+                  {{ t('settings.by') }}
                   @if (p.credit.authorUrl) { <a [href]="p.credit.authorUrl" target="_blank" rel="noopener">{{ p.credit.author }}</a> }
                   @else { {{ p.credit.author }} },
                   @if (p.credit.licenseUrl) { <a [href]="p.credit.licenseUrl" target="_blank" rel="noopener license">{{ p.credit.license }}</a> }
@@ -144,10 +157,10 @@ const THEME_LABEL: Record<ThemePref, string> = { auto: 'Auto', light: 'Light', d
         <app-climate-credit />
 
         <div class="foot">
-          <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">Reset to defaults</button>
-          <button type="button" class="ui-btn ui-btn--dark" data-done (click)="sheet.close()">Done</button>
+          <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">{{ t('settings.resetDefaults') }}</button>
+          <button type="button" class="ui-btn ui-btn--dark" data-done (click)="sheet.close()">{{ t('common.done') }}</button>
         </div>
-        <p class="note">Saved destinations are kept when you reset.</p>
+        <p class="note">{{ t('settings.resetNote') }}</p>
       </div>
     </app-glass-sheet>
   `,
@@ -200,18 +213,26 @@ export class SettingsComponent {
   protected readonly prefs = inject(PrefsService);
   protected readonly state = inject(AppStateService);
   protected readonly photos = inject(PhotoService);
+  private readonly i18n = inject(LocaleService);
+  protected readonly t = t;
   protected readonly p = this.prefs.prefs;
   readonly closed = output<void>();
 
   protected readonly hubs = HUBS;
-  protected readonly themeOptions: SegOption[] = THEMES.map(t => ({ value: t, label: THEME_LABEL[t] }));
-  protected readonly timeOptions: SegOption[] = [
-    { value: '24h', label: '22:10' },
-    { value: '12h', label: '10:10 PM' },
-  ];
-  protected readonly minOptions: SegOption[] = MIN_CONNECT_OPTIONS.map(m => ({ value: String(m), label: `${m}m` }));
-  protected readonly maxOptions: SegOption[] = MAX_LAYOVER_OPTIONS.map(m => ({ value: String(m), label: `${m / 60}h` }));
-  protected readonly listingOptions: SegOption[] = LISTING_HOURS_OPTIONS.map(h => ({ value: String(h), label: `${h}h` }));
+  // Option labels are computed so they follow a language switch.
+  protected readonly languageOptions = computed<SegOption[]>(() =>
+    LANGUAGE_PREFS.map(l => ({ value: l, label: t(LANGUAGE_LABEL[l]) })));
+  protected readonly themeOptions = computed<SegOption[]>(() => THEMES.map(th => ({ value: th, label: t(THEME_LABEL[th]) })));
+  protected readonly timeOptions = computed<SegOption[]>(() => [
+    { value: '24h', label: formatClock('22:10', '24h') },
+    { value: '12h', label: formatClock('22:10', '12h') },
+  ]);
+  protected readonly minOptions = computed<SegOption[]>(() =>
+    MIN_CONNECT_OPTIONS.map(m => ({ value: String(m), label: t('format.dur.m', { m }) })));
+  protected readonly maxOptions = computed<SegOption[]>(() =>
+    MAX_LAYOVER_OPTIONS.map(m => ({ value: String(m), label: t('format.dur.h', { h: m / 60 }) })));
+  protected readonly listingOptions = computed<SegOption[]>(() =>
+    LISTING_HOURS_OPTIONS.map(h => ({ value: String(h), label: t('format.dur.h', { h }) })));
 
   protected display(code: string): string {
     return hubDisplayName(code);
@@ -222,12 +243,16 @@ export class SettingsComponent {
     this.state.setHub((e.target as HTMLSelectElement).value);
   }
 
-  protected setTheme(t: string | undefined): void {
-    if (t && (THEMES as readonly string[]).includes(t)) this.prefs.setTheme(t as ThemePref);
+  protected setTheme(v: string | undefined): void {
+    if (v && (THEMES as readonly string[]).includes(v)) this.prefs.setTheme(v as ThemePref);
   }
 
-  protected setTime(t: string | undefined): void {
-    if (t === '12h' || t === '24h') this.prefs.update({ timeFormat: t as TimeFormat });
+  protected setTime(v: string | undefined): void {
+    if (v === '12h' || v === '24h') this.prefs.update({ timeFormat: v as TimeFormat });
+  }
+
+  protected setLanguage(v: string | undefined): void {
+    if ((LANGUAGE_PREFS as readonly string[]).includes(v ?? '')) this.i18n.setPreference(v as LanguagePref);
   }
 
   protected setConnections(e: Event): void {

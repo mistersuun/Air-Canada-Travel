@@ -16,6 +16,7 @@ import { HomePage } from './home.page';
 import { CITIES_FETCH } from '../../places/city-index.service';
 import { FIXTURE_CITIES_FILE } from '../../places/testing/cities-fixture';
 import { SEVILLE_META, SEVILLE_ROUTES } from '../../trips/testing/seville-fixture';
+import { setLocale } from '../../i18n/locale';
 
 let citiesFetches = 0;
 
@@ -451,5 +452,41 @@ describe('HomePage · Places (cities AC does not fly to)', () => {
     await settle(stable);
     expect(el.querySelector('#rl-places')).toBeNull();
     expect(el.textContent).toContain('No destinations match');
+  });
+});
+
+describe('HomePage in French', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    setLocale('en');
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the hero, sections and dates in Canadian French', async () => {
+    configure();
+    setLocale('fr');
+    const { el, text } = await render();
+    expect(el.querySelector('h1')!.textContent).toContain('Au départ de');
+    expect(text()).toContain('Sans escale cette semaine');
+    expect(text()).toContain('Fins de semaine ›');
+    expect(el.querySelector<HTMLInputElement>('[data-search-input]')!.placeholder).toMatch(/^Rechercher parmi \d+ destinations/);
+    expect(el.querySelector('.f')!.getAttribute('aria-label')).toBe('Filtrer et trier');
+    expect([...el.querySelector('#h-nonstop')!.parentElement!.querySelectorAll('.dow i')].map(i => i.textContent).join('')).toBe('LMMJVSD');
+    // The hub picker and week strip (ui/) are converted with chunk C.
+    expect(text()).not.toMatch(/Nonstop this week|Editor's pick|Show all|Seasonal/);
+  });
+
+  it('switches language live, without a reload', async () => {
+    configure();
+    const { el, state, stable, text } = await render();
+    expect(text()).toContain('Nonstop this week');
+    setLocale('fr');
+    await stable();
+    expect(text()).toContain('Sans escale cette semaine');
+    state.setQuery('zzzzqq');
+    await stable();
+    expect(el.textContent).toContain('Aucune destination ne correspond');
+    expect(el.textContent).toContain('Effacer les filtres');
   });
 });

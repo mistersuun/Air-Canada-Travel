@@ -1,13 +1,15 @@
-import { ChangeDetectionStrategy, Component, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, output, signal } from '@angular/core';
 import { TravelProfile, TripLength, TripStyle } from '../recs/model';
 import { TRIP_STYLES } from '../recs/profile';
 import { ProfileService } from '../recs/profile.service';
 import { AppStateService } from '../state/app-state.service';
-import { DAY_LETTERS, LENGTH_OPTIONS, toggled } from '../recs/profile-options';
+import { toggled } from '../recs/profile-options';
 import { GlassSheetComponent } from '../ui/glass-sheet.component';
 import { HubPickerComponent } from '../ui/hub-picker.component';
-import { SegComponent } from '../ui/seg.component';
-import { WEEKDAY_LONG } from '../utils/time';
+import { SegComponent, SegOption } from '../ui/seg.component';
+import { weekdayLetters, weekdayLong } from '../utils/time';
+import { t } from '../i18n/t';
+import { tripLengthLabel, typeLabel } from '../i18n/labels';
 
 /**
  * One-time, skippable 3-step setup: home airport, how you like to travel
@@ -20,43 +22,43 @@ import { WEEKDAY_LONG } from '../utils/time';
   imports: [GlassSheetComponent, HubPickerComponent, SegComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet title="Welcome" [open]="true" (closed)="done()">
-      <p class="ob__step tn" data-step>Step {{ step() }} of 3</p>
+    <app-glass-sheet [title]="t('shell.onboarding.title')" [open]="true" (closed)="done()">
+      <p class="ob__step tn" data-step>{{ t('shell.onboarding.step', { n: step(), total: 3 }) }}</p>
       @switch (step()) {
         @case (1) {
-          <h3 class="ob__h">Where do you usually fly from?</h3>
-          <p class="ob__p">We show every Air Canada flight from your home airport.</p>
+          <h3 class="ob__h">{{ t('shell.onboarding.hubTitle') }}</h3>
+          <p class="ob__p">{{ t('shell.onboarding.hubText') }}</p>
           <app-hub-picker size="lg" [hub]="state.hub()" (hubChange)="state.setHub($event)" />
         }
         @case (2) {
-          <h3 class="ob__h">How do you like to travel?</h3>
-          <p class="ob__p">Optional. This only helps pick suggestions and stays on this phone.</p>
-          <div class="ob__chips" role="group" aria-label="I like">
+          <h3 class="ob__h">{{ t('shell.onboarding.styleTitle') }}</h3>
+          <p class="ob__p">{{ t('shell.onboarding.styleText') }}</p>
+          <div class="ob__chips" role="group" [attr.aria-label]="t('shell.onboarding.styleGroup')">
             @for (s of styles; track s) {
               <button type="button" class="pick" [class.on]="picked().includes(s)" [attr.aria-pressed]="picked().includes(s)"
-                      [attr.data-style]="s" (click)="picked.set(toggle(picked(), s))">{{ s }}</button>
+                      [attr.data-style]="s" (click)="picked.set(toggle(picked(), s))">{{ typeLabel(s) }}</button>
             }
           </div>
-          <app-seg stretch ariaLabel="Usual trip length" data-length [options]="lengthOptions"
+          <app-seg stretch [ariaLabel]="t('shell.onboarding.length')" data-length [options]="lengthOptions()"
                    [value]="length() ?? ''" (valueChange)="setLength($event)" />
-          <p class="ob__lbl" id="ob-days">Days I can usually leave or come back</p>
+          <p class="ob__lbl" id="ob-days">{{ t('shell.onboarding.days') }}</p>
           <div class="dow" role="group" aria-labelledby="ob-days">
-            @for (l of dayLetters; track $index) {
+            @for (l of dayLetters(); track $index) {
               <button type="button" [class.on]="days().includes($index + 1)" [attr.aria-pressed]="days().includes($index + 1)"
-                      [attr.aria-label]="dayNames[$index]" [attr.data-day]="$index + 1"
+                      [attr.aria-label]="dayName($index)" [attr.data-day]="$index + 1"
                       (click)="days.set(toggle(days(), $index + 1))">{{ l }}</button>
             }
           </div>
         }
         @default {
-          <h3 class="ob__h">Works offline</h3>
-          <p class="ob__p">Schedules, your trips and boarding passes are saved on this phone, so they open without a signal.</p>
-          <p class="ob__p">Add it to your Home Screen to open it like an app: in your browser's share or menu, choose Add to Home Screen.</p>
+          <h3 class="ob__h">{{ t('shell.onboarding.offlineTitle') }}</h3>
+          <p class="ob__p">{{ t('shell.onboarding.offlineText') }}</p>
+          <p class="ob__p">{{ t('shell.onboarding.installText') }}</p>
         }
       }
       <div class="ob__row">
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-skip (click)="done()">{{ step() === 3 ? 'Close' : 'Skip' }}</button>
-        <button type="button" class="ui-btn ui-btn--sm" data-next (click)="next()">{{ step() === 3 ? 'Done' : 'Next' }}</button>
+        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-skip (click)="done()">{{ t(step() === 3 ? 'common.close' : 'common.skip') }}</button>
+        <button type="button" class="ui-btn ui-btn--sm" data-next (click)="next()">{{ t(step() === 3 ? 'common.done' : 'common.next') }}</button>
       </div>
     </app-glass-sheet>
   `,
@@ -88,9 +90,14 @@ export class OnboardingSheetComponent {
 
   protected readonly step = signal(1);
   protected readonly styles = TRIP_STYLES;
-  protected readonly lengthOptions = LENGTH_OPTIONS;
-  protected readonly dayLetters = DAY_LETTERS;
-  protected readonly dayNames = WEEKDAY_LONG;
+  protected readonly t = t;
+  protected readonly typeLabel = typeLabel;
+  protected readonly lengthOptions = computed<SegOption[]>(() =>
+    (['day', 'weekend', 'week'] as const).map(v => ({ value: v, label: tripLengthLabel(v) })));
+  protected readonly dayLetters = computed(() => weekdayLetters());
+  protected dayName(i: number): string {
+    return weekdayLong(i);
+  }
   protected readonly picked = signal<TripStyle[]>([]);
   protected readonly length = signal<TripLength | null>(null);
   protected readonly days = signal<number[]>([]);

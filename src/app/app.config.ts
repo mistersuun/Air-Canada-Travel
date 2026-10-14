@@ -10,6 +10,7 @@ import {
 import {
   type ActivatedRouteSnapshot,
   Router,
+  TitleStrategy,
   provideRouter,
   withComponentInputBinding,
   withInMemoryScrolling,
@@ -26,6 +27,9 @@ import { PhotoService } from './state/photo.service';
 import { AppStateService } from './state/app-state.service';
 import { PwaExtrasService } from './share-in/pwa-extras.service';
 import { stageDeepLink } from './shell/deep-link';
+import { LocaleService } from './i18n/locale.service';
+import { I18nTitleStrategy } from './i18n/title-strategy';
+import { t } from './i18n/t';
 
 /** '/to/LIS' for a route snapshot tree (query params and fragment ignored). */
 export function snapshotPath(root: ActivatedRouteSnapshot): string {
@@ -47,7 +51,7 @@ export const appConfig: ApplicationConfig = {
       withNavigationErrorHandler(e => {
         const state = inject(AppStateService);
         if (reloadOnChunkError(e.error, inject(DOCUMENT).defaultView, e.url) === 'blocked') {
-          state.flash("Couldn't open this page — check your connection.");
+          state.flash(t('shell.chunkError'));
         }
       }),
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
@@ -60,10 +64,14 @@ export const appConfig: ApplicationConfig = {
         },
       }),
     ),
+    // document.title in the UI language (route titles are message keys).
+    { provide: TitleStrategy, useClass: I18nTitleStrategy },
     // Before the first navigation: stage an Explore entry under a deep link,
     // and load the schedules and route network (data, not code) and the photo
     // credits in parallel.
     provideAppInitializer(() => {
+      // First: the UI language is set before anything renders or builds text.
+      inject(LocaleService);
       const staged = stageDeepLink(inject(DOCUMENT).defaultView);
       const state = inject(AppStateService);
       if (staged) state.markStagedBack();

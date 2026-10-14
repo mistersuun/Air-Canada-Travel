@@ -1,6 +1,8 @@
 /**
  * Explore page data rules (spec 4.1). Pure functions over RouteEntry and the
  * schedule engine, so every list on Home can be tested without a component.
+ * Text comes from t() (docs/i18n.md), so a computed() that calls these
+ * functions re-runs when the UI language changes.
  */
 import { getCoverage, getDestinationCodes } from '../../data/schedule-index';
 import type { Coverage } from '../../data/schedule-index';
@@ -12,6 +14,7 @@ import { addDays, diffDays, formatClock, formatKey, hhmmToMin } from '../../util
 import { FlightInstance, coverageHubFor, flightsOn, nextFlightDate } from '../../utils/week';
 import { daysLabel, hm, prettyFlight, timeRange } from '../../ui/format';
 import type { CityHit } from '../../places/city-index';
+import { t } from '../../i18n/t';
 
 // ── Editor's pick ────────────────────────────────────────────────────────────
 
@@ -50,11 +53,10 @@ export function departsToday(e: RouteEntry, todayKey: string, nowMs = -Infinity)
   return e.flights.find(f => f.dateKey === todayKey && f.depUtc >= nowMs) ?? null;
 }
 
-/** 'Nov' from 'Mar – Nov' (the last month of the last run), or null. */
+/** 'Nov' from 'Mar – Nov' ('nov.' from 'mars – nov.'): the last month of the last run, or null. */
 export function seasonEnd(season: string | null | undefined): string | null {
-  if (!season) return null;
-  const m = /([A-Z][a-z]{2})\s*$/.exec(season);
-  return m ? m[1] : null;
+  const last = season?.split(/,\s*|\s+–\s+/).pop()?.trim();
+  return last || null;
 }
 
 /**
@@ -95,14 +97,14 @@ export function editorsPicks(entries: readonly RouteEntry[], opts: PickOptions):
     let badge: string | null = null;
     let badgeShort: string | null = null;
     if (dep) {
-      const word = hhmmToMin(dep.depLocal) >= 17 * 60 ? 'Tonight' : 'Today';
-      badge = `${word} ${formatClock(dep.depLocal, fmt)}`;
+      const word = t(hhmmToMin(dep.depLocal) >= 17 * 60 ? 'home.badge.tonight' : 'home.badge.today');
+      badge = t('home.badge.at', { word, time: formatClock(dep.depLocal, fmt) });
       badgeShort = word;
     } else if (e.daysFlying >= 7) {
-      badge = badgeShort = 'Daily';
+      badge = badgeShort = t('format.daily');
     } else if (e.season) {
       const end = seasonEnd(e.season);
-      badge = end ? `Until ${end}` : e.season;
+      badge = end ? t('home.badge.until', { month: end }) : e.season;
       badgeShort = e.season;
     }
     const f = e.flights[0];
@@ -146,7 +148,7 @@ export function rowMeta(e: RouteEntry, fmt: TimeFormat = '24h', short = false): 
   const it = entryItinerary(e);
   if (!it) return '';
   const span = { depLocal: it.legs[0].depLocal, arrLocal: it.legs[it.legs.length - 1].arrLocal, arrDayOffset: it.arrDayOffset };
-  const via = it.hubs.length ? `via ${it.hubs.join(' ')}` : 'Nonstop';
+  const via = it.hubs.length ? t('format.via', { hubs: it.hubs.join(' ') }) : t('format.nonstop');
   return short ? `${via} · ${hm(it.totalMin)}` : `${via} · ${timeRange(span, fmt)} · ${hm(it.totalMin)}`;
 }
 
@@ -174,8 +176,6 @@ export const SEASON_GAP_DAYS = 21;
 export const SEASON_PAUSE_MAX_DAYS = 90;
 /** "Soon" window for an ending route, and the window a starting route must miss. */
 export const SEASON_SOON_DAYS = 7;
-
-const KIND_WORD: Record<SeasonKind, string> = { starts: 'Starts', ends: 'Ends', pauses: 'Pauses' };
 
 /**
  * Routes from `hub` that start, end or pause within `horizon` days of today:
@@ -222,7 +222,7 @@ export function seasonEvent(hub: string, code: string, today: string, horizon = 
 }
 
 function label(kind: SeasonKind, key: string): string {
-  return `${KIND_WORD[kind]} ${formatKey(key, { month: 'short', day: 'numeric' })}`;
+  return t('home.season.label', { kind, date: formatKey(key, { month: 'short', day: 'numeric' }) });
 }
 
 /** Meta line for a season row: the next departure, or ''. */
@@ -314,7 +314,7 @@ export function placeRows(hits: readonly CityHit[], query: string): PlaceRow[] {
   return rows.map(h => {
     // The state or region is always shown when the city data has it ('Paris · Texas, United States').
     const where = h.place.admin1 && h.place.country ? `${h.place.admin1}, ${h.place.country}` : h.place.country || h.place.admin1;
-    return { id: h.place.id, name: h.place.name, sub: `${where || 'Unknown country'} · Find ways to get there` };
+    return { id: h.place.id, name: h.place.name, sub: t('home.place.sub', { where: where || t('home.place.unknownCountry') }) };
   });
 }
 

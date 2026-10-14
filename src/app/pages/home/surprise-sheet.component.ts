@@ -20,6 +20,7 @@ import {
   FLICK_COUNT, dareText, flickSequence, loadRecent, rememberPick, surpriseCandidates, surpriseLine, surpriseMeta, surprisePick,
   weekendEntries,
 } from './surprise';
+import { t } from '../../i18n/t';
 
 /** Time the arcs flick for before settling. */
 const FLICK_MS = 1200;
@@ -37,15 +38,15 @@ const FLICK_MS = 1200;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost sb" data-surprise (click)="start()" aria-haspopup="dialog">
-      <app-icon name="dice" [size]="16" [strokeWidth]="2" /> Surprise me
+      <app-icon name="dice" [size]="16" [strokeWidth]="2" /> {{ t('home.surprise.button') }}
     </button>
     @if (open()) {
-      <app-glass-sheet title="Surprise me" [open]="true" (closed)="close()">
+      <app-glass-sheet [title]="t('home.surprise.button')" [open]="true" (closed)="close()">
         @if (empty() && !weekend()) {
-          <p class="none ui-sub" data-surprise-empty>No destinations match your filters this week.</p>
+          <p class="none ui-sub" data-surprise-empty>{{ t('home.surprise.emptyFilters') }}</p>
         } @else {
           <label class="wk" for="sb-wk">
-            <span>This weekend</span>
+            <span>{{ t('home.surprise.thisWeekend') }}</span>
             <input id="sb-wk" type="checkbox" role="switch" class="switch" data-surprise-weekend
                    [checked]="weekend()" (change)="setWeekend($any($event.target).checked)">
           </label>
@@ -53,7 +54,7 @@ const FLICK_MS = 1200;
             <app-route-map [hub]="state.hub()" [points]="points()" [highlight]="shown()" [animate]="animateMap()" view="world" [padding]="10" [pulse]="false" />
           </div>
           @if (empty()) {
-            <p class="none ui-sub" data-surprise-empty>{{ weekendWhy() ?? 'Nothing in your filters works for this weekend.' }}</p>
+            <p class="none ui-sub" data-surprise-empty>{{ weekendWhy() ?? t('home.surprise.emptyWeekend') }}</p>
           }
           <div class="out">
             <p class="ui-visually-hidden" aria-live="polite">{{ settled() ? line() : '' }}</p>
@@ -62,17 +63,17 @@ const FLICK_MS = 1200;
                 @if (settled()) {
                   <app-photo-card [code]="p.destination.code" [title]="p.destination.city" [meta]="meta()" />
                 } @else {
-                  <div class="skel" data-surprise-pending><span>Picking somewhere…</span></div>
+                  <div class="skel" data-surprise-pending><span>{{ t('home.surprise.picking') }}</span></div>
                 }
               </div>
               <!-- The actions appear with the result; until then the row only holds its height. -->
               <div class="acts">
                 @if (settled()) {
                   <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-surprise-dare (click)="dare()">
-                    <app-icon name="share" [size]="16" [strokeWidth]="2" /> Dare you</button>
-                  <a class="ui-btn ui-btn--sm" [routerLink]="path(p)" [queryParams]="state.globalParams()" (click)="close()">Open</a>
+                    <app-icon name="share" [size]="16" [strokeWidth]="2" /> {{ t('home.surprise.dare') }}</button>
+                  <a class="ui-btn ui-btn--sm" [routerLink]="path(p)" [queryParams]="state.globalParams()" (click)="close()">{{ t('common.open') }}</a>
                   <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-surprise-again (click)="spin()">
-                    <app-icon name="dice" [size]="16" [strokeWidth]="2" /> Spin again</button>
+                    <app-icon name="dice" [size]="16" [strokeWidth]="2" /> {{ t('home.surprise.again') }}</button>
                 }
               </div>
             }
@@ -115,6 +116,7 @@ const FLICK_MS = 1200;
 })
 export class SurpriseSheetComponent {
   protected readonly state = inject(AppStateService);
+  protected readonly t = t;
   private readonly profile = inject(ProfileService);
   private readonly env = inject(SHARE_ENV);
   private readonly router = inject(Router);
@@ -201,9 +203,9 @@ export class SurpriseSheetComponent {
     const w = this.weekend() ? this.weekendOpts().find(o => o.code === p.destination.code) ?? null : null;
     const link = new URL(this.router.serializeUrl(this.router.createUrlTree(destPath(p.destination.code))), globalThis.location?.href).href;
     const text = `${dareText(p, this.state.nowMs(), this.timeFormat(), w)}\n${link}`;
-    const r = await shareText(text, 'Dare you', this.env());
-    if (r === 'copied') this.state.flash('Copied');
-    else if (r === 'failed') this.state.flash("Couldn't share");
+    const r = await shareText(text, t('home.surprise.dare'), this.env());
+    if (r === 'copied') this.state.flash(t('common.copied'));
+    else if (r === 'failed') this.state.flash(t('common.shareFailed'));
   }
 
   protected spin(): void {

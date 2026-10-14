@@ -9,6 +9,7 @@ import {
   placeRows, reachDep, rowMeta, seasonEnd, seasonEvent, seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
 import type { CityHit } from '../../places/city-index';
+import { setLocale } from '../../i18n/locale';
 import { SEVILLE_PLACE } from '../../trips/testing/seville-fixture';
 
 const WEEK = '2026-10-05';
@@ -169,6 +170,18 @@ describe('home-model', () => {
     expect(seasonEnd('Mar – Nov')).toBe('Nov');
     expect(seasonEnd('Nov – Apr, Jul')).toBe('Jul');
     expect(seasonEnd(null)).toBeNull();
+    expect(seasonEnd('mars – nov.')).toBe('nov.');
+    expect(seasonEnd('déc. – janv., juin – août')).toBe('août');
+  });
+
+  it('builds its text in French when the UI is French', () => {
+    setLocale('fr');
+    try {
+      const hit = { place: { id: 'gn-1', name: 'Séville', admin1: 'Andalousie', country: 'Espagne' } } as unknown as CityHit;
+      expect(placeRows([hit], 'Sév')[0].sub).toBe("Andalousie, Espagne · Trouver comment s'y rendre");
+    } finally {
+      setLocale('en');
+    }
   });
 
   it('coverageStatus', () => {

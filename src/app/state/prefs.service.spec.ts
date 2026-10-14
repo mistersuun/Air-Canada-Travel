@@ -21,7 +21,7 @@ describe('sanitizePrefs', () => {
       minConnect: 90, maxLayover: 7, allowOvernight: 'yes', listingHours: 72, favourites: ['LHR', 'XXX', 'LHR', 42, 'ATH', 'PBI'],
     });
     expect(p).toEqual({
-      hub: 'YVR', region: 'All', showConnections: false, theme: 'auto', timeFormat: '12h',
+      hub: 'YVR', region: 'All', showConnections: false, theme: 'auto', language: 'auto', timeFormat: '12h',
       minConnect: 90, maxLayover: 360, allowOvernight: false, listingHours: 72, favourites: ['LHR', 'ATH', 'DJT'], lastBackupAt: null,
     });
   });

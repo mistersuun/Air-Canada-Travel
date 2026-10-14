@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ApplicationRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import { Router, provideRouter, withComponentInputBinding } from '@angular/router';
+import { Router, TitleStrategy, provideRouter, withComponentInputBinding } from '@angular/router';
+import { I18nTitleStrategy } from './i18n/title-strategy';
 import { SwUpdate, VersionEvent } from '@angular/service-worker';
 import { Subject } from 'rxjs';
 import { AppComponent } from './app.component';
@@ -61,6 +62,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
         { provide: TRIPS_STORAGE, useValue: tripsStorage },
         { provide: NOW, useValue: () => clockOverride ?? NOW_MS },
         { provide: SwUpdate, useValue: { isEnabled: true, versionUpdates, unrecoverable, checkForUpdate } },
+        { provide: TitleStrategy, useClass: I18nTitleStrategy },
       ],
     });
     fixture = TestBed.createComponent(AppComponent);

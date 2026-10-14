@@ -5,6 +5,7 @@ import { SettingsComponent } from './settings.component';
 import { DEFAULT_PREFS, PREFS_KEY, PREFS_STORAGE, PrefsService } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
 import { AppStateService } from '../../state/app-state.service';
+import { locale, setLocale } from '../../i18n/locale';
 
 async function setup() {
   const storage = new MemoryStorage();
@@ -124,5 +125,36 @@ describe('SettingsComponent', () => {
     // Click on the backdrop, outside the box.
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 300 }));
     expect(closed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SettingsComponent language', () => {
+  afterEach(() => {
+    setLocale('en');
+    document.documentElement.setAttribute('lang', 'en');
+  });
+
+  it('offers Automatic / English / Français, applies a choice at once and saves it', async () => {
+    const { el, fixture, prefs } = await setup();
+    const seg = (label: string) =>
+      [...el.querySelectorAll<HTMLButtonElement>('app-seg[data-setting="language"] button')].find(b => b.textContent?.trim() === label)!;
+    const title = () => el.querySelector(`#${el.querySelector('dialog')!.getAttribute('aria-labelledby')}`)?.textContent;
+    expect(seg('Automatic').getAttribute('aria-pressed')).toBe('true');
+    expect(seg('English')).toBeTruthy();
+    seg('Français').click();
+    await fixture.whenStable();
+    expect(prefs.language()).toBe('fr');
+    expect(locale()).toBe('fr');
+    expect(document.documentElement.getAttribute('lang')).toBe('fr-CA');
+    expect(title()).toBe('Paramètres');
+    expect(seg('Automatique').getAttribute('aria-pressed')).toBe('false');
+    expect(seg('Français').getAttribute('aria-pressed')).toBe('true');
+    expect(seg('English')).toBeTruthy();
+    expect(el.textContent).toContain('Correspondance minimale');
+    seg('Automatique').click();
+    await fixture.whenStable();
+    expect(prefs.language()).toBe('auto');
+    expect(locale()).toBe('en');
+    expect(title()).toBe('Settings');
   });
 });

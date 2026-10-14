@@ -10,6 +10,7 @@ import { DestRowComponent } from '../../ui/dest-row.component';
 import { entryDots } from '../../ui/dot-row.component';
 import { destPath, reachPath } from '../../ui/links';
 import { CoverageStatus, PlaceRow, coverageStatus, focusDayIndex, rowMeta } from './home-model';
+import { t } from '../../i18n/t';
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
 
@@ -54,19 +55,19 @@ interface Row {
         <h2 class="ui-h3">{{ emptyTitle() }}</h2>
         <p class="ui-sub">{{ emptyText() }}</p>
         @if (hasActiveFilters()) {
-          <button type="button" class="ui-btn ui-btn--dark" (click)="clearFilters.emit()">Clear filters</button>
+          <button type="button" class="ui-btn ui-btn--dark" (click)="clearFilters.emit()">{{ t('home.list.clearFilters') }}</button>
         }
       </section>
     } @else {
       <div class="groups">
         @if (direct().length) {
           <section class="grp ui-card" aria-labelledby="rl-direct">
-            <div class="ui-sec-h"><h2 class="ui-h3" id="rl-direct">Nonstop</h2><span class="ui-tag ui-tag--teal tn">{{ direct().length }}</span></div>
+            <div class="ui-sec-h"><h2 class="ui-h3" id="rl-direct">{{ t('format.nonstop') }}</h2><span class="ui-tag ui-tag--teal tn">{{ direct().length }}</span></div>
             <div class="rows">
               @for (r of direct(); track r.code) {
                 <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="path(r.code)" [dots]="r.dots" [selectedDay]="focus()">
                   <button trailing type="button" class="star" [class.on]="r.fav" [attr.aria-pressed]="r.fav"
-                          [attr.aria-label]="(r.fav ? 'Unstar ' : 'Star ') + r.code" (click)="star($event, r.code)">
+                          [attr.aria-label]="t(r.fav ? 'common.unstar' : 'common.star', { code: r.code })" (click)="star($event, r.code)">
                     <app-icon name="star" [size]="18" [filled]="r.fav" />
                   </button>
                 </app-dest-row>
@@ -76,12 +77,12 @@ interface Row {
         }
         @if (connecting().length) {
           <section class="grp ui-card" aria-labelledby="rl-conn">
-            <div class="ui-sec-h"><h2 class="ui-h3" id="rl-conn">One connection</h2><span class="ui-tag ui-tag--amber tn">{{ connecting().length }}</span></div>
+            <div class="ui-sec-h"><h2 class="ui-h3" id="rl-conn">{{ t('home.list.oneConnection') }}</h2><span class="ui-tag ui-tag--amber tn">{{ connecting().length }}</span></div>
             <div class="rows">
               @for (r of connecting(); track r.code) {
                 <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="path(r.code)" [dots]="r.dots" [selectedDay]="focus()">
                   <button trailing type="button" class="star" [class.on]="r.fav" [attr.aria-pressed]="r.fav"
-                          [attr.aria-label]="(r.fav ? 'Unstar ' : 'Star ') + r.code" (click)="star($event, r.code)">
+                          [attr.aria-label]="t(r.fav ? 'common.unstar' : 'common.star', { code: r.code })" (click)="star($event, r.code)">
                     <app-icon name="star" [size]="18" [filled]="r.fav" />
                   </button>
                 </app-dest-row>
@@ -95,7 +96,7 @@ interface Row {
 
     <ng-template #placesTpl>
       <section class="grp ui-card" aria-labelledby="rl-places">
-        <div class="ui-sec-h"><h2 class="ui-h3" id="rl-places">Places</h2><span class="ui-tag ui-tag--blue tn">{{ places().length }}</span></div>
+        <div class="ui-sec-h"><h2 class="ui-h3" id="rl-places">{{ t('home.list.places') }}</h2><span class="ui-tag ui-tag--blue tn">{{ places().length }}</span></div>
         <div class="rows">
           @for (p of places(); track p.id) {
             <a class="prow" [routerLink]="reach(p.id)" [queryParams]="placeParams()">
@@ -180,13 +181,15 @@ export class ResultsListComponent {
   readonly jumpToCoverage = output<string | null>();
   readonly toggleFavourite = output<string>();
 
+  protected readonly t = t;
+
   protected readonly focus = computed(() => focusDayIndex(this.weekStartKey(), this.selectedDateKey(), this.todayKey()));
 
   private toRow(e: RouteEntry): Row {
     const it = e.itinerary ?? e.weekSummary?.days.find(d => d.best)?.best;
     return {
       code: e.destination.code,
-      small: e.isDirect || !it?.hubs.length ? e.destination.code : `${e.destination.code} · via ${it.hubs.join(' ')}`,
+      small: e.isDirect || !it?.hubs.length ? e.destination.code : `${e.destination.code} · ${t('format.via', { hubs: it.hubs.join(' ') })}`,
       meta: rowMeta(e, this.timeFormat()),
       dots: this.compact() ? null : entryDots(e),
       fav: this.favourites().has(e.destination.code),
@@ -218,24 +221,26 @@ export class ResultsListComponent {
     return key ? formatKey(key, LONG_DATE) : '';
   }
 
+  /** 'day' when a date is selected, else 'week' (the select argument of the coverage and empty messages). */
+  private readonly span = computed(() => (this.selectedDateKey() ? 'day' : 'week'));
+
   readonly outsideTitle = computed(() => {
-    const what = this.selectedDateKey() ? 'this date' : 'this week';
     switch (this.status()) {
-      case 'before': return `Schedules for ${what} are no longer available`;
-      case 'none': return 'No published schedules yet';
-      default: return `Schedules for ${what} aren't published yet`;
+      case 'before': return t('home.cov.before', { span: this.span() });
+      case 'none': return t('home.cov.none');
+      default: return t('home.cov.after', { span: this.span() });
     }
   });
 
   readonly outsideText = computed(() => {
     const c = this.coverage();
     const hub = this.hubName();
-    if (!c?.to) return `Air Canada hasn't published a timetable for ${hub} yet.`;
-    if (this.status() === 'before') return `Published from ${this.fmt(c.from)} through ${this.fmt(c.to)}.`;
-    return `Timetables from ${hub} are published through ${this.fmt(c.to)}. Later dates are unknown, not empty.`;
+    if (!c?.to) return t('home.cov.noTimetable', { hub });
+    if (this.status() === 'before') return t('home.cov.publishedRange', { from: this.fmt(c.from), to: this.fmt(c.to) });
+    return t('home.cov.publishedTo', { hub, to: this.fmt(c.to) });
   });
 
-  readonly jumpLabel = computed(() => (this.status() === 'before' ? 'Go to first published week' : 'Go to last published week'));
+  readonly jumpLabel = computed(() => t(this.status() === 'before' ? 'home.cov.jumpFirst' : 'home.cov.jumpLast'));
 
   jumpBack(): void {
     this.jumpToCoverage.emit(this.status() === 'before' ? this.coverage()?.from ?? null : null);
@@ -245,26 +250,23 @@ export class ResultsListComponent {
   readonly partialNote = computed(() => {
     if (this.status() !== 'partial') return null;
     const c = this.coverage()!;
-    if (c.to && addDays(this.weekStartKey(), 6) > c.to) return `Published through ${this.fmt(c.to)}; later days this week are not yet available.`;
+    if (c.to && addDays(this.weekStartKey(), 6) > c.to) return t('home.cov.partialEnd', { to: this.fmt(c.to) });
     const today = this.todayKey();
     if (today && c.from && c.from <= today) return null;
-    return `Published from ${this.fmt(c.from)}; earlier days this week are not shown.`;
+    return t('home.cov.partialStart', { from: this.fmt(c.from) });
   });
 
   // ── No results ───────────────────────────────────────────────────────────
   readonly emptyTitle = computed(() => {
     const day = this.selectedDateKey();
-    if (this.hasActiveFilters()) return 'No destinations match';
-    return day ? `No flights on ${formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' })}` : 'No flights this week';
+    if (this.hasActiveFilters()) return t('home.empty.filtered');
+    return day ? t('home.empty.day', { date: formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' }) }) : t('home.empty.week');
   });
 
   readonly emptyText = computed(() => {
-    const day = this.selectedDateKey();
     const hub = this.hubName();
-    if (this.hasActiveFilters()) {
-      return day ? `No flights from ${hub} on this day match the current search and filters.` : `No flights from ${hub} this week match the current search and filters.`;
-    }
-    const tip = this.showConnections() ? '' : ' Turn on connections to see one-stop options.';
-    return (day ? `Nothing leaves ${hub} on this day. Try another day or the whole week.` : `Nothing leaves ${hub} this week. Try another week.`) + tip;
+    if (this.hasActiveFilters()) return t('home.empty.filteredText', { span: this.span(), hub });
+    const text = t('home.empty.text', { span: this.span(), hub });
+    return this.showConnections() ? text : `${text} ${t('home.empty.connectionsTip')}`;
   });
 }

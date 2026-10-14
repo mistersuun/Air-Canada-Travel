@@ -48,18 +48,3 @@ export function parseUrlState(search: string): UrlState {
   return out;
 }
 
-/**
- * Serialise in a stable order. The caller decides which values are defaults
- * and leaves them out (e.g. the current week, region 'All').
- */
-export function serializeUrlState(s: UrlState): string {
-  const p = new URLSearchParams();
-  if (s.from) p.set('from', s.from);
-  if (s.week) p.set('week', s.week);
-  if (s.day) p.set('day', s.day);
-  if (s.region) p.set('region', s.region);
-  if (s.dest) p.set('dest', s.dest);
-  if (s.q) p.set('q', s.q);
-  const str = p.toString();
-  return str ? `?${str}` : '';
-}

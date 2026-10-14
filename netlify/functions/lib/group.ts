@@ -10,12 +10,6 @@ export const DAY_MS = 86_400_000;
 export const DEFAULT_TTL_DAYS = 30;
 export const MAX_TTL_DAYS = 90;
 
-/** GROUP_DAILY_CREATES, default 50 new groups per UTC day (global); junk falls back to the default. */
-export function groupDailyCreates(raw: string | undefined): number {
-  const n = Number(raw);
-  return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 50;
-}
-
 /** The slice of a Netlify Blobs store the group endpoint needs. */
 export interface GroupStore {
   getWithMetadata(key: string): Promise<{ data: string; etag?: string } | null>;
@@ -159,20 +153,28 @@ export async function deleteGroup(store: GroupStore, id: string, token: string, 
   return res(200, { ok: true });
 }
 
+/** How many blobs the sweep reads at once. */
+export const SWEEP_CONCURRENCY = 8;
+
 /** Deletes every expired group (and unreadable records). Returns how many were removed. */
 export async function sweepGroups(store: GroupStore, nowMs: number): Promise<number> {
   const { blobs } = await store.list();
   let removed = 0;
-  for (const { key } of blobs) {
-    try {
-      const cur = await store.getWithMetadata(key);
-      if (!cur) continue;
-      const rec = parseRecord(cur.data);
-      if (!rec || isExpired(rec, nowMs)) {
-        await store.delete(key);
-        removed++;
-      }
-    } catch { /* leave it for the next run */ }
-  }
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < blobs.length) {
+      const { key } = blobs[next++];
+      try {
+        const cur = await store.getWithMetadata(key);
+        if (!cur) continue;
+        const rec = parseRecord(cur.data);
+        if (!rec || isExpired(rec, nowMs)) {
+          await store.delete(key);
+          removed++;
+        }
+      } catch { /* leave it for the next run */ }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(SWEEP_CONCURRENCY, blobs.length) }, worker));
   return removed;
 }

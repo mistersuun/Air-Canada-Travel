@@ -8,8 +8,9 @@
 //   (creating a group also spends from the GROUP_DAILY_CREATES budget: 503 {error:'budget'})
 //   DELETE ?id=  X-Group-Write [+ X-Group-Owner when the group has one]         ("Stop sharing")
 import { getStore } from '@netlify/blobs';
-import { makeBudget, makeLimiter } from './lib/flight-status.ts';
-import { MAX_CIPHERTEXT, deleteGroup, groupDailyCreates, getGroup, parsePutBody, putGroup, validId, validToken, type GroupStore } from './lib/group.ts';
+import { json } from './lib/http.ts';
+import { dailyLimit, makeBudget, makeLimiter } from './lib/limits.ts';
+import { MAX_CIPHERTEXT, deleteGroup, getGroup, parsePutBody, putGroup, validId, validToken, type GroupStore } from './lib/group.ts';
 
 // Writes only (create, update, delete): 30 per IP per 10 minutes.
 const allowWrite = makeLimiter(30, 10 * 60_000);
@@ -19,13 +20,6 @@ const allowCreate = makeLimiter(5, 60 * 60_000);
 
 // Reads: a looser per-IP limit (several companions can share one network; the app polls every 2 minutes).
 const allowRead = makeLimiter(300, 10 * 60_000);
-
-function json(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
-  });
-}
 
 export default async (req: Request, context: { ip?: string }): Promise<Response> => {
   if (req.headers.get('sec-fetch-site') === 'cross-site') return json({ error: 'forbidden' }, 403);
@@ -80,7 +74,7 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
     const spend = async (): Promise<boolean | 'rate-limited'> => {
       if (!allowCreate(context.ip || 'unknown', now)) return 'rate-limited';
       try {
-        return await makeBudget(getStore({ name: 'groups-budget', consistency: 'strong' }), groupDailyCreates(process.env['GROUP_DAILY_CREATES']))(now);
+        return await makeBudget(getStore({ name: 'groups-budget', consistency: 'strong' }), dailyLimit(process.env['GROUP_DAILY_CREATES'], 50))(now);
       } catch {
         return false;
       }

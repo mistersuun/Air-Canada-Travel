@@ -66,11 +66,6 @@ export function placeFromDestination(code: string): Place {
   return { id: `ac-${code}`, name: airportName(code), country: '', iso2: '', lat: 0, lng: 0, tz: airportTz(code), acCode: code };
 }
 
-/** True when `code` is an AC destination or hub. */
-export function isAcAirport(code: string): boolean {
-  return !!(findDestination(code) || findHub(code));
-}
-
 /** The Place of a city search hit. A hit served by AC itself carries `acCode`. */
 export function placeFromHit(hit: CityHit): Place {
   return hit.servedBy ? { ...hit.place, acCode: hit.servedBy } : hit.place;

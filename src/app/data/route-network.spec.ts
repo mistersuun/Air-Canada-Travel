@@ -5,7 +5,6 @@ import {
   installRouteNetwork,
   isRouteOnly,
   loadRouteNetwork,
-  networkDestinations,
   resetRouteNetworkSource,
   ROUTE_ONLY_NOTE,
   capitalizeNote,
@@ -71,11 +70,6 @@ describe('route lookups', () => {
     expect(isRouteOnly('YHZ', 'LAX')).toBe(false);
   });
 
-  it('lists network destinations of an airport', () => {
-    setRouteNetworkSource(ROUTE_NETWORK_FIXTURE);
-    expect(networkDestinations('YHZ')).toEqual(['BGI', 'BOS', 'EWR', 'YDF', 'YOW', 'YYZ']);
-    expect(networkDestinations('BOS')).toEqual(['YHZ']);
-  });
 
   it('describes a fact briefly, never with times or odds', () => {
     setRouteNetworkSource(ROUTE_NETWORK_FIXTURE);

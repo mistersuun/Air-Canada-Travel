@@ -217,11 +217,6 @@ export function installSchedules(file: SchedulesFile): void {
   resetScheduleSource();
 }
 
-/** True once published data is installed. */
-export function schedulesLoaded(): boolean {
-  return baseline.routes.length > 0;
-}
-
 /**
  * Fetches and installs public/data/schedules.json (app startup). The service
  * worker serves it from cache offline. Resolves false, leaving the source
@@ -247,6 +242,7 @@ export function scheduleVersion(): number {
   return version;
 }
 
+/** Every installed route with its schedule records (the data-integrity specs walk this). */
 export function getRouteSchedules(): readonly ScheduleRoute[] {
   return state.routes;
 }
@@ -287,11 +283,6 @@ export function getCoverage(hub?: string | null): Coverage {
     if (w) return { from: w.from, to: w.to, generatedAt, hub };
   }
   return { from: state.global.from, to: state.global.to, generatedAt, hub: null };
-}
-
-/** Coverage window per airport code (origins and destinations). */
-export function getCoverageByAirport(): ReadonlyMap<string, CoverageWindow> {
-  return state.byAirport;
 }
 
 /** True when `dateKey` lies inside the (hub's) published window, inclusive. */

@@ -61,9 +61,6 @@ export function buildGroupLink(origin: string, link: GroupLink): string {
   return `${origin.replace(/\/+$/, '')}/g/${link.id}#k=${link.key}${link.write ? `&w=${link.write}` : ''}`;
 }
 
-/** The read-only version of a link (drops the write token). */
-export const viewOnlyLink = (link: GroupLink): GroupLink => ({ ...link, write: null });
-
 /** Reads the key (and write token) from a fragment ('k=..&w=..' or '#k=..'); null when malformed. */
 export function parseGroupFragment(id: string, fragment: string | null | undefined): GroupLink | null {
   if (!GROUP_ID_RE.test(id) || !fragment) return null;

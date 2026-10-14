@@ -4,7 +4,6 @@ import {
   ROUTE_INDEX,
   getAircraftCodes,
   getCoverage,
-  getCoverageByAirport,
   getDestinationCodes,
   getOriginCodes,
   getRouteSchedules,
@@ -97,7 +96,6 @@ describe('schedule index', () => {
     expect(getCoverage()).toEqual({ from: '2026-10-01', to: '2027-03-31', generatedAt: null, hub: null });
     expect(getCoverage('YEG')).toMatchObject({ from: '2026-11-01', to: '2026-12-15', hub: 'YEG' });
     expect(getCoverage('ZZZ').hub).toBeNull();
-    expect(getCoverageByAirport().get('LHR')).toEqual({ from: '2026-10-01', to: '2027-03-31' });
     expect(isCovered('2026-12-16', 'YEG')).toBe(false);
     expect(isCovered('2026-12-16', 'YUL')).toBe(true);
     expect(isCovered('2027-04-01')).toBe(false);

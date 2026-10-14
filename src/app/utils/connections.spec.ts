@@ -10,11 +10,7 @@ import {
   estimatesAllowed,
   findAlternatives,
   findConnections,
-  findConnectionsForWeek,
   findItineraries,
-  findReturnOptions,
-  formatLayover,
-  getBestConnection,
   hasSegment,
   isLayoverAlert,
   segmentFlights,
@@ -209,7 +205,6 @@ describe('segments and helpers', () => {
     expect(isLayoverAlert(90)).toBe(false);
     expect(isLayoverAlert(361)).toBe(true);
     expect(isLayoverAlert(50, 45)).toBe(false);
-    expect(formatLayover(105)).toBe('1h 45m');
   });
 });
 
@@ -229,39 +224,6 @@ describe('summarizeWeek', () => {
     const s = summarizeWeek('YHZ', 'LHR', '2026-10-05', {}, () => true, { key: 'est', keep: it => it.estimated });
     expect(s.hubs).toEqual(['YUL']);
     expect(s.estimated).toBe(true);
-  });
-});
-
-describe('findReturnOptions', () => {
-  it('counts nights from the outbound arrival date', () => {
-    // AC864 leaves Mon Oct 5 22:10 and lands Tue Oct 6: 4 nights → Sat Oct 10.
-    const [opt] = findReturnOptions('LHR', 'YUL', '2026-10-05', [4]);
-    expect(opt.dateKey).toBe('2026-10-10');
-    expect(opt.nights).toBe(4);
-    expect(opt.itineraries[0].legs[0].flightNumber).toBe('AC865');
-  });
-
-  it('accepts a chosen outbound itinerary', () => {
-    const out = directItineraries('YUL', 'LHR', '2026-10-05')[0];
-    const opts = findReturnOptions('LHR', 'YUL', out, [2, 3]);
-    expect(opts.map(o => o.dateKey)).toEqual(['2026-10-08', '2026-10-09']);
-  });
-
-  it('connects home through a hub with an estimated domestic leg', () => {
-    const [opt] = findReturnOptions('LHR', 'YHZ', '2026-10-05', [3]);
-    expect(opt.dateKey).toBe('2026-10-09');
-    const first = opt.itineraries[0];
-    expect(first.hubs).toEqual(['YUL']);
-    expect(first.legs[0].flightNumber).toBe('AC865');
-    expect(first.legs[1].estimated).toBe(true);
-    // AC865 lands 14:35 EDT; the 17:00 YUL→YHZ leg gives 2h25.
-    expect(first.layovers).toEqual([145]);
-  });
-
-  it('falls back to the given date when there is no outbound', () => {
-    const [opt] = findReturnOptions('ATH', 'YUL', '2026-10-06', [1]);
-    expect(opt.dateKey).toBe('2026-10-07');
-    expect(opt.itineraries).toEqual([]);
   });
 });
 
@@ -295,13 +257,6 @@ describe('deprecated adapters', () => {
     const est = findConnections('YHZ', 'LHR', '2026-10-05')[1];
     expect(est.leg1.flightNumber).toBe('');
     expect(est.leg1.aircraft).toBe('');
-  });
-
-  it('keeps the week and best-connection helpers', () => {
-    expect(findConnectionsForWeek('YHZ', 'LHR', '2026-10-05')).toBe(true);
-    expect(findConnectionsForWeek('YHZ', 'SYD', '2026-10-05')).toBe(false);
-    expect(getBestConnection('YHZ', 'LHR', '2026-10-05')?.viaHub).toBe('YYZ');
-    expect(getBestConnection('YHZ', 'SYD', '2026-10-05')).toBeNull();
   });
 
   it('returns null for direct or unknown-destination itineraries', () => {

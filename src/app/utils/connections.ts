@@ -27,7 +27,6 @@ import {
   MINUTE_MS,
   addDays,
   diffDays,
-  formatDuration,
   keyToDate,
   toKey,
   toUtcMs,
@@ -469,41 +468,6 @@ export function summarizeWeek(
 
 // ── Return trips and backups ────────────────────────────────────────────────
 
-export interface ReturnOption {
-  /** Local departure date of the return, at the destination. */
-  dateKey: string;
-  /** Nights at the destination, counted from the outbound arrival date. */
-  nights: number;
-  /** Direct and connecting options home, ranked by arrival. */
-  itineraries: Itinerary[];
-}
-
-/**
- * Return options dest → home for each stay length. Nights are counted from
- * the outbound's local ARRIVAL date (critique 34): pass the chosen outbound
- * itinerary, or a departure date key (the earliest-arriving outbound that day
- * is used to find the arrival date).
- */
-export function findReturnOptions(
-  dest: string,
-  home: string,
-  outbound: string | Itinerary,
-  nights: readonly number[],
-  opts: ConnectOptions = NO_OPTS,
-): ReturnOption[] {
-  let arrivalKey: string;
-  if (typeof outbound === 'string') {
-    const first = allItineraries(home, dest, outbound, opts)[0];
-    arrivalKey = first ? first.arrDateKey : outbound;
-  } else {
-    arrivalKey = outbound.arrDateKey;
-  }
-  return nights.map(n => {
-    const dateKey = addDays(arrivalKey, n);
-    return { dateKey, nights: n, itineraries: allItineraries(dest, home, dateKey, opts) };
-  });
-}
-
 export interface Alternatives {
   /** Later options through the same hub(s) (or later directs), same day. */
   laterSameRoute: Itinerary[];
@@ -605,17 +569,3 @@ export function findConnections(homeHub: string, destCode: string, date: string 
     .filter((c): c is ConnectionOption => c !== null);
 }
 
-/** @deprecated Use summarizeWeek(...).connectDays > 0. */
-export function findConnectionsForWeek(homeHub: string, destCode: string, weekStart: string | Date, opts: ConnectOptions = NO_OPTS): boolean {
-  return weekKeys(toKey(weekStart)).some(k => findItineraries(homeHub, destCode, k, opts).length > 0);
-}
-
-/** @deprecated Use bestItinerary. Returns the top-ranked connection (not the shortest layover). */
-export function getBestConnection(homeHub: string, destCode: string, date: string | Date, opts: ConnectOptions = NO_OPTS): ConnectionOption | null {
-  return findConnections(homeHub, destCode, date, opts)[0] ?? null;
-}
-
-/** '1h 45m'. Same as formatDuration. */
-export function formatLayover(minutes: number): string {
-  return formatDuration(minutes);
-}

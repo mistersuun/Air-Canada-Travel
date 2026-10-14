@@ -9,7 +9,7 @@ import { HUBS } from '../data/destinations';
 import type { Itinerary } from '../utils/connections';
 import type { TimeFormat } from '../state/prefs.service';
 import {
-  WEEKDAY_LONG, WEEKDAY_SHORT, addDays, dateKey, diffDays, formatClock, formatKey, overriddenZoneLabel, tzOffsetMin, utcToLocal,
+  WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, overriddenZoneLabel, tzOffsetMin, utcToLocal,
   weekdayIndex,
 } from '../utils/time';
 import { formatWeekLabel } from '../utils/week';
@@ -24,11 +24,6 @@ export function itinKey(it: Itinerary): string {
 /** 'Wed, Oct 7'. */
 export function shortDay(key: string): string {
   return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-/** 'Wednesday, October 7'. */
-export function longDay(key: string): string {
-  return `${WEEKDAY_LONG[weekdayIndex(key)]}, ${formatKey(key, { month: 'long', day: 'numeric' })}`;
 }
 
 /** True when the date is outside the hub's published window (null bounds = open). */
@@ -62,12 +57,6 @@ export function operatesLabel(keys: readonly string[]): string {
   return idx.map(i => WEEKDAY_SHORT[i]).join(' ');
 }
 
-/** 'Nonstop', '1 stop · YYZ', '2 stops · YYZ YUL'. */
-export function stopsLabel(it: Itinerary): string {
-  if (!it.hubs.length) return 'Nonstop';
-  return `${it.hubs.length} stop${it.hubs.length > 1 ? 's' : ''} · ${it.hubs.join(' ')}`;
-}
-
 // ── From the week strip ──────────────────────────────────────────────────────
 
 /** Schedules scraped more than this many days ago are flagged. */
@@ -89,15 +78,6 @@ export function weekRangeLabel(weekStart: string): string {
     ? formatKey(end, { day: 'numeric' })
     : formatKey(end, { month: 'short', day: 'numeric' });
   return `${s} – ${e}`;
-}
-
-/** 'today', 'yesterday', '3 days ago' for an ISO timestamp relative to a date key. */
-export function freshnessAge(generatedAt: string, today: string): { days: number; text: string } | null {
-  const t = Date.parse(generatedAt);
-  if (Number.isNaN(t)) return null;
-  const days = Math.max(0, diffDays(dateKey(new Date(t)), today));
-  const text = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
-  return { days, text };
 }
 
 // ── Clear Sky compact formats ────────────────────────────────────────────────

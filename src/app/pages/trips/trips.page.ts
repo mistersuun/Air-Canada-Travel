@@ -48,7 +48,7 @@ export const STARRED_PREVIEW = 3;
 
       @if (active().length) {
         @for (t of active(); track t.id; let first = $first) {
-          <app-trip-card [trip]="t" mode="link" [compact]="!first" />
+          <app-trip-card [trip]="t" mode="link" [compact]="!first" showTries />
           @if (first && warnFor(t)) {
             <p class="note note--amber" data-return-warning><app-icon name="warning" [size]="16" />
               <span>Return leg not listed yet. Listing usually opens a few days before; check your pass rules.</span></p>

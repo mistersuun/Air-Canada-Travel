@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { IconComponent } from '../../components/shared/icons.component';
-import { aroundEarthLabel, boardedFlights, statsOf, type DetailResolver } from '../../logbook/logbook';
+import { scheduleDetail } from '../../logbook/resolve';
+import { aroundEarthLabel, boardedFlights, statsOf } from '../../logbook/logbook';
+import { milestones } from '../../logbook/milestones';
+import { canStoreSeen, loadSeen, saveSeen, unseen } from '../../logbook/seen';
 import { achievements, inspirationStamps, placeStamps, stampAngle } from '../../logbook/stamps';
 import { AppStateService } from '../../state/app-state.service';
 import { PrefsService } from '../../state/prefs.service';
-import { resolveRef } from '../../trips/engine/legs';
 import { TripsService } from '../../trips/trips.service';
 import { hubDisplayName } from '../../ui/format';
 import { airportName } from '../../utils/airports';
@@ -78,7 +80,7 @@ import { formatKey } from '../../utils/time';
       @if (stamps().length) {
         <ul class="grid" data-stamps>
           @for (st of stamps(); track st.code) {
-            <li class="stamp" [style.color]="color(st.region)">
+            <li class="stamp" [class.stamp--new]="fresh().has('stamp:' + st.code)" [attr.data-new]="fresh().has('stamp:' + st.code) ? '' : null" [style.color]="color(st.region)">
               <svg viewBox="0 0 120 120" width="112" height="112" role="img"
                    [attr.aria-label]="st.city + (st.count > 1 ? ', ' + st.count + ' times' : '')"
                    [style.transform]="'rotate(' + angle(st.code) + 'deg)'">
@@ -117,6 +119,17 @@ import { formatKey } from '../../utils/time';
         </ul>
       }
 
+      @if (earned().length) {
+        <h2 class="ui-label lb__lbl">Milestones</h2>
+        <ul class="ach" data-milestones>
+          @for (m of earned(); track m.id) {
+            <li class="ach__i" [class.ach__i--new]="fresh().has('ms:' + m.id)" [attr.data-ms]="m.id">
+              <b>{{ m.label }}</b><span class="tn">{{ m.detail }} · {{ when(m.dateKey) }}</span>
+            </li>
+          }
+        </ul>
+      }
+
       <p class="lb__foot">Counted from flights marked boarded. Distances are great-circle. On this phone only.</p>
     </div>
   `,
@@ -149,6 +162,11 @@ import { formatKey } from '../../utils/time';
     .stamp .code { font-family: var(--cond); font-size: 34px; font-weight: 700; fill: currentColor; letter-spacing: .02em; }
     .stamp .city { font-family: var(--sans); font-size: 10.5px; font-weight: 600; fill: var(--ink); }
     .stamp .meta { font-family: var(--sans); font-size: 9px; fill: var(--ink-2); }
+    .stamp--new svg { animation: ink-in 400ms cubic-bezier(.2, .9, .3, 1.2) both; }
+    .ach__i--new { animation: ink-in-flat 400ms var(--ease-out) both; }
+    @keyframes ink-in { from { opacity: 0; transform: scale(1.5) rotate(-14deg); } }
+    @keyframes ink-in-flat { from { opacity: 0; transform: scale(1.12); } }
+    @media (prefers-reduced-motion: reduce) { .stamp--new svg, .ach__i--new { animation: none; } }
     .stamp--faint { opacity: .38; }
     .lb__ideas { margin: 0 4px 6px; }
     .ach { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
@@ -168,19 +186,36 @@ export class LogbookPage {
   private readonly state = inject(AppStateService);
   private readonly prefs = inject(PrefsService);
 
-  /** Times and equipment for an outcome, from the schedules when they still list the flight. */
-  private readonly resolve: DetailResolver = f => {
-    const i = resolveRef({ ...f, depLocal: '', arrLocal: '', arrDateKey: f.dateKey, aircraft: null });
-    return i ? { aircraft: i.aircraft ?? null, depLocal: i.depLocal, arrLocal: i.arrLocal, arrDateKey: i.arrDateKey } : null;
-  };
-
-  private readonly flights = computed(() => boardedFlights({ outcomes: this.trips.outcomes() }, this.trips.trips(), this.resolve));
+  private readonly flights = computed(() => boardedFlights({ outcomes: this.trips.outcomes() }, this.trips.trips(), scheduleDetail));
   protected readonly stats = computed(() => statsOf(this.flights()));
   protected readonly earth = computed(() => aroundEarthLabel(this.stats().aroundEarth));
   protected readonly stamps = computed(() => placeStamps(this.flights()));
   protected readonly marks = computed(() => achievements(this.flights()));
+  protected readonly earned = computed(() => milestones(this.flights()));
+  /** Stamps and milestones not shown before; fixed when the page opens so they ink in once. */
+  protected readonly fresh = signal<ReadonlySet<string>>(new Set());
   protected readonly hubName = computed(() => hubDisplayName(this.prefs.hub()) || airportName(this.prefs.hub()));
   protected readonly ideas = computed(() => inspirationStamps(this.prefs.hub(), 8));
+
+  constructor() {
+    let first = true;
+    effect(() => {
+      const ids = [...this.stamps().map(x => 'stamp:' + x.code), ...this.earned().map(m => 'ms:' + m.id)];
+      untracked(() => {
+        if (!ids.length) return;
+        const seen = loadSeen();
+        const storable = canStoreSeen();
+        if (first) this.fresh.set(unseen(ids, seen, storable));
+        else this.fresh.set(new Set([...this.fresh(), ...unseen(ids, seen, storable)]));
+        first = false;
+        saveSeen(ids);
+      });
+    });
+  }
+
+  protected when(k: string): string {
+    return formatKey(k, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
 
   protected color(region: string): string {
     return regionVar(region);

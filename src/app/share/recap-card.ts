@@ -9,8 +9,14 @@
  * recapLayout() is pure (positions only, tested); renderRecapCard() draws it
  * with the trip card's canvas helpers.
  */
+import { geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { PHOTO_BASE } from '../state/photo.service';
-import { type TripRecap, recapLine, standbyRecordLine, tripRecap } from '../logbook/logbook';
+import { LAND_URL, type LandCollection, topologyToLand } from '../state/geo.service';
+import { type TripRecap, airportInfo, boardedFlights, recapLine, standbyRecordLine, statsOf, tripBoardedFlights, tripRecap } from '../logbook/logbook';
+import { FETCH_TIMEOUT_BIG_MS, fetchWithTimeout } from '../utils/fetch-timeout';
+import { flagFromIso2 } from '../utils/flags';
+import { scheduleDetail } from '../logbook/resolve';
+import { milestones } from '../logbook/milestones';
 import type { Outcome, Trip } from '../trips/model';
 import { formatKey } from '../utils/time';
 import {
@@ -18,15 +24,20 @@ import {
   approxMeasure, drawArc, drawBackground, drawFooter, ellipsize, loadCardFonts, makeCanvas, setSpacing, toPng,
 } from './trip-card';
 
+const EMOJI_FONT = "'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif";
 export const RECAP_PHOTO_H = 640;
 const FOOT_H = 60;
 const NO_PHOTO_MIN_H = 640;
 const LINE_MAX = 60;
 const LINE_MIN = 34;
+export const MAP_H = 440;
+const FLAGS_MAX = 8;
 
 export interface RecapOptions {
   /** The flight log's outcomes, so the counts agree with the logbook. */
   outcomes?: readonly Outcome[];
+  /** Every trip, so milestones (cumulative over the logbook) are judged against all boarded flights. */
+  allTrips?: readonly Trip[];
   /** Draw the dashed route arc (off by default). */
   arc: boolean;
   /** Add "Boarded X of Y tries" (off by default). */
@@ -40,7 +51,9 @@ export type RecapBlock =
   | { kind: 'title'; y: number; text: string; size: number }
   | { kind: 'dates'; y: number; text: string }
   | { kind: 'line'; y: number; text: string; size: number }
-  | { kind: 'arc'; y: number; h: number; from: string; to: string }
+  | { kind: 'flags'; y: number; text: string; codes: string }
+  | { kind: 'badges'; y: number; text: string }
+  | { kind: 'arc'; y: number; h: number; from: string; to: string; pts: [number, number][] | null }
   | { kind: 'record'; y: number; text: string }
   | Extract<CardBlock, { kind: 'footer' }>;
 
@@ -53,6 +66,14 @@ export interface RecapHead {
   record: string | null;
   from: string;
   to: string;
+  /** Flag emoji of the countries flown to/from. */
+  flags: string;
+  /** The same countries as ISO codes ('PT · ES · CA'), drawn where flag emoji do not render in colour. */
+  flagCodes: string;
+  /** Milestones earned on this trip, as one line ('' when none). */
+  badges: string;
+  /** [lng, lat] of home and the goal, for the map; null when either is unknown. */
+  pts: [number, number][] | null;
   arc: boolean;
   /** True when a destination photo will be drawn at the top. */
   photo: boolean;
@@ -94,9 +115,17 @@ export function recapLayout(head: RecapHead): RecapLayout {
   const lineSize = fit(head.line, recapLineFont, LINE_MAX, LINE_MIN, measure, 2);
   blocks.push({ kind: 'line', y, text: head.line, size: lineSize });
   y += lineSize + 30;
+  if (head.flags) {
+    blocks.push({ kind: 'flags', y, text: head.flags, codes: head.flagCodes });
+    y += 70;
+  }
+  if (head.badges) {
+    blocks.push({ kind: 'badges', y, text: head.badges });
+    y += 56;
+  }
   if (head.arc) {
-    blocks.push({ kind: 'arc', y, h: 170, from: head.from, to: head.to });
-    y += 196;
+    blocks.push({ kind: 'arc', y, h: MAP_H, from: head.from, to: head.to, pts: head.pts });
+    y += MAP_H + 26;
   }
   if (head.record) {
     blocks.push({ kind: 'record', y, text: head.record });
@@ -116,8 +145,36 @@ export function recapDates(trip: Trip): string {
   return first === last ? f(first) : `${f(first)} – ${f(last)}`;
 }
 
+/** The countries of the trip's boarded flights as flag emoji, plus the milestones it earned. */
+export function recapExtras(trip: Trip, opts: Pick<RecapOptions, 'outcomes' | 'allTrips'>): { flags: string; flagCodes: string; badges: string } {
+  const own = (opts.outcomes ?? []).filter(o => o.tripId === trip.id);
+  const flights = boardedFlights({ outcomes: own }, [trip], scheduleDetail);
+  const iso = statsOf(flights).countries.map(c => c.iso2);
+  const shown = iso.slice(0, FLAGS_MAX).map(flagFromIso2).filter(Boolean);
+  const more = iso.length > FLAGS_MAX ? ` +${iso.length - FLAGS_MAX}` : '';
+  const flags = shown.join(' ') + more;
+  const flagCodes = iso.slice(0, FLAGS_MAX).join(' · ') + more;
+  const mine = new Set([...tripBoardedFlights(trip), ...flights].map(f => f.key));
+  const all = boardedFlights({ outcomes: [...(opts.outcomes ?? [])] }, opts.allTrips ?? [trip], scheduleDetail);
+  const earned = milestones(all).filter(m => mine.has(m.flightKey)).map(m => m.label);
+  return { flags, flagCodes, badges: earned.length ? `New: ${earned.join(' · ')}` : '' };
+}
+
+function lngLat(code: string): [number, number] | null {
+  const a = airportInfo(code);
+  return a ? [a.lng, a.lat] : null;
+}
+
 export function recapHead(trip: Trip, opts: RecapOptions, hasPhoto: boolean, measure?: Measure, recap: TripRecap = tripRecap(trip, opts.outcomes)): RecapHead {
+  const x = recapExtras(trip, opts);
+  const a = lngLat(trip.fromHub);
+  const g = trip.goal;
+  const b: [number, number] | null = Number.isFinite(g.lat) && Number.isFinite(g.lng) ? [g.lng, g.lat] : g.acCode ? lngLat(g.acCode) : null;
   return {
+    flags: x.flags,
+    flagCodes: x.flagCodes,
+    badges: x.badges,
+    pts: a && b ? [a, b] : null,
     title: trip.goal.name,
     dates: recapDates(trip),
     line: recapLine(recap),
@@ -140,6 +197,19 @@ export interface RecapDeps {
   fonts?: () => Promise<void>;
   /** The destination photo for an AC code; null when there is none. Defaults to /img/dest/CODE.webp. */
   photo?: (code: string) => Promise<RecapPhoto | null>;
+  /** The land outline (same-origin data/land-110m.json by default); null draws the plain arc. */
+  land?: () => Promise<LandCollection | null>;
+}
+
+/** Fetches the app's own land outline (same origin, so the canvas stays exportable and the CSP is untouched). */
+export async function loadLand(): Promise<LandCollection | null> {
+  if (typeof fetch === 'undefined' || typeof document === 'undefined') return null;
+  try {
+    const res = await fetchWithTimeout(new URL(LAND_URL, document.baseURI).href, {}, FETCH_TIMEOUT_BIG_MS);
+    return res.ok ? topologyToLand(await res.json()) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Loads public/img/dest/CODE.webp (same origin, so the canvas stays exportable). */
@@ -176,7 +246,84 @@ function drawPhoto(ctx: Ctx, b: Extract<RecapBlock, { kind: 'photo' }>, photo: R
   ctx.fillRect(0, b.y + b.h - 160, CARD_WIDTH, 160);
 }
 
-export function drawRecap(ctx: Ctx, layout: RecapLayout, photo: RecapPhoto | null): void {
+/** The route arc on a small world outline (land-110m through d3-geo); the plain dashed arc when there is no land or no coordinates. */
+export function drawRouteMap(ctx: Ctx, b: Extract<RecapBlock, { kind: 'arc' }>, land: LandCollection | null): void {
+  if (!land || !b.pts) {
+    drawArc(ctx, b.y, b.h, b.from, b.to);
+    return;
+  }
+  const [a, z] = b.pts;
+  const w = INNER, h = b.h;
+  const proj = geoNaturalEarth1();
+  // A route over the antimeridian: centre the map on its middle first.
+  const mid = geoInterpolate(a, z)(0.5)[0];
+  proj.rotate([-mid, 0]).fitExtent([[0, 0], [w, h]], { type: 'Sphere' });
+  ctx.save();
+  ctx.translate(PAD, b.y);
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') ctx.roundRect(0, 0, w, h, 28);
+  else ctx.rect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.fill();
+  ctx.clip();
+  ctx.beginPath();
+  geoPath(proj, ctx as unknown as CanvasRenderingContext2D)(land);
+  ctx.fillStyle = 'rgba(11, 18, 32, 0.13)';
+  ctx.fill();
+  // The great-circle arc as short dashes.
+  const f = geoInterpolate(a, z);
+  ctx.beginPath();
+  for (let i = 0; i <= 48; i++) {
+    const p = proj(f(i / 48));
+    if (!p) continue;
+    if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+  }
+  ctx.strokeStyle = CARD.blue;
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.setLineDash([14, 16]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const dot = (ll: [number, number], color: string) => {
+    const p = proj(ll);
+    if (!p) return;
+    ctx.fillStyle = CARD.white;
+    ctx.beginPath(); ctx.arc(p[0], p[1], 19, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(p[0], p[1], 13, 0, Math.PI * 2); ctx.fill();
+  };
+  dot(a, CARD.ink);
+  dot(z, CARD.red);
+  ctx.restore();
+}
+
+let colourFlags: boolean | null = null;
+
+/**
+ * Whether flag emoji draw in colour here (Windows draws two letters instead).
+ * Probed once on a small canvas; true when it cannot be told.
+ */
+export function flagsRenderInColour(makeProbe: (w: number, h: number) => AnyCanvas = makeCanvas): boolean {
+  if (colourFlags !== null) return colourFlags;
+  try {
+    const c = makeProbe(64, 64);
+    const g = c.getContext('2d') as Ctx | null;
+    const data = g ? (g.font = `40px ${EMOJI_FONT}`, g.textBaseline = 'top', g.fillStyle = '#000', g.fillText(flagFromIso2('PT'), 4, 4), g.getImageData?.(0, 0, 64, 64)?.data) : undefined;
+    if (!data) return true;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] > 40 && Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]) > 40) {
+        return (colourFlags = true);
+      }
+    }
+    return (colourFlags = false);
+  } catch {
+    return true;
+  }
+}
+
+export function drawRecap(
+  ctx: Ctx, layout: RecapLayout, photo: RecapPhoto | null, land: LandCollection | null = null, colour = true,
+): void {
   drawBackground(ctx, layout.width, layout.height);
   for (const b of layout.blocks) {
     ctx.textAlign = 'left';
@@ -212,8 +359,26 @@ export function drawRecap(ctx: Ctx, layout: RecapLayout, photo: RecapPhoto | nul
         ctx.fillStyle = CARD.ink;
         ctx.fillText(ellipsize(ctx, b.text, INNER), PAD, b.y);
         break;
+      case 'flags':
+        ctx.textBaseline = 'top';
+        if (colour) {
+          ctx.font = `400 48px ${EMOJI_FONT}`;
+          ctx.fillStyle = CARD.ink;
+          ctx.fillText(b.text, PAD, b.y);
+        } else {
+          ctx.font = FONT.dates;
+          ctx.fillStyle = CARD.sub;
+          ctx.fillText(b.codes, PAD, b.y + 4);
+        }
+        break;
+      case 'badges':
+        ctx.textBaseline = 'top';
+        ctx.font = FONT.dates;
+        ctx.fillStyle = CARD.blue;
+        ctx.fillText(ellipsize(ctx, b.text, INNER), PAD, b.y);
+        break;
       case 'arc':
-        drawArc(ctx, b.y, b.h, b.from, b.to);
+        drawRouteMap(ctx, b, land);
         break;
       case 'record':
         ctx.textBaseline = 'top';
@@ -235,6 +400,7 @@ export async function renderRecapCard(
   await (deps.fonts ?? (() => loadCardFonts()))();
   const code = trip.goal.acCode ?? null;
   const photo = code ? await (deps.photo ?? (c => loadDestPhoto(c)))(code).catch(() => null) : null;
+  const land = opts.arc ? await (deps.land ?? loadLand)().catch(() => null) : null;
   const probe = (deps.canvas ?? makeCanvas)(8, 8).getContext('2d') as Ctx | null;
   const measure: Measure | undefined = probe
     ? (text, font) => { probe.font = font; return probe.measureText(text).width; }
@@ -245,7 +411,7 @@ export async function renderRecapCard(
   canvas.height = layout.height;
   const ctx = canvas.getContext('2d') as Ctx | null;
   if (!ctx) throw new Error('The card could not be drawn.');
-  drawRecap(ctx, layout, photo);
+  drawRecap(ctx, layout, photo, land, flagsRenderInColour(deps.canvas));
   return toPng(canvas);
 }
 

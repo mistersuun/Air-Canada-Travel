@@ -4,8 +4,10 @@ import type { Trip } from '../trips/model';
 import { sevilleTrip } from '../trips/testing/seville-fixture';
 import { CARD_MIN_H } from './trip-card';
 import {
-  DEFAULT_RECAP_OPTIONS, RECAP_PHOTO_H, coverRect, recapDates, recapFilename, recapHead, recapLayout, renderRecapCard,
+  DEFAULT_RECAP_OPTIONS, drawRecap, RECAP_PHOTO_H, coverRect, recapDates, recapExtras, recapFilename, recapHead, recapLayout,
+  renderRecapCard,
 } from './recap-card';
+import { flagFromIso2 as flagEmoji } from '../utils/flags';
 import { stubCanvas } from './testing/stub-canvas';
 
 const noFonts = async () => undefined;
@@ -38,7 +40,7 @@ describe('recapLayout', () => {
     const l = recapLayout(head());
     expect(l.width).toBe(1080);
     expect(l.height).toBeGreaterThanOrEqual(640);
-    expect(l.blocks.map(b => b.kind)).toEqual(['eyebrow', 'title', 'dates', 'line', 'footer']);
+    expect(l.blocks.map(b => b.kind)).toEqual(['eyebrow', 'title', 'dates', 'line', 'flags', 'badges', 'footer']);
     const ys = l.blocks.map(b => b.y);
     expect([...ys].sort((a, b) => a - b)).toEqual(ys);
     expect(l.blocks[0]).toMatchObject({ text: 'TRIP RECAP' });
@@ -136,5 +138,55 @@ describe('renderRecapCard', () => {
 describe('recapFilename', () => {
   it('is a slug', () => {
     expect(recapFilename(done())).toBe('lisbon-recap.png');
+  });
+});
+
+describe('recap extras', () => {
+  it('turns ISO codes into flag emoji', () => {
+    expect(flagEmoji('pt')).toBe('\u{1F1F5}\u{1F1F9}');
+    expect(flagEmoji('CA')).toBe('\u{1F1E8}\u{1F1E6}');
+    expect(flagEmoji('')).toBe('');
+    expect(flagEmoji('XYZ')).toBe('');
+  });
+  it('lists the countries flown and the milestones this trip earned', () => {
+    const x = recapExtras(done(), { allTrips: [done()] });
+    expect(x.flags).toContain(flagEmoji('CA'));
+    expect(x.flags.split(' ').length).toBeGreaterThanOrEqual(2);
+    expect(x.badges).toMatch(/^New: /);
+  });
+  it('earns nothing for a trip that does not complete a milestone', () => {
+    const t = done();
+    t.legs = t.legs.slice(0, 1);
+    const x = recapExtras(t, { allTrips: [t] });
+    expect(x.badges).not.toContain('100,000');
+  });
+  it('draws the route on land when given, and the plain arc without it', async () => {
+    const land = { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-10, 35], [0, 35], [0, 45], [-10, 45], [-10, 35]]] } }] } as never;
+    for (const l of [land, null]) {
+      const blob = await renderRecapCard(done(), { arc: true, standbyRecord: false }, {
+        canvas: stubCanvas([], nodePng), fonts: noFonts, photo: async () => null, land: async () => l,
+      });
+      expect(blob.type).toBe('image/png');
+    }
+  });
+});
+
+describe('flag fallback', () => {
+  it('offers ISO codes alongside the emoji', () => {
+    const x = recapExtras(done(), { allTrips: [done()] });
+    expect(x.flagCodes).toContain('CA');
+    expect(x.flagCodes).toMatch(/^[A-Z]{2}( · [A-Z]{2})*$/);
+  });
+  it('draws the codes, not the emoji, where flags do not render in colour', () => {
+    const texts: string[] = [];
+    const ctx = stubCanvas(texts, nodePng)(8, 8).getContext('2d') as unknown as Parameters<typeof drawRecap>[0];
+    const layout = recapLayout(recapHead(done(), DEFAULT_RECAP_OPTIONS, false));
+    const flags = layout.blocks.find(b => b.kind === 'flags');
+    expect(flags).toBeDefined();
+    drawRecap(ctx, layout, null, null, false);
+    expect(texts).toContain(flags!.kind === 'flags' ? flags!.codes : '');
+    texts.length = 0;
+    drawRecap(ctx, layout, null, null, true);
+    expect(texts).toContain(flags!.kind === 'flags' ? flags!.text : '');
   });
 });

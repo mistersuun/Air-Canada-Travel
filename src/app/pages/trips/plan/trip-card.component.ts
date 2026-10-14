@@ -10,6 +10,8 @@ import type { Trip } from '../../../trips/model';
 import { LegStatusTagComponent } from '../../../trips/ui/leg-status-tag.component';
 import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.component';
 import { tripPath, tripQuery } from '../../../ui/links';
+import { TriesMeterComponent } from '../return/tries-meter.component';
+import { triesHomeLeft } from '../return/tries-meter';
 import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel, tripDatesLabel } from '../trips-model';
 
 /**
@@ -24,7 +26,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
 @Component({
   selector: 'app-trip-card',
   standalone: true,
-  imports: [RouterLink, NgTemplateOutlet, IconComponent, AvatarChipComponent, LegStatusTagComponent, ProvenanceTagComponent],
+  imports: [RouterLink, NgTemplateOutlet, IconComponent, AvatarChipComponent, LegStatusTagComponent, ProvenanceTagComponent, TriesMeterComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="ui-card tc" [class.is-compact]="compact()">
@@ -49,6 +51,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
 
       @if (compact()) {
         <p class="ui-sub tc__sum">{{ partyText() }} · From {{ trip().fromHub }} · {{ summary() }}</p>
+        @if (tries() !== null) { <app-tries-meter class="tc__tries" [count]="tries()!" /> }
       } @else {
         <div class="tc__chips">
           @if (mode() === 'button') {
@@ -57,6 +60,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
             <span class="tc__chip" data-party>{{ partyText() }}</span>
           }
           <span class="tc__chip">From {{ trip().fromHub }}</span>
+          @if (tries() !== null) { <app-tries-meter class="tc__tries" [count]="tries()!" /> }
         </div>
 
         <ol class="tl" aria-label="Legs">
@@ -121,6 +125,8 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     button.tc__chip { cursor: pointer; min-height: 32px; }
     button.tc__chip:hover { color: var(--ink); }
     .tc__sum { margin-top: 10px; }
+    .tc__tries { margin-top: 6px; }
+    .tc__chips .tc__tries { margin: 0 0 0 4px; align-self: center; }
 
     .tl { list-style: none; margin: 14px 0 0; padding: 0; display: grid; }
     .tl__it { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; }
@@ -176,6 +182,9 @@ export class TripCardComponent {
   readonly mode = input<'link' | 'button' | 'static'>('static');
   readonly compact = input(false, { transform: booleanAttribute });
 
+  /** Show the tries-home meter (the Trips list only). */
+  readonly showTries = input(false, { transform: booleanAttribute });
+
   readonly legPick = output<string>();
   readonly partyPick = output<void>();
 
@@ -187,6 +196,10 @@ export class TripCardComponent {
   protected readonly home = computed(() => homeLabel(this.trip()));
   protected readonly summary = computed(() => compactSummary(this.trip()));
   protected readonly tripLink = computed(() => tripPath(this.trip().id));
+
+  /** The minute: the count need not recompute on every clock tick. */
+  private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / 60_000) * 60_000);
+  protected readonly tries = computed(() => (this.showTries() ? triesHomeLeft(this.trip(), this.state.connect(), this.nowMin()) : null));
 
   protected readonly noReturn = computed(() => this.trip().legs.length > 0 && needsReturn(this.trip()));
 

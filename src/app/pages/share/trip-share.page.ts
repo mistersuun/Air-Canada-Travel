@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, computed, effect, inject, input, signal, untracked,
 } from '@angular/core';
 import { IconComponent } from '../../components/shared/icons.component';
-import { type ShareEnv, copyText, downloadBlob, shareImage, shareText } from '../../share/share-out';
+import { SHARE_ENV, type ShareEnv, copyText, downloadBlob, shareImage, shareText } from '../../share/share-out';
 import { renderTripCard } from '../../share/trip-card';
 import {
   type ShareOptions, backupsSummary, hasBackups, shareFilename, splitNote, tripShareText,
@@ -18,14 +18,7 @@ export const CARD_RENDERER = new InjectionToken<(trip: Trip, opts: ShareOptions)
   factory: () => (trip, opts) => renderTripCard(trip, opts),
 });
 
-/** The browser APIs used to send (navigator.share, clipboard, document for downloads). */
-export const SHARE_ENV = new InjectionToken<() => ShareEnv>('SHARE_ENV', {
-  providedIn: 'root',
-  factory: () => () => ({
-    navigator: typeof navigator === 'undefined' ? null : navigator,
-    document: typeof document === 'undefined' ? null : document,
-  }),
-});
+export { SHARE_ENV };
 
 type Tab = 'image' | 'text';
 

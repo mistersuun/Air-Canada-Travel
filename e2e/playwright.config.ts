@@ -37,7 +37,7 @@ export default defineConfig({
   webServer: {
     command: 'node static-server.mjs',
     url: `http://localhost:${port}/manifest.webmanifest`,
-    reuseExistingServer: !process.env['CI'],
+    reuseExistingServer: false,
     env: { E2E_PORT: String(port) },
   },
 });

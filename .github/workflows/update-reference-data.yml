@@ -9,8 +9,8 @@ name: Update Reference Data
 
 on:
   schedule:
-    # Mondays at 06:00 UTC
-    - cron: '0 6 * * 1'
+    # Mondays at 07:30 UTC (after update-schedules at 06:00)
+    - cron: '30 7 * * 1'
   workflow_dispatch:
 
 concurrency:
@@ -81,7 +81,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/advisories.json public/data/fx.json public/data/holidays.json
           git commit -m "chore: update advisories, exchange rates and holidays"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF}"
+          # Other data workflows push to the same branch: rebase onto it and retry.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          for attempt in 1 2 3; do
+            git pull --rebase "$remote" "${GITHUB_REF_NAME}" && git push "$remote" "HEAD:${GITHUB_REF}" && exit 0
+            echo "push attempt $attempt failed; retrying"
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 5))
+          done
+          exit 1
 
       - name: Open an issue on failure
         if: failure()

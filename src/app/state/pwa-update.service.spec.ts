@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { SwUpdate, VersionEvent } from '@angular/service-worker';
@@ -61,6 +61,8 @@ describe('PwaUpdateService', () => {
 describe('reload on resume', () => {
   const ready = (v: Subject<VersionEvent>) => v.next({ type: 'VERSION_READY', currentVersion: { hash: 'a' }, latestVersion: { hash: 'b' } });
   const hidden = (state: DocumentVisibilityState) => vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
+  let now = 1_000_000;
+  beforeEach(() => { now = 1_000_000; vi.spyOn(Date, 'now').mockImplementation(() => now); });
   afterEach(() => vi.restoreAllMocks());
 
   it('reloads on the next resume when the version arrived while hidden, activating first', async () => {
@@ -82,8 +84,33 @@ describe('reload on resume', () => {
     ready(versionUpdates);
     expect(pwa.reloadOnResume('/saved')).toBe(false); // was never hidden
     pwa.noteHidden();
+    now += 61_000;
     expect(pwa.reloadOnResume('/saved')).toBe(true);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reload after a short absence (file picker, camera)', () => {
+    const { pwa, versionUpdates } = setup();
+    const reload = vi.spyOn(pwa, 'reload').mockImplementation(() => undefined);
+    ready(versionUpdates);
+    pwa.noteHidden();
+    now += 20_000;
+    expect(pwa.reloadOnResume('/saved')).toBe(false);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('does not reload while a dialog is open', () => {
+    const { pwa, versionUpdates } = setup();
+    const reload = vi.spyOn(pwa, 'reload').mockImplementation(() => undefined);
+    ready(versionUpdates);
+    pwa.noteHidden();
+    now += 61_000;
+    const dlg = document.createElement('dialog');
+    dlg.setAttribute('open', '');
+    document.body.append(dlg);
+    expect(pwa.reloadOnResume('/saved')).toBe(false);
+    dlg.remove();
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it('does not reload without an update, on form pages, or in a focused field', () => {
@@ -93,6 +120,7 @@ describe('reload on resume', () => {
     expect(pwa.reloadOnResume('/saved')).toBe(false);
     ready(versionUpdates);
     pwa.noteHidden();
+    now += 61_000;
     expect(pwa.reloadOnResume('/trips/t1/passes/add')).toBe(false);
     expect(pwa.reloadOnResume('/g/abc')).toBe(false);
     const input = document.createElement('input');
@@ -101,6 +129,8 @@ describe('reload on resume', () => {
     expect(pwa.reloadOnResume('/saved')).toBe(false);
     input.remove();
     expect(reload).not.toHaveBeenCalled();
+    pwa.noteHidden();
+    now += 61_000;
     expect(pwa.reloadOnResume('/saved')).toBe(true);
   });
 

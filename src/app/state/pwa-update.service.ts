@@ -29,6 +29,7 @@ export class PwaUpdateService {
   readonly broken = signal(false);
   /** True once the app was in the background while an update was waiting. */
   private hiddenWithUpdate = false;
+  private hiddenAt: number | null = null;
 
   constructor() {
     const nav = this.router.events.subscribe(e => {
@@ -68,12 +69,17 @@ export class PwaUpdateService {
   /** Call when the document becomes hidden. */
   noteHidden(): void {
     if (this.ready()) this.hiddenWithUpdate = true;
+    this.hiddenAt ??= Date.now();
   }
 
   /** Call when the document becomes visible again. Returns true if it reloaded. */
   reloadOnResume(path: string): boolean {
+    const hiddenFor = this.hiddenAt === null ? Infinity : Date.now() - this.hiddenAt;
+    this.hiddenAt = null;
     if (!this.ready() || !this.hiddenWithUpdate) return false;
-    if (holdsReload(path) || isEditingField(this.doc)) return false;
+    // A short trip to a file picker or the camera is not "coming back to the app".
+    if (hiddenFor < MIN_HIDDEN_MS) return false;
+    if (holdsReload(path) || isEditingField(this.doc) || this.doc.querySelector('dialog[open]')) return false;
     this.hiddenWithUpdate = false;
     this.reload();
     return true;
@@ -87,6 +93,9 @@ export class PwaUpdateService {
     this.broken.set(false);
   }
 }
+
+/** The app must have been in the background this long before an update reloads it on resume. */
+const MIN_HIDDEN_MS = 60_000;
 
 /** Pages where a surprise reload would lose typing or interrupt a pass: boarding passes, the add flow, group links, imports. */
 export function holdsReload(path: string): boolean {

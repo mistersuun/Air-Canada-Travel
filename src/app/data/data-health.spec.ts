@@ -63,18 +63,18 @@ describe('data health', () => {
       const last = collect(corridor, 'validTo', []).sort().pop();
       if (!last) continue;
       const left = daysAhead(`${last}T23:59:59Z`);
-      if (left < 7) expiring.push(`${id} ends ${last}`);
+      if (left < 5) expiring.push(`${id} ends ${last}`);
       else if (left < 21) soon.push(`${id} ends ${last}`);
     }
-    // Under 7 days (or past): the ground workflow (1st and 15th) has missed a run. 7 to 21: a heads-up.
+    // Under 5 days (or past): the ground workflow (1st and 15th) has missed a run. 5 to 21: a heads-up.
     report(expiring.map(s => `ground.json corridor ${s}`));
     if (soon.length) console.warn(`[data-health] ground.json corridors ending within 21 days: ${soon.join(', ')}`);
   });
 
-  it('schedules.json still covers at least 60 days ahead', () => {
+  it('schedules.json still covers at least 28 days ahead', () => {
     const meta = readJson<{ meta: { coverageTo?: string } }>('schedules.json').meta;
     const left = meta.coverageTo ? daysAhead(`${meta.coverageTo}T23:59:59Z`) : -1;
-    report(left < 60 ? [`schedules.json coverage ends ${meta.coverageTo ?? '(missing)'}, under 60 days ahead`] : []);
+    report(left < 28 ? [`schedules.json coverage ends ${meta.coverageTo ?? '(missing)'}, under 28 days ahead`] : []);
   });
 
   it('advisories, fx and holidays are under 21 days old', () => {

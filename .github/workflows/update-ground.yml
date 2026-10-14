@@ -77,7 +77,8 @@ jobs:
       - name: App tests and build
         run: |
           npm ci
-          npx vitest run
+          # data-health.spec.ts checks the committed data's age: this job is what refreshes it.
+          npx vitest run --exclude '**/data-health.spec.ts'
           npx ng build
 
       - name: Commit and push if changed

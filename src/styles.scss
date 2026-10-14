@@ -246,11 +246,11 @@ img, svg { display: block; }
   &--bare { padding-bottom: calc(32px + env(safe-area-inset-bottom)); }
 
   @media (min-width: 720px) {
-    padding: 0 24px 40px;
+    padding: 0 max(24px, env(safe-area-inset-right)) 40px max(24px, env(safe-area-inset-left));
     &--bare { padding-bottom: 40px; }
   }
   @media (min-width: 1024px) {
-    padding: 0 48px 48px;
+    padding: 0 max(48px, env(safe-area-inset-right)) 48px max(48px, env(safe-area-inset-left));
     &--bare { padding-bottom: 48px; }
   }
 }

@@ -274,7 +274,8 @@ export class MapPage {
   private readonly visible = computed<Rect>(() => {
     const { w, h } = this.size();
     if (w < SHEET_QUERY_PX) {
-      const top = 64;
+      // The search bar floats over the map; frame from just under it so no empty band is left above the routes.
+      const top = 56;
       return { x: 0, y: top, w, h: Math.max(80, h - sheetHeight(h) - top) };
     }
     const left = w >= 1024 ? 32 + 380 : 24 + 340;
@@ -298,7 +299,7 @@ export class MapPage {
         focus = listed.filter(i => i === focusItem || near.has(i.code)).map(i => [i.lng, i.lat] as LngLat);
       }
       const vis = this.visible();
-      const inset = this.size().w < SHEET_QUERY_PX ? { x: 64, y: 36 } : { x: 96, y: 56 };
+      const inset = this.size().w < SHEET_QUERY_PX ? { x: 48, y: 24 } : { x: 96, y: 56 };
       return frameView(hubLL, all, focus, this.box(), { w: vis.w, h: vis.h }, inset);
     },
     { equal: (a, b) => a.zoom === b.zoom && a.center[0] === b.center[0] && a.center[1] === b.center[1] },

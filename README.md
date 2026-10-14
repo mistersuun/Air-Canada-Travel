@@ -1,42 +1,79 @@
-# Air Canada Destinations Explorer
+# Routes
 
-An Angular 17 interactive travel platform using Leaflet maps with animated great-circle flight arcs from Canadian hubs to 70+ Air Canada destinations worldwide.
+A phone-first, installable (PWA) planner for Air Canada flights from a Canadian home airport: what flies this week and today, where you can go for a weekend, and a private place for your trips and boarding passes. Built with Angular 21 (standalone components and signals) and a d3-geo world map. Everything personal (trips, passes, preferences) stays on the device unless you choose to share it.
 
-## Features
+Not affiliated with Air Canada or Air Canada Vacations. Schedules come from public pages and can be wrong or out of date: always check aircanada.com before you travel. No prices, no ads, no affiliate links.
 
-- **Leaflet Map** with Carto Voyager tiles — clean, warm cartography
-- **Animated flight arcs** — curved great-circle paths drawn from every hub serving a route when you click a destination. Primary route is solid with a traveling dot; secondary routes are dashed
-- **8 Canadian hubs** shown permanently — Toronto, Montreal, Vancouver, Calgary, Ottawa, Halifax, Edmonton, Quebec City
-- **70+ destinations** across Caribbean, Mexico, USA, Europe, Asia & Pacific, South America, Africa & Middle East
-- **Region & type filters** — chip-based filtering with color coding
-- **New 2026 routes** toggle — Budapest, Catania, Azores, Palma, Berlin, Nantes, Cartagena, Fort-de-France
-- **Detail panel** — slides up showing route info (YYZ → CDG format), duration, aircraft, season, departure cities
-- **No prices** — designed for use with your own travel benefits/Aeroplan points
+## Pages
 
-## Data Sources
+Routes are defined in `src/app/app.routes.ts` (all lazy-loaded):
 
-All route data is from publicly available Air Canada information:
-- Wikipedia: List of Air Canada destinations
-- Air Canada Vacations "Where We Fly" page
-- Milesopedia route announcements
-- Air Canada seasonal schedule press releases
+| Path | Page |
+| --- | --- |
+| `/` | Home: pick your airport, browse destinations |
+| `/to/:code` | Destination: flights, weather, typical climate, ground options, photos |
+| `/flight/:code/:date[/:flight]` | One day's flights to a destination, with return picks |
+| `/map` | World map of routes from your airport |
+| `/calendar`, `/calendar/:code` | Week and day view of flights |
+| `/saved` | Saved destinations |
+| `/today` | Today's flights and live status (optional) |
+| `/weekend` | Weekend finder |
+| `/trips`, `/trips/:id` | Your trips; `/trips/import` opens a shared trip |
+| `/trips/:id/passes/add`, `/trips/:id/pass/:passId` | Scan or add a boarding pass; the pass view |
+| `/trips/:id/files`, `/share`, `/recap`, `/recover` | Trip files, sharing, recap, and "still reachable" if a flight changes |
+| `/share-in` | Share target: add a shared PDF, image or calendar file to a trip |
+| `/g/:id` | Group trip link (optional, encrypted) |
+| `/logbook`, `/profile` | Past flights and travel profile |
+| `/reach/:place[/:code]` | Places reachable from a destination |
 
-Durations and aircraft types are approximate estimates. **Always verify on aircanada.com before booking.**
-
-## Setup
+## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Start dev server
-ng serve
-
-# Open browser
-open http://localhost:4200
+npm start                 # ng serve on http://localhost:4200
+npm test                  # vitest with coverage; `npx vitest run <path>` for a single spec
+npm run e2e               # Playwright (set E2E_PORT to pick a port)
+npm run build             # production build to dist/ac-explorer/browser
+pip install -r scripts/requirements.txt
+python3 -m pytest -q scripts/tests   # data pipeline tests
 ```
 
-## Live flight status (optional)
+The initial bundle budget is 700 kB (warning) and 900 kB (error). `src/app/csp.spec.ts` guards the Content-Security-Policy in `netlify.toml`: no inline scripts and no new external hosts without updating both. `src/app/data/data-health.spec.ts` fails in CI (`CI=1`) when committed data goes stale.
+
+## Data pipeline
+
+The app reads small JSON files from `public/data/`, built by Python scripts in `scripts/` and refreshed by GitHub Actions in `.github/workflows/` (each commits to master only when something changed, rebasing and retrying if another job pushed first; a failed run opens an issue).
+
+| File | What it is | Script | Workflow and schedule (UTC) |
+| --- | --- | --- | --- |
+| `schedules.json` | Flights per route from the Air Canada Vacations "Where we fly" PDFs, with coverage dates | `fetch-schedules.py` | `update-schedules.yml`, Mondays 06:00 |
+| `route-network.json` | Routes flown from the hubs that the PDFs leave out (Wikipedia, OurAirports; no times) | `fetch-route-network.py` | `update-schedules.yml` |
+| `advisories.json` | Government of Canada travel advice levels | `build-advisories.py` | `update-reference-data.yml`, Mondays 07:30 |
+| `fx.json` | ECB reference rates via Frankfurter (CAD base) | `build-fx.py` | `update-reference-data.yml` |
+| `holidays.json` | Public holidays (Nager.Date), this year and next | `build-holidays.py` | `update-reference-data.yml` |
+| `ground.json` | Train and bus timetables from open GTFS feeds (corridors to airports) | `build-ground.py` | `update-ground.yml`, 1st and 15th, 05:00 |
+| `airport-hotels.json` | Hotels near each hub and gateway airport (OpenStreetMap, ODbL) | `build-airport-hotels.py` | `update-airport-hotels.yml`, quarterly (3rd of Jan/Apr/Jul/Oct), 04:00 |
+| `climate.json` | Typical monthly weather per destination and hub (Open-Meteo ERA5, CC BY 4.0) | `build-climate.py` | `update-climate.yml`, yearly (2 Sep), 05:17 |
+| `cities.json` | City list for places search | `build-cities.py` | manual |
+| `land-110m.json` | World outline for the map (Natural Earth, via topojson) | n/a | static |
+
+Destination photos live in `public/img/dest/` (`scripts/photos/`, credits in `credits.json`). Every workflow can also be started by hand from the Actions tab. `schedules.json` refuses to shrink by more than 20% or end less than four weeks ahead unless you tick the override inputs.
+
+## Hosting and Netlify
+
+Netlify builds with `npm ci && npm run build` and serves `dist/ac-explorer/browser`. `netlify.toml` sets the security headers (CSP, Permissions-Policy: camera for boarding-pass scanning, geolocation for the nearest-airport button), `no-cache` for `index.html`, the service worker files and `/data/*`, and long-lived immutable caching for content-hashed build files. The service worker is `public/sw.js` (share target, periodic schedule checks, notifications) wrapping Angular's `ngsw-worker.js`; `ngsw-config.json` lists what it caches. When a new version is ready the app offers a reload, and reloads by itself the next time you come back to it, except on forms and boarding passes.
+
+Netlify functions in `netlify/functions/` (all optional; the app hides the feature quietly when one is missing or its env var is unset):
+
+| Function | Purpose | Env vars |
+| --- | --- | --- |
+| `flight-status.mts` | Live flight status | `AEROAPI_KEY`, `AEROAPI_DAILY_LIMIT` |
+| `events.mts` | Events near a destination | `TICKETMASTER_KEY`, `TICKETMASTER_DAILY_LIMIT` |
+| `group.mts`, `group-sweep.mts` | Encrypted group trip links and their daily expiry sweep | `GROUP_DAILY_CREATES` |
+
+## Optional live data
+
+### Live flight status (optional)
 
 On the day of travel, Today and the flight page can show live status (estimated time, gate, inbound aircraft, cancelled) from FlightAware AeroAPI. It is off until you set a key; without one the function answers 503 and the app shows nothing extra.
 
@@ -55,7 +92,7 @@ Fields to verify on the first live call (the AeroAPI docs were not reachable whe
 
 Locally, `netlify dev` serves the function (and a local Blobs store); `ng serve` and the e2e static server do not, and the app hides the status line quietly when the endpoint is missing.
 
-## What's on (optional)
+### What's on (optional)
 
 The destination page, the weekend finder and a trip's Prep tab can list events near a destination for the dates in question ("Sat Oct 10 · 20:00 · Coldplay · Estádio da Luz"), from the Ticketmaster Discovery API v2. Each links to Ticketmaster and the card says "Events from Ticketmaster". No prices and no affiliate parameters (the app is non-commercial; Ticketmaster's terms also forbid deriving revenue). It is off until you set a key; without one the function answers 503 and the app shows nothing.
 
@@ -66,7 +103,7 @@ How it works: `netlify/functions/events.mts` takes `?code=<IATA>&from=YYYY-MM-DD
 
 Limits and cost controls: the CDN caches each answer for 6 hours (`Netlify-Vary` on code, from and to); only misses reach the function; each IP gets about 10 misses per 10 minutes; cross-site requests are refused; a global daily budget applies. The app asks only when a view is shown (the weekend finder only after tapping "What's on" on a row), and stays silent on any failure. The response fields (`_embedded.events[].name`, `url`, `dates.start.localDate` / `localTime`, `dates.status.code`, `_embedded.venues[0].name`, `classifications[0].segment.name`) follow the documented v2 names; the docs were not reachable when this was written, so verify them on the first live call.
 
-## Group trip links (optional)
+### Group trip links (optional)
 
 A trip's menu has "Group trip": one link for your travel companions that shows the shared plan (read-only) plus every member's own status ("On AC834", "Plan B: AC836", "Bus to YUL"), an expected arrival and a meet-up point. No accounts.
 
@@ -80,38 +117,6 @@ Limits and privacy:
 - Anyone holding the link can read it, and with `&w=` can update it, so keep it to your travel companions. Air Canada pass rules do not allow sharing passes or listing details, and the group page says so. Nicknames are 24 characters at most, labels 40, the meet-up note 80.
 - The key and token are also kept in this browser's local storage so a reload still works (the router drops the fragment). Clearing site data forgets them; the link itself still works.
 - The group page polls every 2 minutes while it is visible. On a host without functions (the e2e static server, `ng serve`) it says "Group sharing needs the online service" and nothing else.
-
-## Tech Stack
-
-- Angular 17 (standalone components)
-- Leaflet 1.9.4
-- TypeScript 5.4
-- SCSS
-- DM Sans + Source Serif 4 fonts
-
-## Project Structure
-
-```
-src/
-  app/
-    app.component.ts          — Root layout, filters, state management
-    data/
-      destinations.ts         — All route data, hub coordinates, types
-    components/
-      map/
-        map.component.ts      — Leaflet map, markers, flight arcs, animation
-      sidebar/
-        sidebar.component.ts  — Scrollable destination list
-      detail-panel/
-        detail-panel.component.ts — Selected route overlay
-  styles.scss                 — Global styles, Leaflet overrides
-  index.html                  — Entry HTML with font imports
-  main.ts                     — Bootstrap
-```
-
-## Not Affiliated
-
-This is a personal travel planning tool. Not affiliated with Air Canada or Air Canada Vacations.
 
 ## Service worker switch-off
 

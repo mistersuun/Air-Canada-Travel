@@ -22,6 +22,8 @@
     # the barcode decode worker (a same-origin worker-<hash>.js).
     # connect-src lists the font hosts because the service worker fetches them,
     # and api.open-meteo.com for the weather forecast (destination coordinates only).
+    # camera: boarding-pass scanning; geolocation: the nearest-hub button (asks on tap).
+    Permissions-Policy = "camera=(self), microphone=(), geolocation=(self), payment=(), usb=()"
     Content-Security-Policy = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-hashes' 'sha256-RRtvQ/ngPYYKxMKmwEGOBCInozN2Nad/RW3leEYlGYY=' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; worker-src 'self' blob:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://api.open-meteo.com; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 
 # Group links carry their key in the fragment: never leak the page URL as a referrer, never cache it.
@@ -65,6 +67,35 @@
   [headers.values]
     Cache-Control = "no-cache"
     Content-Type = "application/manifest+json"
+
+# Content-hashed build output never changes under the same name, so cache it for
+# a year. Only these hashed prefixes: index.html, sw.js, ngsw*.json/js and /data/*
+# keep their no-cache rules above (Netlify applies every matching rule and these
+# patterns do not overlap with them, so no header is set twice for one file).
+[[headers]]
+  for = "/main-*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/chunk-*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/polyfills-*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/styles-*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/media/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
 
 # Destination photos: file names are stable, so cache for a week and let the
 # service worker (dest-photos group) revalidate in the background. credits.json

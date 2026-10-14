@@ -241,7 +241,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     versionUpdates.next({ type: 'VERSION_READY', currentVersion: { hash: 'a' }, latestVersion: { hash: 'b' } });
     await settle();
     const toast = el.querySelector('app-toast')!;
-    expect(toast.textContent).toContain('New schedules available');
+    expect(toast.textContent).toContain('A new version is available');
     [...toast.querySelectorAll('button')].find(b => b.textContent?.includes('Reload'))!.click();
     expect(reload).toHaveBeenCalled();
     toast.querySelector<HTMLButtonElement>('[aria-label="Dismiss"]')!.click();
@@ -260,7 +260,7 @@ describe('AppComponent (shell)', { timeout: 20_000 }, () => {
     expect(el.querySelector('app-toast')).toBeNull();
     state.path.set('/saved');
     await settle();
-    expect(el.querySelector('app-toast')?.textContent).toContain('New schedules available');
+    expect(el.querySelector('app-toast')?.textContent).toContain('A new version is available');
   });
 
   it('offers a repair reload when the service worker is unrecoverable', async () => {

@@ -109,7 +109,7 @@ export class AppComponent {
     // Never interrupt a boarding pass with a reload prompt; it shows once the user leaves.
     if (this.pwa.ready() && !isPassView(this.state.path())) {
       return {
-        message: 'New schedules available',
+        message: 'A new version is available',
         actionLabel: 'Reload',
         onAction: () => this.pwa.reload(),
         onDismiss: () => this.pwa.dismiss(),
@@ -126,7 +126,11 @@ export class AppComponent {
   });
 
   onVisibilityChange(): void {
-    if (this.doc.visibilityState !== 'visible') return;
+    if (this.doc.visibilityState !== 'visible') {
+      this.pwa.noteHidden();
+      return;
+    }
+    if (this.pwa.reloadOnResume(this.state.path())) return;
     this.state.refreshToday();
     this.pwa.check();
     this.trips.checkChanges();

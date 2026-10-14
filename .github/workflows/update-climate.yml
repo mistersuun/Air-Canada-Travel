@@ -1,0 +1,87 @@
+name: Update Climate Normals
+
+# Rebuilds public/data/climate.json (typical monthly weather for every destination
+# and hub, Open-Meteo ERA5 archive, CC BY 4.0). The normals barely move, so yearly
+# is plenty. A run that hits the free daily quota writes what is complete and the
+# cache (restored below) lets the next dispatch resume where it stopped.
+
+on:
+  schedule:
+    # 2nd and 3rd of September at 05:17 UTC (the second day finishes what the daily API quota cut off)
+    - cron: '17 5 2,3 9 *'
+  workflow_dispatch:
+
+concurrency:
+  group: update-climate
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Builder unit tests
+        run: |
+          pip install pytest==9.1.1
+          python -m pytest -q scripts/tests/test_build_climate.py
+
+      - name: Cache Open-Meteo responses
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/routes-climate
+          key: routes-climate-${{ github.run_id }}
+          restore-keys: routes-climate-
+
+      - name: Build climate.json
+        # Stdlib only. Hubs first: the "Escape the cold" comparison needs them.
+        run: python3 scripts/build-climate.py --first YYZ,YUL,YVR,YYC,YOW,YHZ,YEG,YQB,YWG,YTZ
+
+      - name: Diff summary
+        run: |
+          {
+            echo '### climate.json diff'
+            echo '```'
+            git diff --stat -- public/data/climate.json || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit and push if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git diff --quiet -- public/data/climate.json && exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/data/climate.json
+          git commit -m "chore: update climate normals"
+          # Other data workflows push to the same branch: rebase onto it and retry.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          for attempt in 1 2 3; do
+            git pull --rebase "$remote" "${GITHUB_REF_NAME}" && git push "$remote" "HEAD:${GITHUB_REF}" && exit 0
+            echo "push attempt $attempt failed; retrying"
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Climate update failed ($(date -u +%Y-%m-%d))" \
+            --body "The update-climate workflow failed and nothing was committed. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

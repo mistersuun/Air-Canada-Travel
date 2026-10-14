@@ -77,7 +77,8 @@ jobs:
       - name: App tests and build
         run: |
           npm ci
-          npx vitest run
+          # data-health.spec.ts checks the committed data's age: this job is what refreshes it.
+          npx vitest run --exclude '**/data-health.spec.ts'
           npx ng build
 
       - name: Commit and push if changed
@@ -89,7 +90,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add public/data/ground.json
           git commit -m "chore: update ground timetables from open GTFS feeds"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF}"
+          # Other data workflows push to the same branch: rebase onto it and retry.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          for attempt in 1 2 3; do
+            git pull --rebase "$remote" "${GITHUB_REF_NAME}" && git push "$remote" "HEAD:${GITHUB_REF}" && exit 0
+            echo "push attempt $attempt failed; retrying"
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 5))
+          done
+          exit 1
 
       - name: Open an issue on failure
         if: failure()

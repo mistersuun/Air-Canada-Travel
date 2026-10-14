@@ -3,7 +3,7 @@ import { IconComponent } from '../shared/icons.component';
 
 /**
  * Floating ink pill: a message, an optional action chip and a dismiss button.
- * Used for "New schedules available · Reload", "Link copied" and undo notices.
+ * Used for "A new version is available · Reload", "Link copied" and undo notices.
  * Sits above the mobile tab bar, 24px from the bottom on desktop.
  */
 @Component({

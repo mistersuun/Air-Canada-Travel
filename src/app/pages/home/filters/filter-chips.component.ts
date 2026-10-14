@@ -37,10 +37,11 @@ export interface ActiveChip {
     :host { display: block; min-width: 0; }
     .ac { gap: 8px; align-items: center; padding: 2px 0; }
     .chip {
-      flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 11px; border-radius: 999px;
+      position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 11px; border-radius: 999px;
       font-size: 12.5px; font-weight: 600; white-space: nowrap;
       background: color-mix(in srgb, var(--blue) 12%, transparent); color: var(--blue);
     }
+    .chip::after { content: ''; position: absolute; inset: -8px -2px; }
     .chip:hover { background: color-mix(in srgb, var(--blue) 18%, transparent); }
     .clear { flex: none; font-size: 13px; padding: 6px 4px; }
   `],

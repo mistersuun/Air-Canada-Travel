@@ -155,7 +155,7 @@ const EAGER_MONTHS = 3;
       padding: calc(env(safe-area-inset-top) + 14px) 18px 0;
     }
     .tb__t { white-space: nowrap; }
-    .lnk { color: var(--blue); font-size: 15px; padding: 6px 0; min-width: 56px; text-align: left; }
+    .lnk { color: var(--blue); font-size: 15px; padding: 6px 0; min-width: 56px; min-height: 44px; text-align: left; }
     .lnk--b { font-weight: 600; text-align: right; }
     .lnk:disabled { color: var(--ink-3); cursor: default; }
     .flds { display: flex; gap: 10px; padding: 14px 18px 10px; }

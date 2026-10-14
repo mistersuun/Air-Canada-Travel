@@ -287,9 +287,10 @@ interface ListRow {
     .count { color: var(--ink-3); font-weight: 600; margin-left: 4px; }
     .regions { gap: 8px; margin-bottom: 10px; padding: 2px 0; }
     .rchip {
-      flex: none; padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap;
+      position: relative; flex: none; padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap;
       background: var(--glass); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--hair);
     }
+    .rchip::after { content: ''; position: absolute; inset: -7px -2px; }
     .rchip:hover { color: var(--ink); }
     .rchip[aria-pressed='true'] { background: var(--ink); color: var(--bg); box-shadow: none; }
     .chips { margin-bottom: 14px; }

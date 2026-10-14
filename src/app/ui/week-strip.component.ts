@@ -119,20 +119,21 @@ export const SWIPE_PX = 50;
     .d.on { color: #FFFFFF; }
     .d.on .dow { color: #FFFFFF; }
     .d.on .dt.is-on { background: #FFFFFF; }
-    .nav { width: 32px; height: 32px; display: none; }
+    .nav { width: 44px; height: 44px; display: none; }
     .cap { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 13px; }
     .cap__label {
-      display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 4px; margin-left: -4px;
+      display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; margin-left: -4px;
       color: var(--ink-2); font-weight: 600;
     }
     .cap__label app-icon { color: var(--blue); }
     .cap__end { display: inline-flex; align-items: center; gap: 4px; }
-    .cap__today { padding: 6px 8px; margin-right: 2px; }
+    .cap__today { padding: 12px 8px; margin-right: 2px; }
     /* Below desktop the chevrons live here, so every pointer, keyboard and AT user can change week. */
     .cap__nav {
-      display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+      position: relative; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
       color: var(--ink-2); background: var(--fill);
     }
+    .cap__nav::after { content: ''; position: absolute; inset: -6px; }
     .cap__nav:disabled { opacity: .4; cursor: default; }
     .cap__nav:hover:not(:disabled) { color: var(--ink); }
     .picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }

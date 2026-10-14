@@ -50,12 +50,15 @@ export interface SegOption {
     }
     .seg.ui-glass { background: var(--glass); }
     .seg__b {
-      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
       padding: 7px 14px; border-radius: 8px;
       font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap;
       transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
     }
     :host(.is-stretch) .seg__b { flex: 1; min-width: 0; padding-inline: 8px; }
+    /* Looks 30px tall, taps 44px: the pseudo-element extends the hit area. */
+    .seg__b::after { content: ''; position: absolute; inset: -7px 0; }
+    :host(.is-sm) .seg__b::after { inset: -10px 0; }
     :host(.is-sm) .seg__b { padding: 5px 10px; font-size: 12.5px; }
     .seg__b:hover:not(:disabled):not(.on) { color: var(--ink); }
     .seg__b.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }

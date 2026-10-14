@@ -143,11 +143,13 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
     .nm { font-size: 15px; font-weight: 600; }
     .hint { font-size: 13px; color: var(--ink-2); }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chips { row-gap: 14px; }
     .chip {
-      display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+      position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
       background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap;
       box-shadow: inset 0 0 0 1px var(--hair);
     }
+    .chip::after { content: ''; position: absolute; inset: -7px -2px; }
     .chip[aria-pressed='true'] { background: var(--ink); color: var(--bg); box-shadow: none; }
     .chip:disabled { opacity: .45; cursor: default; }
     .chip b { font-size: 11px; font-weight: 700; letter-spacing: .04em; opacity: .7; }

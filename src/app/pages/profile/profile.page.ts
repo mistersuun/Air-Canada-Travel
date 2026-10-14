@@ -156,7 +156,7 @@ export const DEFAULT_MAX_HOURS = 7;
   styles: [`
     :host { display: block; }
     .pf { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; }
-    .pf__head { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; gap: 12px; margin-bottom: 4px; }
+    .pf__head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 12px; margin-bottom: 4px; }
     .pf__head h1 { margin: 0; text-align: center; }
     .pf__lbl { margin: 18px 4px 8px; font-size: 10.5px; }
     .pf__card { padding: 16px; margin-top: 0; }

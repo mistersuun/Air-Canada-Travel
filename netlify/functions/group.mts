@@ -3,8 +3,10 @@
 // sha256 of the write token. No accounts, no logging of bodies or headers.
 //   GET    ?id=            -> {ciphertext, iv, version, updatedAt, expiresAt}   (404 / 410)
 //   PUT    ?id=  X-Group-Write  {ciphertext, iv, baseVersion, expiresAt?}      (409 on conflict)
+//          X-Group-Owner (optional): the owner token. Stored hashed when the group is created;
+//          later it allows lengthening expiresAt (never shortening).
 //   (creating a group also spends from the GROUP_DAILY_CREATES budget: 503 {error:'budget'})
-//   DELETE ?id=  X-Group-Write                                                  ("Stop sharing")
+//   DELETE ?id=  X-Group-Write [+ X-Group-Owner when the group has one]         ("Stop sharing")
 import { getStore } from '@netlify/blobs';
 import { makeBudget, makeLimiter } from './lib/flight-status.ts';
 import { MAX_CIPHERTEXT, deleteGroup, groupDailyCreates, getGroup, parsePutBody, putGroup, validId, validToken, type GroupStore } from './lib/group.ts';
@@ -35,12 +37,18 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
   const now = Date.now();
 
   let token = '';
+  let owner: string | undefined;
   if (method === 'GET') {
     if (!allowRead(context.ip || 'unknown', now)) return json({ error: 'rate-limited' }, 429);
   } else {
     const t = req.headers.get('x-group-write');
     if (!validToken(t)) return json({ error: 'forbidden' }, 403);
     token = t;
+    const o = req.headers.get('x-group-owner');
+    if (o !== null) {
+      if (!validToken(o)) return json({ error: 'forbidden' }, 403);
+      owner = o;
+    }
     if (!allowWrite(context.ip || 'unknown', now)) return json({ error: 'rate-limited' }, 429);
   }
 
@@ -57,7 +65,7 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
       return json(r.body, r.status);
     }
     if (method === 'DELETE') {
-      const r = await deleteGroup(store, id, token);
+      const r = await deleteGroup(store, id, token, owner);
       return json(r.body, r.status);
     }
     const declared = Number(req.headers.get('content-length') ?? '0');
@@ -77,7 +85,7 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
         return false;
       }
     };
-    const r = await putGroup(store, id, token, body, now, spend);
+    const r = await putGroup(store, id, token, body, now, spend, owner);
     return json(r.body, r.status);
   } catch (e) {
     console.error('group failure:', e instanceof Error ? e.name : 'unknown');

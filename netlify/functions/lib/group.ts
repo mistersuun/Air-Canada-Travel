@@ -1,6 +1,8 @@
 // Group trip store logic (pure: the Blobs store is injected so it can be tested with a fake).
 // The server only ever holds ciphertext. The AES key lives in the group link's URL
-// fragment and never reaches this code; the write token is stored only as sha256(token).
+// fragment and never reaches this code; the write token is stored only as sha256(token), and so is the owner token
+// (made when the group is created, kept only on the creator's device, never in a link; it gates
+// DELETE and lengthening the expiry).
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 export const MAX_CIPHERTEXT = 96 * 1024;
@@ -29,6 +31,8 @@ export interface GroupRecord {
   updatedAt: string;
   expiresAt: string;
   writeHash: string;
+  /** sha256 of the owner token; absent on groups made before it existed (the write token then suffices). */
+  ownerHash?: string;
 }
 
 export const validId = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_-]{22}$/.test(v);
@@ -69,7 +73,8 @@ function parseRecord(text: string): GroupRecord | null {
   try {
     const r = JSON.parse(text) as Partial<GroupRecord>;
     if (typeof r.ciphertext === 'string' && typeof r.iv === 'string' && typeof r.version === 'number'
-      && typeof r.updatedAt === 'string' && typeof r.expiresAt === 'string' && typeof r.writeHash === 'string') return r as GroupRecord;
+      && typeof r.updatedAt === 'string' && typeof r.expiresAt === 'string' && typeof r.writeHash === 'string'
+      && (r.ownerHash === undefined || typeof r.ownerHash === 'string')) return r as GroupRecord;
   } catch { /* fall through */ }
   return null;
 }
@@ -99,6 +104,8 @@ export async function putGroup(
   store: GroupStore, id: string, token: string, body: PutBody, nowMs: number,
   /** Called only for a genuine create, after every check passed and right before the write: true to proceed, false = budget spent, 'rate-limited' = this caller made too many. */
   spend?: () => Promise<boolean | 'rate-limited'>,
+  /** The owner token (X-Group-Owner): stored (hashed) on create, and required to lengthen the expiry once the group has one. */
+  ownerToken?: string,
 ): Promise<Result> {
   const cur = await store.getWithMetadata(id);
   const existing = cur ? parseRecord(cur.data) : null;
@@ -118,6 +125,7 @@ export async function putGroup(
     const rec: GroupRecord = {
       ciphertext: body.ciphertext, iv: body.iv, version: 1, updatedAt: at,
       expiresAt: computeExpiry(body.expiresAt, nowMs), writeHash: hashToken(token),
+      ...(ownerToken ? { ownerHash: hashToken(ownerToken) } : {}),
     };
     const r = await store.set(id, JSON.stringify(rec), { onlyIfNew: true });
     return r.modified ? res(200, { version: 1, updatedAt: at, expiresAt: rec.expiresAt }) : res(409, { error: 'conflict' });
@@ -125,16 +133,28 @@ export async function putGroup(
   if (!sameHash(existing.writeHash, hashToken(token))) return res(403, { error: 'forbidden' });
   if (body.baseVersion !== existing.version) return res(409, { error: 'conflict', version: existing.version });
   const next: GroupRecord = { ...existing, ciphertext: body.ciphertext, iv: body.iv, version: existing.version + 1, updatedAt: at };
+  // Only the owner can lengthen the group's life (clamped to 90 days from now); it is never shortened.
+  if (body.expiresAt && isOwner(existing, token, ownerToken)) {
+    const wanted = computeExpiry(body.expiresAt, nowMs);
+    if (Date.parse(wanted) > Date.parse(existing.expiresAt)) next.expiresAt = wanted;
+  }
   const r = await store.set(id, JSON.stringify(next), { onlyIfMatch: cur.etag ?? '' });
   return r.modified ? res(200, { version: next.version, updatedAt: at, expiresAt: next.expiresAt }) : res(409, { error: 'conflict' });
 }
 
-/** DELETE with the write token ("Stop sharing"). */
-export async function deleteGroup(store: GroupStore, id: string, token: string): Promise<Result> {
+/** The owner token matches; for a group made before owner tokens, the write token (already checked) stands in. */
+function isOwner(rec: GroupRecord, _writeToken: string, ownerToken: string | undefined): boolean {
+  if (!rec.ownerHash) return true;
+  return !!ownerToken && sameHash(rec.ownerHash, hashToken(ownerToken));
+}
+
+/** DELETE ("Stop sharing"): the write token, plus the owner token when the group has one. */
+export async function deleteGroup(store: GroupStore, id: string, token: string, ownerToken?: string): Promise<Result> {
   const cur = await store.getWithMetadata(id);
   const rec = cur ? parseRecord(cur.data) : null;
   if (!cur || !rec) return res(404, { error: 'not-found' });
   if (!sameHash(rec.writeHash, hashToken(token))) return res(403, { error: 'forbidden' });
+  if (!isOwner(rec, token, ownerToken)) return res(403, { error: 'forbidden' });
   await store.delete(id);
   return res(200, { ok: true });
 }

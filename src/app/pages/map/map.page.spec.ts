@@ -24,7 +24,6 @@ describe('MapPage', () => {
     fixture = TestBed.createComponent(MapPage);
     el = fixture.nativeElement;
     state = TestBed.inject(AppStateService);
-    state.todayKey.set('2026-10-01');
     setup?.(state);
     for (const [k, v] of Object.entries(inputs)) fixture.componentRef.setInput(k, v);
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);

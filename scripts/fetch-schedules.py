@@ -515,6 +515,47 @@ def generate_json(routes: dict, *, generated_at: str, sources: list[str], hubs: 
     return "\n".join(lines) + "\n"
 
 
+META_FILENAME = "schedules-meta.json"
+META_KEYS = ("generatedAt", "coverageFrom", "coverageTo", "coverageByHub", "hubToHub", "routeCount", "recordCount")
+
+
+def meta_json(schedules_text: str) -> str | None:
+    """
+    The few-hundred-byte companion of schedules.json: just its `meta` block (no
+    sources, no routes). The service worker polls this instead of the ~2 MB file
+    to learn whether a newer schedule exists. None when the text has no usable meta.
+    """
+    try:
+        meta = (json.loads(schedules_text).get("meta") or {})
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(meta, dict) or not isinstance(meta.get("generatedAt"), str):
+        return None
+    slim = {k: meta[k] for k in META_KEYS if k in meta}
+    return json.dumps(slim, ensure_ascii=False, indent=2) + "\n"
+
+
+def write_meta(schedules_path: str) -> bool:
+    """Writes schedules-meta.json next to `schedules_path` from its contents; True when the file changed."""
+    try:
+        with open(schedules_path, encoding="utf-8") as f:
+            text = meta_json(f.read())
+    except OSError:
+        return False
+    if text is None:
+        return False
+    path = os.path.join(os.path.dirname(os.path.abspath(schedules_path)), META_FILENAME)
+    try:
+        with open(path, encoding="utf-8") as f:
+            if f.read() == text:
+                return False
+    except OSError:
+        pass
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Discovery + download
 # ---------------------------------------------------------------------------
@@ -975,6 +1016,7 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         existing = None
     if existing is not None and strip_generated_at(existing) == strip_generated_at(ts):
         print(f"\nNo schedule changes; {out_path} left untouched (generatedAt kept).")
+        write_meta(out_path)  # only ever (re)created from the unchanged file, same generatedAt
         return 0
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
@@ -988,6 +1030,8 @@ def run(argv: list[str], *, discover: Callable[[], list[str]] = discover_pdf_url
         return 1
     os.replace(tmp_path, out_path)
     print(f"Written to {out_path}")
+    if write_meta(out_path):
+        print(f"Written to {os.path.join(os.path.dirname(os.path.abspath(out_path)), META_FILENAME)}")
     return 0
 
 

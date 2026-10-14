@@ -44,6 +44,12 @@ describe('small helpers', () => {
     expect(zoneAbbr('Europe/London', 'GB', NOON)).toBe('BST');
     expect(zoneAbbr('Not/AZone', 'XX', NOON)).toBe('');
   });
+
+  it('uses the overridden offset for zones whose rules changed (Winnipeg stays on UTC-5)', () => {
+    expect(zoneAbbr('America/Winnipeg', 'CA', Date.parse('2026-12-01T18:00:00Z'))).toBe('GMT-5');
+    expect(zoneAbbr('America/Vancouver', 'CA', Date.parse('2026-12-01T18:00:00Z'))).toBe('GMT-7');
+    expect(zoneAbbr('America/Winnipeg', 'CA', Date.parse('2026-10-01T18:00:00Z'))).not.toMatch(/^GMT/);
+  });
 });
 
 describe('currency', () => {

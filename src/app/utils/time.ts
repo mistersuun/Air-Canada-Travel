@@ -203,6 +203,19 @@ export const TZ_OVERRIDES: Readonly<Record<string, { fromUtc: number; offsetMin:
   'Africa/Casablanca': { fromUtc: Date.UTC(2026, 8, 20, 1), offsetMin: 0 },
 };
 
+/**
+ * Zone label for a zone whose rules TZ_OVERRIDES replaces at `at` ('GMT-7', 'GMT'), else null.
+ * Intl, with older zone data, would still say 'PST' or 'CST' there.
+ */
+export function overriddenZoneLabel(tz: string, at: number): string | null {
+  const fixed = TZ_OVERRIDES[tz];
+  if (!fixed || at < fixed.fromUtc) return null;
+  const abs = Math.abs(fixed.offsetMin);
+  if (!abs) return 'GMT';
+  const m = abs % 60;
+  return `GMT${fixed.offsetMin < 0 ? '-' : '+'}${Math.floor(abs / 60)}${m ? ':' + String(m).padStart(2, '0') : ''}`;
+}
+
 function rawOffsetAt(tz: string, at: number): number {
   const fixed = TZ_OVERRIDES[tz];
   if (fixed && at >= fixed.fromUtc) return fixed.offsetMin;

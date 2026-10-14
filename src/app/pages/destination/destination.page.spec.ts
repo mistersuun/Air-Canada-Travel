@@ -25,7 +25,6 @@ describe('DestinationPage', () => {
     fixture = TestBed.createComponent(DestinationPage);
     el = fixture.nativeElement;
     state = TestBed.inject(AppStateService);
-    state.todayKey.set('2026-10-01'); // the device zone may already be on Oct 2
     setup?.(state);
     fixture.componentRef.setInput('code', code);
     await fixture.whenStable();

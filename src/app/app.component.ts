@@ -45,6 +45,17 @@ interface ToastView {
         <button type="button" class="ui-tag ui-tag--amber" (click)="state.retryDataLoad()">Retry</button>
       </div>
     }
+    @if (state.dataLoad() === 'loading') {
+      <div class="data-banner" role="status">
+        <span>Still loading flight schedules. Results are empty until they arrive.</span>
+      </div>
+    }
+    @if (state.dataLoad() === 'ready') {
+      <div class="data-banner" role="status">
+        <span>Flight schedules ready.</span>
+        <button type="button" class="ui-tag ui-tag--amber" (click)="state.reloadPage()">Refresh</button>
+      </div>
+    }
     <app-top-nav />
     <main #main id="main" tabindex="-1"><router-outlet /></main>
     <app-tab-bar />

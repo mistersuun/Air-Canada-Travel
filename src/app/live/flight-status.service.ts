@@ -1,14 +1,15 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { AppStateService } from '../state/app-state.service';
 import { STATUS_ENDPOINT, maxAgeMs, depIso, parseStatus, statusKey, type FlightStatus } from './flight-status';
+import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 /** How the endpoint is called; specs replace it. Resolves to the HTTP status and parsed JSON (null when not JSON). */
 export const STATUS_FETCH = new InjectionToken<(url: string) => Promise<{ status: number; body: unknown }>>('STATUS_FETCH', {
   providedIn: 'root',
   factory: () => async (url: string) => {
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
     let body: unknown = null;
-    try { body = await res.json(); } catch { /* not JSON: treated as unavailable */ }
+    try { body = await res.json(); } catch (err) { if (isAbortError(err)) throw err; /* not JSON: treated as unavailable */ }
     return { status: res.status, body };
   },
 });
@@ -51,7 +52,7 @@ export class FlightStatusService {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) { this.mark(key); return; }
     this.inflight.add(key);
     try {
-      const url = `${STATUS_ENDPOINT}?ident=${encodeURIComponent(ident)}&origin=${encodeURIComponent(origin)}&dep=${encodeURIComponent(depIso(depUtc))}`;
+      const url = `${STATUS_ENDPOINT}?ident=${encodeURIComponent(ident.trim().toUpperCase())}&origin=${encodeURIComponent(origin.trim().toUpperCase())}&dep=${encodeURIComponent(depIso(depUtc))}`;
       const { status, body } = await this.fetcher(url);
       const parsed = status === 200 ? parseStatus(body) : null;
       if (parsed) {

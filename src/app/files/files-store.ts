@@ -96,15 +96,17 @@ export class IdbFilesStore implements FilesStore {
 
   /**
    * Opens `routes-files`. `onVersionChange` runs when another tab upgrades the
-   * database (the connection is closed first). `blobMode: 'buffer'` forces the
+   * database (the connection is closed first); `onClose` when the browser drops the connection. `blobMode: 'buffer'` forces the
    * ArrayBuffer shape (tests).
    */
-  static async open(opts: { factory?: IDBFactory; onVersionChange?: () => void; blobMode?: 'auto' | 'buffer'; name?: string } = {}): Promise<IdbFilesStore> {
+  static async open(opts: { factory?: IDBFactory; onVersionChange?: () => void; onClose?: () => void; blobMode?: 'auto' | 'buffer'; name?: string } = {}): Promise<IdbFilesStore> {
     const { db, readOnly } = await openDb(opts.name ?? FILES_DB, FILES_DB_VERSION, upgradeFilesDb, opts.factory);
     db.onversionchange = () => {
       db.close();
       opts.onVersionChange?.();
     };
+    // The browser closed the connection on its own (storage cleared, profile unmounted): the caller opens a new one.
+    db.onclose = () => opts.onClose?.();
     return new IdbFilesStore(db, readOnly, opts.blobMode ?? 'auto');
   }
 
@@ -268,13 +270,13 @@ export class MemoryFilesStore implements FilesStore {
  * Tests provide `() => Promise.resolve(new MemoryFilesStore())` or an
  * IdbFilesStore over fake-indexeddb.
  */
-export type FilesStoreOpener = (hooks: { onVersionChange: () => void }) => Promise<FilesStore>;
+export type FilesStoreOpener = (hooks: { onVersionChange: () => void; onClose?: () => void }) => Promise<FilesStore>;
 
 export const FILES_STORE = new InjectionToken<FilesStoreOpener>('FILES_STORE', {
   providedIn: 'root',
   factory: () => async hooks => {
     try {
-      return await IdbFilesStore.open({ onVersionChange: hooks.onVersionChange });
+      return await IdbFilesStore.open({ onVersionChange: hooks.onVersionChange, onClose: hooks.onClose });
     } catch (e) {
       if ((e as { name?: string })?.name === 'IdbBlockedError') throw e;
       return new MemoryFilesStore();

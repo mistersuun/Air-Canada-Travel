@@ -1,5 +1,6 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import { GroundTimetables, decodeGround, groundTimetables, setGroundTimetables } from './timetable';
+import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 /** Where the app fetches the timetables (relative to the base href). */
 export const GROUND_URL = 'data/ground.json';
@@ -14,7 +15,7 @@ export const GROUND_URL = 'data/ground.json';
 export const GROUND_FETCH = new InjectionToken<() => Promise<unknown>>('GROUND_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
-    const res = await fetch(GROUND_URL);
+    const res = await fetchWithTimeout(GROUND_URL);
     if (!res.ok) {
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
       if (res.status >= 500 || offline) throw new Error(`ground.json: HTTP ${res.status}`);
@@ -22,7 +23,8 @@ export const GROUND_FETCH = new InjectionToken<() => Promise<unknown>>('GROUND_F
     }
     try {
       return await res.json();
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) throw err;
       return null;
     }
   },

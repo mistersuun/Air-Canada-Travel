@@ -53,7 +53,10 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
     if (done) break;
     chunks.push(value);
     total += value.length;
-    if (total > MAX_JSON) throw new Error('too large');
+    if (total > MAX_JSON) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error('too large');
+    }
   }
   await written;
   const out = new Uint8Array(total);

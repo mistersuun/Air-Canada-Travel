@@ -207,6 +207,63 @@ export function inboundIdToFetch(f: Rec, nowMs: number, hours = 6): string | nul
   return ahead <= hours * HOUR_MS && ahead >= -HOUR_MS ? id : null;
 }
 
+/**
+ * The one query string a request is cached under. The CDN varies on the raw
+ * ident|origin|dep values, so 'ac834', 'AC834' and ' ACA834' would otherwise be
+ * three entries (three AeroAPI calls). Returns null when the request is already
+ * canonical; else the canonical 'ident=AC834&origin=YVR&dep=…' to redirect to.
+ */
+export function canonicalQuery(params: URLSearchParams, ident: string, origin: string, dep: string): string | null {
+  const want = new URLSearchParams({ ident: displayIdent(ident), origin, dep }).toString();
+  const keys = [...params.keys()];
+  const canonical = keys.length === 3 && keys.join(',') === 'ident,origin,dep'
+    && params.get('ident') === displayIdent(ident) && params.get('origin') === origin && params.get('dep') === dep;
+  return canonical ? null : want;
+}
+
+/** How long a looked-up inbound aircraft is reused (it moves slowly; the main answer is cached for 5 minutes). */
+export const INBOUND_TTL_MS = 15 * 60_000;
+
+/** The slice of a Netlify Blobs store the inbound cache needs. */
+export interface InboundStore {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<unknown>;
+  delete?(key: string): Promise<unknown>;
+}
+
+/**
+ * The inbound aircraft's leg for `faFlightId`: from the store when looked up in the last
+ * 15 minutes, else via `fetchInbound` (which spends budget; null = refused or failed) and
+ * stored. A failed lookup is not cached. The store is best effort: any error just means a lookup.
+ */
+export async function cachedInbound(
+  store: InboundStore | null, faFlightId: string, nowMs: number,
+  fetchInbound: () => Promise<FlightStatus['inbound'] | undefined>,
+): Promise<FlightStatus['inbound']> {
+  const key = `inbound-${faFlightId}`;
+  try {
+    const raw = store ? await store.get(key) : null;
+    if (raw) {
+      let c: { at?: unknown; inbound?: unknown } | null = null;
+      try { c = JSON.parse(raw) as { at?: unknown; inbound?: unknown }; } catch { /* malformed */ }
+      if (c && typeof c.at === 'number' && nowMs - c.at >= 0 && nowMs - c.at < INBOUND_TTL_MS) {
+        return isRec(c.inbound) ? normalizeCachedInbound(c.inbound) : null;
+      }
+      // Stale or malformed: remove it, so keys for flights that are over do not pile up in the store.
+      await store?.delete?.(key);
+    }
+  } catch { /* unreadable: look it up */ }
+  const fresh = await fetchInbound();
+  if (fresh === undefined) return null;
+  try { await store?.set(key, JSON.stringify({ at: nowMs, inbound: fresh })); } catch { /* best effort */ }
+  return fresh;
+}
+
+function normalizeCachedInbound(c: Rec): FlightStatus['inbound'] {
+  const ident = str(c['ident']);
+  return ident ? { ident, landed: iso(c['landed']), estimatedIn: iso(c['estimatedIn']) } : null;
+}
+
 /** Best-effort fixed-window limiter (memory is per function instance). */
 export function makeLimiter(max: number, windowMs: number): (key: string, nowMs: number) => boolean {
   const hits = new Map<string, { n: number; reset: number }>();

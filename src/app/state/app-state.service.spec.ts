@@ -12,9 +12,12 @@ import { getFlightsForWeek } from '../utils/week';
 import { AppStateService, NOTICE_MS, NOW, ROUTES_ENGINE, RoutesEngine } from './app-state.service';
 import { PREFS_KEY, PREFS_STORAGE, PrefsService } from './prefs.service';
 import { MemoryStorage } from './testing';
+import { toUtcMs, todayKey } from '../utils/time';
 
 // Thursday 1 Oct 2026, noon local: week starts Mon 28 Sep.
-const NOW_MS = new Date('2026-10-01T12:00:00').getTime();
+/** A wall-clock time at the default hub (Montreal), so the specs do not depend on the device's time zone. */
+const hubTime = (key: string, hhmm: string) => toUtcMs(key, hhmm, 'America/Toronto');
+const NOW_MS = hubTime('2026-10-01', '12:00');
 
 function engineSpy() {
   const spy = { computeRoutes: vi.fn(computeRoutes), hubStats: vi.fn(hubStats) };
@@ -226,16 +229,53 @@ describe('AppStateService', () => {
   describe('midnight and week rollover', () => {
     it('moves an untouched past week to the current week when the tab returns', () => {
       const { state, clock } = setup();
-      clock.now = new Date('2026-10-05T08:00:00').getTime(); // next Monday
+      clock.now = hubTime('2026-10-05', '08:00'); // next Monday
       state.refreshToday();
       expect(state.todayKey()).toBe('2026-10-05');
       expect(state.weekStartKey()).toBe('2026-10-05');
     });
 
+    it('today is the hub\'s date, not the device\'s: 03:00Z is Oct 5 in Tokyo but still Oct 4 in Vancouver', () => {
+      const { state, clock } = setup({ url: '?from=YVR' });
+      clock.now = Date.parse('2026-10-05T03:00:00Z');
+      state.refreshToday();
+      expect(state.hub()).toBe('YVR');
+      expect(state.todayKey()).toBe('2026-10-04');
+      expect(todayKey('Asia/Tokyo', clock.now)).toBe('2026-10-05');
+    });
+
+    it('rolls over at midnight in the hub zone (the 30 s tick calls refreshToday)', () => {
+      const { state, clock } = setup({ url: '?from=YVR' });
+      clock.now = Date.parse('2026-10-05T06:59:00Z'); // 23:59 PDT
+      state.refreshToday();
+      expect(state.todayKey()).toBe('2026-10-04');
+      clock.now = Date.parse('2026-10-05T07:01:00Z'); // 00:01 PDT
+      state.refreshToday();
+      expect(state.todayKey()).toBe('2026-10-05');
+      expect(state.weekStartKey()).toBe('2026-10-05');
+    });
+
+    it('changing the hub changes today, and an untouched week follows', async () => {
+      const { state, clock } = setup({ url: '?from=YVR' });
+      clock.now = Date.parse('2026-10-05T03:00:00Z');
+      state.refreshToday();
+      expect(state.todayKey()).toBe('2026-10-04');
+      expect(state.weekStartKey()).toBe('2026-09-28');
+      state.setHub('YHZ'); // Halifax is already on Oct 5
+      await settle();
+      expect(state.todayKey()).toBe('2026-10-05');
+      expect(state.weekStartKey()).toBe('2026-10-05');
+      // And back: an untouched week follows today backwards too.
+      state.setHub('YVR');
+      await settle();
+      expect(state.todayKey()).toBe('2026-10-04');
+      expect(state.weekStartKey()).toBe('2026-09-28');
+    });
+
     it('leaves a week the user chose alone', () => {
       const { state, clock } = setup();
       state.goToWeek('2026-09-21');
-      clock.now = new Date('2026-10-05T08:00:00').getTime();
+      clock.now = hubTime('2026-10-05', '08:00');
       state.refreshToday();
       expect(state.todayKey()).toBe('2026-10-05');
       expect(state.weekStartKey()).toBe('2026-09-21');
@@ -411,7 +451,7 @@ describe('AppStateService', () => {
 
     it('dataInfo describes the coverage and flags an old scrape or running-out coverage', () => {
       const { state, clock } = setup();
-      const at = (iso: string) => { clock.now = new Date(`${iso}T12:00:00`).getTime(); state.refreshToday(); };
+      const at = (iso: string) => { clock.now = hubTime(iso, '12:00'); state.refreshToday(); };
       const info = state.dataInfo();
       expect(info.to).toBe('2027-03-31');
       expect(info.updatedLabel).toBe('Updated Sep 28 · data to Mar 31, 2027');
@@ -434,6 +474,30 @@ describe('AppStateService', () => {
       expect(state.dataInfo().staleTag).toBe('Schedules published to Mar 31');
       at('2027-04-01');
       expect(state.dataInfo().staleTag).toBe('No schedules after Mar 31');
+    });
+
+    it('late data bumps scheduleRev so routes and coverage recompute without a reload', () => {
+      const { state } = setup();
+      const before = state.scheduleRev();
+      const first = state.routes();
+      expect(state.routes()).toBe(first);
+      state.reportDataReady();
+      expect(state.dataLoad()).toBe('ready');
+      expect(state.scheduleRev()).toBe(before + 1);
+      expect(state.routes()).not.toBe(first);
+      state.reportDataLoad(false);
+      expect(state.scheduleRev()).toBe(before + 1);
+    });
+
+    it('reportDataPending shows loading, and a later report replaces it', () => {
+      const { state } = setup();
+      state.reportDataPending();
+      expect(state.dataLoad()).toBe('loading');
+      state.reportDataLoad(true);
+      expect(state.dataLoad()).toBe('ok');
+      state.reportDataLoad(false);
+      state.reportDataPending();
+      expect(state.dataLoad()).toBe('failed');
     });
 
     it('dataLoad starts ok; a retry that succeeds clears a failure and reloads the page', async () => {

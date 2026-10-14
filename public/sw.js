@@ -6,7 +6,8 @@
  *     Cache Storage ('ac-share-in') -> 303 to /share-in?id=<id>, where the app
  *     reads and deletes them.
  *  2. Periodic Background Sync 'schedule-check' (installed Chromium PWAs):
- *     fetches data/schedules.json; if meta.generatedAt changed, tells open
+ *     fetches data/schedules-meta.json (a ~1 KB copy of the schedules' meta
+ *     block; falls back to schedules.json); if generatedAt changed, tells open
  *     windows, or else shows one local notification. Best effort: the browser
  *     decides when (if ever) it runs.
  *  3. notificationclick: focuses or opens /trips.
@@ -25,6 +26,7 @@ var SEEN_KEY = '/__sched-seen';
 var MAX_AGE_MS = 60 * 60 * 1000;
 var MAX_FILES = 5;
 var MAX_BYTES = 25 * 1024 * 1024;
+var ORPHAN_AGE_MS = 5 * 60 * 1000;
 
 function str(v) {
   return typeof v === 'string' ? v.slice(0, 100000) : '';
@@ -51,18 +53,40 @@ async function stashShare(form) {
   return id;
 }
 
-/** Drops stashes the app never collected (older than an hour). */
+/** When a stash id was made (its prefix is Date.now() in base 36), or 0 when it does not parse. */
+function stashTime(id) {
+  var t = parseInt(id.slice(0, 8), 36);
+  return isFinite(t) ? t : 0;
+}
+
+/**
+ * Drops stashes the app never collected (older than an hour), and files left
+ * without a meta.json (a share that failed half way) once they are 5 minutes old,
+ * so a stash being written right now is not touched.
+ */
 async function purgeOld(cache) {
   var keys = await cache.keys();
+  var withMeta = {};
+  var ids = [];
   for (var i = 0; i < keys.length; i++) {
-    var m = /\/__share\/([^/]+)\/meta\.json$/.exec(keys[i].url);
+    var m = /\/__share\/([^/]+)\/(meta\.json|[^/]+)$/.exec(keys[i].url);
     if (!m) continue;
+    if (ids.indexOf(m[1]) < 0) ids.push(m[1]);
+    if (m[2] !== 'meta.json') continue;
+    withMeta[m[1]] = true;
     var res = await cache.match(keys[i]);
     var meta = res ? await res.json().catch(function () { return null; }) : null;
     if (meta && Date.now() - meta.at <= MAX_AGE_MS) continue;
-    var all = await cache.keys();
-    for (var j = 0; j < all.length; j++) if (all[j].url.indexOf('/__share/' + m[1] + '/') >= 0) await cache.delete(all[j]);
+    await dropStash(cache, m[1]);
   }
+  for (var k = 0; k < ids.length; k++) {
+    if (!withMeta[ids[k]] && Date.now() - stashTime(ids[k]) > ORPHAN_AGE_MS) await dropStash(cache, ids[k]);
+  }
+}
+
+async function dropStash(cache, id) {
+  var all = await cache.keys();
+  for (var j = 0; j < all.length; j++) if (all[j].url.indexOf('/__share/' + id + '/') >= 0) await cache.delete(all[j]);
 }
 
 self.addEventListener('fetch', function (event) {
@@ -75,7 +99,9 @@ self.addEventListener('fetch', function (event) {
   event.stopImmediatePropagation();
   event.respondWith((async function () {
     try {
-      var id = await stashShare(await req.formData());
+      // Refuse a body that says it is too big before reading it all into memory.
+      var declared = Number(req.headers && req.headers.get ? req.headers.get('content-length') : NaN);
+      var id = declared > MAX_BYTES ? null : await stashShare(await req.formData());
       if (id === null) id = 'too-large';
       return Response.redirect(new URL(SHARE_PATH + '?id=' + id, self.location.href).href, 303);
     } catch (e) {
@@ -100,11 +126,28 @@ async function writeSeen(value) {
   await cache.put(SEEN_KEY, new Response(value));
 }
 
-async function checkSchedules() {
+/** generatedAt from schedules-meta.json ({generatedAt}) or schedules.json ({meta: {generatedAt}}). */
+function generatedAtOf(json) {
+  var m = json && typeof json.generatedAt === 'string' ? json : json && json.meta;
+  return m && typeof m.generatedAt === 'string' ? m.generatedAt : null;
+}
+
+/** The tiny meta file first; the full schedules file only when that is missing or unreadable. */
+async function latestGeneratedAt() {
+  try {
+    var small = await fetch('/data/schedules-meta.json', { cache: 'no-store' });
+    if (small.ok) {
+      var at = generatedAtOf(await small.json());
+      if (at) return at;
+    }
+  } catch (e) { /* offline errors surface from the fallback below */ }
   var res = await fetch('/data/schedules.json', { cache: 'no-store' });
-  if (!res.ok) return;
-  var json = await res.json();
-  var current = json && json.meta && typeof json.meta.generatedAt === 'string' ? json.meta.generatedAt : null;
+  if (!res.ok) return null;
+  return generatedAtOf(await res.json());
+}
+
+async function checkSchedules() {
+  var current = await latestGeneratedAt();
   var previous = await readSeen();
   if (current && (!previous || current > previous)) await writeSeen(current);
   if (!scheduleChanged(previous, current)) return;
@@ -126,7 +169,7 @@ self.addEventListener('periodicsync', function (event) {
 self.addEventListener('message', function (event) {
   var d = event.data;
   if (d && d.type === 'ac:schedules-seen' && typeof d.generatedAt === 'string') {
-    event.waitUntil(readSeen().then(function (prev) { if (!prev || d.generatedAt > prev) return writeSeen(d.generatedAt); }));
+    event.waitUntil(readSeen().then(function (prev) { if (!prev || d.generatedAt > prev) return writeSeen(d.generatedAt); }).catch(function () { /* best effort */ }));
   }
 });
 

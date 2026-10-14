@@ -6,7 +6,7 @@ import { NavigationEnd, NavigationStart, Params, Router } from '@angular/router'
 import { HUBS, Hub } from '../data/destinations';
 import { Coverage, getCoverage, loadSchedules } from '../data/schedule-index';
 import { loadRouteNetwork } from '../data/route-network';
-import { findDestination, findHub } from '../utils/airports';
+import { airportTz, findDestination, findHub } from '../utils/airports';
 import { summarizeWeek } from '../utils/connections';
 import { EMPTY_FILTERS, Filters, RouteEntry, SortKey, activeFilterCount, computeRoutes, hubStats } from '../utils/routes';
 import { WEEKDAY_SHORT, addDays, dateKey, diffDays, formatKey, isDateKey, todayKey, weekStartKey, weekdayIndex } from '../utils/time';
@@ -106,10 +106,8 @@ export class AppStateService {
   private readonly win = this.doc.defaultView;
 
   // ── Inputs ────────────────────────────────────────────────────────────────
-  readonly todayKey = signal(todayKey(undefined, this.now()));
   private readonly hubOverride = signal<string | null>(null);
   private readonly regionOverride = signal<string | null>(null);
-  readonly weekStartKey = signal(weekStartKey(this.todayKey()));
   readonly selectedDateKey = signal<string | null>(null);
   readonly query = signal('');
   readonly sort = signal<SortKey>('az');
@@ -127,9 +125,24 @@ export class AppStateService {
   /** Epoch ms, refreshed every COUNTDOWN_TICK_MS while the document is visible. */
   readonly nowMs = signal(this.now());
 
+  /**
+   * Today's date at the selected hub (its time zone, not the device's), like the pages that
+   * read hubToday: a phone in Tokyo showing YVR is on YVR's date. Follows the hub and the clock.
+   */
+  readonly todayKey = computed(() => todayKey(airportTz(this.hub()), this.nowMs()));
+  readonly weekStartKey = signal(weekStartKey(this.todayKey()));
+  /** The day the week was last rolled forward for. */
+  private rolledFor = this.todayKey();
+
   // ── Data load ─────────────────────────────────────────────────────────────
-  /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. */
-  readonly dataLoad = signal<'ok' | 'failed'>('ok');
+  /** 'failed' when the schedules file could not be loaded: results are empty, not cancelled. 'loading' when startup gave up waiting and it is still coming; 'ready' when it arrived late and a refresh would show it everywhere. */
+  readonly dataLoad = signal<'ok' | 'loading' | 'ready' | 'failed'>('ok');
+  /**
+   * Bumped each time schedule data arrives after startup. The derived routes, stats and
+   * coverage read it, so what is on screen updates; pages that read the schedule index
+   * directly still need a reload (see the 'ready' banner).
+   */
+  readonly scheduleRev = signal(0);
   private retrying = false;
 
   // ── Shell UI state ────────────────────────────────────────────────────────
@@ -148,13 +161,19 @@ export class AppStateService {
   private pendingPush = false;
 
   // ── Derived ───────────────────────────────────────────────────────────────
+  /** The hub, read together with scheduleRev so late-arriving schedules recompute whatever calls the engine. */
+  private hubAtRev(): string {
+    this.scheduleRev();
+    return this.hub();
+  }
+
   readonly hubName = computed(() => findHub(this.hub())?.name ?? this.hub());
   readonly hubInfo = computed<Hub>(() => findHub(this.hub()) ?? HUBS.find(h => h.code === DEFAULT_HUB)!);
 
   /** Filtered, searched and sorted routes (Home results mode). */
   readonly routes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
-      home: this.hub(),
+      home: this.hubAtRev(),
       weekStartKey: this.weekStartKey(),
       dateKey: this.selectedDateKey(),
       region: this.region(),
@@ -173,7 +192,7 @@ export class AppStateService {
    */
   readonly unsearchedRoutes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
-      home: this.hub(),
+      home: this.hubAtRev(),
       weekStartKey: this.weekStartKey(),
       dateKey: this.selectedDateKey(),
       region: this.region(),
@@ -189,7 +208,7 @@ export class AppStateService {
   /** Every route from the hub in scope (week or selected day), ignoring search, filters and region. */
   readonly allRoutes = computed<RouteEntry[]>(() =>
     this.engine.computeRoutes({
-      home: this.hub(),
+      home: this.hubAtRev(),
       weekStartKey: this.weekStartKey(),
       dateKey: this.selectedDateKey(),
       region: 'All',
@@ -203,9 +222,9 @@ export class AppStateService {
     () => new Map(this.allRoutes().map(r => [r.destination.code, r])),
   );
 
-  readonly stats = computed(() => this.engine.hubStats(this.hub(), this.weekStartKey(), this.connect()));
+  readonly stats = computed(() => this.engine.hubStats(this.hubAtRev(), this.weekStartKey(), this.connect()));
 
-  readonly coverage = computed<Coverage>(() => this.engine.getCoverage(this.hub()));
+  readonly coverage = computed<Coverage>(() => this.engine.getCoverage(this.hubAtRev()));
 
   /** Active filter chips plus search; region is shown separately. */
   readonly activeFilterCount = computed(() => activeFilterCount(this.filters()) + (this.query() ? 1 : 0));
@@ -214,7 +233,7 @@ export class AppStateService {
   readonly favouriteSet = computed<ReadonlySet<string>>(() => new Set(this.favourites()));
 
   readonly starredThisWeek = computed<StarredItem[]>(() => {
-    const hub = this.hub();
+    const hub = this.hubAtRev();
     const week = this.weekStartKey();
     const withConnections = this.showConnections();
     const connect = this.connect();
@@ -300,6 +319,12 @@ export class AppStateService {
     this.applyUrl(parseUrlState(this.platformLocation.search ?? ''));
     this.path.set(this.platformLocation.pathname || '/');
 
+    // A different hub can mean a different date: roll an untouched week forward without waiting for the next tick.
+    effect(() => {
+      this.todayKey();
+      untracked(() => this.rollWeek());
+    });
+
     effect(() => {
       const params = this.globalParams();
       untracked(() => this.writeUrl(params));
@@ -345,9 +370,21 @@ export class AppStateService {
     this.win?.location.reload();
   }
 
+  /** Startup stopped waiting for the data: the app renders while it keeps loading. */
+  reportDataPending(): void {
+    if (this.dataLoad() === 'ok') this.dataLoad.set('loading');
+  }
+
   /** Records the startup load (app initializer). */
   reportDataLoad(ok: boolean): void {
     this.dataLoad.set(ok ? 'ok' : 'failed');
+    if (ok) this.scheduleRev.update(n => n + 1);
+  }
+
+  /** Data arrived after startup but the page was not reloaded: on-screen lists update, a refresh brings the rest. */
+  reportDataReady(): void {
+    this.dataLoad.set('ready');
+    this.scheduleRev.update(n => n + 1);
   }
 
   /**
@@ -519,12 +556,17 @@ export class AppStateService {
   /** Recompute today (tab became visible, possibly after midnight) and roll the week forward if untouched. */
   refreshToday(): void {
     this.nowMs.set(this.now());
-    const t = todayKey(undefined, this.now());
-    if (t === this.todayKey()) return;
-    this.todayKey.set(t);
+    this.rollWeek();
+  }
+
+  /** Moves an untouched week forward when the hub's date changed (midnight there, or another hub chosen). */
+  private rollWeek(): void {
+    const t = this.todayKey();
+    if (t === this.rolledFor) return;
+    this.rolledFor = t;
     if (!this.navigated) {
       const current = weekStartKey(t);
-      if (this.weekStartKey() < current) {
+      if (this.weekStartKey() !== current) {
         this.weekStartKey.set(current);
         this.selectedDateKey.set(null);
       }

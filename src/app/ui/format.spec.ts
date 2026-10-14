@@ -77,6 +77,13 @@ describe('ui/format', () => {
     expect(tzAbbr('Not/AZone', now)).toBe('');
   });
 
+  it('names a zone by its overridden offset once the override applies (BC stays on UTC-7)', () => {
+    expect(tzAbbr('America/Vancouver', Date.parse('2026-10-01T12:00:00Z'))).toBe('PDT');
+    expect(tzAbbr('America/Vancouver', Date.parse('2026-12-01T12:00:00Z'))).toBe('GMT-7');
+    expect(tzAbbr('America/Edmonton', Date.parse('2026-12-01T12:00:00Z'))).toBe('GMT-6');
+    expect(tzAbbr('Africa/Casablanca', Date.parse('2026-12-01T12:00:00Z'))).toBe('GMT');
+  });
+
   it('days and hubs', () => {
     expect(daysLabel(7)).toBe('Daily');
     expect(daysLabel(6)).toBe('6× wk');

@@ -7,10 +7,13 @@
 // answers repeats (Netlify-Vary on ident|origin|dep, 5 to 30 minute TTL); each
 // IP gets ~10 cache misses per 10 minutes; and a global daily call budget
 // (AEROAPI_DAILY_LIMIT, default 40) is counted in Netlify Blobs with conditional writes.
+// A request whose query is not in canonical form (case, order, extra params) is
+// redirected to it, so the CDN holds one entry per flight; the inbound aircraft
+// lookup is cached in Blobs for 15 minutes on its own.
 import { getStore } from '@netlify/blobs';
 import {
-  cacheSeconds, dailyLimit, inboundIdToFetch, makeBudget, makeLimiter, normalizeFlight, normalizeInbound, pickFlight, queryWindow,
-  validateDep, validateIdent, validateOrigin,
+  cachedInbound, cacheSeconds, canonicalQuery, dailyLimit, inboundIdToFetch, makeBudget, makeLimiter, normalizeFlight, normalizeInbound, pickFlight, queryWindow,
+  validateDep, validateIdent, validateOrigin, type InboundStore,
 } from './lib/flight-status.ts';
 
 const BASE = 'https://aeroapi.flightaware.com/aeroapi';
@@ -47,6 +50,9 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
   const dep = validateDep(q.get('dep'), now);
   if (!ident || !origin || dep === null) return json({ error: 'bad-request' }, 400, null);
 
+  const canon = canonicalQuery(q, ident, origin, q.get('dep') ?? '');
+  if (canon) return new Response(null, { status: 308, headers: { Location: `${new URL(req.url).pathname}?${canon}`, 'Cache-Control': NO_STORE } });
+
   // Only cache misses reach this point, so this is a limit on upstream-bound requests.
   if (!allow(context.ip || 'unknown', now)) return json({ error: 'rate-limited' }, 429, null);
 
@@ -66,8 +72,14 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
 
     let inbound = null;
     const inboundId = inboundIdToFetch(f, now);
-    if (inboundId && (await spend(now))) {
-      try { inbound = normalizeInbound(await aero(`/flights/${encodeURIComponent(inboundId)}?ident_type=fa_flight_id`, key)); } catch { /* the inbound is optional */ }
+    if (inboundId) {
+      let cache: InboundStore | null = null;
+      try { cache = getStore({ name: 'aeroapi-inbound', consistency: 'strong' }) as unknown as InboundStore; } catch { /* no cache: look it up */ }
+      // Budget is spent only on a stale or missing entry.
+      inbound = await cachedInbound(cache, inboundId, now, async () => {
+        if (!(await spend(now))) return undefined;
+        try { return normalizeInbound(await aero(`/flights/${encodeURIComponent(inboundId)}?ident_type=fa_flight_id`, key)); } catch { return undefined; }
+      });
     }
     const ttl = cacheSeconds(dep, now);
     return json(normalizeFlight(f, { ident }, inbound, now), 200, `public, s-maxage=${ttl}, stale-while-revalidate=60`, 'public, max-age=60');

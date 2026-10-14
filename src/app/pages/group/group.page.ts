@@ -4,7 +4,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { GROUP_ID_RE, type GroupLink, parseGroupFragment } from '../../group/group-crypto';
 import { type GroupDoc, MAX_MEETUP, MAX_NAME, MAX_PLAN_LABEL, groupIsFull, memberList, planLabelSuggestions } from '../../group/group-doc';
-import { GroupService, POLL_MS, type GroupFailure } from '../../group/group.service';
+import { GroupService, POLL_MS, type GroupFailure, type GroupRecord } from '../../group/group.service';
 import { shareOrCopy } from '../../group/share-link';
 import { AppStateService } from '../../state/app-state.service';
 import type { SharedTripPreview } from '../../trips/model';
@@ -174,6 +174,10 @@ export class GroupPage {
   private version = 0;
   private expiresAt: string | null = null;
   private memberId = '';
+  /** Only on the device that created the group: needed to stop it and to lengthen its life. */
+  private ownerToken: string | null = null;
+  /** True once this device holds a record for the group (from an earlier visit or from remember()). */
+  private remembered = false;
   private loadedOnce = false;
   /** True once the meet-up field was edited since the last sync: only then is it written back. */
   private meetDirty = false;
@@ -198,9 +202,11 @@ export class GroupPage {
       this.view.set('invalid');
       return;
     }
+    this.remembered = !!rec;
     this.memberId = rec?.memberId ?? this.groups.newMember();
     this.name.set(rec?.name ?? '');
     this.owner.set(rec?.owner === true && rec.key === this.link.key);
+    this.ownerToken = this.owner() ? (rec?.ownerToken ?? null) : null;
     void this.refresh();
 
     const destroyRef = inject(DestroyRef);
@@ -227,8 +233,22 @@ export class GroupPage {
       const mine = r.doc.members[this.memberId];
       if (mine) { this.name.set(mine.name); this.label.set(mine.planLabel); this.arrival.set(toLocalInput(mine.arrival)); }
       this.remember();
+      await this.extendLife();
     }
     this.view.set('ready');
+  }
+
+  /** The owner opening the group: lengthen its life when the trip now ends well after it. Quiet on failure. */
+  private async extendLife(): Promise<void> {
+    const d = this.doc();
+    if (!this.link?.write || !this.owner() || !d) return;
+    const expiresAt = this.groups.ownerExpiry(this.groups.recordFor(this.link.id), this.expiresAt);
+    if (!expiresAt) return;
+    const r = await this.groups.save(this.link, d, this.version, expiresAt, this.ownerToken);
+    if (r.ok) {
+      await this.apply(r.doc, r.version, r.expiresAt ?? this.expiresAt);
+      this.remember();
+    }
   }
 
   /** Background refresh: quiet on failure, and it never touches what is being typed. */
@@ -254,10 +274,16 @@ export class GroupPage {
   private remember(): void {
     if (!this.link) return;
     const old = this.groups.recordFor(this.link.id);
-    this.groups.remember({
+    const rec: GroupRecord = {
       id: this.link.id, key: this.link.key, write: this.link.write ?? old?.write ?? null, memberId: this.memberId,
-      name: this.name().trim().slice(0, MAX_NAME), owner: this.owner(), tripId: old?.tripId ?? null, expiresAt: this.expiresAt ?? old?.expiresAt ?? null,
-    });
+      name: this.name().trim().slice(0, MAX_NAME), owner: this.owner(), ownerToken: this.ownerToken ?? old?.ownerToken ?? null, tripId: old?.tripId ?? null, expiresAt: this.expiresAt ?? old?.expiresAt ?? null,
+    };
+    // Once this device has the group, only update it: if another tab stopped or forgot it, do not bring it back.
+    if (this.remembered) this.groups.update(rec);
+    else {
+      this.groups.remember(rec);
+      this.remembered = true;
+    }
   }
 
   protected async saveStatus(): Promise<void> {
@@ -275,13 +301,14 @@ export class GroupPage {
       }, now);
       const meet = this.meet().trim().slice(0, MAX_MEETUP);
       if (this.meetDirty && meet !== (d.meetup?.text ?? '')) next = { ...next, meetup: { text: meet, updatedAt: new Date(now).toISOString() } };
-      const r = await this.groups.save(this.link, next, this.version);
+      const expiresAt = this.owner() ? this.groups.ownerExpiry(this.groups.recordFor(this.link.id), this.expiresAt) : undefined;
+      const r = await this.groups.save(this.link, next, this.version, expiresAt, this.ownerToken);
       if (!r.ok) {
         this.note.set(MESSAGES[r.reason]);
         return;
       }
       this.meetDirty = false;
-      await this.apply(r.doc, r.version, this.expiresAt);
+      await this.apply(r.doc, r.version, r.expiresAt ?? this.expiresAt);
       this.remember();
       this.note.set('Status updated');
     } finally {
@@ -313,7 +340,7 @@ export class GroupPage {
     if (!this.link) return;
     this.busy.set(true);
     try {
-      if (!(await this.groups.stop(this.link))) {
+      if (!(await this.groups.stop(this.link, this.ownerToken))) {
         this.note.set(MESSAGES.unavailable);
         return;
       }

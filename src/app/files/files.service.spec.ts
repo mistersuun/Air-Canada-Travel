@@ -372,7 +372,7 @@ describe('backup with files', () => {
 });
 
 describe('FilesDb', () => {
-  it('opens the store once and reports errors', async () => {
+  it('reports errors, and tries to open again on the next call', async () => {
     let opens = 0;
     TestBed.configureTestingModule({
       providers: [{ provide: FILES_STORE, useValue: async () => { opens++; throw new Error('blocked'); } }],
@@ -381,7 +381,7 @@ describe('FilesDb', () => {
     expect(db.status()).toBe('idle');
     expect(await db.store()).toBeNull();
     expect(await db.store()).toBeNull();
-    expect(opens).toBe(1);
+    expect(opens).toBe(2);
     expect(db.status()).toBe('error');
   });
 

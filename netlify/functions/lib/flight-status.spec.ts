@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  budgetKey, cacheSeconds, dailyLimit, displayIdent, inboundIdToFetch, makeBudget, makeLimiter, normalizeFlight, normalizeInbound, pickFlight,
+  INBOUND_TTL_MS, budgetKey, cachedInbound, cacheSeconds, canonicalQuery, dailyLimit, displayIdent, inboundIdToFetch, makeBudget, makeLimiter, normalizeFlight, normalizeInbound, pickFlight,
   queryWindow, validateDep, validateIdent, validateOrigin,
 } from './flight-status';
 
@@ -177,5 +177,74 @@ describe('daily budget', () => {
   it('fails closed when the store throws', async () => {
     const spend = makeBudget({ getWithMetadata: async () => { throw new Error('down'); }, set: async () => ({ modified: true }) }, 10);
     expect(await spend(NOW)).toBe(false);
+  });
+});
+
+describe('canonicalQuery', () => {
+  const canon = (qs: string) => canonicalQuery(new URLSearchParams(qs), 'ACA834', 'YVR', '2026-10-06T21:55Z');
+  it('is null for the canonical request', () => {
+    expect(canon('ident=AC834&origin=YVR&dep=2026-10-06T21%3A55Z')).toBeNull();
+  });
+  it('gives one canonical query for case, ICAO form, order and extra params', () => {
+    const want = 'ident=AC834&origin=YVR&dep=2026-10-06T21%3A55Z';
+    expect(canon('ident=ac834&origin=yvr&dep=2026-10-06T21:55Z')).toBe(want);
+    expect(canon('ident=ACA834&origin=YVR&dep=2026-10-06T21:55Z')).toBe(want);
+    expect(canon('dep=2026-10-06T21:55Z&origin=YVR&ident=AC834')).toBe(want);
+    expect(canon('ident=AC834&origin=YVR&dep=2026-10-06T21:55Z&x=1')).toBe(want);
+  });
+});
+
+describe('cachedInbound (15 minute cache keyed by the inbound flight id)', () => {
+  const inbound = { ident: 'AC811', landed: null, estimatedIn: '2026-10-06T21:00:00Z' };
+  function store() {
+    const m = new Map<string, string>();
+    return { m, get: async (k: string) => m.get(k) ?? null, set: async (k: string, v: string) => { m.set(k, v); } };
+  }
+  it('looks up once, then reuses it until 15 minutes pass', async () => {
+    const s = store();
+    let calls = 0;
+    const look = async () => { calls++; return inbound; };
+    expect(await cachedInbound(s, 'ACA811-9', NOW, look)).toEqual(inbound);
+    expect(await cachedInbound(s, 'ACA811-9', NOW + INBOUND_TTL_MS - 1, look)).toEqual(inbound);
+    expect(calls).toBe(1);
+    expect(await cachedInbound(s, 'ACA811-9', NOW + INBOUND_TTL_MS, look)).toEqual(inbound);
+    expect(calls).toBe(2);
+    await cachedInbound(s, 'ACA999-1', NOW, look);
+    expect(calls).toBe(3);
+  });
+  it('deletes an entry it finds stale or unreadable before looking up again', async () => {
+    const m = new Map<string, string>();
+    const deleted: string[] = [];
+    const s = { get: async (k: string) => m.get(k) ?? null, set: async (k: string, v: string) => { m.set(k, v); }, delete: async (k: string) => { deleted.push(k); m.delete(k); } };
+    m.set('inbound-ACA811-9', JSON.stringify({ at: NOW - INBOUND_TTL_MS - 1, inbound }));
+    await cachedInbound(s, 'ACA811-9', NOW, async () => undefined);
+    expect(deleted).toEqual(['inbound-ACA811-9']);
+    expect(m.size).toBe(0);
+    m.set('inbound-ACA811-9', 'junk');
+    await cachedInbound(s, 'ACA811-9', NOW, async () => inbound);
+    expect(deleted).toHaveLength(2);
+    expect(m.size).toBe(1); // the fresh lookup is stored again
+  });
+  it('a refused or failed lookup (undefined) gives null and is not cached', async () => {
+    const s = store();
+    let calls = 0;
+    const fail = async () => { calls++; return undefined; };
+    expect(await cachedInbound(s, 'ACA811-9', NOW, fail)).toBeNull();
+    expect(await cachedInbound(s, 'ACA811-9', NOW, fail)).toBeNull();
+    expect(calls).toBe(2);
+    expect(s.m.size).toBe(0);
+  });
+  it('caches "no inbound known" too, and survives a missing or broken store', async () => {
+    const s = store();
+    let calls = 0;
+    const none = async () => { calls++; return null; };
+    await cachedInbound(s, 'ACA811-9', NOW, none);
+    expect(await cachedInbound(s, 'ACA811-9', NOW + 1000, none)).toBeNull();
+    expect(calls).toBe(1);
+    expect(await cachedInbound(null, 'ACA811-9', NOW, async () => inbound)).toEqual(inbound);
+    const broken = { get: async () => { throw new Error('x'); }, set: async () => { throw new Error('x'); } };
+    expect(await cachedInbound(broken, 'ACA811-9', NOW, async () => inbound)).toEqual(inbound);
+    s.m.set('inbound-ACA811-9', 'junk');
+    expect(await cachedInbound(s, 'ACA811-9', NOW, async () => inbound)).toEqual(inbound);
   });
 });

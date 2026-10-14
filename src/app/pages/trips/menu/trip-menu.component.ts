@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DOCUMENT, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { SCHEDULES_URL, getCoverage, getSchedulesMeta, scheduleVersion } from '../../../data/schedule-index';
@@ -146,8 +146,21 @@ export class TripMenuComponent {
   protected readonly reportText = computed(() => { const r = this.report(); return r ? offlineReportLabel(r) : ''; });
   protected readonly schedulesReady = computed(() => this.cached() === true);
 
+  /**
+   * The share link, built when the menu opens (and again when the trip changes) so that
+   * Copy link can call navigator.share / clipboard.writeText inside the tap itself: after an
+   * await some browsers (Safari, iOS) no longer treat the call as a user gesture.
+   */
+  private readonly link = signal<{ url: string } | 'too-large' | null>(null);
+  private building: Promise<void> = Promise.resolve();
+  private buildSeq = 0;
+
   constructor() {
     void this.checkCache();
+    effect(() => {
+      this.trip();
+      untracked(() => { this.building = this.buildLink(); });
+    });
   }
 
   /** Looks for the schedules in Cache Storage; with no service worker, loaded data counts. */
@@ -202,18 +215,67 @@ export class TripMenuComponent {
     this.trips.update(this.trip().id, t => ({ ...t, party: { ...t.party, splitNote } }));
   }
 
-  protected async copyLink(): Promise<void> {
+  private async buildLink(): Promise<void> {
+    const seq = ++this.buildSeq;
+    // The previous link stays until the new one resolves, so a tap during a rebuild still shares synchronously.
+    let next: { url: string } | 'too-large' | null;
+    try {
+      const url = await this.trips.shareLink(this.trip().id);
+      next = url ? { url } : null;
+    } catch {
+      next = 'too-large';
+    }
+    // A newer build (the trip changed meanwhile) owns the signal.
+    if (seq === this.buildSeq) this.link.set(next);
+  }
+
+  protected copyLink(): Promise<void> {
+    const ready = this.link();
+    if (ready === 'too-large') {
+      this.state.flash('This trip is too large to share as a link · use Export trips in Settings');
+      return Promise.resolve();
+    }
+    // Normal case: the link is ready, so share/copy start synchronously inside the tap.
+    if (ready) return this.deliver(ready.url);
+    const nav = this.doc.defaultView?.navigator;
+    const win = this.doc.defaultView as (Window & { ClipboardItem?: typeof ClipboardItem }) | null;
+    if (!nav?.share && nav?.clipboard?.write && win?.ClipboardItem) {
+      // Not built yet: a clipboard item can take the link as a promise and still count as the tap.
+      const text = this.building.then(() => {
+        const l = this.link();
+        if (!l || l === 'too-large') throw new Error('no link');
+        return new Blob([l.url], { type: 'text/plain' });
+      });
+      return this.busyWhile(async () => {
+        try {
+          await nav.clipboard.write([new win.ClipboardItem!({ 'text/plain': text })]);
+          this.state.flash('Link copied');
+        } catch {
+          this.state.flash(this.link() === 'too-large' ? 'This trip is too large to share as a link · use Export trips in Settings' : 'Could not copy the link');
+        }
+      });
+    }
+    return this.busyWhile(async () => {
+      await this.building;
+      const l = this.link();
+      if (l === 'too-large') this.state.flash('This trip is too large to share as a link · use Export trips in Settings');
+      else if (l) await this.deliver(l.url);
+    });
+  }
+
+  private async busyWhile(run: () => Promise<void>): Promise<void> {
     this.busy.set(true);
     try {
-      let url: string;
-      try {
-        url = await this.trips.shareLink(this.trip().id);
-      } catch {
-        this.state.flash('This trip is too large to share as a link · use Export trips in Settings');
-        return;
-      }
-      if (!url) return;
-      const nav = this.doc.defaultView?.navigator;
+      await run();
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  /** navigator.share when there is one, else the clipboard. The first call happens before any await. */
+  private deliver(url: string): Promise<void> {
+    const nav = this.doc.defaultView?.navigator;
+    return this.busyWhile(async () => {
       if (nav?.share) {
         try {
           await nav.share({ title: this.trip().name, text: `${this.trip().name}: our standby plan`, url });
@@ -229,9 +291,7 @@ export class TripMenuComponent {
       } catch {
         this.state.flash('Could not copy the link');
       }
-    } finally {
-      this.busy.set(false);
-    }
+    });
   }
 
   protected calendar(): void {

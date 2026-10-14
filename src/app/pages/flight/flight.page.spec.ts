@@ -77,7 +77,7 @@ describe('FlightPage', () => {
     expect(text('.tk .hd .ui-tag')).toBe('NON-STOP');
     expect(text('.tk .times')).toContain('22:10');
     expect(text('.tk .times')).toContain('Thu, Oct 8 · local');
-    expect(cells(el)).toMatchObject({ Date: 'Oct 7', Flight: 'AC864', Aircraft: 'A330-300', Frequency: 'Daily' });
+    expect(cells(el)).toMatchObject({ Date: 'Oct 7', Flight: 'AC864', Aircraft: 'A330-300 · about 297 seats', Frequency: 'Daily' });
     expect(text('.cd')).toBe('Departs today · in 14h 10m');
     // The seg lights EARLIEST; NONSTOP is enabled since a nonstop exists.
     const seg = [...el.querySelectorAll<HTMLButtonElement>('app-seg button')];

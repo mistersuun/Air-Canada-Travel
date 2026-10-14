@@ -5,7 +5,7 @@
 import type { Coverage } from '../../data/schedule-index';
 import { isCovered } from '../../data/schedule-index';
 import { isRouteOnly, routeFact, routeFactDetail } from '../../data/route-network';
-import { aircraftName } from '../../utils/aircraft';
+import { aircraftName, aircraftWithSeats } from '../../utils/aircraft';
 import {
   NO_OPTS, directItineraries, findItineraries, type ConnectOptions, type Itinerary,
 } from '../../utils/connections';
@@ -147,7 +147,7 @@ export function timelineItems(
     const offset = it.arrDayOffset ? ` ${it.arrDayOffset > 0 ? '+' : '−'}${Math.abs(it.arrDayOffset)}` : '';
     const sub = it.hubs.length
       ? `1 stop · ${it.hubs.join(' ')} · ${hm(it.totalMin)}`
-      : [shortAircraft(first.aircraft), hm(it.totalMin)].filter(Boolean).join(' · ');
+      : [aircraftWithSeats(first.aircraft), hm(it.totalMin)].filter(Boolean).join(' · ');
     return {
       it,
       dateLabel: timelineDay(it.dateKey, today) + (soon ? ` · ${countdown(it.departUtc - nowMs)}` : ''),

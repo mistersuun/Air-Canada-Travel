@@ -36,6 +36,45 @@ const NAMES: Record<string, string> = {
   'E75': 'Embraer E175',
 };
 
+/**
+ * Typical seat counts for Air Canada, Air Canada Rouge and Jazz / Air Canada
+ * Express equipment, from published fleet configurations. These are typical
+ * configurations, not a specific flight's: cabins vary by tail number. A code
+ * with no entry shows no seat count (the A321neo varies too much to state one).
+ */
+const SEATS: Record<string, number> = {
+  '223': 137,
+  '319': 120,
+  '320': 146,
+  '321': 200,
+  '333': 297,
+  '77L': 270,
+  '77W': 400,
+  '788': 255,
+  '789': 298,
+  '7M8': 169,
+  'CR9': 76,
+  'DH4': 78,
+  'E75': 76,
+};
+
+/** Typical seat count for an equipment code, or null when not known. */
+export function aircraftSeats(code: string | null | undefined): number | null {
+  return (code && SEATS[code]) || null;
+}
+
+/** 'about 298 seats' for a known type, else ''. */
+export function seatsLabel(code: string | null | undefined): string {
+  const n = aircraftSeats(code);
+  return n ? `about ${n} seats` : '';
+}
+
+/** '787-9 · about 298 seats': the maker-less name plus the typical seat count. */
+export function aircraftWithSeats(code: string | null | undefined): string {
+  const short = aircraftName(code).replace(/^(Airbus|Boeing|Bombardier|De Havilland|Embraer)\s+/, '');
+  return [short, seatsLabel(code)].filter(Boolean).join(' · ');
+}
+
 /** Human name for an IATA equipment code; the code itself when unknown. */
 export function aircraftName(code: string | null | undefined): string {
   if (!code) return '';

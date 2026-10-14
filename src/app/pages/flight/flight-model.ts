@@ -6,7 +6,7 @@ import type { Alternatives, Itinerary } from '../../utils/connections';
 import { isLayoverAlert, LONG_LAYOVER } from '../../utils/connections';
 import type { FlightInstance } from '../../utils/week';
 import { flightsOn } from '../../utils/week';
-import { aircraftName } from '../../utils/aircraft';
+import { aircraftName, aircraftWithSeats } from '../../utils/aircraft';
 import { airportName, airportTz, isHub } from '../../utils/airports';
 import { addDays, formatClock, formatDuration, formatKey, utcToLocal, weekStartKey, weekKeys } from '../../utils/time';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -148,7 +148,7 @@ export function ticketModel(it: Itinerary, fmt: TimeFormat = '24h', minConnect =
               value: prettyFlight(leg.flightNumber),
               title: leg.altFlightNumbers?.length ? `Also filed as ${leg.altFlightNumbers.map(prettyFlight).join(', ')}` : undefined,
             },
-        { label: 'Aircraft', value: shortAircraft(leg.aircraft) || '—', title: aircraftName(leg.aircraft) || undefined },
+        { label: 'Aircraft', value: aircraftWithSeats(leg.aircraft) || '—', title: aircraftName(leg.aircraft) || undefined },
         { label: 'Duration', value: hm(leg.durationMin) },
         { label: 'Frequency', value: frequencyLabel(weekFrequency(leg)) },
         { label: 'Time diff', value: tzDiffLabel(airportTz(leg.dest), airportTz(leg.origin), leg.depUtc) },
@@ -184,7 +184,7 @@ export function optionRow(it: Itinerary, fmt: TimeFormat = '24h', name?: string)
   const first = it.legs[0];
   const last = it.legs[it.legs.length - 1];
   const times = `${it.origin} ${formatClock(first.depLocal, fmt)} → ${it.dest} ${formatClock(last.arrLocal, fmt)}${supOffset(it.arrDayOffset)}`;
-  const aircraft = [...new Set(it.legs.map(l => shortAircraft(l.aircraft)).filter(Boolean))].join(' / ');
+  const aircraft = [...new Set(it.legs.map(l => aircraftWithSeats(l.aircraft)).filter(Boolean))].join(' / ');
   return {
     key: itinKey(it),
     tile: hub ?? (isHub(it.dest) ? it.origin : it.dest),

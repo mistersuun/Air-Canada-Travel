@@ -67,7 +67,7 @@ describe('flight-model', () => {
     expect(Object.fromEntries(t.legs[0].cells.map(c => [c.label, c.value]))).toEqual({
       Date: 'Oct 7',
       Flight: 'AC864',
-      Aircraft: 'A330-300',
+      Aircraft: 'A330-300 · about 297 seats',
       Duration: '6h50',
       Frequency: 'Daily',
       'Time diff': '+5h',
@@ -117,7 +117,7 @@ describe('flight-model', () => {
     const [it] = directItineraries('YUL', 'LHR', '2026-10-07');
     const r = optionRow(it);
     expect(r).toMatchObject({ tile: 'LHR', name: 'Nonstop', small: '6h50', slug: 'AC864', date: '2026-10-07' });
-    expect(r.meta).toBe('AC864 · YUL 22:10 → LHR 10:00⁺¹ · A330-300');
+    expect(r.meta).toBe('AC864 · YUL 22:10 → LHR 10:00⁺¹ · A330-300 · about 297 seats');
     const [ret] = directItineraries('LHR', 'YUL', '2026-10-12');
     expect(optionRow(ret).tile).toBe('LHR');
     const via = allItineraries('YHZ', 'LHR', '2026-10-07').find(i => i.hubs[0] === 'YYZ' && !i.estimated)!;

@@ -163,13 +163,12 @@ export function weekendOptions(input: WeekendInput): WeekendOption[] {
 
 /**
  * '~40h there · 5 tries home · 3 out': time on the ground first, then the tries
- * home; with connections on and some tries needing one, '~40h there · 2 nonstop
- * tries · 5 with connections · 3 out'.
+ * home; with connections on and some tries needing one, '~40h there · 2 nonstop · 5 with connections · 3 out'.
  */
 export function weekendMeta(o: WeekendOption, showConnections = false): string {
   const t = o.tries.length;
   const head = `~${o.hoursThere}h there`;
-  if (showConnections && o.directTries < t) return `${head} · ${o.directTries} nonstop ${o.directTries === 1 ? 'try' : 'tries'} · ${t} with connections · ${o.out.length} out`;
+  if (showConnections && o.directTries < t) return `${head} · ${o.directTries} nonstop · ${t} with connections · ${o.out.length} out`;
   return `${head} · ${t} ${t === 1 ? 'try' : 'tries'} home · ${o.out.length} out`;
 }
 

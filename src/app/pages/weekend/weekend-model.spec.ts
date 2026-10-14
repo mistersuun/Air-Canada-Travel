@@ -124,7 +124,7 @@ describe('weekend ranking', () => {
     const o = weekendOption(input(), 'LGA')!;
     expect(o.directTries).toBe(o.tries.filter(it => it.legs.length === 1).length);
     const connected = { ...o, directTries: 2, tries: o.tries.slice(0, 5) };
-    expect(weekendMeta(connected, true)).toMatch(/^~\d+h there · 2 nonstop tries · 5 with connections · \d+ out$/);
+    expect(weekendMeta(connected, true)).toMatch(/^~\d+h there · 2 nonstop · 5 with connections · \d+ out$/);
     expect(weekendMeta(connected, false)).toMatch(/^~\d+h there · 5 tries home · \d+ out$/);
     expect(weekendMeta({ ...connected, directTries: 5 }, true)).toMatch(/5 tries home/);
   });

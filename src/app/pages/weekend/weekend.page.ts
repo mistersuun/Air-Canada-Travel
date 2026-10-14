@@ -82,7 +82,7 @@ import {
             </app-dest-row>
             <div class="evt">
               <button type="button" class="evt__b" [attr.aria-expanded]="events() === r.o.code" [attr.aria-controls]="'evt-' + r.o.code"
-                      attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on in {{ cityOf(r.o.code) }}
+                      attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on
                 <app-icon class="evt__c" [class.open]="events() === r.o.code" name="chevron-down" [size]="14" /></button>
               <div [id]="'evt-' + r.o.code">
                 @if (events() === r.o.code) { <app-events-card verbose [code]="r.o.code" [from]="r.arrKey" [to]="r.o.retKey" /> }

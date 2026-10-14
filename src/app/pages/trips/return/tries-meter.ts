@@ -1,3 +1,4 @@
+import { t } from '../../../i18n/t';
 import { returnBoarded } from '../../../logbook/logbook';
 import type { Trip } from '../../../trips/model';
 import type { ConnectOptions } from '../../../utils/connections';
@@ -24,7 +25,7 @@ export function triesMeter(n: number): TriesMeter {
   return {
     planes: Math.min(count, METER_MAX),
     extra: Math.max(0, count - METER_MAX),
-    label: `${count} ${count === 1 ? 'try' : 'tries'} home left`,
+    label: t('trips.meter.label', { n: count }),
     last: count === 1,
   };
 }

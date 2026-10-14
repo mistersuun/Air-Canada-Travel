@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { t } from '../../../i18n/t';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { triesMeter } from './tries-meter';
 
@@ -15,7 +16,7 @@ import { triesMeter } from './tries-meter';
     <span class="tm" role="img" [attr.aria-label]="m().label" [class.tm--last]="m().last" data-tries-meter>
       @for (i of idx(); track i) { <app-icon name="plane" [size]="14" [strokeWidth]="2" [filled]="true" /> }
       @if (m().extra) { <b class="tn">+{{ m().extra }}</b> }
-      @if (!m().planes) { <b>none left</b> }
+      @if (!m().planes) { <b>{{ t('trips.meter.none') }}</b> }
     </span>
   `,
   styles: [`
@@ -26,6 +27,7 @@ import { triesMeter } from './tries-meter';
   `],
 })
 export class TriesMeterComponent {
+  protected readonly t = t;
   readonly count = input.required<number>();
   protected readonly m = computed(() => triesMeter(this.count()));
   protected readonly idx = computed(() => Array.from({ length: this.m().planes }, (_, i) => i));

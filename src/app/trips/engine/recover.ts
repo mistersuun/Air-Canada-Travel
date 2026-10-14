@@ -15,6 +15,7 @@ import { MINUTE_MS, addDays, diffDays, utcToLocal } from '../../utils/time';
 import type { FlightInstance } from '../../utils/week';
 import { GroundEstimate, airportEnd, arrivalAtGoal, groundEstimate, unknownGround } from '../../places/ground';
 import { gatewaysNear } from '../../places/reach';
+import { t } from '../../i18n/t';
 import { Trip, TripLeg, isFinalStatus } from '../model';
 import { stopForLeg } from '../stops';
 import { buildItinerary, legStartUtc, refDepUtc } from './legs';
@@ -34,8 +35,6 @@ export interface ReachableOption {
   nightsAtGoal: number | null;                     // nights until the trip's first leg that leaves the goal area
   returnStillWorks: boolean | null;                // the trip's planned return legs still come after the arrival
 }
-
-export const CLOSED_REASON = 'boarding has likely closed';
 
 interface Ctx {
   trip: Trip;
@@ -219,7 +218,7 @@ export function stillReachable(input: {
       const usable = it.departUtc > closedBefore;
       // A one-stop that lands after a usable direct to the same gateway adds nothing.
       if (k && directUsableArr !== null && (!usable || it.arriveUtc >= directUsableArr)) continue;
-      gwOptions.push(decorate(ctx, gateway, it, usable ? 'usable' : 'closed', usable ? null : CLOSED_REASON, 'tonight', ground));
+      gwOptions.push(decorate(ctx, gateway, it, usable ? 'usable' : 'closed', usable ? null : t('trips.recover.closed'), 'tonight', ground));
     }
 
     // Missed connections: the next feeder to a hub lands after the hub's last onward flight that day.
@@ -235,9 +234,9 @@ export function stillReachable(input: {
       const ready = feeder.arrUtc + ctx.minConnect * MINUTE_MS;
       if (onward.some(f => f.depUtc >= ready)) continue;
       const missed = onward[onward.length - 1];
-      const reason = missed.depUtc < feeder.arrUtc
-        ? `${feeder.flightNumber} lands ${feeder.arrLocal}, after ${missed.flightNumber} leaves at ${missed.depLocal}`
-        : `${feeder.flightNumber} lands ${feeder.arrLocal}, too close to ${missed.flightNumber} at ${missed.depLocal}`;
+      const reason = t(missed.depUtc < feeder.arrUtc ? 'trips.recover.landsAfter' : 'trips.recover.landsTooClose', {
+        feeder: feeder.flightNumber ?? '', land: feeder.arrLocal, onward: missed.flightNumber ?? '', dep: missed.depLocal,
+      });
       gwOptions.push(decorate(ctx, gateway, buildItinerary([feeder, missed]), 'missedConnection', reason, 'tonight', ground));
     }
     tonight.push(...gwOptions);

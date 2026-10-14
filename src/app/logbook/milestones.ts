@@ -4,6 +4,7 @@
  * flights every time, oldest first (red-eye lives in the logbook's Marks), so they never drift from the log. No
  * points, levels or streaks; an unearned milestone is simply absent.
  */
+import { formatNumber, t, type MsgKey } from '../i18n/t';
 import { type BoardedFlight, airportInfo } from './logbook';
 
 export type MilestoneId =
@@ -44,21 +45,20 @@ export function isTranspacific(origin: string, dest: string): boolean {
   return (americas(a) && asia(b)) || (americas(b) && asia(a));
 }
 
-const KM_STEPS: [MilestoneId, number, string][] = [
-  ['km10k', 10_000, '10,000 km flown'], ['km50k', 50_000, '50,000 km flown'], ['km100k', 100_000, '100,000 km flown'],
-];
+const KM_STEPS: [MilestoneId, number][] = [['km10k', 10_000], ['km50k', 50_000], ['km100k', 100_000]];
 const AIRPORT_STEPS: [MilestoneId, number][] = [['airports10', 10], ['airports25', 25]];
 const COUNTRY_STEPS: [MilestoneId, number][] = [['countries5', 5], ['countries10', 10]];
 
-const LABELS: Record<MilestoneId, string> = {
-  transatlantic: 'First transatlantic', transpacific: 'First transpacific',
-  airports10: '10 airports', airports25: '25 airports', countries5: '5 countries', countries10: '10 countries',
-  km10k: '10,000 km', km50k: '50,000 km', km100k: '100,000 km'
+const LABELS: Record<MilestoneId, MsgKey> = {
+  transatlantic: 'logbook.ms.transatlantic', transpacific: 'logbook.ms.transpacific',
+  airports10: 'logbook.ms.airports10', airports25: 'logbook.ms.airports25',
+  countries5: 'logbook.ms.countries5', countries10: 'logbook.ms.countries10',
+  km10k: 'logbook.ms.km10k', km50k: 'logbook.ms.km50k', km100k: 'logbook.ms.km100k',
 };
 
 /** Label for an id. */
 export function milestoneLabel(id: MilestoneId): string {
-  return LABELS[id];
+  return t(LABELS[id]);
 }
 
 /** Earned milestones, in the order they were earned. */
@@ -69,7 +69,7 @@ export function milestones(flights: readonly BoardedFlight[]): Milestone[] {
   const add = (id: MilestoneId, f: BoardedFlight, detail: string): void => {
     if (got.has(id)) return;
     got.add(id);
-    out.push({ id, label: LABELS[id], detail, dateKey: f.dateKey, flightKey: f.key });
+    out.push({ id, label: t(LABELS[id]), detail, dateKey: f.dateKey, flightKey: f.key });
   };
   const airports = new Set<string>();
   const countries = new Set<string>();
@@ -84,10 +84,10 @@ export function milestones(flights: readonly BoardedFlight[]): Milestone[] {
       airports.add(c);
       countries.add(a.iso2);
     }
-    for (const [id, n] of AIRPORT_STEPS) if (airports.size >= n) add(id, f, `${n} airports`);
-    for (const [id, n] of COUNTRY_STEPS) if (countries.size >= n) add(id, f, `${n} countries`);
+    for (const [id, n] of AIRPORT_STEPS) if (airports.size >= n) add(id, f, t('logbook.ms.nAirports', { n }));
+    for (const [id, n] of COUNTRY_STEPS) if (countries.size >= n) add(id, f, t('logbook.ms.nCountries', { n }));
     km += f.km ?? 0;
-    for (const [id, n, text] of KM_STEPS) if (km >= n) add(id, f, text);
+    for (const [id, n] of KM_STEPS) if (km >= n) add(id, f, t('logbook.ms.kmFlown', { km: formatNumber(n) }));
   }
   return out;
 }

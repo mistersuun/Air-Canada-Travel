@@ -5,33 +5,36 @@
  * else all-day "Estimated · Madrid → Seville train". Alternates are not
  * exported. A plan, not a booking: every description says so.
  */
+import { t } from '../../i18n/t';
 import { aircraftName } from '../../utils/aircraft';
 import { airportName } from '../../utils/airports';
 import { escapeIcsText, foldIcsLine, icsUtc } from '../../utils/ics';
 import { addDays, toUtcMs } from '../../utils/time';
+import type { MsgKey } from '../../i18n/t';
 import { FlightRef, GroundLeg, Trip, TripLeg } from '../model';
 import { endTz, refArrUtc, refDepUtc } from './legs';
 import { DEFAULT_LISTING_HOURS } from './listing';
 
 const CRLF = '\r\n';
-const PRODID = '-//Routes//Trip export//EN';
+const PRODID = '-//Routes//Trip export//EN'; // i18n-ignore
 const UID_DOMAIN = 'routes-trips';
 /** SEQUENCE is seconds since this epoch: monotonic per export, and inside a 32-bit int. */
 const SEQUENCE_EPOCH_S = 1_700_000_000;
 /** Replaced legs are history, not plans. */
 const SKIP: readonly TripLeg['status'][] = ['notBoarded', 'abandoned', 'didntTry'];
 
-const MODE_LABEL: Record<GroundLeg['mode'], string> = {
-  train: 'train', bus: 'bus', car: 'drive', ferry: 'ferry', flight: 'flight', other: 'trip',
+const MODE_KEY: Record<GroundLeg['mode'], MsgKey> = {
+  train: 'trips.mode.train', bus: 'trips.mode.bus', car: 'trips.mode.drive', ferry: 'trips.mode.ferry',
+  flight: 'trips.mode.flight', other: 'trips.mode.trip',
 };
 
 function flightEvent(trip: Trip, ref: FlightRef, stamp: string, seq: number, listingHours: number): string[] {
   const label = `${ref.flightNumber} ${ref.origin}→${ref.dest}`;
   const plane = ref.aircraft ? ` · ${aircraftName(ref.aircraft)}` : '';
   const desc = [
-    `Standby plan for ${trip.name}, not a booking.`,
-    `${ref.flightNumber}${plane}: ${ref.origin} ${ref.depLocal} → ${ref.dest} ${ref.arrLocal}, local times (scheduled).`,
-    'Listing is your own step: check your pass rules and the Air Canada app.',
+    t('trips.ics.plan', { name: trip.name }),
+    t('trips.ics.times', { flight: `${ref.flightNumber}${plane}`, origin: ref.origin, dep: ref.depLocal, dest: ref.dest, arr: ref.arrLocal }),
+    t('trips.ics.listingNote'),
   ].join('\n');
   return [
     'BEGIN:VEVENT',
@@ -43,13 +46,13 @@ function flightEvent(trip: Trip, ref: FlightRef, stamp: string, seq: number, lis
     `DTEND:${icsUtc(refArrUtc(ref))}`,
     'STATUS:TENTATIVE',
     'TRANSP:OPAQUE',
-    `SUMMARY:${escapeIcsText(`Tentative standby · ${label}`)}`,
+    `SUMMARY:${escapeIcsText(t('trips.ics.summary', { label }))}`,
     `LOCATION:${escapeIcsText(`${airportName(ref.origin)} (${ref.origin})`)}`,
     `DESCRIPTION:${escapeIcsText(desc)}`,
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
     `TRIGGER:-PT${listingHours}H`,
-    `DESCRIPTION:${escapeIcsText(`List for ${ref.flightNumber} (check your pass rules)`)}`,
+    `DESCRIPTION:${escapeIcsText(t('trips.ics.alarm', { flight: ref.flightNumber }))}`,
     'END:VALARM',
     'END:VEVENT',
   ];
@@ -57,19 +60,19 @@ function flightEvent(trip: Trip, ref: FlightRef, stamp: string, seq: number, lis
 
 function groundEvent(trip: Trip, leg: GroundLeg, stamp: string, seq: number): string[] {
   const route = `${leg.from.name} → ${leg.to.name}`;
-  const mode = MODE_LABEL[leg.mode];
+  const mode = t(MODE_KEY[leg.mode]);
   const out = ['BEGIN:VEVENT', `UID:${trip.id}-${leg.id}@${UID_DOMAIN}`, `DTSTAMP:${stamp}`, `LAST-MODIFIED:${stamp}`, `SEQUENCE:${seq}`];
   const fromTz = endTz(leg.from) ?? trip.goal.tz ?? 'UTC';
   const toTz = endTz(leg.to) ?? fromTz;
   if (leg.provenance === 'saved' && leg.userTimes) {
-    const t = leg.userTimes;
+    const ut = leg.userTimes;
     out.push(
-      `DTSTART:${icsUtc(toUtcMs(t.depDateKey, t.depLocal, fromTz))}`,
-      `DTEND:${icsUtc(toUtcMs(t.arrDateKey, t.arrLocal, toTz))}`,
+      `DTSTART:${icsUtc(toUtcMs(ut.depDateKey, ut.depLocal, fromTz))}`,
+      `DTEND:${icsUtc(toUtcMs(ut.arrDateKey, ut.arrLocal, toTz))}`,
       'STATUS:CONFIRMED',
       'TRANSP:OPAQUE',
       `SUMMARY:${escapeIcsText(`${route} ${mode}`)}`,
-      `DESCRIPTION:${escapeIcsText([`Saved by you: ${t.depLocal} → ${t.arrLocal}, local times.`, leg.note].filter(Boolean).join('\n'))}`,
+      `DESCRIPTION:${escapeIcsText([t('trips.ics.saved', { dep: ut.depLocal, arr: ut.arrLocal }), leg.note].filter(Boolean).join('\n'))}`,
     );
   } else {
     out.push(
@@ -77,8 +80,8 @@ function groundEvent(trip: Trip, leg: GroundLeg, stamp: string, seq: number): st
       `DTEND;VALUE=DATE:${addDays(leg.dateKey, 1).replace(/-/g, '')}`,
       'STATUS:TENTATIVE',
       'TRANSP:TRANSPARENT',
-      `SUMMARY:${escapeIcsText(`${leg.provenance === 'unknown' ? 'Unknown' : 'Estimated'} · ${route} ${mode}`)}`,
-      `DESCRIPTION:${escapeIcsText('Only estimated so far: find the real times and save them in the trip.')}`,
+      `SUMMARY:${escapeIcsText(t(leg.provenance === 'unknown' ? 'trips.ics.unknownGround' : 'trips.ics.estimatedGround', { route, mode }))}`,
+      `DESCRIPTION:${escapeIcsText(t('trips.ics.estimatedNote'))}`,
     );
   }
   out.push('END:VEVENT');

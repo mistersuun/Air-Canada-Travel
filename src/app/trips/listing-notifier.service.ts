@@ -1,4 +1,5 @@
 import { DOCUMENT, Injectable, inject } from '@angular/core';
+import { t } from '../i18n/t';
 import { PrefsService } from '../state/prefs.service';
 import { airportName } from '../utils/airports';
 import { listingOpenedSince } from './engine/listing';
@@ -31,7 +32,7 @@ export class ListingNotifierService {
     const opened = listingOpenedSince(this.trips.trips(), since, nowMs, this.prefs.listingHours());
     for (const { trip, leg, refIndex } of opened) {
       const ref = leg.refs[refIndex];
-      this.show(`Listing open for ${ref.flightNumber}`, `${airportName(ref.origin)} → ${airportName(ref.dest)} · ${trip.name}. Listing is your own step.`, `listing-${leg.id}-${refIndex}`);
+      this.show(t('trips.notify.title', { flight: ref.flightNumber }), t('trips.notify.body', { from: airportName(ref.origin), to: airportName(ref.dest), trip: trip.name }), `listing-${leg.id}-${refIndex}`);
     }
     return opened.length;
   }

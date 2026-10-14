@@ -5,6 +5,8 @@
  * Times: flight times stay origin/dest-local (FlightRef local fields), user
  * timestamps are ISO instants, and `homeBy` is wall-clock at `homeAirport`.
  */
+import { t, type MsgKey } from '../i18n/t';
+
 export const TRIPS_KEY = 'ac.trips.v1';          // { schema, trips }
 export const FLIGHTLOG_KEY = 'ac.flightlog.v1';  // { schema, notes, outcomes, dismissed }
 export const TRIPS_CORRUPT_KEY = 'ac.trips.corrupt';
@@ -29,14 +31,24 @@ export function schemaFor(trips: readonly Pick<Trip, 'stops'>[]): 1 | 2 {
 }
 
 export type Provenance = 'scheduled' | 'estimated' | 'saved' | 'unknown';
-export const PROVENANCE_LABEL: Record<Provenance, string> =
-  { scheduled: 'Scheduled', estimated: 'Estimated', saved: 'Saved by you', unknown: 'Unknown' };
+
+/** A label map whose values are translated when read, so it follows a language switch. */
+export function labelMap<K extends string>(keys: Record<K, MsgKey>): Record<K, string> {
+  const out = {} as Record<K, string>;
+  for (const k of Object.keys(keys) as K[]) Object.defineProperty(out, k, { enumerable: true, get: () => t(keys[k]) });
+  return out;
+}
+
+export const PROVENANCE_LABEL: Record<Provenance, string> = labelMap({
+  scheduled: 'trips.provenance.scheduled', estimated: 'trips.provenance.estimated',
+  saved: 'trips.provenance.saved', unknown: 'trips.provenance.unknown',
+});
 
 export type LegStatus = 'planned' | 'listed' | 'checkedIn' | 'boarded' | 'notBoarded' | 'didntTry' | 'abandoned';
-export const LEG_STATUS_LABEL: Record<LegStatus, string> = {
-  planned: 'Planned', listed: 'Listed', checkedIn: 'Checked in', boarded: 'Boarded',
-  notBoarded: 'Not boarded', didntTry: "Didn't try", abandoned: 'Dropped',
-};
+export const LEG_STATUS_LABEL: Record<LegStatus, string> = labelMap({
+  planned: 'trips.status.planned', listed: 'trips.status.listed', checkedIn: 'trips.status.checkedIn', boarded: 'trips.status.boarded',
+  notBoarded: 'trips.status.notBoarded', didntTry: 'trips.status.didntTry', abandoned: 'trips.status.abandoned',
+});
 export const LEG_STATUSES: readonly LegStatus[] =
   ['planned', 'listed', 'checkedIn', 'boarded', 'notBoarded', 'didntTry', 'abandoned'];
 /** Statuses after which a leg is "done" (no more prompts, excluded from Today's "next flight"). */
@@ -186,8 +198,10 @@ export interface LoadNote {
 }
 
 export type OutcomeKind = 'allBoarded' | 'someBoarded' | 'noneBoarded' | 'didntTry';
-export const OUTCOME_LABEL: Record<OutcomeKind, string> =
-  { allBoarded: 'Everyone boarded', someBoarded: 'Some of us', noneBoarded: "Didn't board", didntTry: "Didn't try" };
+export const OUTCOME_LABEL: Record<OutcomeKind, string> = labelMap({
+  allBoarded: 'trips.outcome.allBoarded', someBoarded: 'trips.outcome.someBoarded',
+  noneBoarded: 'trips.outcome.noneBoarded', didntTry: 'trips.outcome.didntTry',
+});
 export const OUTCOME_KINDS: readonly OutcomeKind[] = ['allBoarded', 'someBoarded', 'noneBoarded', 'didntTry'];
 
 export interface Outcome {
@@ -238,5 +252,5 @@ export function emptyFlightLog(): FlightLog {
 
 /** 'Seville trip'. */
 export function defaultTripName(goal: Place): string {
-  return `${goal.name} trip`;
+  return t('trips.defaultName', { name: goal.name });
 }

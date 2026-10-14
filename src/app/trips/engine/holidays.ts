@@ -5,6 +5,7 @@
  *
  * The note is neutral: it never changes a number and is never a score.
  */
+import { t, type MsgKey } from '../../i18n/t';
 import { addDays, diffDays, formatKey, weekdayIndex } from '../../utils/time';
 
 export interface Holiday { dateKey: string; name: string; region: 'CA' | 'US' | `CA-${string}` }
@@ -69,7 +70,7 @@ export function holidaysIn(year: number): Holiday[] {
     { dateKey: key(y, 7, 1), name: 'Canada Day', region: 'CA' },
     { dateKey: nthWeekday(y, 8, MON, 1), name: 'Civic Holiday', region: 'CA' },
     { dateKey: nthWeekday(y, 9, MON, 1), name: 'Labour Day', region: 'CA' },
-    { dateKey: key(y, 9, 30), name: 'National Day for Truth and Reconciliation', region: 'CA' },
+    { dateKey: key(y, 9, 30), name: 'National Day for Truth and Reconciliation', region: 'CA' }, // i18n-ignore
     { dateKey: nthWeekday(y, 10, MON, 2), name: 'Thanksgiving', region: 'CA' },
     { dateKey: key(y, 11, 11), name: 'Remembrance Day', region: 'CA' },
     { dateKey: key(y, 12, 25), name: 'Christmas Day', region: 'CA' },
@@ -78,8 +79,8 @@ export function holidaysIn(year: number): Holiday[] {
     { dateKey: nthWeekday(y, 2, MON, 3), name: 'Family Day', region: 'CA-ON,BC,AB,SK,NB' },
     { dateKey: nthWeekday(y, 2, MON, 3), name: 'Louis Riel Day', region: 'CA-MB' },
     { dateKey: nthWeekday(y, 2, MON, 3), name: 'Heritage Day', region: 'CA-NS' },
-    { dateKey: victoriaDay(y), name: 'Journée nationale des patriotes', region: 'CA-QC' },
-    { dateKey: key(y, 6, 24), name: 'Fête nationale', region: 'CA-QC' },
+    { dateKey: victoriaDay(y), name: 'Journée nationale des patriotes', region: 'CA-QC' }, // i18n-ignore
+    { dateKey: key(y, 6, 24), name: 'Fête nationale', region: 'CA-QC' }, // i18n-ignore
     // United States (federal)
     { dateKey: key(y, 1, 1), name: "New Year's Day", region: 'US' },
     { dateKey: nthWeekday(y, 1, MON, 3), name: 'Martin Luther King Jr. Day', region: 'US' },
@@ -107,12 +108,31 @@ export function holidaysNear(dateKey: string, windowDays: number): Holiday[] {
     .filter(h => Math.abs(diffDays(dateKey, h.dateKey)) <= windowDays);
 }
 
+const CA_SLUG: Record<string, string> = {
+  "New Year's Day": 'newYear', 'Good Friday': 'goodFriday', 'Easter Monday': 'easterMonday', 'Victoria Day': 'victoria',
+  'Canada Day': 'canadaDay', 'Civic Holiday': 'civic', 'Labour Day': 'labour',
+  'National Day for Truth and Reconciliation': 'truth', Thanksgiving: 'thanksgiving', 'Remembrance Day': 'remembrance', // i18n-ignore
+  'Christmas Day': 'christmas', 'Boxing Day': 'boxing', 'Family Day': 'family', 'Louis Riel Day': 'riel', 'Heritage Day': 'heritage',
+};
+const US_SLUG: Record<string, string> = {
+  "New Year's Day": 'newYear', 'Martin Luther King Jr. Day': 'mlk', "Presidents' Day": 'presidents', 'Memorial Day': 'memorial',
+  Juneteenth: 'juneteenth', 'Independence Day': 'independence', 'Labor Day': 'labor', 'Columbus Day': 'columbus',
+  'Veterans Day': 'veterans', Thanksgiving: 'thanksgiving', 'Christmas Day': 'christmas',
+};
+/** Holidays whose Canadian name is told apart from the US one ('Canadian Thanksgiving'). */
+const CA_DISTINCT = new Set(["New Year's Day", 'Thanksgiving', 'Christmas Day']);
+
+/** A Canadian or provincial holiday's own name in the UI language (names without a key, like Quebec's, are shown as they are). */
+function baseName(h: Holiday): string {
+  const slug = CA_SLUG[h.name];
+  return slug ? t(`trips.holiday.ca.${slug}` as MsgKey) : h.name;
+}
+
 /** 'Canadian Thanksgiving', 'US Thanksgiving', 'Family Day (ON, BC, AB, SK, NB)', 'Canada Day'. */
 export function holidayDisplayName(h: Holiday): string {
-  if (h.region === 'CA') return h.name === 'Thanksgiving' || h.name === "New Year's Day" || h.name === 'Christmas Day'
-    ? `Canadian ${h.name}` : h.name;
-  if (h.region === 'US') return `US ${h.name}`;
-  return `${h.name} (${provinces(h)})`;
+  if (h.region === 'CA') return CA_DISTINCT.has(h.name) ? t(`trips.holiday.caFull.${CA_SLUG[h.name]}` as MsgKey) : baseName(h);
+  if (h.region === 'US') return t(`trips.holiday.usFull.${US_SLUG[h.name]}` as MsgKey);
+  return `${baseName(h)} (${provinces(h)})`;
 }
 
 function provinces(h: Holiday): string {
@@ -130,7 +150,11 @@ export function holidayNote(dateKey: string): string | null {
   const h = [...near].sort((a, b) =>
     rank(a) - rank(b) || Math.abs(diffDays(dateKey, a.dateKey)) - Math.abs(diffDays(dateKey, b.dateKey)))[0];
   const day = formatKey(h.dateKey, { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '');
-  const weekend = weekdayIndex(h.dateKey) === MON || weekdayIndex(h.dateKey) === THU ? ' weekend' : '';
-  const name = h.region.startsWith('CA-') ? `${h.name}${weekend} in ${provinces(h)}` : `${holidayDisplayName(h)}${weekend}`;
-  return `${name} (${day}). Often busy, check loads.`;
+  const weekend = weekdayIndex(h.dateKey) === MON || weekdayIndex(h.dateKey) === THU;
+  const prov = h.region.startsWith('CA-');
+  const name = prov ? baseName(h) : holidayDisplayName(h);
+  const key = prov
+    ? (weekend ? 'trips.holiday.noteProvWeekend' : 'trips.holiday.noteProv')
+    : (weekend ? 'trips.holiday.noteWeekend' : 'trips.holiday.note');
+  return t(key, { name, provinces: prov ? provinces(h) : '', day });
 }

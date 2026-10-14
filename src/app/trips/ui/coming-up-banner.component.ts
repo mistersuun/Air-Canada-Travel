@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { tripPath } from '../../ui/links';
@@ -21,10 +22,10 @@ import { emptyFlightLog } from '../model';
   host: { '[class.is-on]': '!!item()' },
   template: `
     @if (item(); as c) {
-      <a class="cu ui-glass" [routerLink]="path(c.tripId)" data-coming-up [attr.aria-label]="'Coming up: ' + c.text">
+      <a class="cu ui-glass" [routerLink]="path(c.tripId)" data-coming-up [attr.aria-label]="t('trips.banner.aria', { text: c.text })">
         <span class="cu__txt tn">
           <span class="cu__h">{{ c.head }}</span>
-          @if (c.actions.length) { <span class="cu__a">Next: {{ c.actions.join(' · ') }}</span> }
+          @if (c.actions.length) { <span class="cu__a">{{ t('trips.banner.next', { actions: c.actions.join(' · ') }) }}</span> }
         </span>
         <app-icon class="cu__chev" name="chevron-right" [size]="18" />
       </a>
@@ -45,6 +46,7 @@ import { emptyFlightLog } from '../model';
   `],
 })
 export class ComingUpBannerComponent {
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
 

@@ -6,7 +6,7 @@ const TONE: Record<LegStatus, string> = {
   listed: 'ui-tag--teal',
   checkedIn: 'ui-tag--blue',
   boarded: 'ui-tag--teal',
-  notBoarded: 'ui-tag--neutral is-miss',
+  notBoarded: 'ui-tag--neutral is-miss', // i18n-ignore
   didntTry: 'ui-tag--neutral',
   abandoned: 'ui-tag--neutral',
 };

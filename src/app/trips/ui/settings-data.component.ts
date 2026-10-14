@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { storageInfo } from '../../files/quota';
+import { t, type MsgKey, type MsgParams } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService, UNSAVED_NOTICE } from '../trips.service';
 
@@ -17,27 +18,27 @@ export const MAX_BACKUP_BYTES = 5_000_000;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="grp" data-settings-data>
-      <p class="ui-label">Your trips</p>
-      <p class="hint">Your trips live on this device. There is no account: export a backup to move them or keep them safe.</p>
+      <p class="ui-label">{{ t('trips.data.title') }}</p>
+      <p class="hint">{{ t('trips.data.hint') }}</p>
       <div class="acts">
-        <button type="button" class="btn" data-export (click)="exportTrips()">Export trips</button>
+        <button type="button" class="btn" data-export (click)="exportTrips()">{{ t('trips.data.export') }}</button>
         <label class="btn" [class.is-off]="trips.readOnly()">
-          Import trips
+          {{ t('trips.data.import') }}
           <input type="file" accept="application/json,.json" class="ui-visually-hidden" data-import
                  [disabled]="trips.readOnly()" (change)="importFile($event)">
         </label>
       </div>
-      @if (trips.unsaved()) { <p class="res is-err" role="status" data-unsaved>{{ unsavedText }}</p> }
+      @if (trips.unsaved()) { <p class="res is-err" role="status" data-unsaved>{{ t(unsavedKey) }}</p> }
       @if (trips.backupReminder(); as n) { <p class="hint" data-backup-nudge>{{ n }}</p> }
-      @if (result(); as r) { <p class="res" [class.is-err]="r.error" role="status">{{ r.text }}</p> }
-      @if (count()) { <p class="hint tn">{{ count() }} on this device.</p> }
+      @if (result(); as r) { <p class="res" [class.is-err]="r.error" role="status">{{ r.text() }}</p> }
+      @if (count()) { <p class="hint tn">{{ t('trips.data.onDevice', { n: count() }) }}</p> }
       @if (keepLine(); as k) { <p class="hint" data-persisted>{{ k }}</p> }
       @if (trips.damaged(); as d) {
         <div class="dmg" data-damaged>
-          <p class="hint">A damaged copy of your {{ d }} was kept.</p>
+          <p class="hint">{{ t('trips.data.damaged', { what: t(damagedKey(d)) }) }}</p>
           <div class="acts">
-            <button type="button" class="btn" data-damaged-download (click)="downloadDamaged()">Download</button>
-            <button type="button" class="btn btn--del" data-damaged-delete (click)="deleteDamaged()">{{ confirmDelete() ? 'Tap again to delete' : 'Delete' }}</button>
+            <button type="button" class="btn" data-damaged-download (click)="downloadDamaged()">{{ t('trips.data.download') }}</button>
+            <button type="button" class="btn btn--del" data-damaged-delete (click)="deleteDamaged()">{{ t(confirmDelete() ? 'trips.data.tapAgain' : 'trips.data.delete') }}</button>
           </div>
         </div>
       }
@@ -65,18 +66,25 @@ export class SettingsDataComponent {
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
 
-  protected readonly result = signal<{ text: string; error: boolean } | null>(null);
-  protected readonly count = computed(() => {
-    const n = this.trips.trips().length;
-    return n ? `${n} ${n === 1 ? 'trip' : 'trips'}` : '';
-  });
+  protected readonly t = t;
+  /** The result line is a function, so it is written in the language shown when it is read. */
+  protected readonly result = signal<{ text: () => string; error: boolean } | null>(null);
+  protected readonly count = computed(() => this.trips.trips().length);
 
-  protected readonly unsavedText = UNSAVED_NOTICE;
+  protected readonly unsavedKey = UNSAVED_NOTICE;
   private readonly persisted = signal<boolean | null>(null);
   protected readonly keepLine = computed(() => {
     const p = this.persisted();
-    return p === null ? '' : p ? 'This phone keeps your trips unless you clear site data.' : 'Your browser may clear your trips if space runs low. A backup keeps them safe.';
+    return p === null ? '' : t(p ? 'trips.data.persisted' : 'trips.data.notPersisted');
   });
+
+  protected damagedKey(d: 'trips' | 'flight log' | 'trips and flight log'): MsgKey { // i18n-ignore
+    return d === 'trips' ? 'trips.data.damagedTrips' : d === 'flight log' ? 'trips.data.damagedLog' : 'trips.data.damagedBoth'; // i18n-ignore
+  }
+
+  private say(key: MsgKey, error: boolean, params?: MsgParams): void {
+    this.result.set({ text: () => t(key, params), error });
+  }
 
   constructor() {
     void storageInfo().then(i => this.persisted.set(i.persisted), () => undefined);
@@ -84,8 +92,8 @@ export class SettingsDataComponent {
 
   exportTrips(): void {
     const r = this.trips.downloadBackup();
-    this.result.set(r ? { text: `Downloaded ${r.filename}`, error: false }
-      : { text: 'Could not create the file on this browser.', error: true });
+    if (r) this.say('trips.data.downloaded', false, { name: r.filename });
+    else this.say('trips.data.noFile', true);
   }
 
   protected readonly confirmDelete = signal(false);
@@ -102,7 +110,7 @@ export class SettingsDataComponent {
   }
 
   downloadDamaged(): void {
-    if (!this.trips.downloadDamaged()) this.result.set({ text: 'Could not create the file on this browser.', error: true });
+    if (!this.trips.downloadDamaged()) this.say('trips.data.noFile', true);
   }
 
   async importFile(e: Event): Promise<void> {
@@ -111,14 +119,14 @@ export class SettingsDataComponent {
     input.value = '';
     if (!file) return;
     if (file.size > MAX_BACKUP_BYTES) {
-      this.result.set({ text: 'That file is too large to be a trips backup.', error: true });
+      this.say('trips.data.tooLarge', true);
       return;
     }
     let text: string;
     try {
       text = await file.text();
     } catch {
-      this.result.set({ text: 'Could not read that file.', error: true });
+      this.say('trips.data.unreadable', true);
       return;
     }
     this.importText(text);
@@ -128,11 +136,10 @@ export class SettingsDataComponent {
   importText(text: string): void {
     const r = this.trips.importBackup(text);
     if ('error' in r) {
-      this.result.set({ text: r.error, error: true });
+      this.result.set({ text: () => r.error, error: true });
       return;
     }
-    const msg = `Added ${r.added} ${r.added === 1 ? 'trip' : 'trips'}, updated ${r.updated}`;
-    this.result.set({ text: msg, error: false });
-    this.state.flash(msg);
+    this.say('trips.data.imported', false, { added: r.added, updated: r.updated });
+    this.state.flash(t('trips.data.imported', { added: r.added, updated: r.updated }));
   }
 }

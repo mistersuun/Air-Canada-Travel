@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { t } from '../../../i18n/t';
 import { EventsCardComponent } from '../../../events/events-card.component';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { buildPrepChecklist, tripEssentials } from '../../../places/prep';
@@ -31,7 +32,7 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
 
       <section aria-labelledby="pp-h">
         <div class="ui-sec-h pp__h">
-          <h2 class="ui-h3" id="pp-h">Before you go</h2>
+          <h2 class="ui-h3" id="pp-h">{{ t('trips.prep.before') }}</h2>
           <span class="ui-sub tn" data-count>{{ count() }}</span>
         </div>
         <div class="ui-card pp__list">
@@ -49,22 +50,22 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
               @if (r.customId; as cid) {
                 @if (!isUsual(r.item.title)) {
                   <button type="button" class="chk__save" data-save-usual (click)="saveUsual(r.item.title)"
-                          [attr.aria-label]="'Save ' + r.item.title + ' as a usual item'">Save as usual</button>
+                          [attr.aria-label]="t('trips.prep.saveAria', { item: r.item.title })">{{ t('trips.prep.saveUsual') }}</button>
                 }
-                <button type="button" class="chk__rm" [attr.aria-label]="'Remove ' + r.item.title" (click)="removeCustom(cid)">
+                <button type="button" class="chk__rm" [attr.aria-label]="t('trips.edit.removeAria', { what: r.item.title })" (click)="removeCustom(cid)">
                   <app-icon name="close" [size]="15" />
                 </button>
               }
             </div>
           }
           <form class="add" (submit)="addCustom($event)">
-            <label class="ui-visually-hidden" for="pp-add">Add your own item</label>
-            <input id="pp-add" class="add__in" type="text" maxlength="300" autocomplete="off" placeholder="Add your own item"
+            <label class="ui-visually-hidden" for="pp-add">{{ t('trips.prep.addOwn') }}</label>
+            <input id="pp-add" class="add__in" type="text" maxlength="300" autocomplete="off" [placeholder]="t('trips.prep.addOwn')"
                    [value]="draft()" (input)="draft.set($any($event.target).value)" data-add-input>
-            <button type="submit" class="ui-btn ui-btn--ghost ui-btn--sm" [disabled]="!draft().trim() || trips.readOnly()" data-add>Add</button>
+            <button type="submit" class="ui-btn ui-btn--ghost ui-btn--sm" [disabled]="!draft().trim() || trips.readOnly()" data-add>{{ t('trips.edit.add') }}</button>
           </form>
         </div>
-        <p class="ui-visually-hidden" id="pp-leg-hint">Opens the leg so you can save the times you found.</p>
+        <p class="ui-visually-hidden" id="pp-leg-hint">{{ t('trips.prep.legHint') }}</p>
       </section>
 
       @if (trip().goal.acCode; as ev) {
@@ -73,8 +74,8 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
 
       @if (ess(); as e) {
         <div class="ui-ess tn pp__ess" data-ess>
-          @if (e.currency) { <div><span>Money</span><b>{{ e.currency }}</b></div> }
-          @if (e.timeDiff) { <div><span>Time</span><b>{{ e.timeDiff }}</b></div> }
+          @if (e.currency) { <div><span>{{ t('trips.prep.money') }}</span><b>{{ e.currency }}</b></div> }
+          @if (e.timeDiff) { <div><span>{{ t('trips.prep.time') }}</span><b>{{ e.timeDiff }}</b></div> }
         </div>
       }
     </div>
@@ -123,6 +124,7 @@ import { type PrepRow, doneLabel, listingStatus, prepRow } from './prep-model';
   `],
 })
 export class PrepTabComponent {
+  protected readonly t = t;
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly router = inject(Router);
@@ -183,8 +185,8 @@ export class PrepTabComponent {
   }
 
   protected saveUsual(text: string): void {
-    if (this.profile.addUsualItem(text)) this.state.flash('Saved to My usual items');
-    else this.state.flash(`My usual items is full (${MAX_USUAL_ITEMS})`);
+    if (this.profile.addUsualItem(text)) this.state.flash(t('trips.prep.savedUsual'));
+    else this.state.flash(t('trips.prep.usualFull', { n: MAX_USUAL_ITEMS }));
   }
 
   protected removeCustom(id: string): void {

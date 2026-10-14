@@ -5,6 +5,7 @@
  *   lastStop   = where you head home from (Return tab, home-by gateways)
  *   currentStop = where you are on a given day (Today's "Day N in ...")
  */
+import { t } from '../i18n/t';
 import { airportEnd } from '../places/ground';
 import { greatCircleKm } from '../utils/geo';
 import type { Place, Stop, Trip, TripLeg } from './model';
@@ -40,7 +41,8 @@ export function currentStop(trip: Trip, dateKey: string): Stop {
 /** 'Seville, Lisbon and Porto'; just the goal name for a single stop. */
 export function stopNames(trip: Trip): string {
   const names = tripStops(trip).map(s => s.place.name);
-  return names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  if (names.length <= 1) return names.join('');
+  return t('trips.stopNames', { list: names.slice(0, -1).join(', '), last: names[names.length - 1] });
 }
 
 /** Adds a stop keeping the list ordered by arrival date. */

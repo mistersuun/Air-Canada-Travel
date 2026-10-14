@@ -7,7 +7,8 @@
  */
 import type { TimeFormat } from '../../state/prefs.service';
 import { airportTz } from '../../utils/airports';
-import { MINUTE_MS, WEEKDAY_SHORT, formatClock, tzOffsetMin, utcToLocal, weekdayIndex } from '../../utils/time';
+import { t } from '../../i18n/t';
+import { MINUTE_MS, formatClock, tzOffsetMin, utcToLocal, weekdayIndex, weekdayShort } from '../../utils/time';
 import { FlightLeg, FlightRef, Trip } from '../model';
 import { ESTIMATED_FLIGHT, refDepUtc } from './legs';
 
@@ -35,10 +36,10 @@ export interface ListingChip {
   refIndex: number;
 }
 
-/** 'YUL time' when the airport's clock differs from this device's at `ms`, else ''. */
-function zoneSuffix(origin: string, ms: number): string {
+/** True when the airport's clock differs from this device's at `ms` (the label then names the airport's zone). */
+function differsFromDevice(origin: string, ms: number): boolean {
   const device = -new Date(ms).getTimezoneOffset();
-  return tzOffsetMin(airportTz(origin), ms) === device ? '' : ` ${origin} time`;
+  return tzOffsetMin(airportTz(origin), ms) !== device;
 }
 
 /**
@@ -58,10 +59,12 @@ export function listingChip(leg: FlightLeg, nowMs: number, hours: number, fmt: T
   const { i, dep } = best as { i: number; dep: number };
   const ref = leg.refs[i];
   const opensUtc = listingOpensUtc(dep, hours);
-  if (nowMs >= opensUtc) return { label: 'Listing open', open: true, opensUtc, refIndex: i };
+  if (nowMs >= opensUtc) return { label: t('trips.listing.open'), open: true, opensUtc, refIndex: i };
   if (opensUtc - nowMs > LISTING_SOON_HOURS * HOUR_MS) return null;
   const at = utcToLocal(opensUtc, airportTz(ref.origin));
-  const label = `Listing opens ${WEEKDAY_SHORT[weekdayIndex(at.dateKey)]} ${formatClock(at.hhmm, fmt)}${zoneSuffix(ref.origin, opensUtc)}`;
+  const label = t(differsFromDevice(ref.origin, opensUtc) ? 'trips.listing.opensZone' : 'trips.listing.opens', {
+    day: weekdayShort(weekdayIndex(at.dateKey)), time: formatClock(at.hhmm, fmt), code: ref.origin,
+  });
   return { label, open: false, opensUtc, refIndex: i };
 }
 

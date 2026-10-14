@@ -3,6 +3,7 @@
  * response shape, which flights are worth asking about and the one-line text.
  * Facts only: times and gates as reported, never a prediction.
  */
+import { t } from '../i18n/t';
 import { formatClock, utcToLocal, MINUTE_MS } from '../utils/time';
 import type { TimeFormat } from '../state/prefs.service';
 import { airportTz } from '../utils/airports';
@@ -98,9 +99,9 @@ export function parseStatus(v: unknown): FlightStatus | null {
 export function agoLabel(fetchedAt: string, nowMs: number): string {
   const min = Math.max(0, Math.floor((nowMs - Date.parse(fetchedAt)) / MINUTE_MS));
   if (!Number.isFinite(min)) return '';
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
-  return `${Math.floor(min / 60)} h ${min % 60} min ago`;
+  if (min < 1) return t('trips.live.justNow');
+  if (min < 60) return t('trips.live.minAgo', { n: min });
+  return t('trips.live.hmAgo', { h: Math.floor(min / 60), m: min % 60 });
 }
 
 export interface StatusLine {
@@ -120,20 +121,22 @@ const clock = (iso: string, tz: string, fmt: TimeFormat) => formatClock(utcToLoc
  */
 export function statusLine(s: FlightStatus, origin: string, nowMs: number, fmt: TimeFormat): StatusLine {
   const tz = airportTz(origin);
-  const source = `FlightAware, ${agoLabel(s.fetchedAt, nowMs)}`;
-  if (s.cancelled) return { cancelled: true, text: 'Cancelled', source };
+  const source = t('trips.live.source', { ago: agoLabel(s.fetchedAt, nowMs) });
+  if (s.cancelled) return { cancelled: true, text: t('trips.live.cancelled'), source };
   const parts: string[] = [];
   const { scheduled, estimated, actual } = s.dep;
-  if (actual) parts.push(`Departed ${clock(actual, tz, fmt)}`);
+  if (actual) parts.push(t('trips.live.departed', { time: clock(actual, tz, fmt) }));
   else if (estimated) {
     const delta = scheduled ? Math.round((Date.parse(estimated) - Date.parse(scheduled)) / MINUTE_MS) : 0;
-    parts.push(`Estimated ${clock(estimated, tz, fmt)}${delta ? ` (${delta > 0 ? '+' : '−'}${Math.abs(delta)})` : ''}`);
-  } else if (scheduled) parts.push(`Scheduled ${clock(scheduled, tz, fmt)}`);
-  if (s.diverted) parts.push('Diverted');
-  if (s.dep.gate) parts.push(`Gate ${s.dep.gate}`);
+    parts.push(delta
+      ? t('trips.live.estimatedDelta', { time: clock(estimated, tz, fmt), delta: `${delta > 0 ? '+' : '−'}${Math.abs(delta)}` })
+      : t('trips.live.estimated', { time: clock(estimated, tz, fmt) }));
+  } else if (scheduled) parts.push(t('trips.live.scheduled', { time: clock(scheduled, tz, fmt) }));
+  if (s.diverted) parts.push(t('trips.live.diverted'));
+  if (s.dep.gate) parts.push(t('trips.live.gate', { gate: s.dep.gate }));
   if (s.inbound) {
-    if (s.inbound.landed) parts.push(`Inbound ${s.inbound.ident} landed ${clock(s.inbound.landed, tz, fmt)}`);
-    else if (s.inbound.estimatedIn) parts.push(`Inbound ${s.inbound.ident} estimated in ${clock(s.inbound.estimatedIn, tz, fmt)}`);
+    if (s.inbound.landed) parts.push(t('trips.live.landed', { ident: s.inbound.ident, time: clock(s.inbound.landed, tz, fmt) }));
+    else if (s.inbound.estimatedIn) parts.push(t('trips.live.landing', { ident: s.inbound.ident, time: clock(s.inbound.estimatedIn, tz, fmt) }));
   }
   return { cancelled: false, text: parts.join(' · '), source };
 }
@@ -142,6 +145,6 @@ export function statusLine(s: FlightStatus, origin: string, nowMs: number, fmt: 
 export function recoverTarget(tripId: string, isReturn: boolean, origin: string, legId: string):
   { link: string[]; params: Record<string, string>; label: string } {
   return isReturn
-    ? { link: tripPath(tripId), params: tripQuery('return'), label: 'See ways home' }
-    : { link: recoverPath(tripId), params: { at: origin, leg: legId }, label: 'What can I still reach?' };
+    ? { link: tripPath(tripId), params: tripQuery('return'), label: t('trips.live.waysHome') }
+    : { link: recoverPath(tripId), params: { at: origin, leg: legId }, label: t('trips.live.reach') };
 }

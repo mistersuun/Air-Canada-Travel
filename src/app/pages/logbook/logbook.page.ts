@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import { formatNumber, t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { scheduleDetail } from '../../logbook/resolve';
 import { aroundEarthLabel, boardedFlights, statsOf } from '../../logbook/logbook';
@@ -28,44 +29,44 @@ import { formatKey } from '../../utils/time';
   template: `
     <div class="ui-page ui-page--bare lb">
       <header class="lb__head">
-        <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
-        <h1 class="ui-h3">Logbook</h1>
+        <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('trips.detail.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+        <h1 class="ui-h3">{{ t('logbook.title') }}</h1>
         <span class="lb__sp" aria-hidden="true"></span>
       </header>
 
       @let s = stats();
       @if (s.flights === 0) {
         <section class="ui-card lb__empty" data-empty>
-          <h2 class="ui-h3">Nothing here yet</h2>
-          <p class="ui-sub">Flights you board are added here, from your trips and your flight log. It stays on this phone.</p>
+          <h2 class="ui-h3">{{ t('logbook.emptyTitle') }}</h2>
+          <p class="ui-sub">{{ t('logbook.emptyText') }}</p>
         </section>
       } @else {
-        <section class="tiles" aria-label="Totals" data-stats>
-          <div class="tile" data-flights><b class="tn">{{ s.flights }}</b>{{ ' ' }}<span>{{ s.flights === 1 ? 'flight' : 'flights' }}</span></div>
+        <section class="tiles" [attr.aria-label]="t('logbook.totals')" data-stats>
+          <div class="tile" data-flights><b class="tn">{{ s.flights }}</b>{{ ' ' }}<span>{{ t('logbook.unit.flights', { n: s.flights }) }}</span></div>
           <div class="tile" data-km>
-            <b class="tn">{{ s.km.toLocaleString('en-CA') }}</b>{{ ' ' }}<span>km</span>
+            <b class="tn">{{ num(s.km) }}</b>{{ ' ' }}<span>{{ km }}</span>
             @if (earth()) { <small data-earth>{{ earth() }}</small> }
           </div>
-          <div class="tile" data-countries><b class="tn">{{ s.countries.length }}</b>{{ ' ' }}<span>{{ s.countries.length === 1 ? 'country' : 'countries' }}</span></div>
-          <div class="tile" data-cities><b class="tn">{{ s.cities.length }}</b>{{ ' ' }}<span>{{ s.cities.length === 1 ? 'city' : 'cities' }}</span></div>
+          <div class="tile" data-countries><b class="tn">{{ s.countries.length }}</b>{{ ' ' }}<span>{{ t('logbook.unit.countries', { n: s.countries.length }) }}</span></div>
+          <div class="tile" data-cities><b class="tn">{{ s.cities.length }}</b>{{ ' ' }}<span>{{ t('logbook.unit.cities', { n: s.cities.length }) }}</span></div>
         </section>
 
         <section class="ui-card facts">
           @if (s.longest; as l) {
             <div class="fact" data-longest>
-              <span class="fact__k">Longest flight</span>
-              <span class="fact__v tn">{{ l.origin }} → {{ l.dest }} · {{ l.km.toLocaleString('en-CA') }} km</span>
+              <span class="fact__k">{{ t('logbook.longest') }}</span>
+              <span class="fact__v tn">{{ l.origin }} → {{ l.dest }} · {{ t('logbook.recap.km', { km: num(l.km) }) }}</span>
             </div>
           }
           @if (s.mostFlownRoute; as r) {
             <div class="fact" data-route>
-              <span class="fact__k">Most-flown route</span>
-              <span class="fact__v tn">{{ r.a }} – {{ r.b }} · {{ r.count }} times</span>
+              <span class="fact__k">{{ t('logbook.mostFlown') }}</span>
+              <span class="fact__v tn">{{ r.a }} – {{ r.b }} · {{ t('logbook.times', { n: r.count }) }}</span>
             </div>
           }
           @if (s.aircraft.length) {
             <div class="fact fact--col" data-aircraft>
-              <span class="fact__k">Aircraft</span>
+              <span class="fact__k">{{ t('logbook.aircraft') }}</span>
               <ul class="air">
                 @for (a of s.aircraft; track a.code) {
                   <li><span>{{ a.name }}</span><span class="tn">{{ a.count }}</span></li>
@@ -76,13 +77,13 @@ import { formatKey } from '../../utils/time';
         </section>
       }
 
-      <h2 class="ui-label lb__lbl">Stamps</h2>
+      <h2 class="ui-label lb__lbl">{{ t('logbook.stamps') }}</h2>
       @if (stamps().length) {
         <ul class="grid" data-stamps>
           @for (st of stamps(); track st.code) {
             <li class="stamp" [class.stamp--new]="fresh().has('stamp:' + st.code)" [attr.data-new]="fresh().has('stamp:' + st.code) ? '' : null" [style.color]="color(st.region)">
               <svg viewBox="0 0 120 120" width="112" height="112" role="img"
-                   [attr.aria-label]="st.city + (st.count > 1 ? ', ' + st.count + ' times' : '')"
+                   [attr.aria-label]="st.count > 1 ? t('logbook.stampTimes', { city: st.city, n: st.count }) : st.city"
                    [style.transform]="'rotate(' + angle(st.code) + 'deg)'">
                 <rect x="4" y="4" width="112" height="112" rx="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="7 5" />
                 <text x="60" y="62" text-anchor="middle" class="code">{{ st.code }}</text>
@@ -94,12 +95,12 @@ import { formatKey } from '../../utils/time';
         </ul>
       } @else {
         <p class="ui-sub lb__ideas" data-ideas-caption>
-          Places you could go: a few of the nonstop flights from {{ hubName() }}, just for ideas.
+          {{ t('logbook.ideas', { hub: hubName() }) }}
         </p>
         <ul class="grid grid--faint" data-ideas>
           @for (st of ideas(); track st.code) {
             <li class="stamp stamp--faint" [style.color]="color(st.region)">
-              <svg viewBox="0 0 120 120" width="112" height="112" role="img" [attr.aria-label]="st.city + ', an idea'"
+              <svg viewBox="0 0 120 120" width="112" height="112" role="img" [attr.aria-label]="t('logbook.ideaAria', { city: st.city })"
                    [style.transform]="'rotate(' + angle(st.code) + 'deg)'">
                 <rect x="4" y="4" width="112" height="112" rx="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="7 5" />
                 <text x="60" y="66" text-anchor="middle" class="code">{{ st.code }}</text>
@@ -111,7 +112,7 @@ import { formatKey } from '../../utils/time';
       }
 
       @if (marks().length) {
-        <h2 class="ui-label lb__lbl">Marks</h2>
+        <h2 class="ui-label lb__lbl">{{ t('logbook.marks') }}</h2>
         <ul class="ach" data-achievements>
           @for (a of marks(); track a.id) {
             <li class="ach__i" [attr.data-ach]="a.id"><b>{{ a.label }}</b><span class="tn">{{ a.detail }}</span></li>
@@ -120,7 +121,7 @@ import { formatKey } from '../../utils/time';
       }
 
       @if (earned().length) {
-        <h2 class="ui-label lb__lbl">Milestones</h2>
+        <h2 class="ui-label lb__lbl">{{ t('logbook.milestones') }}</h2>
         <ul class="ach" data-milestones>
           @for (m of earned(); track m.id) {
             <li class="ach__i" [class.ach__i--new]="fresh().has('ms:' + m.id)" [attr.data-ms]="m.id">
@@ -130,7 +131,7 @@ import { formatKey } from '../../utils/time';
         </ul>
       }
 
-      <p class="lb__foot">Counted from flights marked boarded. Distances are great-circle. On this phone only.</p>
+      <p class="lb__foot">{{ t('logbook.foot') }}</p>
     </div>
   `,
   styles: [`
@@ -182,6 +183,10 @@ import { formatKey } from '../../utils/time';
   `],
 })
 export class LogbookPage {
+  protected readonly t = t;
+  protected readonly num = formatNumber;
+  /** The unit symbol, the same in both languages. */
+  protected readonly km = 'km';
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly prefs = inject(PrefsService);

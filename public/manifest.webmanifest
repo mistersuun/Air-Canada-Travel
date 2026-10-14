@@ -1,7 +1,7 @@
 {
-  "name": "Air Canada Trip Planner",
-  "short_name": "AC Trips",
-  "description": "Every Air Canada vacation flight from your home airport, by week and by day",
+  "name": "Routes",
+  "short_name": "Routes",
+  "description": "Routes: flights from your home airport by week and by day, plus trip tools. Independent project, not affiliated with Air Canada.",
   "id": "/",
   "theme_color": "#CFE6FF",
   "background_color": "#F5F7FA",
@@ -10,10 +10,10 @@
   "start_url": "/",
   "orientation": "any",
   "shortcuts": [
-    { "name": "Today", "short_name": "Today", "url": "/today", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
-    { "name": "My trips", "short_name": "Trips", "url": "/trips", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
-    { "name": "Saved", "short_name": "Saved", "url": "/saved", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
-    { "name": "This weekend", "short_name": "Weekend", "url": "/weekend", "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] }
+    { "name": "Today", "short_name": "Today", "url": "/today", "icons": [{ "src": "icons/v2/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "My trips", "short_name": "Trips", "url": "/trips", "icons": [{ "src": "icons/v2/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "Saved", "short_name": "Saved", "url": "/saved", "icons": [{ "src": "icons/v2/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] },
+    { "name": "This weekend", "short_name": "Weekend", "url": "/weekend", "icons": [{ "src": "icons/v2/icon-96x96.png", "sizes": "96x96", "type": "image/png" }] }
   ],
   "share_target": {
     "action": "/share-in",
@@ -42,16 +42,16 @@
     }
   ],
   "icons": [
-    { "src": "icons/icon-72x72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/v2/icon-72x72.png", "sizes": "72x72", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-96x96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-128x128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-144x144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-152x152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-maskable-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/v2/icon-384x384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/v2/icon-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

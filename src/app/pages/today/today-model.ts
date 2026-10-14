@@ -12,7 +12,7 @@ import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
 import { networkNoteFor } from '../../data/route-network';
 import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
-import { MISS_GAP_MIN, departuresHome } from '../../trips/engine/homeby';
+import { MISS_GAP_MIN, deadlineUtc, departuresHome } from '../../trips/engine/homeby';
 import { hm, supOffset } from '../../ui/format';
 import type { TimeFormat } from '../../state/prefs.service';
 import { airportEnd, arrivalAtGoal, groundEstimate, placeEnd, type GroundEstimate } from '../../places/ground';
@@ -20,11 +20,15 @@ import { tonightCheckIn } from '../../places/stay-links';
 import { legPrepItems, type PrepItem } from '../../places/prep';
 import { partOfDay } from '../reach/reach-model';
 import { shortAircraftName } from '../../trips/engine/facts';
-import { legStartUtc, refArrUtc, refDepUtc } from '../../trips/engine/legs';
+import { endTz, legStartUtc, legWindow, refArrUtc, refDepUtc, sortLegs } from '../../trips/engine/legs';
+import { findDestination, findHub } from '../../utils/airports';
+import { getDestinationCodes } from '../../data/schedule-index';
+import { dailyFact } from '../destination/fun-facts';
+import { MODE_LABEL, groundRide } from '../trips/trips-model';
 import { type ReachableOption, legDepartureKey, leavesGoalArea, missOneOutbound, stillReachable } from '../../trips/engine/recover';
 import { activeTravelDay, placeName } from '../../trips/engine/today';
 import {
-  type FlightLeg, type FlightRef, type LegEnd, type LegStatus, type LoadNote, type Outcome, type Trip, type TripLeg,
+  type FlightLeg, type FlightRef, type GroundLeg, type LegEnd, type LegStatus, type LoadNote, type Outcome, type Provenance, type Trip, type TripLeg,
   LEG_STATUS_LABEL, instanceKey, isFinalStatus,
 } from '../../trips/model';
 
@@ -119,6 +123,200 @@ export function currentSegment(trip: Trip, leg: FlightLeg, outcomes: readonly Ou
     .map(o => instanceKey(o)));
   const i = leg.refs.findIndex(r => !boarded.has(instanceKey(r)));
   return i < 0 ? Math.max(0, leg.refs.length - 1) : i;
+}
+
+// ── Ground legs and the days between flights ────────────────────────────────
+
+/** The calendar a ground leg is read against: local at its start place (else the goal). */
+function groundDayKey(leg: GroundLeg, trip: Trip, nowMs: number): { today: string; day: string } {
+  const tz = endTz(leg.from) ?? trip.goal.tz ?? airportTz(trip.fromHub);
+  return { today: utcToLocal(nowMs, tz).dateKey, day: leg.userTimes?.depDateKey ?? leg.dateKey };
+}
+
+/**
+ * The ground leg /today shows when no flight is up: an explicit ?trip=&leg=
+ * naming a ground leg, else a train, bus, car or ferry leg planned for today
+ * (local at its start). Open legs come before ones already marked done;
+ * dropped legs never show.
+ */
+export function resolveGroundToday(trips: Trip[], nowMs: number, tripId?: string | null, legId?: string | null): TodayTarget | null {
+  if (tripId && legId) {
+    const leg = trips.find(t => t.id === tripId)?.legs.find(l => l.id === legId);
+    return leg && leg.kind === 'ground' ? { tripId, legId } : null;
+  }
+  const found: { target: TodayTarget; open: boolean; depUtc: number }[] = [];
+  for (const trip of trips) {
+    if (trip.archived || (tripId && trip.id !== tripId)) continue;
+    for (const leg of trip.legs) {
+      if (leg.kind !== 'ground' || leg.status === 'abandoned') continue;
+      const k = groundDayKey(leg, trip, nowMs);
+      if (k.day !== k.today) continue;
+      found.push({ target: { tripId: trip.id, legId: leg.id }, open: !isFinalStatus(leg.status), depUtc: legStartUtc(leg, trip.legs) });
+    }
+  }
+  found.sort((a, b) => Number(b.open) - Number(a.open) || a.depUtc - b.depUtc);
+  return found[0]?.target ?? null;
+}
+
+export interface GroundTodayView {
+  tripId: string;
+  legId: string;
+  eyebrow: string;          // 'Today · Wed Oct 14 · Madrid'
+  title: string;            // 'Madrid → Seville'
+  mode: GroundLeg['mode'];
+  modeLabel: string;        // 'Train'
+  /** The saved departure ('09:00'), or null while only estimated. */
+  time: string | null;
+  zone: string;             // 'Madrid time'
+  provenance: Provenance;
+  status: LegStatus;
+  final: boolean;
+  sub: string;              // 'Train 2h39' or 'Train · arrives 14:45'
+  /** Timetable facts for the corridor: 'trains roughly hourly · usual last one 21:30'. */
+  info: string | null;
+  note: string;
+}
+
+export function groundTodayView(input: { trip: Trip; legId: string; nowMs: number; fmt: TimeFormat }): GroundTodayView | null {
+  const { trip, nowMs, fmt } = input;
+  const leg = trip.legs.find(l => l.id === input.legId);
+  if (!leg || leg.kind !== 'ground') return null;
+  const t = leg.userTimes;
+  const ride = groundRide(leg);
+  const from = leg.from.code ? airportEnd(leg.from.code) ?? leg.from : leg.from;
+  const g = groundEstimate(from, leg.to, { dateKey: leg.dateKey });
+  const sub = t
+    ? `${MODE_LABEL[leg.mode]} · arrives ${formatClock(t.arrLocal, fmt)}${t.arrDateKey !== t.depDateKey ? ' (next day)' : ''}`
+    : ride.label;
+  const info = leg.mode === g.mode
+    ? [g.frequency, g.lastDepLocal ? `usual last one ${formatClock(g.lastDepLocal, fmt)}` : null].filter(Boolean).join(' · ') || null
+    : null;
+  const k = groundDayKey(leg, trip, nowMs);
+  const d = diffDays(k.today, k.day);
+  return {
+    tripId: trip.id,
+    legId: leg.id,
+    eyebrow: [d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : '', dayLabel(k.day), leg.from.name].filter(Boolean).join(' · '),
+    title: `${leg.from.name} → ${leg.to.name}`,
+    mode: leg.mode,
+    modeLabel: MODE_LABEL[leg.mode] ?? 'Ground',
+    time: t ? formatClock(t.depLocal, fmt) : null,
+    zone: `${leg.from.name} time`,
+    provenance: ride.provenance,
+    status: leg.status,
+    final: isFinalStatus(leg.status),
+    sub,
+    info,
+    note: leg.note.trim(),
+  };
+}
+
+/** The trip is under way: its first leg has started and the home-by time has not passed. */
+export function tripUnderWay(trip: Trip, nowMs: number): boolean {
+  if (trip.archived) return false;
+  const first = sortLegs(trip.legs.filter(l => l.status !== 'abandoned'))[0];
+  const w = first ? legWindow(first, trip.legs) : null;
+  return !!w && nowMs >= w.depUtc && nowMs <= deadlineUtc(trip.homeBy, trip.homeAirport);
+}
+
+export interface MidTripView {
+  tripId: string;
+  eyebrow: string;          // 'Seville trip · Wed Oct 14'
+  title: string;            // 'Day 2 in Seville' | 'On your way to Seville'
+  /** The next open leg, with where it stands. */
+  next: { title: string; detail: string } | null;
+  /** 'Home by Mon Oct 19, 22:00' and '5 days to go'. */
+  homeBy: { label: string; countdown: string };
+  fact: string | null;
+}
+
+/** 'today', 'tomorrow', '5 days to go' against the calendar at the home airport. */
+function homeByCountdown(trip: Trip, nowMs: number): string {
+  const d = diffDays(utcToLocal(nowMs, airportTz(trip.homeAirport)).dateKey, trip.homeBy.dateKey);
+  return d <= 0 ? 'today' : d === 1 ? 'tomorrow' : `${d} days to go`;
+}
+
+/** When and on which day the first outbound flight lands (else the outbound date, no instant). */
+function arrival(trip: Trip): { dateKey: string; utc: number | null } {
+  const out = trip.legs.find((l): l is FlightLeg => l.kind === 'flight' && l.role !== 'return' && l.refs.length > 0 && l.status !== 'abandoned');
+  if (!out) return { dateKey: trip.outboundDate, utc: null };
+  const last = out.refs[out.refs.length - 1];
+  return { dateKey: last.arrDateKey, utc: refArrUtc(last) };
+}
+
+function nextLeg(trip: Trip, nowMs: number, fmt: TimeFormat): MidTripView['next'] {
+  const leg = sortLegs(trip.legs).find(l => !isFinalStatus(l.status) && legStartUtc(l, trip.legs) > nowMs);
+  if (!leg) return null;
+  if (leg.kind === 'flight') {
+    if (!leg.refs.length) return null;
+    const ref = leg.refs[0];
+    const home = leg.role === 'return' ? ' home' : '';
+    const state = leg.status === 'planned' ? 'Not listed yet' : LEG_STATUS_LABEL[leg.status];
+    return {
+      title: `Next: ${ref.flightNumber}${home} · ${dayLabel(ref.dateKey)} ${formatClock(ref.depLocal, fmt)} ${zoneLabel(ref.origin)}`,
+      detail: `${state} · ${leavesLabel(refDepUtc(ref), nowMs, airportTz(ref.origin))}`,
+    };
+  }
+  const day = leg.userTimes?.depDateKey ?? leg.dateKey;
+  const time = leg.userTimes ? ` ${formatClock(leg.userTimes.depLocal, fmt)}` : '';
+  return {
+    title: `Next: ${MODE_LABEL[leg.mode] ?? 'Ground'} ${leg.from.name} → ${leg.to.name} · ${dayLabel(day)}${time}`,
+    detail: groundRide(leg).label,
+  };
+}
+
+function goalFact(trip: Trip, nowMs: number): string | null {
+  const dest = findDestination(trip.goal.acCode) ?? findHub(trip.goal.acCode);
+  const hub = findHub(trip.fromHub);
+  if (!dest || !hub) return null;
+  const nonstops = getDestinationCodes(hub.code).map(c => findHub(c) ?? findDestination(c)).filter((x): x is NonNullable<typeof x> => !!x);
+  return dailyFact(dest, hub, nonstops, nowMs);
+}
+
+/**
+ * A day of a trip that is under way with nothing scheduled: which day it is at
+ * the goal, the next leg, the home-by countdown and (when one applies) a fact
+ * about the destination. The trip with the nearest home-by time wins.
+ */
+export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripId?: string | null): MidTripView | null {
+  const trip = trips
+    .filter(t => (!tripId || t.id === tripId) && tripUnderWay(t, nowMs))
+    .sort((a, b) => deadlineUtc(a.homeBy, a.homeAirport) - deadlineUtc(b.homeBy, b.homeAirport))[0];
+  if (!trip) return null;
+  const tz = trip.goal.tz || airportTz(trip.homeAirport);
+  const todayKey = utcToLocal(nowMs, tz).dateKey;
+  const arr = arrival(trip);
+  const n = arr.utc !== null && arr.utc > nowMs ? 0 : diffDays(arr.dateKey, todayKey) + 1;
+  return {
+    tripId: trip.id,
+    eyebrow: `${trip.name} · ${dayLabel(todayKey)}`,
+    title: n >= 1 ? `Day ${n} in ${trip.goal.name}` : `On your way to ${trip.goal.name}`,
+    next: nextLeg(trip, nowMs, fmt),
+    homeBy: { label: `Home by ${dayLabel(trip.homeBy.dateKey)}, ${formatClock(trip.homeBy.hhmm, fmt)}`, countdown: homeByCountdown(trip, nowMs) },
+    fact: goalFact(trip, nowMs),
+  };
+}
+
+export interface UpcomingTripView { tripId: string; title: string; detail: string }
+
+/** The nearest trip that has not started: 'Next trip in 5 days' with its name and first date. */
+export function upcomingTripView(trips: Trip[], nowMs: number): UpcomingTripView | null {
+  let best: { trip: Trip; start: number } | null = null;
+  for (const trip of trips) {
+    if (trip.archived) continue;
+    const first = sortLegs(trip.legs.filter(l => l.status !== 'abandoned'))[0];
+    const w = first ? legWindow(first, trip.legs) : null;
+    const start = w ? w.depUtc : deadlineUtc({ dateKey: trip.outboundDate, hhmm: '00:00' }, trip.fromHub);
+    if (start <= nowMs || (best && best.start <= start)) continue;
+    best = { trip, start };
+  }
+  if (!best) return null;
+  const d = diffDays(utcToLocal(nowMs, airportTz(best.trip.fromHub)).dateKey, best.trip.outboundDate);
+  return {
+    tripId: best.trip.id,
+    title: d <= 0 ? 'Your next trip is later today' : d === 1 ? 'Next trip tomorrow' : `Next trip in ${d} days`,
+    detail: `${best.trip.name} · ${dayLabel(best.trip.outboundDate)}`,
+  };
 }
 
 // ── Explore banner ────────────────────────────────────────────────────────────

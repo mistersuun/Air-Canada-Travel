@@ -6,7 +6,8 @@ import type { LoadNote, Outcome, Trip } from '../../trips/model';
 import { SEVILLE_IDS, SEVILLE_META, SEVILLE_ROUTES, sevilleTrip } from '../../trips/testing/seville-fixture';
 import { toUtcMs } from '../../utils/time';
 import {
-  bannerText, leavesLabel, noteText, plannedNights, recoverLeg, recoverView, resolveToday, statusForTick, todayView,
+  bannerText, groundTodayView, leavesLabel, midTripView, noteText, plannedNights, recoverLeg, recoverView, resolveGroundToday,
+  resolveToday, statusForTick, todayView, tripUnderWay, upcomingTripView,
 } from './today-model';
 
 const AT_1640 = toUtcMs('2026-10-08', '16:40', 'America/Toronto');
@@ -253,5 +254,83 @@ describe('recover model (YUL at 18:05 Thu Oct 8, AC834 not boarded)', () => {
     const v = recoverView({ trip: t, at: 'YUL', legId: SEVILLE_IDS.outbound, nowMs: AT_1805, connect: CONNECT, fmt: '24h' });
     expect(v.note?.returnBroken).toBe(true);
     expect(v.note?.text).toMatch(/^Your Fri return no longer fits: open Return\./);
+  });
+});
+
+describe('today model: ground legs and days between flights (Seville fixture)', () => {
+  beforeEach(() => setScheduleSource(SEVILLE_ROUTES, SEVILLE_META));
+  afterEach(() => resetScheduleSource());
+
+  const TRAIN_DAY = toUtcMs('2026-10-09', '09:00', 'Europe/Madrid');
+  const MID_TRIP = toUtcMs('2026-10-10', '12:00', 'Europe/Madrid');
+
+  it('ground leg today: resolves to the train, with its ride, mode and timetable facts', () => {
+    const trips = [sevilleTrip()];
+    expect(resolveGroundToday(trips, TRAIN_DAY)).toEqual({ tripId: SEVILLE_IDS.trip, legId: SEVILLE_IDS.train });
+    expect(resolveGroundToday(trips, TRAIN_DAY, SEVILLE_IDS.trip, SEVILLE_IDS.bus)).toEqual({ tripId: SEVILLE_IDS.trip, legId: SEVILLE_IDS.bus });
+    expect(resolveGroundToday(trips, MID_TRIP)).toBeNull();
+    expect(resolveGroundToday([{ ...sevilleTrip(), archived: true }], TRAIN_DAY)).toBeNull();
+    const v = groundTodayView({ trip: trips[0], legId: SEVILLE_IDS.train, nowMs: TRAIN_DAY, fmt: '24h' })!;
+    expect(v.eyebrow).toBe('Today · Fri Oct 9 · Madrid');
+    expect(v.title).toBe('Madrid → Seville');
+    expect(v.modeLabel).toBe('Train');
+    expect(v.time).toBeNull();
+    expect(v.final).toBe(false);
+    expect(v.sub).toMatch(/^Train /);
+  });
+
+  it('a saved bus shows its departure and arrival; a done leg still shows and a dropped one never does', () => {
+    const trip = sevilleTrip();
+    const bus = toUtcMs('2026-10-12', '08:00', 'Europe/Madrid');
+    const v = groundTodayView({ trip, legId: SEVILLE_IDS.bus, nowMs: bus, fmt: '24h' })!;
+    expect(v.time).toBe('09:00');
+    expect(v.sub).toBe('Bus · arrives 14:45');
+    expect(v.note).toBe('your note');
+    trip.legs = trip.legs.map(l => (l.id === SEVILLE_IDS.bus ? { ...l, status: 'boarded' as const } : l));
+    expect(resolveGroundToday([trip], bus)).toEqual({ tripId: SEVILLE_IDS.trip, legId: SEVILLE_IDS.bus });
+    expect(groundTodayView({ trip, legId: SEVILLE_IDS.bus, nowMs: bus, fmt: '24h' })!.final).toBe(true);
+    trip.legs = trip.legs.map(l => (l.id === SEVILLE_IDS.bus ? { ...l, status: 'abandoned' as const } : l));
+    expect(resolveGroundToday([trip], bus)).toBeNull();
+  });
+
+  it('mid-trip day: Day N at the goal, the next leg, the home-by countdown', () => {
+    const trip = sevilleTrip();
+    expect(tripUnderWay(trip, MID_TRIP)).toBe(true);
+    const v = midTripView([trip], MID_TRIP, '24h')!;
+    expect(v.title).toBe('Day 2 in Seville');
+    expect(v.eyebrow).toBe('Seville trip · Sat Oct 10');
+    expect(v.next?.title).toBe('Next: Bus Seville → Lisbon · Mon Oct 12 09:00');
+    expect(v.homeBy).toEqual({ label: 'Home by Tue Oct 13, 22:00', countdown: '3 days to go' });
+    // Once the bus is done the next leg is the flight home, with its listing state.
+    trip.legs = trip.legs.map(l => (l.id === SEVILLE_IDS.bus || l.id === SEVILLE_IDS.train ? { ...l, status: 'boarded' as const } : l));
+    const later = midTripView([trip], toUtcMs('2026-10-12', '20:00', 'Europe/Madrid'), '24h')!;
+    expect(later.next?.title).toBe('Next: AC813 home · Tue Oct 13 11:25 LIS time');
+    expect(later.next?.detail).toMatch(/^Not listed yet · leaves in /);
+    expect(later.homeBy.countdown).toBe('tomorrow');
+    expect(midTripView([trip], MID_TRIP, '24h', 'nope')).toBeNull();
+  });
+
+  it('before the flight lands the title says on your way; on arrival day it is Day 1', () => {
+    const trip = sevilleTrip();
+    expect(midTripView([trip], toUtcMs('2026-10-09', '03:00', 'Europe/Madrid'), '24h')!.title).toBe('On your way to Seville');
+    expect(midTripView([trip], toUtcMs('2026-10-09', '09:00', 'Europe/Madrid'), '24h')!.title).toBe('Day 1 in Seville');
+  });
+
+  it('future trip: Next trip in N days; none after the trip ends, archived, or with no trips', () => {
+    const trip = sevilleTrip();
+    const before = toUtcMs('2026-10-01', '12:00', 'America/Toronto');
+    expect(upcomingTripView([trip], before)).toEqual({ tripId: SEVILLE_IDS.trip, title: 'Next trip in 7 days', detail: 'Seville trip · Thu Oct 8' });
+    expect(upcomingTripView([trip], toUtcMs('2026-10-07', '12:00', 'America/Toronto'))!.title).toBe('Next trip tomorrow');
+    expect(midTripView([trip], before, '24h')).toBeNull();
+    expect(upcomingTripView([trip], MID_TRIP)).toBeNull();
+    expect(upcomingTripView([{ ...trip, archived: true }], before)).toBeNull();
+    expect(upcomingTripView([], before)).toBeNull();
+  });
+
+  it('none: after the home-by time nothing is under way', () => {
+    const after = toUtcMs('2026-10-20', '12:00', 'America/Toronto');
+    expect(midTripView([sevilleTrip()], after, '24h')).toBeNull();
+    expect(resolveGroundToday([sevilleTrip()], after)).toBeNull();
+    expect(upcomingTripView([sevilleTrip()], after)).toBeNull();
   });
 });

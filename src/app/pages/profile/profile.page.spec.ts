@@ -49,7 +49,7 @@ describe('ProfilePage', () => {
     expect(squash(q('[data-max-text]').textContent)).toBe('Any length');
     expect(q<HTMLInputElement>('[data-any]').checked).toBe(true);
     expect(q<HTMLInputElement>('[data-max]').disabled).toBe(true);
-    expect(q<HTMLButtonElement>('[data-reset]').disabled).toBe(true);
+    expect(el.querySelector('[data-reset]')).toBeNull();   // nothing to reset yet
     expect(el.textContent).not.toContain('%');
   });
 

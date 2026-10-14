@@ -68,7 +68,7 @@ export const DEFAULT_MAX_HOURS = 7;
                  [style.--pct]="pct(p.maxFlightHours ?? sliderDefault)"
                  [attr.aria-valuetext]="p.maxFlightHours === null ? 'Any length' : 'Up to ' + p.maxFlightHours + ' hours'"
                  (input)="setMax($event)">
-          <div class="ticks tn" aria-hidden="true"><span>1h</span><span>6h</span><span>12h</span></div>
+          <div class="ticks tn" [class.is-off]="p.maxFlightHours === null" aria-hidden="true"><span>1h</span><span>6h</span><span>12h</span></div>
           <label class="ck" for="pf-any">
             <input id="pf-any" type="checkbox" data-any [checked]="p.maxFlightHours === null" (change)="setAny($event)">
             <span>Any length</span>
@@ -141,13 +141,14 @@ export const DEFAULT_MAX_HOURS = 7;
         <span>Your logbook</span><span aria-hidden="true">›</span>
       </button>
 
+      <!-- Nothing to reset on a fresh profile: no button, rather than one that looks disabled. -->
       <div class="reset">
         @if (confirming()) {
           <span class="reset__q">Reset your travel profile?</span>
           <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-reset-cancel (click)="confirming.set(false)">Cancel</button>
           <button type="button" class="ui-btn ui-btn--sm" data-reset-yes (click)="reset()">Reset</button>
-        } @else {
-          <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm reset__b" data-reset [disabled]="profile.isEmpty()"
+        } @else if (!profile.isEmpty()) {
+          <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm reset__b" data-reset
                   (click)="confirming.set(true)">Reset profile</button>
         }
       </div>
@@ -181,6 +182,7 @@ export const DEFAULT_MAX_HOURS = 7;
       -webkit-appearance: none; appearance: none; width: 100%; height: 30px; margin: 4px 0 0; background: none; cursor: pointer;
     }
     .range:disabled { opacity: .45; cursor: default; }
+    .ticks.is-off { opacity: .45; }
     .range::-webkit-slider-runnable-track {
       height: 4px; border-radius: 2px;
       background: linear-gradient(to right, var(--blue) 0 var(--pct), var(--fill) var(--pct) 100%);

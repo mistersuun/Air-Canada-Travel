@@ -274,6 +274,47 @@ describe('TripDetailPage', () => {
       delete (navigator as { clipboard?: unknown }).clipboard;
     });
 
+    it('Copy link shares synchronously inside the tap (the link is built when the menu opens)', async () => {
+      const share = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'share', { configurable: true, value: share });
+      try {
+        const { el, stable } = await render();
+        el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
+        await stable();
+        await new Promise(r => setTimeout(r, 50)); // the build is async: let it finish
+        el.querySelector<HTMLButtonElement>('[data-copy]')!.click();
+        expect(share).toHaveBeenCalledTimes(1); // no await between the tap and navigator.share
+        expect(share.mock.calls[0][0].url).toMatch(/\/trips\/import#t=[zj][A-Za-z0-9_-]+$/);
+      } finally {
+        delete (navigator as { share?: unknown }).share;
+      }
+    });
+
+    it('Copy link before the link is ready hands the clipboard a promise instead of waiting', async () => {
+      const write = vi.fn().mockResolvedValue(undefined);
+      let item: Record<string, Promise<Blob>> | null = null;
+      class FakeItem { constructor(i: Record<string, Promise<Blob>>) { item = i; } }
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
+      vi.stubGlobal('ClipboardItem', FakeItem);
+      try {
+        const { el, stable, state, trips } = await render();
+        let release!: (u: string) => void;
+        vi.spyOn(trips, 'shareLink').mockImplementation(() => new Promise<string>(r => { release = r; }));
+        el.querySelector<HTMLButtonElement>('[data-menu]')!.click();
+        await stable();
+        el.querySelector<HTMLButtonElement>('[data-copy]')!.click();
+        expect(write).toHaveBeenCalledTimes(1); // synchronously, before the link exists
+        release('https://app.test/trips/import#tzabc');
+        const blob = await item!['text/plain'];
+        const read = await new Promise<string>(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.readAsText(blob); });
+        expect(read).toBe('https://app.test/trips/import#tzabc');
+        await vi.waitFor(() => expect(state.notice()?.message).toBe('Link copied'));
+      } finally {
+        vi.unstubAllGlobals();
+        delete (navigator as { clipboard?: unknown }).clipboard;
+      }
+    });
+
     it('Calendar downloads the .ics and records it; Save for offline stamps the trip', async () => {
       const create = vi.fn(() => 'blob:x');
       Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create });

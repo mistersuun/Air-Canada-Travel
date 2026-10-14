@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  overriddenZoneLabel,
   addDays,
   addMonths,
   dateKey,
@@ -171,5 +172,17 @@ describe('time zones', () => {
     expect(todayKey('America/Toronto', now)).toBe('2026-09-30');
     expect(todayKey('Europe/London', now)).toBe('2026-10-01');
     expect(isDateKey(todayKey())).toBe(true);
+  });
+});
+
+describe('overriddenZoneLabel', () => {
+  it('is null before an override starts and for zones without one', () => {
+    expect(overriddenZoneLabel('America/Vancouver', Date.UTC(2026, 9, 1))).toBeNull();
+    expect(overriddenZoneLabel('America/Toronto', Date.UTC(2030, 0, 1))).toBeNull();
+  });
+  it('labels from the overridden offset', () => {
+    expect(overriddenZoneLabel('America/Vancouver', Date.UTC(2026, 10, 1, 9))).toBe('GMT-7');
+    expect(overriddenZoneLabel('America/Edmonton', Date.UTC(2027, 0, 1))).toBe('GMT-6');
+    expect(overriddenZoneLabel('Africa/Casablanca', Date.UTC(2026, 9, 1))).toBe('GMT');
   });
 });

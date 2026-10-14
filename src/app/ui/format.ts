@@ -9,7 +9,7 @@ import { HUBS } from '../data/destinations';
 import type { Itinerary } from '../utils/connections';
 import type { TimeFormat } from '../state/prefs.service';
 import {
-  WEEKDAY_LONG, WEEKDAY_SHORT, addDays, dateKey, diffDays, formatClock, formatKey, tzOffsetMin, utcToLocal,
+  WEEKDAY_LONG, WEEKDAY_SHORT, addDays, dateKey, diffDays, formatClock, formatKey, overriddenZoneLabel, tzOffsetMin, utcToLocal,
   weekdayIndex,
 } from '../utils/time';
 import { formatWeekLabel } from '../utils/week';
@@ -186,6 +186,8 @@ export function tzDiffLabel(destTz: string, hubTz: string, now: number): string 
 
 /** Short zone name ('JST', 'GMT+1') for display; '' when Intl cannot tell. */
 export function tzAbbr(tz: string, now: number): string {
+  const overridden = overriddenZoneLabel(tz, now);
+  if (overridden) return overridden;
   try {
     const part = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' })
       .formatToParts(new Date(now))

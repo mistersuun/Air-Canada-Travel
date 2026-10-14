@@ -11,7 +11,7 @@ import {
 } from '../../utils/connections';
 import { routeSeason } from '../../utils/season';
 import {
-  WEEKDAY_SHORT, addDays, addMonths, diffDays, formatClock, formatKey, monthKeys, monthOf, weekKeys, weekdayIndex,
+  WEEKDAY_SHORT, addDays, addMonths, diffDays, formatClock, formatKey, monthKeys, monthOf, overriddenZoneLabel, weekKeys, weekdayIndex,
 } from '../../utils/time';
 import { coverageHubFor, flightsOn, nextFlightDate } from '../../utils/week';
 import { monthAvailability } from '../../utils/routes';
@@ -405,6 +405,8 @@ const TZ_ABBR: Readonly<Record<string, string>> = {
 
 /** 'JST', 'WEST', 'CEST', 'EST': the zone's short name, trying the country's own English locale first. */
 export function zoneAbbr(tz: string, iso2: string, nowMs: number): string {
+  const overridden = overriddenZoneLabel(tz, nowMs);
+  if (overridden) return overridden;
   const read = (locale: string): string => {
     try {
       return new Intl.DateTimeFormat(locale, { timeZone: tz, timeZoneName: 'short' })

@@ -12,8 +12,12 @@ export const E2E_HOST = 'routes.test';
 const origin = `http://${E2E_HOST}:${port}`;
 const args = [`--host-resolver-rules=MAP ${E2E_HOST} 127.0.0.1`, `--unsafely-treat-insecure-origin-as-secure=${origin}`];
 // Locally the preinstalled Chromium may not match this Playwright's build.
-const local = '/opt/pw-browsers/chromium';
+const local = process.env['E2E_BROWSER'] ?? '/opt/pw-browsers/chromium';
 const executablePath = process.env['CI'] || !existsSync(local) ? undefined : local;
+// The full Chromium build, not chrome-headless-shell: the headless shell ignores
+// --unsafely-treat-insecure-origin-as-secure, so navigator.serviceWorker would be
+// undefined on the mapped origin.
+const channel = executablePath ? undefined : 'chromium';
 
 export default defineConfig({
   testDir: '.',
@@ -28,7 +32,7 @@ export default defineConfig({
     serviceWorkers: 'allow',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], launchOptions: { executablePath, args } } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel, launchOptions: { executablePath, args } } }],
   // Serves a prior `ng build` (dist/ac-explorer/browser) with Netlify's headers.
   webServer: {
     command: 'node static-server.mjs',

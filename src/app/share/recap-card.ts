@@ -162,7 +162,8 @@ function lngLat(code: string): [number, number] | null {
 export function recapHead(trip: Trip, opts: RecapOptions, hasPhoto: boolean, measure?: Measure, recap: TripRecap = tripRecap(trip, opts.outcomes)): RecapHead {
   const x = recapExtras(trip, opts);
   const a = lngLat(trip.fromHub);
-  const b = trip.goal.acCode ? lngLat(trip.goal.acCode) : null;
+  const g = trip.goal;
+  const b: [number, number] | null = Number.isFinite(g.lat) && Number.isFinite(g.lng) ? [g.lng, g.lat] : g.acCode ? lngLat(g.acCode) : null;
   return {
     flags: x.flags,
     badges: x.badges,

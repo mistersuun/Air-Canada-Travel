@@ -7,13 +7,14 @@ import type { RouteEntry } from '../../utils/routes';
 import type { FlightInstance } from '../../utils/week';
 import { WEEKDAY_SHORT, formatClock, weekdayIndex } from '../../utils/time';
 import type { TimeFormat } from '../../state/prefs.service';
+import type { WeekendOption } from '../weekend/weekend-model';
 
 /** How many recent picks are skipped. */
 export const SURPRISE_RECENT = 5;
 /** Weight multiplier for a destination of a style the traveller likes. */
 export const STYLE_NUDGE = 1.5;
 /** Candidate arcs flicked through before settling (including the pick). */
-export const FLICK_COUNT = 7;
+export const FLICK_COUNT = 5;
 
 const STORAGE_KEY = 'ac.surprise.recent.v1';
 
@@ -99,6 +100,27 @@ export function surpriseMeta(e: RouteEntry, nowMs: number, fmt: TimeFormat = '24
 export function surpriseLine(e: RouteEntry, nowMs: number, fmt: TimeFormat = '24h'): string {
   const m = surpriseMeta(e, nowMs, fmt);
   return m ? `${e.destination.city} · ${m}` : e.destination.city;
+}
+
+/**
+ * Entries restricted to the destinations the Weekend finder says work for the
+ * window (an outbound and a way home by the deadline). Same logic, not a copy:
+ * `options` come from weekendOptions().
+ */
+export function weekendEntries(entries: readonly RouteEntry[], options: readonly Pick<WeekendOption, 'code'>[]): RouteEntry[] {
+  const ok = new Set(options.map(o => o.code));
+  return entries.filter(e => ok.has(code(e)));
+}
+
+/** 'Dare you: Lisbon this weekend? ~40h there, 6 tries home' (facts; falls back to the nonstop time without a weekend option). */
+export function dareText(e: RouteEntry, nowMs: number, fmt: TimeFormat, weekend: WeekendOption | null): string {
+  const city = e.destination.city;
+  if (weekend) {
+    const t = weekend.tries.length;
+    return `Dare you: ${city} this weekend? ~${weekend.hoursThere}h there, ${t} ${t === 1 ? 'try' : 'tries'} home`;
+  }
+  const m = surpriseMeta(e, nowMs, fmt);
+  return m ? `Dare you: ${city}? ${m}` : `Dare you: ${city}?`;
 }
 
 // ── Recent picks (sessionStorage; every access guarded) ──────────────────────

@@ -28,6 +28,8 @@ export default defineConfig({
   timeout: 60_000,
   reporter: process.env['CI'] ? [['github'], ['list']] : 'list',
   use: {
+    // The app follows the device language; English assertions need an English browser.
+    locale: 'en-US',
     baseURL: origin,
     serviceWorkers: 'allow',
     trace: 'retain-on-failure',

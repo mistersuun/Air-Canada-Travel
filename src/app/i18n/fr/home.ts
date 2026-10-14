@@ -74,7 +74,7 @@ export const home: Translation<typeof en> = {
   'home.surprise.dareCity': 'Défi\u00a0: {city}?',
   'home.chips.label': 'Filtres actifs',
   'home.chips.remove': 'Retirer {label}',
-  'home.chips.query': '« {q} »',
+  'home.chips.query': '« {q} »',
   'home.chips.via': 'Via {hub}',
   'home.chips.sameDay': 'Arrivée le jour même',
   'home.chips.widebody': 'Gros-porteur',

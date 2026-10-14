@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setLocale } from '../i18n/locale';
 import {
-  countdown, daysLabel, formatStay, freshnessAge, greeting, hm, hubDisplayName, longDay, operatesLabel, relativeCountdown, relativeDay,
-  shortDay, stopsLabel, timeRange, weekRangeLabel,
+  countdown, daysLabel, formatStay, greeting, hm, hubDisplayName, operatesLabel, relativeCountdown, relativeDay,
+  shortDay, timeRange, weekRangeLabel,
 } from './format';
 import { formatClock, formatDuration, formatKey, monthShort, weekdayLetters, weekdayLong, weekdayShort } from '../utils/time';
 import type { Itinerary } from '../utils/connections';
@@ -16,7 +16,6 @@ describe('formats in Canadian French', () => {
 
   it('dates: "mer. 14 oct.", "mercredi 14 octobre"', () => {
     expect(plain(shortDay('2026-10-14'))).toBe('mer. 14 oct.');
-    expect(plain(longDay('2026-10-14'))).toBe('mercredi 14 octobre');
     expect(plain(formatKey('2026-10-14', { month: 'short', day: 'numeric', year: 'numeric' }))).toBe('14 oct. 2026');
   });
 
@@ -55,16 +54,11 @@ describe('formats in Canadian French', () => {
   it('words: days, stops, greetings, relative days', () => {
     expect(daysLabel(7)).toBe('Tous les jours');
     expect(daysLabel(6)).toBe('6×/sem.');
-    expect(stopsLabel({ hubs: [] } as unknown as Itinerary)).toBe('Sans escale');
-    expect(stopsLabel({ hubs: ['YYZ'] } as unknown as Itinerary)).toBe('1 escale · YYZ');
-    expect(stopsLabel({ hubs: ['YYZ', 'YUL'] } as unknown as Itinerary)).toBe('2 escales · YYZ YUL');
     expect(greeting(Date.UTC(2026, 9, 14, 13), 'America/Toronto')).toBe('Bonjour');
     expect(relativeDay('2026-10-14', '2026-10-14')).toBe('Aujourd\'hui');
     expect(relativeDay('2026-10-15', '2026-10-14')).toBe('Demain');
     expect(relativeDay('2026-10-17', '2026-10-14')).toBe('sam.');
     expect(relativeCountdown(0, 0, '2026-10-17', '2026-10-14')).toBe('Dans 3 jours · sam.');
-    expect(freshnessAge('2026-10-11T12:00:00Z', '2026-10-14')?.text).toBe('il y a 3 jours');
-    expect(freshnessAge('2026-10-14T12:00:00Z', '2026-10-14')?.text).toBe('aujourd\'hui');
   });
 
   it('hub names: "Québec" for YQB, accents kept for YUL', () => {

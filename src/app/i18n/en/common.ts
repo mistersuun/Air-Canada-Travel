@@ -19,4 +19,5 @@ export const common = {
   'common.seeAll': 'See all',
   'common.star': 'Star {code}',
   'common.unstar': 'Unstar {code}',
+  'common.undo': 'Undo',
 } satisfies Messages;

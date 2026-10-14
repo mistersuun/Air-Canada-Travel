@@ -19,4 +19,5 @@ export const common: Translation<typeof en> = {
   'common.seeAll': 'Tout afficher',
   'common.star': 'Ajouter {code} aux favoris',
   'common.unstar': 'Retirer {code} des favoris',
+  'common.undo': 'Annuler',
 };

@@ -5,6 +5,8 @@
  * defensively: AeroAPI fields may be missing or null and nothing here throws.
  */
 
+import { isRec, type Rec } from './http.ts';
+
 export interface StatusEnd {
   scheduled: string | null;
   estimated: string | null;
@@ -69,53 +71,6 @@ export function cacheSeconds(depMs: number, nowMs: number): number {
   return Math.min(1800, Math.max(300, Math.floor((ahead - 6 * HOUR_MS) / 1000)));
 }
 
-/** Key of the per-day AeroAPI call counter (UTC date). */
-export function budgetKey(nowMs: number): string {
-  return `calls-${new Date(nowMs).toISOString().slice(0, 10)}`;
-}
-
-/** AEROAPI_DAILY_LIMIT, default 40; junk falls back to the default. */
-export function dailyLimit(raw: string | undefined): number {
-  const n = Number(raw);
-  return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 40;
-}
-
-/** The slice of a Netlify Blobs store the budget needs (conditional writes on an ETag). */
-export interface CounterStore {
-  getWithMetadata(key: string): Promise<{ data: string; etag?: string } | null>;
-  set(key: string, value: string, options: { onlyIfNew: true } | { onlyIfMatch: string }): Promise<{ modified: boolean }>;
-}
-
-/**
- * Daily AeroAPI call budget over a key/value store (Netlify Blobs, strong
- * consistency, in production). Race-free: every write is conditional (create
- * only if new, or update only if the ETag read is still current) and retried a
- * few times, so concurrent misses cannot over-spend. A store failure or lost
- * race refuses the call (fails closed).
- */
-export function makeBudget(store: CounterStore, limit: number) {
-  return async (nowMs: number, calls = 1): Promise<boolean> => {
-    try {
-      const key = budgetKey(nowMs);
-      for (let attempt = 0; attempt < 4; attempt++) {
-        const cur = await store.getWithMetadata(key);
-        const used = cur ? Number(cur.data) : 0;
-        const n = Number.isFinite(used) ? used : 0;
-        if (n + calls > limit) return false;
-        const r = cur
-          ? await store.set(key, String(n + calls), { onlyIfMatch: cur.etag ?? '' })
-          : await store.set(key, String(calls), { onlyIfNew: true });
-        if (r.modified) return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  };
-}
-
-type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown, max = 40): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 const iso = (v: unknown): string | null => {
   const s = str(v, 40);
@@ -262,16 +217,4 @@ export async function cachedInbound(
 function normalizeCachedInbound(c: Rec): FlightStatus['inbound'] {
   const ident = str(c['ident']);
   return ident ? { ident, landed: iso(c['landed']), estimatedIn: iso(c['estimatedIn']) } : null;
-}
-
-/** Best-effort fixed-window limiter (memory is per function instance). */
-export function makeLimiter(max: number, windowMs: number): (key: string, nowMs: number) => boolean {
-  const hits = new Map<string, { n: number; reset: number }>();
-  return (key, nowMs) => {
-    if (hits.size > 5000) for (const [k, v] of hits) if (v.reset <= nowMs) hits.delete(k);
-    const h = hits.get(key);
-    if (!h || h.reset <= nowMs) { hits.set(key, { n: 1, reset: nowMs + windowMs }); return true; }
-    h.n += 1;
-    return h.n <= max;
-  };
 }

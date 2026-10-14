@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { makeLimiter } from './flight-status';
+import { makeLimiter } from './limits';
 import {
-  DAY_MS, MAX_CIPHERTEXT, computeExpiry, deleteGroup, getGroup, groupDailyCreates, hashToken, parsePutBody, putGroup, sweepGroups, validId, validToken, type GroupStore,
+  DAY_MS, MAX_CIPHERTEXT, computeExpiry, deleteGroup, getGroup, hashToken, parsePutBody, putGroup, SWEEP_CONCURRENCY, sweepGroups, validId, validToken, type GroupStore,
 } from './group';
 
 const NOW = Date.parse('2026-10-06T15:00:00Z');
@@ -51,12 +51,6 @@ describe('validation', () => {
     expect(Date.parse(computeExpiry(new Date(NOW + 400 * DAY_MS).toISOString(), NOW))).toBe(NOW + 90 * DAY_MS);
     expect(Date.parse(computeExpiry(new Date(NOW - DAY_MS).toISOString(), NOW))).toBe(NOW + DAY_MS);
     expect(Date.parse(computeExpiry(new Date(NOW + 10 * DAY_MS).toISOString(), NOW))).toBe(NOW + 10 * DAY_MS);
-  });
-});
-
-describe('groupDailyCreates', () => {
-  it('defaults to 50 and parses GROUP_DAILY_CREATES', () => {
-    expect([groupDailyCreates(undefined), groupDailyCreates('10'), groupDailyCreates('0'), groupDailyCreates('x'), groupDailyCreates('-1'), groupDailyCreates('')]).toEqual([50, 10, 0, 50, 50, 50]);
   });
 });
 
@@ -190,6 +184,22 @@ describe('expiry and deletion', () => {
     await s.set('junk', 'not json', { onlyIfNew: true });
     expect(await sweepGroups(s, NOW + 5 * DAY_MS)).toBe(2);
     expect([...s.m.keys()]).toEqual([A]);
+  });
+  it('the sweep reads at most 8 blobs at once and still visits every one', async () => {
+    const s = memory();
+    for (let i = 0; i < 30; i++) await s.set(`junk-${i}`, 'not json', { onlyIfNew: true });
+    let inFlight = 0;
+    let peak = 0;
+    const get = s.getWithMetadata;
+    s.getWithMetadata = async k => {
+      inFlight++; peak = Math.max(peak, inFlight);
+      await new Promise(r => setTimeout(r, 1));
+      try { return await get(k); } finally { inFlight--; }
+    };
+    expect(await sweepGroups(s, NOW)).toBe(30);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(SWEEP_CONCURRENCY);
+    expect(s.m.size).toBe(0);
   });
 });
 

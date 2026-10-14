@@ -3,7 +3,7 @@ import { DESTINATIONS, HUBS } from '../../../src/app/data/destinations';
 import places from './places.json';
 import centres from './place-centres.json';
 import {
-  buildUrl, coordsFor, eventsDailyLimit, normalizeEvents, safeTicketmasterUrl, validateCode, validateWindow,
+  buildUrl, coordsFor, normalizeEvents, safeTicketmasterUrl, validateCode, validateWindow,
 } from './events';
 
 const NOW = Date.parse('2026-10-06T15:00:00Z');
@@ -118,11 +118,5 @@ describe('misc', () => {
     expect(safeTicketmasterUrl('https://www.ticketmaster.com.mx/e/1')).not.toBeNull();
     expect(safeTicketmasterUrl('https://ticketmaster.zz/e/1')).toBeNull();
     expect(safeTicketmasterUrl('https://eviticketmaster.com/e/1')).toBeNull();
-  });
-  it('eventsDailyLimit', () => {
-    expect(eventsDailyLimit(undefined)).toBe(500);
-    expect(eventsDailyLimit('120')).toBe(120);
-    expect(eventsDailyLimit('0')).toBe(0);
-    expect(eventsDailyLimit('x')).toBe(500);
   });
 });

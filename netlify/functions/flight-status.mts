@@ -12,9 +12,11 @@
 // lookup is cached in Blobs for 15 minutes on its own.
 import { getStore } from '@netlify/blobs';
 import {
-  cachedInbound, cacheSeconds, canonicalQuery, dailyLimit, inboundIdToFetch, makeBudget, makeLimiter, normalizeFlight, normalizeInbound, pickFlight, queryWindow,
+  cachedInbound, cacheSeconds, canonicalQuery, inboundIdToFetch, normalizeFlight, normalizeInbound, pickFlight, queryWindow,
   validateDep, validateIdent, validateOrigin, type InboundStore,
 } from './lib/flight-status.ts';
+import { json as jsonResponse } from './lib/http.ts';
+import { dailyLimit, makeBudget, makeLimiter } from './lib/limits.ts';
 
 const BASE = 'https://aeroapi.flightaware.com/aeroapi';
 const allow = makeLimiter(10, 10 * 60_000);
@@ -22,12 +24,7 @@ const NO_STORE = 'no-store';
 const VARY = 'query=ident|origin|dep';
 
 function json(body: unknown, status: number, cdn: string | null, browser = NO_STORE): Response {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': browser };
-  if (cdn) {
-    headers['Netlify-CDN-Cache-Control'] = cdn;
-    headers['Netlify-Vary'] = VARY;
-  }
-  return new Response(JSON.stringify(body), { status, headers });
+  return jsonResponse(body, status, { 'Cache-Control': browser, ...(cdn ? { 'Netlify-CDN-Cache-Control': cdn, 'Netlify-Vary': VARY } : {}) });
 }
 
 async function aero(path: string, key: string): Promise<unknown> {
@@ -58,7 +55,7 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
 
   let spend: (nowMs: number, calls?: number) => Promise<boolean>;
   try {
-    spend = makeBudget(getStore({ name: 'aeroapi-budget', consistency: 'strong' }), dailyLimit(process.env['AEROAPI_DAILY_LIMIT']));
+    spend = makeBudget(getStore({ name: 'aeroapi-budget', consistency: 'strong' }), dailyLimit(process.env['AEROAPI_DAILY_LIMIT'], 40));
   } catch {
     return json({ error: 'budget' }, 503, null);
   }

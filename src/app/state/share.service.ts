@@ -1,4 +1,5 @@
 import { DOCUMENT, Injectable, inject } from '@angular/core';
+import { t } from '../i18n/t';
 import { AppStateService } from './app-state.service';
 
 /**
@@ -26,9 +27,9 @@ export class ShareService {
     try {
       if (!nav?.clipboard) throw new Error('no clipboard');
       await nav.clipboard.writeText(url);
-      this.state.flash('Link copied');
+      this.state.flash(t('group.linkCopied'));
     } catch {
-      this.state.flash('Could not copy the link');
+      this.state.flash(t('group.copyFailed'));
     }
   }
 }

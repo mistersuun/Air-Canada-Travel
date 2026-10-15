@@ -7,6 +7,7 @@
  * up". Load notes are not included either.
  */
 import { LEG_STATUSES, type LegStatus, type Trip } from '../trips/model';
+import { t } from '../i18n/t';
 
 export const MAX_NAME = 24;
 export const MAX_PLAN_LABEL = 40;
@@ -158,10 +159,10 @@ export function planLabelSuggestions(trip: Trip): string[] {
   for (const l of trip.legs) {
     if (l.kind !== 'flight') continue;
     const f = l.refs[0]?.flightNumber;
-    if (f) out.push(`On ${f}`);
+    if (f) out.push(t('group.planOn', { flight: f }));
     for (const a of l.alternates) {
       const af = a.refs[0]?.flightNumber;
-      if (af) out.push(`Plan B: ${af}`);
+      if (af) out.push(t('group.planB', { flight: af }));
     }
   }
   return [...new Set(out)].slice(0, 8);

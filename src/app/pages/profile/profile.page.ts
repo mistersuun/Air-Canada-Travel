@@ -3,19 +3,24 @@ import { Router } from '@angular/router';
 import { logbookPath } from '../../extras/links';
 import { IconComponent } from '../../components/shared/icons.component';
 import type { TravelProfile, TripLength, TripStyle } from '../../recs/model';
-import { MAX_USUAL_ITEMS, TRIP_STYLES, USUAL_SUGGESTIONS } from '../../recs/profile';
-import { DAY_LETTERS, LENGTH_OPTIONS, toggled } from '../../recs/profile-options';
+import { MAX_USUAL_ITEMS, TRIP_STYLES, usualSuggestions } from '../../recs/profile';
+import { lengthOptions, toggled } from '../../recs/profile-options';
 import { ProfileService } from '../../recs/profile.service';
 import { clearDismissedFacts, dismissedFacts } from '../flight/fun-fact';
+import { typeLabel } from '../../i18n/labels';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { SegComponent, SegOption } from '../../ui/seg.component';
-import { WEEKDAY_LONG } from '../../utils/time';
+import { weekdayLetters, weekdayLong } from '../../utils/time';
 
-export { DAY_LETTERS, LENGTH_OPTIONS, toggled };
-export const ONWARD_OPTIONS: SegOption[] = [
-  { value: 'low', label: 'Low' },
-  { value: 'any', label: 'Any' },
-];
+export { toggled };
+/** The onward-travel budget choices ('Low', 'Any') in the UI language. */
+export function onwardOptions(): SegOption[] {
+  return [
+    { value: 'low', label: t('recs.profile.onwardLow') },
+    { value: 'any', label: t('recs.profile.onwardAny') },
+  ];
+}
 /** Default slider position when "Any" is unticked. */
 export const DEFAULT_MAX_HOURS = 7;
 
@@ -34,130 +39,130 @@ export const DEFAULT_MAX_HOURS = 7;
     @let p = profile.profile();
     <div class="ui-page ui-page--bare pf">
       <header class="pf__head">
-        <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
-        <h1 class="ui-h3">Travel profile</h1>
+        <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('recs.profile.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+        <h1 class="ui-h3">{{ t('recs.profile.title') }}</h1>
         <span class="pf__sp" aria-hidden="true"></span>
       </header>
 
-      <h2 class="ui-label pf__lbl" id="pf-like">I like</h2>
+      <h2 class="ui-label pf__lbl" id="pf-like">{{ t('recs.profile.iLike') }}</h2>
       <div class="ui-card pf__card">
         <div class="chips" role="group" aria-labelledby="pf-like">
           @for (s of styles; track s) {
             <button type="button" class="pick" [class.on]="p.styles.includes(s)" [attr.aria-pressed]="p.styles.includes(s)"
                     [attr.data-style]="s" (click)="toggleStyle(s)">
-              @if (p.styles.includes(s)) { <app-icon name="check" [size]="14" [strokeWidth]="2.6" /> }{{ s }}
+              @if (p.styles.includes(s)) { <app-icon name="check" [size]="14" [strokeWidth]="2.6" /> }{{ styleLabel(s) }}
             </button>
           }
         </div>
-        <p class="hint">None picked means any kind of trip.</p>
+        <p class="hint">{{ t('recs.profile.likeHint') }}</p>
       </div>
 
-      <h2 class="ui-label pf__lbl">Usual trip</h2>
+      <h2 class="ui-label pf__lbl">{{ t('recs.profile.usualTrip') }}</h2>
       <div class="ui-card pf__card">
         <div class="fl">
-          <span class="fl__t" id="pf-len">Length</span>
-          <app-seg stretch ariaLabel="Usual trip length" data-length [options]="lengthOptions"
+          <span class="fl__t" id="pf-len">{{ t('recs.profile.length') }}</span>
+          <app-seg stretch [ariaLabel]="t('recs.profile.lengthAria')" data-length [options]="lengthOptions()"
                    [value]="p.length ?? 'weekend'" (valueChange)="setLength($event)" />
         </div>
         <div class="fl fl--gap">
           <div class="fl__row">
-            <label class="fl__t" for="pf-max">Longest flight</label>
-            <span class="fl__v tn" data-max-text>@if (p.maxFlightHours === null) { <b>Any length</b> } @else { Up to <b>{{ p.maxFlightHours }}h</b> }</span>
+            <label class="fl__t" for="pf-max">{{ t('recs.profile.longest') }}</label>
+            <span class="fl__v tn" data-max-text>@if (p.maxFlightHours === null) { <b>{{ t('recs.profile.anyLength') }}</b> } @else { {{ t('recs.profile.upToLead') }} <b>{{ t('recs.dur.h', { h: p.maxFlightHours }) }}</b> }</span>
           </div>
           <input id="pf-max" type="range" min="1" max="12" step="1" class="range" data-max
                  [value]="p.maxFlightHours ?? sliderDefault" [disabled]="p.maxFlightHours === null"
                  [style.--pct]="pct(p.maxFlightHours ?? sliderDefault)"
-                 [attr.aria-valuetext]="p.maxFlightHours === null ? 'Any length' : 'Up to ' + p.maxFlightHours + ' hours'"
+                 [attr.aria-valuetext]="p.maxFlightHours === null ? t('recs.profile.anyLength') : t('recs.profile.maxValue', { h: p.maxFlightHours })"
                  (input)="setMax($event)">
-          <div class="ticks tn" [class.is-off]="p.maxFlightHours === null" aria-hidden="true"><span>1h</span><span>6h</span><span>12h</span></div>
+          <div class="ticks tn" [class.is-off]="p.maxFlightHours === null" aria-hidden="true"><span>{{ t('recs.dur.h', { h: 1 }) }}</span><span>{{ t('recs.dur.h', { h: 6 }) }}</span><span>{{ t('recs.dur.h', { h: 12 }) }}</span></div>
           <label class="ck" for="pf-any">
             <input id="pf-any" type="checkbox" data-any [checked]="p.maxFlightHours === null" (change)="setAny($event)">
-            <span>Any length</span>
+            <span>{{ t('recs.profile.anyLength') }}</span>
           </label>
         </div>
       </div>
 
       <div class="ui-card pf__card pf__card--rows">
         <div class="srow">
-          <div class="srow__tx"><span class="fl__t" id="pf-party">Travellers</span>
-            <span class="hint">Used to prefer days with more departures, never to guess seats.</span></div>
+          <div class="srow__tx"><span class="fl__t" id="pf-party">{{ t('recs.profile.travellers') }}</span>
+            <span class="hint">{{ t('recs.profile.travellersHint') }}</span></div>
           <div class="stepper" role="group" aria-labelledby="pf-party">
-            <button type="button" aria-label="Fewer travellers" data-party-minus [disabled]="p.party <= 1" (click)="setParty(p.party - 1)">−</button>
+            <button type="button" [attr.aria-label]="t('recs.profile.fewer')" data-party-minus [disabled]="p.party <= 1" (click)="setParty(p.party - 1)">−</button>
             <b class="tn" aria-live="polite" data-party>{{ p.party }}</b>
-            <button type="button" aria-label="More travellers" data-party-plus [disabled]="p.party >= 9" (click)="setParty(p.party + 1)">+</button>
+            <button type="button" [attr.aria-label]="t('recs.profile.more')" data-party-plus [disabled]="p.party >= 9" (click)="setParty(p.party + 1)">+</button>
           </div>
         </div>
         <div class="srow srow--col">
           <div class="srow__line">
-            <span class="fl__t">Onward travel budget</span>
-            <app-seg class="onw" ariaLabel="Onward travel budget" data-onward [options]="onwardOptions"
+            <span class="fl__t">{{ t('recs.profile.onward') }}</span>
+            <app-seg class="onw" [ariaLabel]="t('recs.profile.onward')" data-onward [options]="onwardOptions()"
                      [value]="p.onwardBudget" (valueChange)="setOnward($event)" />
           </div>
-          <span class="hint">Any lets ideas include a train or bus past the airport.</span>
+          <span class="hint">{{ t('recs.profile.onwardHint') }}</span>
         </div>
         @if (hiddenFacts() > 0) {
           <div class="srow">
-            <div class="srow__tx"><span class="fl__t">Fun facts on flight pages</span>
-              <span class="hint">You hid them for {{ hiddenFacts() }} {{ hiddenFacts() === 1 ? 'destination' : 'destinations' }}.</span></div>
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-facts-again (click)="showFactsAgain()">Show again</button>
+            <div class="srow__tx"><span class="fl__t">{{ t('recs.profile.facts') }}</span>
+              <span class="hint">{{ t('recs.profile.factsHidden', { n: hiddenFacts() }) }}</span></div>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-facts-again (click)="showFactsAgain()">{{ t('recs.profile.showAgain') }}</button>
           </div>
         }
       </div>
 
-      <h2 class="ui-label pf__lbl" id="pf-days">Days I can usually leave or come back</h2>
+      <h2 class="ui-label pf__lbl" id="pf-days">{{ t('recs.profile.days') }}</h2>
       <div class="ui-card pf__card">
         <div class="dow" role="group" aria-labelledby="pf-days">
-          @for (l of dayLetters; track $index) {
+          @for (l of dayLetters(); track $index) {
             <button type="button" [class.on]="p.days.includes($index + 1)" [attr.aria-pressed]="p.days.includes($index + 1)"
-                    [attr.aria-label]="dayNames[$index]" [attr.data-day]="$index + 1" (click)="toggleDay($index + 1)">{{ l }}</button>
+                    [attr.aria-label]="dayNames()[$index]" [attr.data-day]="$index + 1" (click)="toggleDay($index + 1)">{{ l }}</button>
           }
         </div>
-        <p class="hint">Mondays that are holidays count too.@if (!p.days.length) { None picked means any day. }</p>
+        <p class="hint">{{ t('recs.profile.daysHint') }}@if (!p.days.length) { {{ t('recs.profile.daysNone') }} }</p>
       </div>
 
-      <h2 class="ui-label pf__lbl" id="pf-usual">My usual items</h2>
+      <h2 class="ui-label pf__lbl" id="pf-usual">{{ t('recs.profile.usual') }}</h2>
       <div class="ui-card pf__card">
-        <p class="hint hint--top">Added to the prep list of every new trip.</p>
+        <p class="hint hint--top">{{ t('recs.profile.usualHint') }}</p>
         @if (p.usualItems.length) {
           <ul class="items" role="list" aria-labelledby="pf-usual" data-usual>
             @for (it of p.usualItems; track it) {
               <li class="items__row"><span>{{ it }}</span>
-                <button type="button" class="items__rm" [attr.aria-label]="'Remove ' + it" data-usual-rm (click)="profile.removeUsualItem(it)">
+                <button type="button" class="items__rm" [attr.aria-label]="t('recs.profile.remove', { item: it })" data-usual-rm (click)="profile.removeUsualItem(it)">
                   <app-icon name="close" [size]="15" /></button></li>
             }
           </ul>
         }
         @if (suggestions(p.usualItems).length) {
-          <div class="chips" role="group" aria-label="Suggested items">
+          <div class="chips" role="group" [attr.aria-label]="t('recs.profile.suggested')">
             @for (s of suggestions(p.usualItems); track s) {
               <button type="button" class="pick" data-suggest (click)="profile.addUsualItem(s)">+ {{ s }}</button>
             }
           </div>
         }
         <form class="add" (submit)="addUsual($event)">
-          <label class="ui-visually-hidden" for="pf-add">Add a usual item</label>
-          <input id="pf-add" class="add__in" type="text" maxlength="80" autocomplete="off" placeholder="Add your own"
+          <label class="ui-visually-hidden" for="pf-add">{{ t('recs.profile.addLabel') }}</label>
+          <input id="pf-add" class="add__in" type="text" maxlength="80" autocomplete="off" [attr.placeholder]="t('recs.profile.addOwn')"
                  [value]="draft()" (input)="draft.set($any($event.target).value)" data-usual-input>
-          <button type="submit" class="ui-btn ui-btn--ghost ui-btn--sm" [disabled]="!draft().trim() || p.usualItems.length >= maxItems" data-usual-add>Add</button>
+          <button type="submit" class="ui-btn ui-btn--ghost ui-btn--sm" [disabled]="!draft().trim() || p.usualItems.length >= maxItems" data-usual-add>{{ t('recs.add') }}</button>
         </form>
       </div>
 
       <p class="note"><app-icon name="lock" [size]="16" />
-        <span>Stays on this phone. Used only to pick suggestions. Not in share links.</span></p>
+        <span>{{ t('recs.profile.privacy') }}</span></p>
 
       <button type="button" class="lb" data-logbook (click)="openLogbook()">
-        <span>Your logbook</span><span aria-hidden="true">›</span>
+        <span>{{ t('recs.profile.logbook') }}</span><span aria-hidden="true">›</span>
       </button>
 
       <!-- Nothing to reset on a fresh profile: no button, rather than one that looks disabled. -->
       <div class="reset">
         @if (confirming()) {
-          <span class="reset__q">Reset your travel profile?</span>
-          <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-reset-cancel (click)="confirming.set(false)">Cancel</button>
-          <button type="button" class="ui-btn ui-btn--sm" data-reset-yes (click)="reset()">Reset</button>
+          <span class="reset__q">{{ t('recs.profile.resetQ') }}</span>
+          <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-reset-cancel (click)="confirming.set(false)">{{ t('recs.cancel') }}</button>
+          <button type="button" class="ui-btn ui-btn--sm" data-reset-yes (click)="reset()">{{ t('common.reset') }}</button>
         } @else if (!profile.isEmpty()) {
           <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm reset__b" data-reset
-                  (click)="confirming.set(true)">Reset profile</button>
+                  (click)="confirming.set(true)">{{ t('recs.profile.reset') }}</button>
         }
       </div>
     </div>
@@ -223,6 +228,7 @@ export const DEFAULT_MAX_HOURS = 7;
     }
     .stepper button:disabled { color: var(--ink-3); cursor: default; }
     .stepper b { min-width: 22px; text-align: center; font-weight: 650; }
+    app-seg[data-length] ::ng-deep .seg__b { white-space: normal; line-height: 1.15; text-align: center; min-height: 44px; }
     .onw { width: 128px; flex: none; }
     .onw ::ng-deep .seg__b { flex: 1; min-height: 38px; }
     .dow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
@@ -262,6 +268,8 @@ export const DEFAULT_MAX_HOURS = 7;
   `],
 })
 export class ProfilePage {
+  protected readonly t = t;
+  protected readonly styleLabel = typeLabel;
   protected readonly hiddenFacts = signal(dismissedFacts().size);
 
   protected showFactsAgain(): void {
@@ -274,10 +282,10 @@ export class ProfilePage {
   private readonly router = inject(Router);
 
   protected readonly styles = TRIP_STYLES;
-  protected readonly lengthOptions = LENGTH_OPTIONS;
-  protected readonly onwardOptions = ONWARD_OPTIONS;
-  protected readonly dayLetters = DAY_LETTERS;
-  protected readonly dayNames = WEEKDAY_LONG;
+  protected readonly lengthOptions = computed(() => lengthOptions());
+  protected readonly onwardOptions = computed(() => onwardOptions());
+  protected readonly dayLetters = computed(() => weekdayLetters());
+  protected readonly dayNames = computed(() => Array.from({ length: 7 }, (_, i) => weekdayLong(i)));
   protected readonly sliderDefault = DEFAULT_MAX_HOURS;
   protected readonly confirming = signal(false);
   private readonly p = computed(() => this.profile.profile());
@@ -289,7 +297,7 @@ export class ProfilePage {
   protected suggestions(have: readonly string[]): string[] {
     if (have.length >= MAX_USUAL_ITEMS) return [];
     const lower = new Set(have.map(h => h.toLowerCase()));
-    return USUAL_SUGGESTIONS.filter(s => !lower.has(s.toLowerCase()));
+    return usualSuggestions().filter(s => !lower.has(s.toLowerCase()));
   }
 
   protected addUsual(e: Event): void {
@@ -338,7 +346,7 @@ export class ProfilePage {
   protected reset(): void {
     this.profile.reset();
     this.confirming.set(false);
-    this.state.flash('Travel profile reset');
+    this.state.flash(t('recs.profile.resetDone'));
   }
 
   protected openLogbook(): void {

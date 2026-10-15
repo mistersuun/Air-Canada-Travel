@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { t } from '../../i18n/t';
 import { AirportHotelsService, distanceLabel, hotelMapUrl } from '../airport-hotels';
 import { stayLinks } from '../stay-links';
 
@@ -16,8 +17,8 @@ export const STUCK_HOTELS_SHOWN = 5;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="st ui-card" data-stuck-tonight>
-      <h2 class="ui-h3 st__h">Stuck tonight?</h2>
-      <p class="st__lead">Nothing else leaves {{ airportName() }} tonight in our schedule data.@if (hotels().length) { Hotels near the airport:}</p>
+      <h2 class="ui-h3 st__h">{{ t('places.stuck.title') }}</h2>
+      <p class="st__lead">{{ t('places.stuck.lead', { airport: airportName() }) }}@if (hotels().length) { {{ t('places.stuck.hotels') }}}</p>
       @if (hotels().length) {
         <ul class="st__hotels" data-hotels>
           @for (h of hotels(); track h.name + h.lat) {
@@ -27,8 +28,8 @@ export const STUCK_HOTELS_SHOWN = 5;
             </li>
           }
         </ul>
-        <p class="st__foot">Hotel data © <a class="ui-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>,
-          <a class="ui-link" [href]="licenseUrl()" target="_blank" rel="noopener noreferrer license">ODbL</a>. Distances are straight-line. No prices or availability.</p>
+        <p class="st__foot">{{ t('places.stuck.data') }} <a class="ui-link" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">{{ osm }}</a>,
+          <a class="ui-link" [href]="licenseUrl()" target="_blank" rel="noopener noreferrer license">{{ odbl }}</a>. {{ t('places.stuck.foot') }}</p>
       }
       <ul class="st__links" data-stay-links>
         @for (l of links(); track l.id) {
@@ -51,6 +52,9 @@ export const STUCK_HOTELS_SHOWN = 5;
   `],
 })
 export class StuckTonightComponent {
+  protected readonly t = t;
+  protected readonly odbl = 'ODbL';
+  protected readonly osm = 'OpenStreetMap contributors';   // i18n-ignore
   private readonly service = inject(AirportHotelsService);
   /** IATA code of the airport the traveller is at. */
   readonly code = input.required<string>();

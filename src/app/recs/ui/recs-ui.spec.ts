@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { SwUpdate } from '@angular/service-worker';
 import { EMPTY } from 'rxjs';
+import { t } from '../../i18n/t';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
@@ -133,7 +134,7 @@ describe('ForYouComponent', () => {
     expect(text('#h-foryou')).toBe('For you');
     expect(text('[data-edit-profile]')).toBe('Edit profile');
     expect(el.querySelector('[data-edit-profile]')!.getAttribute('href')).toMatch(/^\/profile/);
-    expect(text('.line')).toBe(FOR_YOU_LINE);
+    expect(text('.line')).toBe(t(FOR_YOU_LINE));
 
     const lw = el.querySelector('[data-group^="lw:"]')!;
     expect(text('[data-holiday]', lw)).toBe('Thanksgiving long weekend');

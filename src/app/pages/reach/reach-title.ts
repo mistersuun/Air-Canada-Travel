@@ -1,6 +1,7 @@
 import { DestroyRef, Signal, effect, inject, signal } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { NavigationEnd, Router } from '@angular/router';
+import { t } from '../../i18n/t';
 
 /**
  * Sets "<Place> · Reach · Routes" once the place is known, and again after every
@@ -17,6 +18,6 @@ export function reachTitle(name: Signal<string>): void {
   effect(() => {
     ended();
     const n = name();
-    if (n) title.setTitle(`${n} · Reach · Routes`);
+    if (n) title.setTitle(t('places.reach.pageTitle', { name: n }));
   });
 }

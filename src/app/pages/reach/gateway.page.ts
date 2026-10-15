@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent, IconName } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { airportEnd, arrivalAtGoal, onwardLinks, placeEnd } from '../../places/ground';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { Gateway, reachGateways } from '../../places/reach';
@@ -40,15 +41,15 @@ import { reachTitle } from './reach-title';
       <header class="hero">
         <app-dest-photo class="hero__img" [code]="code()" size="hero" eager [alt]="photoAlt()" (photoShown)="heroShown.set($event)" />
         <div class="hero__bar">
-          <button type="button" class="ui-circ" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <button type="button" class="ui-circ" [attr.aria-label]="t('places.reach.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
           <button type="button" class="ui-circ star" [attr.aria-pressed]="isFav()"
-                  [attr.aria-label]="isFav() ? 'Remove ' + city() + ' from Saved' : 'Save ' + city()" (click)="state.toggleFavourite(code())">
+                  [attr.aria-label]="isFav() ? t('places.reach.unsave', { city: city() }) : t('places.reach.save', { city: city() })" (click)="state.toggleFavourite(code())">
             <app-icon name="star" [size]="18" [filled]="isFav()" />
           </button>
         </div>
         @if (heroShown() && credit(); as c) {
           <p class="credit">
-            <a [href]="c.sourceUrl" target="_blank" rel="noopener">Photo</a> ·
+            <a [href]="c.sourceUrl" target="_blank" rel="noopener">{{ t('settings.photo') }}</a> ·
             @if (c.authorUrl) { <a [href]="c.authorUrl" target="_blank" rel="noopener">{{ c.author }}</a> } @else { {{ c.author }} }
           </p>
         }
@@ -56,23 +57,23 @@ import { reachTitle } from './reach-title';
 
       <div class="body">
         <p class="ui-sub tn">{{ city() }} → {{ placeName() || '…' }}</p>
-        <h1 class="title"><span class="city">via {{ city() }}</span><span class="code ui-cond">{{ code() }}</span></h1>
+        <h1 class="title"><span class="city">{{ t('format.via', { hubs: city() }) }}</span><span class="code ui-cond">{{ code() }}</span></h1>
 
         @switch (placeState().kind) {
-          @case ('loading') { <p class="ui-sub" role="status">Loading places…</p> }
+          @case ('loading') { <p class="ui-sub" role="status">{{ t('places.reach.loading') }}</p> }
           @case ('error') {
             <section class="ui-card card" role="status">
-              <p class="ui-sub">The list of places couldn't be loaded. It needs the internet the first time.</p>
-              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="retry()">Try again</button>
+              <p class="ui-sub">{{ t('places.reach.loadError') }}</p>
+              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="retry()">{{ t('places.reach.tryAgain') }}</button>
             </section>
           }
           @case ('unknown') {
-            <section class="ui-card card" role="status"><p class="ui-sub">This link doesn't match a place in our city list.</p></section>
+            <section class="ui-card card" role="status"><p class="ui-sub">{{ t('places.reach.unknownLink') }}</p></section>
           }
           @case ('ready') {
             @if (gateway(); as g) {
               @if (g.itineraries.length > 1) {
-                <div class="opts" role="group" aria-label="Flights that day">
+                <div class="opts" role="group" [attr.aria-label]="t('places.reach.flightsThatDay')">
                   @for (it of g.itineraries; track $index) {
                     <button type="button" class="ui-tag opt tn" [class.ui-tag--blue]="$index === pick()" [class.ui-tag--neutral]="$index !== pick()"
                             [attr.aria-pressed]="$index === pick()" (click)="pick.set($index)">
@@ -81,7 +82,7 @@ import { reachTitle } from './reach-title';
                 </div>
               }
 
-              <section class="ui-card card" aria-label="Door to door">
+              <section class="ui-card card" [attr.aria-label]="t('places.reach.doorToDoor')">
                 @if (itin(); as it) {
                   <ol class="chain">
                     @for (l of it.legs; track $index) {
@@ -91,7 +92,7 @@ import { reachTitle } from './reach-title';
                           <div class="leg__t tn">{{ seg(l) }}</div>
                           <div class="leg__m tn">{{ fno(l.flightNumber) }}@if (l.aircraft) { · {{ plane(l.aircraft) }}} ·
                             <app-provenance-tag [value]="it.estimated ? 'unknown' : 'scheduled'" /></div>
-                          @if ($index > 0) { <div class="leg__m tn">{{ layover(it, $index) }} to connect in {{ l.origin }} · a second standby leg</div> }
+                          @if ($index > 0) { <div class="leg__m tn">{{ t('places.reach.connect', { dur: layover(it, $index), airport: l.origin }) }}</div> }
                         </div>
                       </li>
                     }
@@ -100,7 +101,7 @@ import { reachTitle } from './reach-title';
                         <div class="leg__ic g"><b><app-icon name="clock" [size]="12" [strokeWidth]="2.2" /></b><u></u></div>
                         <div class="leg__b">
                           <div class="leg__t">{{ g.ground.exitLabel }}</div>
-                          <div class="leg__m">allow about {{ hm(g.ground.exitMin) }} · <app-provenance-tag value="estimated" /></div>
+                          <div class="leg__m">{{ t('places.reach.allow', { dur: hm(g.ground.exitMin) }) }} · <app-provenance-tag value="estimated" /></div>
                         </div>
                       </li>
                     }
@@ -121,29 +122,29 @@ import { reachTitle } from './reach-title';
                 } @else {
                   <p class="none tn">{{ idle() }}</p>
                   @if (g.nextDateKey) {
-                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="goTo(g.nextDateKey)">Show {{ day(g.nextDateKey) }}</button>
+                    <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="goTo(g.nextDateKey)">{{ t('places.reach.showDay', { day: day(g.nextDateKey) }) }}</button>
                   }
                 }
                 <a class="ui-btn ui-btn--dark ui-btn--block find" [href]="links().google" target="_blank" rel="noopener">
-                  <app-icon name="map" [size]="18" />Find onward transport</a>
-                <p class="also">Also:
-                  <a [href]="links().rome2rio" target="_blank" rel="noopener">Rome2Rio</a> ·
-                  <a [href]="links().omio" target="_blank" rel="noopener">Omio</a> ·
-                  <a [href]="links().skyscanner" target="_blank" rel="noopener">Skyscanner</a></p>
+                  <app-icon name="map" [size]="18" />{{ t('places.reach.findOnward') }}</a>
+                <p class="also">{{ t('places.reach.also') }}
+                  <a [href]="links().rome2rio" target="_blank" rel="noopener">{{ brands[0] }}</a> ·
+                  <a [href]="links().omio" target="_blank" rel="noopener">{{ brands[1] }}</a> ·
+                  <a [href]="links().skyscanner" target="_blank" rel="noopener">{{ brands[2] }}</a></p>
               </section>
 
               <div class="ui-card card acts">
                 <button type="button" class="ui-btn ui-btn--ghost" [attr.aria-disabled]="!itin() || null" [attr.aria-describedby]="itin() ? null : 'gw-why'" (click)="start(true)">{{ found() }}</button>
-                <button type="button" class="ui-btn" [attr.aria-disabled]="!itin() || null" [attr.aria-describedby]="itin() ? null : 'gw-why'" (click)="start(false)">Start this trip</button>
+                <button type="button" class="ui-btn" [attr.aria-disabled]="!itin() || null" [attr.aria-describedby]="itin() ? null : 'gw-why'" (click)="start(false)">{{ t('places.reach.start') }}</button>
               </div>
               @if (!itin()) {
-                <p id="gw-why" class="ui-sub foot">Pick a day with a flight first{{ g.nextDateKey ? ', for example ' + day(g.nextDateKey) : '' }}.</p>
+                <p id="gw-why" class="ui-sub foot">{{ g.nextDateKey ? t('places.reach.pickDayEg', { day: day(g.nextDateKey) }) : t('places.reach.pickDay') }}</p>
               }
-              <p class="ui-sub foot">Listing stays your own step. Trains and buses here are timetables or estimates until you save the one you found.</p>
+              <p class="ui-sub foot">{{ t('places.reach.listingNote') }}</p>
             } @else {
               <section class="ui-card card" role="status">
-                <p class="ui-sub">{{ code() }} isn't one of the airports near {{ placeName() }}.</p>
-                <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="reach()" [queryParams]="linkParams()">See ways to reach {{ placeName() }}</a>
+                <p class="ui-sub">{{ t('places.reach.notNear', { code: code(), place: placeName() }) }}</p>
+                <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="reach()" [queryParams]="linkParams()">{{ t('places.reach.seeWays', { place: placeName() }) }}</a>
               </section>
             }
           }
@@ -208,7 +209,7 @@ import { reachTitle } from './reach-title';
     .also a { color: var(--blue); font-weight: 500; display: inline-block; padding: 6px 2px; }
     .also a:hover { text-decoration: underline; }
     .acts { display: flex; gap: 10px; align-items: center; padding: 14px; }
-    .acts .ui-btn { flex: 1; min-width: 0; padding-inline: 10px; }
+    .acts .ui-btn { flex: 1; min-width: 0; padding-inline: 10px; white-space: normal; text-align: center; line-height: 1.2; }
     .foot { margin: 12px 4px 0; font-size: 12.5px; }
 
     @media (min-width: 720px) {
@@ -220,6 +221,8 @@ import { reachTitle } from './reach-title';
   `],
 })
 export class GatewayPage {
+  protected readonly t = t;
+  protected readonly brands = ['Rome2Rio', 'Omio', 'Skyscanner'];
   protected readonly state = inject(AppStateService);
   private readonly photos = inject(PhotoService);
   private readonly trips = inject(TripsService);
@@ -343,7 +346,7 @@ export class GatewayPage {
     return segmentLine(l);
   }
   protected fno(n: string | null): string {
-    return prettyFlight(n) || 'Estimated flight';
+    return prettyFlight(n) || t('places.reach.estFlight');
   }
   protected plane(code: string): string {
     return shortAircraftName(code);

@@ -7,6 +7,7 @@
  * The airport exit and transfer are always Estimated. Pure, apart from
  * reading the loaded timetables signal.
  */
+import { t } from '../i18n/t';
 import type { GroundMode, LegEnd, Place } from '../trips/model';
 import { hubDisplayName } from '../ui/format';
 import { findDestination, findHub } from '../utils/airports';
@@ -15,7 +16,7 @@ import { MINUTE_MS, toUtcMs, addDays, hhmmToMin, minToHhmm, todayKey, utcToLocal
 import { fastestTransit } from './airport-info';
 import { CORRIDORS, CORRIDOR_EXIT_MIN, Corridor, corridorTransferMin } from './corridors';
 import {
-  DAY_KIND_LABEL, Departure, TimetableDir, dayKind, departuresOn, groundTimetables, nextDeparture, timetableFor,
+  Departure, TimetableDir, dayKind, dayKindLabel, departuresOn, groundTimetables, nextDeparture, timetableFor,
   typicalRide,
 } from './timetable';
 
@@ -150,20 +151,19 @@ export function findCorridor(from: LegEnd, to: Place | LegEnd): { row: Corridor;
   return null;
 }
 
-/** '2h40', '9h', '45 min'. */
+/** '2h40', '9h', '45 min' ('2 h 40', '9 h', '45 min'). */
 export function aboutDuration(min: number): string {
-  if (min < 60) return `${min} min`;
+  if (min < 60) return t('places.dur.min', { m: min });
   const h = Math.floor(min / 60);
   const m = min % 60;
-  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
+  return m ? t('places.dur.hm', { h, mm: String(m).padStart(2, '0') }) : t('places.dur.h', { h });
 }
 
 const round5 = (n: number) => Math.max(5, Math.round(n / 5) * 5);
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function unknownGround(): GroundEstimate {
   return {
-    mode: 'unknown', label: 'Onward travel unknown', rideMin: null, exitMin: 0, exitLabel: '', totalMin: null,
+    mode: 'unknown', label: t('places.ground.unknown'), rideMin: null, exitMin: 0, exitLabel: '', totalMin: null,
     frequency: null, lastDepLocal: null, shortFlightToo: false, source: 'none', provenance: 'unknown',
   };
 }
@@ -183,22 +183,25 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKe
     const { row, reverse } = hit;
     // Towards the airport there is no passport/exit, but the station → airport transfer still counts.
     const exitMin = reverse ? corridorTransferMin(row) : row.exitMin;
-    const word = row.modeLabel ?? cap(row.mode);
+    const flight = row.shortFlightToo ? 'yes' : 'no';
+    const dur = aboutDuration(row.rideMin);
     const base: GroundEstimate = {
       mode: row.mode,
-      label: `${word} about ${aboutDuration(row.rideMin)}${row.shortFlightToo ? ', or a short flight' : ''}`,
+      label: row.modeLabel
+        ? t('places.ground.named', { mode: row.modeLabel, dur, flight })
+        : t(row.mode === 'bus' ? 'places.ground.bus' : 'places.ground.train', { dur, flight }),
       rideMin: row.rideMin,
       exitMin,
-      exitLabel: reverse ? (exitMin ? `Get to ${row.code} airport` : '') : row.exitLabel,
+      exitLabel: reverse ? (exitMin ? t('places.exit.toAirport', { code: row.code }) : '') : t(row.exitLabel),
       totalMin: exitMin + row.rideMin,
-      frequency: row.frequency,
+      frequency: row.frequency ? t(row.frequency) : null,
       lastDepLocal: reverse ? null : row.lastDepLocal,
       shortFlightToo: !!row.shortFlightToo,
       source: 'corridor',
       provenance: 'estimated',
     };
     const dir = timetableFor(groundTimetables(), row.code, row.geonameId, reverse);
-    return dir ? withTimetable(base, dir, word, reverse, opts?.dateKey ?? todayKey(dir.tz)) : base;
+    return dir ? withTimetable(base, dir, row.modeLabel, reverse, opts?.dateKey ?? todayKey(dir.tz)) : base;
   }
 
   const a = countryOf(from);
@@ -212,8 +215,8 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKe
   if (roadKm < CAR_MAX_KM) {
     const ride = round5((roadKm / CAR_KMH) * 60);
     return {
-      mode: 'car', label: `Taxi or transit about ${aboutDuration(ride)}`, rideMin: ride, exitMin,
-      exitLabel: exitMin ? 'Passport and exit' : '', totalMin: exitMin + ride, frequency: null, lastDepLocal: null,
+      mode: 'car', label: t('places.ground.taxi', { dur: aboutDuration(ride) }), rideMin: ride, exitMin,
+      exitLabel: exitMin ? t('places.exit.passport') : '', totalMin: exitMin + ride, frequency: null, lastDepLocal: null,
       shortFlightToo: false, source: 'heuristic', provenance: 'estimated',
     };
   }
@@ -224,16 +227,16 @@ export function groundEstimate(from: LegEnd, to: Place | LegEnd, opts?: { dateKe
   const busExit = transit ? CORRIDOR_EXIT_MIN + transit.min : exitMin;
   return {
     mode: 'bus',
-    label: `Bus or train about ${aboutDuration(ride)}${far ? ', or a short flight' : ''}`,
+    label: t('places.ground.busTrain', { dur: aboutDuration(ride), flight: far ? 'yes' : 'no' }),
     rideMin: ride, exitMin: busExit,
-    exitLabel: !fromAirport ? '' : transit ? `Passport, exit, then ${transit.note} (about ${transit.min} min)` : 'Passport, exit, get to the station',
+    exitLabel: !fromAirport ? '' : transit ? t('places.exit.then', { note: transit.note, min: transit.min }) : t('places.exit.station'),
     totalMin: busExit + ride, frequency: null, lastDepLocal: null,
     shortFlightToo: far, source: 'heuristic', provenance: 'estimated',
   };
 }
 
 /** The corridor estimate with its timetable for `dateKey`: Scheduled when trains or buses run that day. */
-function withTimetable(base: GroundEstimate, dir: TimetableDir, word: string, reverse: boolean, dateKey: string): GroundEstimate {
+function withTimetable(base: GroundEstimate, dir: TimetableDir, modeLabel: string | undefined, reverse: boolean, dateKey: string): GroundEstimate {
   const deps = departuresOn(dir, dateKey);
   const info: GroundTimetableInfo = {
     dir, operator: dir.op, dateKey, state: 'ok', departures: deps ?? [], rideText: '', validTo: dir.validTo, note: dir.note,
@@ -244,17 +247,19 @@ function withTimetable(base: GroundEstimate, dir: TimetableDir, word: string, re
   const lo = Math.min(...rides);
   const hi = Math.max(...rides);
   const ride = typicalRide(deps);
-  const rideText = hi - lo > RIDE_RANGE_MIN ? `${aboutDuration(lo)} to ${aboutDuration(hi)}` : aboutDuration(ride);
+  const rideText = hi - lo > RIDE_RANGE_MIN ? t('places.ride.range', { lo: aboutDuration(lo), hi: aboutDuration(hi) }) : aboutDuration(ride);
   const first = minToHhmm(deps[0].depMin);
   const last = minToHhmm(deps[deps.length - 1].depMin);
-  const noun = base.mode === 'bus' ? (deps.length === 1 ? 'bus' : 'buses') : (deps.length === 1 ? 'train' : 'trains');
-  const when = deps.length === 1 ? `at ${first}` : `${first} to ${last}`;
+  const when = deps.length === 1 ? t('places.freq.at', { time: first }) : t('places.freq.range', { first, last });
+  const flight = base.shortFlightToo ? 'yes' : 'no';
   return {
     ...base,
-    label: `${word} ${rideText}${base.shortFlightToo ? ', or a short flight' : ''}`,
+    label: modeLabel
+      ? t('places.ground.timedNamed', { mode: modeLabel, dur: rideText, flight })
+      : t(base.mode === 'bus' ? 'places.ground.timedBus' : 'places.ground.timedTrain', { dur: rideText, flight }),
     rideMin: ride,
     totalMin: base.exitMin + ride,
-    frequency: `${deps.length} ${dir.op} ${noun} on ${DAY_KIND_LABEL[dayKind(dateKey)]}, ${when}`,
+    frequency: t(base.mode === 'bus' ? 'places.freq.timedBus' : 'places.freq.timedTrain', { n: deps.length, op: dir.op, day: dayKindLabel(dayKind(dateKey)), when }),
     lastDepLocal: reverse ? null : last,
     source: 'timetable',
     provenance: 'scheduled',

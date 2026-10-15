@@ -4,14 +4,15 @@
  * except startTripFromGateway, which writes through TripsService.
  */
 import { HUBS } from '../../data/destinations';
-import { GroundDeparture, GroundEstimate, airportEnd, placeEnd } from '../../places/ground';
+import { MsgKey, t } from '../../i18n/t';
+import { GroundDeparture, GroundEstimate, aboutDuration, airportEnd, placeEnd } from '../../places/ground';
 import { shortDate } from '../../places/timetable';
 import { Gateway, ReachSort } from '../../places/reach';
 import type { GroundLeg, GroundMode, Place } from '../../trips/model';
 import type { TripsService } from '../../trips/trips.service';
 import { prettyFlight, supOffset } from '../../ui/format';
 import type { Itinerary } from '../../utils/connections';
-import { MINUTE_MS, WEEKDAY_SHORT, addDays, formatKey, isDateKey, utcToLocal, weekdayIndex } from '../../utils/time';
+import { MINUTE_MS, addDays, formatKey, isDateKey, utcToLocal, weekdayIndex, weekdayShort } from '../../utils/time';
 
 /** Default departure: a week from today. Default return: 5 days after leaving, 22:00. */
 export const DEFAULT_LEAD_DAYS = 7;
@@ -75,11 +76,7 @@ export function dayLabel(key: string): string {
 
 /** 'AC834' or 'AC489 + AC824'. */
 export function itinFlights(it: Itinerary): string {
-  return it.legs.map(l => prettyFlight(l.flightNumber) || 'Flight').join(' + ');
-}
-
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
+  return it.legs.map(l => prettyFlight(l.flightNumber) || t('places.reach.flightWord')).join(' + ');
 }
 
 export function hubCity(code: string): string {
@@ -109,20 +106,20 @@ export function gatewayRow(g: Gateway, dateKey: string): GatewayRow {
     const first = best.legs[0];
     const viaIts = g.itineraries.filter(i => i.legs.length > 1);
     if (g.directCount) {
-      flight = `${itinFlights(best)} ${first.depLocal} · ${plural(g.directCount, 'flight', 'flights')} that day`;
+      flight = t('places.reach.flightLine', { flights: itinFlights(best), time: first.depLocal, n: g.directCount });
       if (viaIts.length) {
-        standby = `+${viaIts.length} via ${hubCity(viaIts[0].hubs[0] ?? '')} · ${plural(viaIts[0].legs.length, 'standby leg', 'standby legs')}`;
+        standby = t('places.reach.standbyVia', { n: viaIts.length, city: hubCity(viaIts[0].hubs[0] ?? ''), legs: viaIts[0].legs.length });
       }
     } else {
-      flight = `${itinFlights(best)} ${first.depLocal} · via ${hubCity(best.hubs[0] ?? '')}`;
-      standby = plural(best.legs.length, 'standby leg', 'standby legs');
+      flight = `${itinFlights(best)} ${first.depLocal} · ${t('format.via', { hubs: hubCity(best.hubs[0] ?? '') })}`;
+      standby = t('places.reach.standbyLegs', { legs: best.legs.length });
     }
   } else if (!g.covered) {
-    idle = `Schedules for ${dayLabel(dateKey)} aren't published yet`;
+    idle = t('places.reach.notPublished', { day: dayLabel(dateKey) });
   } else {
     idle = g.nextDateKey
-      ? `Not found in our schedule data ${dayLabel(dateKey)} · next ${dayLabel(g.nextDateKey)}`
-      : `Not found in our schedule data ${dayLabel(dateKey)} · none in our schedule data for the next 2 weeks`;
+      ? t('places.reach.notFoundNext', { day: dayLabel(dateKey), next: dayLabel(g.nextDateKey) })
+      : t('places.reach.notFoundNone', { day: dayLabel(dateKey) });
   }
   return {
     code: g.code, city: g.city, flight, standby, idle, nextDateKey: !best && g.covered ? g.nextDateKey ?? null : null,
@@ -134,19 +131,19 @@ export function gatewayRow(g: Gateway, dateKey: string): GatewayRow {
 export function partOfDay(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number);
   const min = h * 60 + m;
-  if (min < 5 * 60) return 'early morning';
-  if (min < 10 * 60 + 30) return 'morning';
-  if (min < 13 * 60 + 30) return 'midday';
-  if (min < 17 * 60) return 'afternoon';
-  if (min < 21 * 60) return 'evening';
-  return 'late evening';
+  if (min < 5 * 60) return t('places.part.earlyMorning');
+  if (min < 10 * 60 + 30) return t('places.part.morning');
+  if (min < 13 * 60 + 30) return t('places.part.midday');
+  if (min < 17 * 60) return t('places.part.afternoon');
+  if (min < 21 * 60) return t('places.part.evening');
+  return t('places.part.lateEvening');
 }
 
 /** 'Seville around midday, Fri Oct 9' (in the goal's time zone, else the gateway's). */
 export function arrivalLine(place: Place, utc: number | null, gatewayTz: string): string {
-  if (utc === null) return `${place.name}: arrival time unknown`;
+  if (utc === null) return t('places.reach.arrivalUnknown', { place: place.name });
   const local = utcToLocal(utc, place.tz || gatewayTz);
-  return `${place.name} around ${partOfDay(local.hhmm)}, ${dayLabel(local.dateKey)}`;
+  return t('places.reach.arrival', { place: place.name, part: partOfDay(local.hhmm), day: dayLabel(local.dateKey) });
 }
 
 /** 'YUL 17:55 → MAD 06:50⁺¹' for one flight segment. */
@@ -156,9 +153,10 @@ export function segmentLine(l: Itinerary['legs'][number]): string {
 
 /** 'Train to Seville', 'Bus to Seville', 'Taxi or transit to Seville', 'Onward to Seville'. */
 export function groundTitle(g: GroundEstimate, place: Place): string {
-  const word = g.mode === 'train' ? 'Train' : g.mode === 'bus' ? (g.label.startsWith('Bus or train') ? 'Bus or train' : 'Bus')
-    : g.mode === 'car' ? 'Taxi or transit' : g.mode === 'ferry' ? 'Ferry' : 'Onward';
-  return `${word} to ${place.name}`;
+  const key: MsgKey = g.mode === 'train' ? 'places.reach.toTrain'
+    : g.mode === 'bus' ? (g.source === 'heuristic' ? 'places.reach.toBusTrain' : 'places.reach.toBus')
+    : g.mode === 'car' ? 'places.reach.toTaxi' : g.mode === 'ferry' ? 'places.reach.toFerry' : 'places.reach.toOnward';
+  return t(key, { place: place.name });
 }
 
 /**
@@ -167,19 +165,19 @@ export function groundTitle(g: GroundEstimate, place: Place): string {
  * is the departure the traveller would catch (`next`, from arrivalAtGoal).
  */
 export function groundDetail(g: GroundEstimate, next?: GroundDeparture | null): string {
-  if (g.mode === 'unknown' || g.rideMin === null) return 'Not found in our data: check the links below';
+  if (g.mode === 'unknown' || g.rideMin === null) return t('places.reach.notFoundLinks');
   if (g.source === 'timetable' && g.timetable) {
-    const flight = g.shortFlightToo ? ', or a short flight' : '';
-    const last = g.lastDepLocal ? `last ${g.lastDepLocal}` : '';
+    const flight = g.shortFlightToo ? t('places.reach.orFlight') : '';
+    const last = g.lastDepLocal ? t('places.reach.last', { time: g.lastDepLocal }) : '';
     const when = next
       ? next.sameDay
-        ? [`next ${next.hhmm}`, last].filter(Boolean).join(', ')
-        : `next ${WEEKDAY_SHORT[weekdayIndex(next.dateKey)]} ${next.hhmm}`
+        ? [t('places.reach.next', { time: next.hhmm }), last].filter(Boolean).join(', ')
+        : t('places.reach.nextDay', { day: weekdayShort(weekdayIndex(next.dateKey)), time: next.hhmm })
       : last;
     return [g.timetable.rideText + flight, when].filter(Boolean).join(' · ');
   }
-  const about = /about [^,]+/.exec(g.label)?.[0] ?? '';
-  const extra = g.shortFlightToo && !about ? '' : g.shortFlightToo ? ', or a short flight' : '';
+  const about = t('places.reach.about', { dur: aboutDuration(g.rideMin) });
+  const extra = g.shortFlightToo ? t('places.reach.orFlight') : '';
   return [about + extra, g.frequency].filter(Boolean).join(' · ');
 }
 
@@ -190,16 +188,16 @@ export function groundDetail(g: GroundEstimate, next?: GroundDeparture | null): 
  * in our timetable data for Sat Oct 17'). [] without a timetable.
  */
 export function groundTimetableLines(g: GroundEstimate): string[] {
-  const t = g.timetable;
-  if (!t) return [];
-  const note = t.note ? [t.note] : [];
-  switch (t.state) {
+  const tm = g.timetable;
+  if (!tm) return [];
+  const note = tm.note ? [tm.note] : [];
+  switch (tm.state) {
     case 'ok':
-      return [g.frequency ?? '', `Timetable · ${t.operator} · valid to ${shortDate(t.validTo)}`, ...note].filter(Boolean);
+      return [g.frequency ?? '', t('places.reach.ttValid', { op: tm.operator, date: shortDate(tm.validTo) }), ...note].filter(Boolean);
     case 'empty':
-      return [`Not found in our timetable data for ${dayLabel(t.dateKey)}`, ...note];
+      return [t('places.reach.ttNone', { day: dayLabel(tm.dateKey) }), ...note];
     case 'ended':
-      return [`Timetable ends ${shortDate(t.validTo)}, times estimated`];
+      return [t('places.reach.ttEnds', { date: shortDate(tm.validTo) })];
     default:
       return [];
   }
@@ -208,24 +206,23 @@ export function groundTimetableLines(g: GroundEstimate): string[] {
 /** 'I found a train' / 'I found a bus' / 'I found a ride' / 'I found a way there'. */
 export function foundLabel(mode: GroundEstimate['mode']): string {
   switch (mode) {
-    case 'train': return 'I found a train';
-    case 'bus': return 'I found a bus';
-    case 'car': return 'I found a ride';
-    default: return 'I found a way there';
+    case 'train': return t('places.reach.foundTrain');
+    case 'bus': return t('places.reach.foundBus');
+    case 'car': return t('places.reach.foundRide');
+    default: return t('places.reach.foundWay');
   }
 }
 
 /** A warning when the usual last train/bus is likely gone, or a night on the way is likely; else null. */
 export function lastTrainWarning(g: Gateway): string | null {
   if (!g.itineraries.length) return null;
-  const what = g.ground.mode === 'bus' ? 'bus' : g.ground.mode === 'train' ? 'train' : 'connection';
+  const what = g.ground.mode === 'bus' ? 'bus' : g.ground.mode === 'train' ? 'train' : 'other';
   if (g.lastDepMissed) {
     const last = !g.ground.lastDepLocal ? ''
-      : g.ground.source === 'timetable' ? ` (the last one leaves at ${g.ground.lastDepLocal})`
-      : ` (usually about ${g.ground.lastDepLocal})`;
-    return `You'd be out of the airport after the last ${what}${last}. Plan a night in ${g.city}.`;
+      : t(g.ground.source === 'timetable' ? 'places.reach.lastLeaves' : 'places.reach.lastUsually', { time: g.ground.lastDepLocal });
+    return t('places.reach.late', { what, last, city: g.city });
   }
-  if (g.overnightLikely) return `You'd arrive late. A night in ${g.city} is likely.`;
+  if (g.overnightLikely) return t('places.reach.arriveLate', { city: g.city });
   return null;
 }
 

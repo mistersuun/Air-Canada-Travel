@@ -7,7 +7,8 @@
  * every synchronous caller of groundEstimate() recomputes once the file loads.
  */
 import { signal } from '@angular/core';
-import { addDays, isDateKey, isValidTimeZone, minToHhmm, weekdayIndex } from '../utils/time';
+import { t } from '../i18n/t';
+import { addDays, formatKey, isDateKey, isValidTimeZone, minToHhmm, weekdayIndex } from '../utils/time';
 
 /** One departure: minutes after local midnight, ride minutes, index into `products`. */
 export interface Departure { depMin: number; rideMin: number; product: string }
@@ -148,8 +149,10 @@ export function dayKind(dateKey: string): DayKind {
   return wd === 5 ? 'sat' : wd === 6 ? 'sun' : 'wk';
 }
 
-/** 'weekdays', 'Saturdays', 'Sundays'. */
-export const DAY_KIND_LABEL: Record<DayKind, string> = { wk: 'weekdays', sat: 'Saturdays', sun: 'Sundays' };
+/** 'weekdays', 'Saturdays', 'Sundays' ('en semaine', 'les samedis', 'les dimanches'). */
+export function dayKindLabel(kind: DayKind): string {
+  return t(kind === 'wk' ? 'places.day.wk' : kind === 'sat' ? 'places.day.sat' : 'places.day.sun');
+}
 
 /** That date's departures (sorted); [] when nothing runs; null outside the timetable's dates. */
 export function departuresOn(dir: TimetableDir, dateKey: string): readonly Departure[] | null {
@@ -186,8 +189,7 @@ export function typicalRide(deps: readonly Departure[]): number {
   return r[Math.floor((r.length - 1) / 2)];
 }
 
-/** 'Dec 20' for a date key. */
+/** 'Dec 20' ('20 déc.') for a date key. */
 export function shortDate(dateKey: string): string {
-  const [, m, d] = dateKey.split('-').map(Number);
-  return `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m - 1]} ${d}`;
+  return formatKey(dateKey, { month: 'short', day: 'numeric' });
 }

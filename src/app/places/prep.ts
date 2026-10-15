@@ -4,6 +4,7 @@
  * listing reminders per flight leg, and "find the real train/bus" for each
  * ground leg. Pure.
  */
+import { MsgKey, t } from '../i18n/t';
 import { monthsBetween, packingFacts, typicalForMonths } from '../recs/climate';
 import type { ClimateIndex } from '../recs/model';
 import { currencyName } from '../pages/destination/currency';
@@ -81,7 +82,7 @@ export function routeCountries(trip: Trip): string[] {
 /** 'Spain', 'Spain and Portugal', 'Spain, France and Italy'. */
 export function joinNames(names: string[]): string {
   if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return t('places.joinAnd', { list: names.slice(0, -1).join(', '), last: names[names.length - 1] });
 }
 
 /** travel.gc.ca slug: 'ES' → 'spain', 'DO' → 'dominican-republic'. */
@@ -103,9 +104,9 @@ function fill(s: string, vars: Record<string, string>): string {
 function entryItem(trip: Trip, rule: EntryRule, id: string, vars: Record<string, string>): PrepItem {
   return {
     id,
-    title: fill(rule.title, vars),
-    detail: fill(rule.detail, vars),
-    link: { label: rule.linkLabel, url: fill(rule.url, vars) },
+    title: t(rule.title, vars),
+    detail: t(rule.detail, vars),
+    link: { label: t(rule.linkLabel), url: fill(rule.url, vars) },
     critical: rule.critical,
     source: 'manual',
     done: !!trip.prep[id]?.done,
@@ -158,16 +159,15 @@ const isOpen = (leg: { status: LegStatus }) => !isFinalStatus(leg.status);
  */
 function calendarDetail(trip: Trip, r: FlightRef): string | null {
   if (!trip.calendarExportedAt || !trip.calendarRefs) return null;
-  return trip.calendarRefs.includes(calendarKey(r)) ? 'Calendar reminder added' : 'Not in your calendar yet · export again';
+  return trip.calendarRefs.includes(calendarKey(r)) ? t('places.prep.calAdded') : t('places.prep.calMissing');
 }
 
 function listingItems(trip: Trip, leg: FlightLeg): PrepItem[] {
   const done = leg.status !== 'planned';
   return leg.refs.map((r, i) => {
-    const home = leg.role === 'return' ? ' home' : '';
     return {
       id: `list:${leg.id}:${i}`,
-      title: `${done ? 'Listed' : 'List'} for ${r.flightNumber}${home}`,
+      title: t('places.prep.list', { done: done ? 'yes' : 'no', flight: r.flightNumber, home: leg.role === 'return' ? 'yes' : 'no' }),
       detail: done ? null : calendarDetail(trip, r),
       link: null,
       critical: true,
@@ -181,8 +181,8 @@ function checkInItem(leg: FlightLeg): PrepItem {
   const first = leg.refs[0];
   return {
     id: `checkin:${leg.id}`,
-    title: `Check in${first ? ` for ${first.flightNumber}` : ''}`,
-    detail: "Before your pass's cutoff",
+    title: first ? t('places.prep.checkinFor', { flight: first.flightNumber }) : t('places.prep.checkin'),
+    detail: t('places.prep.cutoff'),
     link: null,
     critical: true,
     source: 'legStatus',
@@ -190,16 +190,17 @@ function checkInItem(leg: FlightLeg): PrepItem {
   };
 }
 
-const MODE_WORD: Record<GroundLeg['mode'], string> = {
-  train: 'train', bus: 'bus', car: 'ride', ferry: 'ferry', flight: 'flight', other: 'connection',
+const FIND_KEY: Record<GroundLeg['mode'], MsgKey> = {
+  train: 'places.prep.find.train', bus: 'places.prep.find.bus', car: 'places.prep.find.car',
+  ferry: 'places.prep.find.ferry', flight: 'places.prep.find.flight', other: 'places.prep.find.other',
 };
 
 function groundItem(leg: GroundLeg): PrepItem {
   const done = leg.provenance === 'saved';
   return {
     id: `ground:${leg.id}`,
-    title: `Find the ${leg.from.name} → ${leg.to.name} ${MODE_WORD[leg.mode] ?? 'connection'}`,
-    detail: done ? 'Saved by you' : 'Only estimated so far',
+    title: t(FIND_KEY[leg.mode] ?? 'places.prep.find.other', { from: leg.from.name, to: leg.to.name }),
+    detail: done ? t('places.prep.savedByYou') : t('places.prep.onlyEstimated'),
     link: null,
     critical: false,
     source: 'legStatus',
@@ -221,13 +222,13 @@ function weatherCode(trip: Trip): string | null {
 export function weatherItems(trip: Trip, climate: ClimateIndex | null | undefined): PrepItem[] {
   const code = weatherCode(trip);
   const months = monthsBetween(trip.outboundDate, trip.homeBy.dateKey);
-  const t = typicalForMonths(climate, code, months);
-  if (!t) return [];
+  const typ = typicalForMonths(climate, code, months);
+  if (!typ) return [];
   const item = (id: string, title: string): PrepItem => ({
-    id, title, detail: 'Typical for these months, not a forecast', link: null, critical: false,
+    id, title, detail: t('places.prep.typicalNote'), link: null, critical: false,
     source: 'manual', done: !!trip.prep[id]?.done,
   });
-  return [item('weather:typical', t.text), ...packingFacts(climate, code, months).map(p => item(p.id, p.title))];
+  return [item('weather:typical', typ.text), ...packingFacts(climate, code, months).map(p => item(p.id, p.title))];
 }
 
 /** Reference facts the checklist can use (all optional: a missing file adds nothing). */
@@ -248,9 +249,9 @@ export function referenceItems(trip: Trip, ref: PrepReference | null | undefined
     const id = 'advisory:gc';
     const upd = advisoryUpdated(adv, trip.outboundDate);
     out.push({
-      id, title: `Government of Canada advice for ${countryName(iso)}: ${adv.text}${adv.regional ? ' · regional advisories in effect' : ''}`,
-      detail: `Official travel.gc.ca page${upd ? ` · ${upd}` : ''}`,
-      link: { label: 'Official travel.gc.ca page', url: adv.url },
+      id, title: t('places.prep.advice', { country: countryName(iso), text: adv.text, regional: adv.regional ? 'yes' : 'no' }),
+      detail: upd ? t('places.prep.officialUpd', { upd }) : t('places.prep.official'),
+      link: { label: t('places.prep.official'), url: adv.url },
       critical: false, source: 'manual', done: !!trip.prep[id]?.done,
     });
   }
@@ -258,8 +259,8 @@ export function referenceItems(trip: Trip, ref: PrepReference | null | undefined
     if (!h.global) continue;
     const id = `holiday:${iso}:${holidayKey(h)}`;
     out.push({
-      id, title: `Public holiday in ${countryName(iso)} · ${shortDate(h.date, trip.outboundDate)} · ${holidayName(h)}`,
-      detail: 'Public holiday',
+      id, title: t('places.prep.holiday', { country: countryName(iso), date: shortDate(h.date, trip.outboundDate), name: holidayName(h) }),
+      detail: t('places.prep.holidayDetail'),
       link: null, critical: false, source: 'manual', done: !!trip.prep[id]?.done,
     });
   }
@@ -299,6 +300,6 @@ export function legPrepItems(trip: Trip, legId: string): PrepItem[] {
 export function tripEssentials(trip: Trip, nowMs: number): { currency: string; timeDiff: string } {
   const currency = currencyName(trip.goal.iso2);
   const tz = trip.goal.tz;
-  const timeDiff = tz ? `${tzDiffLabel(tz, airportTz(trip.homeAirport), nowMs)} vs ${hubDisplayName(trip.homeAirport)}` : '';
+  const timeDiff = tz ? t('places.prep.timeDiff', { diff: tzDiffLabel(tz, airportTz(trip.homeAirport), nowMs), hub: hubDisplayName(trip.homeAirport) }) : '';
   return { currency, timeDiff };
 }

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { t } from '../../i18n/t';
 import { routeNetworkCredit } from '../../data/route-network';
 import { formatKey, isDateKey } from '../../utils/time';
 
@@ -14,22 +15,22 @@ import { formatKey, isDateKey } from '../../utils/time';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <details class="grp credits">
-      <summary class="row"><span class="nm">Data credits</span><span class="chev" aria-hidden="true">›</span></summary>
+      <summary class="row"><span class="nm">{{ t('places.credit.title') }}</span><span class="chev" aria-hidden="true">›</span></summary>
       <ul class="cr">
         <li>
-          <b>City search</b>&ngsp;<a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames (geonames.org)</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">CC BY 4.0</a>, compacted to names, coordinates, population and time zones.
+          <b>{{ t('places.credit.city') }}</b>&ngsp;<a href="https://www.geonames.org/" target="_blank" rel="noopener">{{ geonames }}</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">{{ ccBy }}</a>, {{ t('places.credit.cityTail') }}
         </li>
         <li>
-          <b>Schedules</b>&ngsp;<a href="https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly" target="_blank" rel="noopener">Air Canada Vacations 'Where We Fly'</a> (published schedules, not seat availability).
+          <b>{{ t('places.credit.schedules') }}</b>&ngsp;<a href="https://vacations.aircanada.com/en/plan-your-trip/travel-info/where-we-fly" target="_blank" rel="noopener">{{ whereWeFly }}</a> {{ t('places.credit.schedulesTail') }}
         </li>
         <li data-route-list>
-          <b>Route list</b>&ngsp;<a href="https://en.wikipedia.org/" target="_blank" rel="noopener">Wikipedia</a> airport articles ("Airlines and destinations", Wikipedia contributors), <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener license">CC BY-SA 4.0</a>, with airport details from <a href="https://ourairports.com/" target="_blank" rel="noopener">OurAirports</a> (public domain). Says a route is flown, not when; check times on aircanada.com.@if (routeListChecked) {&ngsp;Checked {{ routeListChecked }}.}
+          <b>{{ t('places.credit.routes') }}</b>&ngsp;<a href="https://en.wikipedia.org/" target="_blank" rel="noopener">{{ wikipedia }}</a> {{ t('places.credit.routesA') }}, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener license">{{ ccBySa }}</a>, {{ t('places.credit.routesB') }} <a href="https://ourairports.com/" target="_blank" rel="noopener">{{ ourAirports }}</a> {{ t('places.credit.routesC') }}@if (routeListChecked) {&ngsp;{{ t('places.credit.checked', { date: routeListChecked }) }}}
         </li>
         <li data-hotels-credit>
-          <b>Airport hotels</b>&ngsp;Hotel names and places near airports (the "Stuck tonight?" list) are from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener license">ODbL 1.0</a>. No prices or availability.
+          <b>{{ t('places.credit.hotels') }}</b>&ngsp;{{ t('places.credit.hotelsA') }} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">{{ osm }}</a>, <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener license">{{ odbl }}</a>. {{ t('places.credit.hotelsB') }}
         </li>
         <li>
-          <b>Onward travel</b>&ngsp;Train and bus times come from operators' open timetables where we have them (see Timetable credits), otherwise they are our estimates. Not bookings. Check before you go.
+          <b>{{ t('places.credit.onward') }}</b>&ngsp;{{ t('places.credit.onwardText') }}
         </li>
       </ul>
     </details>
@@ -49,6 +50,15 @@ import { formatKey, isDateKey } from '../../utils/time';
   `],
 })
 export class DataCreditsComponent {
+  protected readonly t = t;
+  protected readonly geonames = 'GeoNames (geonames.org)';   // i18n-ignore
+  protected readonly ccBy = 'CC BY 4.0';
+  protected readonly ccBySa = 'CC BY-SA 4.0';
+  protected readonly odbl = 'ODbL 1.0';
+  protected readonly wikipedia = 'Wikipedia';
+  protected readonly ourAirports = 'OurAirports';
+  protected readonly whereWeFly = "Air Canada Vacations 'Where We Fly'";   // i18n-ignore
+  protected readonly osm = 'OpenStreetMap contributors';   // i18n-ignore
   /** 'Oct 1, 2026': when the route list was last built (null when it is not loaded). */
   protected readonly routeListChecked = checkedLabel(routeNetworkCredit().builtAt);
 }

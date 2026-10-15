@@ -150,7 +150,7 @@ describe('SettingsComponent language', () => {
     expect(seg('Automatique').getAttribute('aria-pressed')).toBe('false');
     expect(seg('Français').getAttribute('aria-pressed')).toBe('true');
     expect(seg('English')).toBeTruthy();
-    expect(el.textContent).toContain('Correspondance minimale');
+    expect(el.textContent).toContain('Durée minimale de correspondance');
     seg('Automatique').click();
     await fixture.whenStable();
     expect(prefs.language()).toBe('auto');

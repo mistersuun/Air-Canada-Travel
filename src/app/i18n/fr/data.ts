@@ -22,7 +22,7 @@ export const data: Translation<typeof en> = {
   'data.window.redeye': 'Vol de nuit',
   'data.length.day': 'Journée',
   'data.length.weekend': 'Longue fin de semaine',
-  'data.length.week': 'Une semaine et +',
+  'data.length.week': 'Une semaine ou plus',
   'data.hub.YUL': 'Montréal',
   'data.hub.YQB': 'Québec',
   'data.hub.YTZ': 'Toronto (Billy Bishop)',

@@ -94,8 +94,8 @@ describe('t()', () => {
     const p = { city: 'Lisbonne', hours: 40, n: 1 };
     expect(tIn('en', 'home.surprise.dareWeekend', { ...p, n: 1 })).toContain('1 try home');
     expect(tIn('en', 'home.surprise.dareWeekend', { ...p, n: 2 })).toContain('2 tries home');
-    expect(tIn('fr', 'home.surprise.dareWeekend', p)).toContain('1 essai pour revenir');
-    expect(tIn('fr', 'home.surprise.dareWeekend', { ...p, n: 6 })).toContain('6 essais pour revenir');
+    expect(tIn('fr', 'home.surprise.dareWeekend', p)).toContain('1 vol pour rentrer');
+    expect(tIn('fr', 'home.surprise.dareWeekend', { ...p, n: 6 })).toContain('6 vols pour rentrer');
   });
 
   it('tIn ignores the active language; tOr falls back for unknown keys', () => {

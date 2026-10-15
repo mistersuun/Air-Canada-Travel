@@ -210,7 +210,7 @@ describe('CalendarPage in French', () => {
     expect(text('.fld:nth-child(1) .fld__l')).toBe('Départ');
     expect(text('.fld:nth-child(2) .fld__l')).toBe('Retour');
     expect(text('.ft .ui-btn')).toMatch(/^Choisir .*7 nuits$/);
-    expect(el.querySelector('[data-key="2026-10-08"]')!.getAttribute('aria-label')).toMatch(/^jeudi 8 octobre, \d+ départs? de retour$/);
+    expect(el.querySelector('[data-key="2026-10-08"]')!.getAttribute('aria-label')).toMatch(/^jeudi 8 octobre, \d+ vols? de retour$/);
     expect(text('.lg')).toContain('plus de départs');
   });
 });

@@ -35,8 +35,8 @@ afterEach(() => setLocale('en'));
 describe('shared UI in French', () => {
   it('words the weekday dots and the week label', () => {
     setLocale('fr');
-    expect(dotsLabel(['on', 'off', 'on', 'connect', 'off', 'off', 'off'])).toBe('Vol lun., mer.; correspondances jeu.');
-    expect(dotsLabel(['on', 'on', 'on', 'on', 'on', 'on', 'on'])).toBe('Vol tous les jours');
+    expect(dotsLabel(['on', 'off', 'on', 'connect', 'off', 'off', 'off'])).toBe('Vols lun., mer.; correspondances jeu.');
+    expect(dotsLabel(['on', 'on', 'on', 'on', 'on', 'on', 'on'])).toBe('Vols tous les jours');
     expect(dotsLabel(['off', 'off', 'off', 'off', 'off', 'off', 'off'])).toBe('Aucun vol cette semaine');
     expect(nb(formatWeekLabel('2026-10-12'))).toBe('12–18 oct. 2026');
     expect(nb(formatWeekLabel('2026-12-28'))).toMatch(/^28 déc\. 2026 – 3 janv\. 2027$/);
@@ -81,15 +81,15 @@ describe('destination model in French', () => {
       { code: 'CCC', lat: 50, lng: 10, tz: 'UTC' }, { code: 'DDD', lat: 60, lng: 30, tz: 'UTC' },
     ];
     expect(distanceRankFact(pts[3], hub, pts)).toBe('Le vol sans escale le plus long depuis YYZ');
-    expect(distanceRankFact(pts[2], hub, pts)).toBe('2e plus long vol sans escale depuis YYZ');
+    expect(distanceRankFact(pts[2], hub, pts)).toBe('2e vol sans escale le plus long depuis YYZ');
     expect(extremeFact(pts[3], hub, pts)).toBe('La destination la plus au nord depuis YYZ');
     expect(dailyFact(pts[1], hub, pts, Date.UTC(2026, 5, 21, 12))).toMatch(/depuis YYZ|clarté/);
   });
 
   it('words route-only notes in French', () => {
     setLocale('fr');
-    expect(routeOnlyNote()).toBe('dessert cette route · horaires absents de nos données');
-    expect(routeFactNoteOn({ begins: '2027-06-16' } as never, '2026-10-02')).toBe('route en service à partir du 16 juin 2027');
+    expect(routeOnlyNote()).toBe('dessert cette liaison · horaires absents de nos données');
+    expect(routeFactNoteOn({ begins: '2027-06-16' } as never, '2026-10-02')).toBe('liaison offerte à partir du 16 juin 2027');
     expect(routeFactDetail({ brands: ['express'], seasonal: true, begins: '2026-12-17' } as never)).toBe('Air Canada Express · Saisonnier · Début le 17 déc.');
   });
 });
@@ -100,14 +100,14 @@ describe('flight and calendar models in French', () => {
     expect(frequencyLabel(7)).toBe('Tous les jours');
     expect(nb(frequencyLabel(3))).toBe('3×/sem.');
     expect(agoLabel(0)).toBe("à l'instant");
-    expect(agoLabel(25 * 60_000)).toBe('il y a 25 min');
+    expect(agoLabel(25 * 60_000)).toBe('il y a 25\u00a0min');
     expect(agoLabel(3 * 3_600_000)).toBe('il y a 3 h');
     expect(nb(agoLabel(2 * 86_400_000))).toBe('il y a 2 jours');
     expect(nb(rangeLabel('2026-10-08', '2026-10-15'))).toBe('8–15 oct.');
     expect(nb(rangeLabel('2026-10-28', '2026-11-04'))).toBe('28 oct. – 4 nov.');
     expect(nightsLabel('2026-10-08', '2026-10-15')).toBe('7 nuits');
     expect(nb(selectLabel('2026-10-08', null))).toMatch(/^Choisir le .* · aller simple$/);
-    expect(selectLabel(null, null)).toBe('Choisissez une date de départ');
+    expect(selectLabel(null, null)).toBe('Choisir une date de départ');
   });
 
   it('words ICS text in French', () => {
@@ -134,7 +134,7 @@ describe('map, saved and weekend models in French', () => {
     setLocale('fr');
     expect(itemMeta({ kind: 'direct', durationMin: 330, count: 3 } as never)).toMatch(/3 cette semaine$/);
     expect(itemMeta({ kind: 'connect', durationMin: null, via: 'YYZ' } as never)).toBe('via YYZ');
-    expect(itemMeta({ kind: 'connect', durationMin: null, via: null } as never)).toBe('Avec correspondance seulement');
+    expect(itemMeta({ kind: 'connect', durationMin: null, via: null } as never)).toBe('Correspondances seulement');
     expect(watchingMeta({ dayKeys: [], days: '', direct: true })).toBe('Aucun vol cette semaine');
     expect(watchingMeta({ dayKeys: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], days: '', direct: true })).toBe('Tous les jours');
     expect(nb(cardMeta({
@@ -145,10 +145,10 @@ describe('map, saved and weekend models in French', () => {
   it('words the weekend finder in French', () => {
     setLocale('fr');
     const o = { tries: [1, 2, 3], directTries: 3, hoursThere: 40, out: [1, 2] } as never;
-    expect(weekendMeta(o).replace(/ /g, ' ')).toBe('~40 h sur place · 3 essais pour rentrer · 2 à l\'aller');
+    expect(weekendMeta(o).replace(/ /g, ' ')).toBe('~40 h sur place · 3 vols pour rentrer · 2 à l\'aller');
     const w = presetWindow('this', '2026-10-06');
     expect(windowProblem({ ...w, leaveKey: 'x' }, 'YUL', toUtcMs('2026-10-06', '09:00', 'America/Toronto'))).toBe('Entrez une date et une heure');
-    expect(windowProblem({ ...w, homeKey: '2026-10-01' }, 'YUL', toUtcMs('2026-10-06', '09:00', 'America/Toronto'))).toBe("L'heure de retour est passée");
+    expect(windowProblem({ ...w, homeKey: '2026-10-01' }, 'YUL', toUtcMs('2026-10-06', '09:00', 'America/Toronto'))).toBe("L'heure de retour est déjà passée");
   });
 });
 
@@ -156,11 +156,11 @@ describe('share text in French', () => {
   it('writes the Seville plan in French', () => {
     setLocale('fr');
     const text = tripShareText(SEVILLE_TRIP, { includeSplitNote: true, includeBackups: true, fmt: '24h' });
-    expect(text).toContain('(selon l\'horaire, en attente)');
+    expect(text).toContain('(à l\'horaire, en attente)');
     expect(text).toMatch(/Si nous nous séparons : /);
-    expect(text).toMatch(/Vols de secours pour jeu\. : /);
+    expect(text).toMatch(/Vols de rechange pour jeu\. : /);
     expect(text.endsWith(shareFooter())).toBe(true);
-    expect(shareFooter()).toBe("Heures locales. Un plan d'attente, pas une réservation.");
+    expect(shareFooter()).toBe("Heures locales. Un plan pour voyager en attente, pas une réservation.");
     expect(nb(shareSubtitle(SEVILLE_TRIP))).toMatch(/· 2 voyageurs$/);
     expect(text).not.toMatch(/scheduled|standby|Backups|If we split up/);
     expect(airportName('YUL')).toBeTruthy();

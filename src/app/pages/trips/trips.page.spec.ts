@@ -49,10 +49,10 @@ describe('TripsPage', () => {
     const { el, text, all } = await render(SEVILLE_TRIPS_FILE);
     expect(text('h1')).toBe('Voyages');
     expect(text('[data-new-trip]')).toBe('+ Nouveau voyage');
-    expect(text('[data-countdown]')).toBe('Dans 7 jours');
+    expect(text('[data-countdown]')).toBe('Encore 7 dodos');
     expect(all('.tc__chip')[0]).toContain('2 voyageurs');
     expect(all('.tl__top app-leg-status-tag, .tl__top app-provenance-tag').slice(0, 2)).toEqual(['Inscrit', 'Estimé']);
-    expect(text('[data-return-warning]')).toContain('Trajet de retour pas encore inscrit');
+    expect(text('[data-return-warning]')).toContain('Segment de retour pas encore inscrit');
     expect(el.textContent).not.toMatch(/Return leg|Starred|Past trips/);
   });
 

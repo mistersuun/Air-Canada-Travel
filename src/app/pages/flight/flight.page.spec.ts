@@ -255,7 +255,7 @@ describe('FlightPage in French', () => {
     expect(Object.keys(cells(el))).toEqual(['Date', 'Vol', 'Appareil', 'Durée', 'Fréquence', 'Décalage']);
     expect(text('.cd')).toMatch(/^Départ aujourd'hui · dans \d/);
     expect(el.querySelector('[aria-label="Partager ce vol"]')).not.toBeNull();
-    expect(text()).toContain('Si vous manquez celui-ci');
+    expect(text()).toContain('Si vous manquez ce vol');
     expect(text()).toContain('Horaires publiés seulement');
     expect(text()).not.toMatch(/Flight details|Departs|If you miss|Round trip|Other options|Schedules, not seats|Show all/);
   });

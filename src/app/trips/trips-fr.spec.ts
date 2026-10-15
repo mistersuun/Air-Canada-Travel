@@ -48,7 +48,7 @@ describe('Trips in French', () => {
     expect(nbsp(tripDatesLabel(t))).toBe('jeu. 8 oct. → de retour au plus tard le mar. 13 oct., 22:00');
     expect(partyLabel(t.party)).toContain('2 voyageurs');
     expect(partyLabel({ ...t.party, count: 1 })).toBe('1 voyageur');
-    expect(compactSummary(t)).toBe('4 trajets · 2 solutions de rechange');
+    expect(compactSummary(t)).toBe('4 segments · 2 vols de rechange');
     expect(tripSubtitle(t)).toContain('2 voyageurs');
     expect(countdown(t, yul('2026-09-30', '12:00')).text).toBe('Dans 8 jours');
     expect(countdown(t, yul('2026-10-07', '12:00')).text).toBe('Demain');
@@ -58,11 +58,11 @@ describe('Trips in French', () => {
   it('writes the miss-one chain and the tries meter in French', () => {
     const v = buildReturnView(sevilleTrip(), { minConnect: 60 });
     const rows = missRows(v.steps);
-    expect(rows[0].title.startsWith('Essai 1 · AC813')).toBe(true);
+    expect(rows[0].title.startsWith('Premier vol · AC813')).toBe(true);
     expect(rows[0].lines[0]).toContain('avec');
     expect(v.chainTitle).toMatch(/^Si vous tentez /);
-    expect(triesMeter(1).label).toBe('1 essai restant pour rentrer');
-    expect(triesMeter(3).label).toBe('3 essais restants pour rentrer');
+    expect(triesMeter(1).label).toBe('1 vol restant pour rentrer');
+    expect(triesMeter(3).label).toBe('3 vols restants pour rentrer');
   });
 
   it('counts your own record without odds', () => {
@@ -80,7 +80,7 @@ describe('Trips in French', () => {
   it('writes the calendar file in French but keeps the field names', () => {
     const ics = buildTripIcs(sevilleTrip(), yul('2026-10-01', '09:00'));
     expect(ics).toContain('BEGIN:VEVENT');
-    expect(ics).toContain('SUMMARY:Attente provisoire · AC834 YUL→MAD');
+    expect(ics).toContain('SUMMARY:En attente (provisoire) · AC834 YUL→MAD');
     expect(ics).toContain('STATUS:TENTATIVE');
   });
 
@@ -97,7 +97,7 @@ describe('Trips in French', () => {
     expect(weekLabel([{ from: '2026-10-05', to: '2026-10-11' }])).toMatch(/^Semaine du /);
     expect(eventLine({ name: 'Coldplay', url: 'https://x', date: '2026-10-10', time: null, venue: '', segment: '', rescheduled: true }))
       .toContain('reporté');
-    expect(milestoneLabel('transatlantic')).toBe("Première traversée de l'Atlantique");
+    expect(milestoneLabel('transatlantic')).toBe('Premier vol transatlantique');
     expect(nbsp(recapLine({ flights: 1, km: 5215, countries: 2 }))).toBe('1 vol · 5 215 km · 2 pays');
     expect(aroundEarthLabel(0.31)).toBe('0,3 × le tour de la Terre');
   });

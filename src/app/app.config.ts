@@ -70,8 +70,10 @@ export const appConfig: ApplicationConfig = {
     // and load the schedules and route network (data, not code) and the photo
     // credits in parallel.
     provideAppInitializer(() => {
-      // First: the UI language is set before anything renders or builds text.
-      inject(LocaleService);
+      // First: the UI language is chosen before anything renders or builds text.
+      // A French device fetches its catalogue (a lazy chunk) alongside the data
+      // below; i18n.ready gives up after a short budget and starts in English.
+      const i18n = inject(LocaleService);
       const staged = stageDeepLink(inject(DOCUMENT).defaultView);
       const state = inject(AppStateService);
       if (staged) state.markStagedBack();
@@ -83,7 +85,8 @@ export const appConfig: ApplicationConfig = {
       const doc = inject(DOCUMENT);
       const guard = createReloadGuard(doc, inject(Router));
       void photos.load();
-      return startupLoad(state, loadSchedules(), loadRouteNetwork(), () => extras.announceSchedules(), guard, doc);
+      const data = startupLoad(state, loadSchedules(), loadRouteNetwork(), () => extras.announceSchedules(), guard, doc);
+      return Promise.all([i18n.ready, data]).then(() => undefined);
     }),
     provideServiceWorker('sw.js', {
       enabled: !isDevMode(),

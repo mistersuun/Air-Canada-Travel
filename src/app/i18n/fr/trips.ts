@@ -192,7 +192,7 @@ export const trips: Translation<typeof en> = {
   'trips.party.travellers': '{n, plural, one {# voyageur} other {# voyageurs}}',
   'trips.party.together': '{n, plural, one {# voyageur} other {# voyageurs}} · ensemble',
   'trips.cd.underWay': 'En cours',
-  'trips.cd.sleeps': 'Encore {n} dodos',
+  'trips.cd.sleeps': 'Dans {n, plural, one {# jour} other {# jours}}',
   'trips.cd.inDays': 'Dans {n} jours',
   'trips.deadline.late': 'arrive après votre heure limite',
   'trips.deadline.home': 'de retour {time} avant votre heure limite',

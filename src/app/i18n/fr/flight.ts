@@ -46,8 +46,8 @@ export const flight: Translation<typeof en> = {
   'flight.ago.now': "à l'instant",
   'flight.ago.min': 'il y a {n}\u00a0min',
   'flight.ago.h': 'il y a {n} h',
-  'flight.note.open': '{n} disponibles',
-  'flight.note.listed': '{n} inscrits',
+  'flight.note.open': '{n, plural, one {# disponible} other {# disponibles}}',
+  'flight.note.listed': '{n, plural, one {# inscrit} other {# inscrits}}',
   'flight.note.when': 'Vérifié à {at}',
   /** Flight page */
   'flight.title': 'Détails du vol',

@@ -6,7 +6,7 @@ export const FETCH_TIMEOUT_BIG_MS = 20_000;
 export const FETCH_STALL_MS = 15_000;
 
 function timeoutError(): DOMException {
-  return new DOMException('The operation timed out.', 'TimeoutError');
+  return new DOMException('The operation timed out.', 'TimeoutError'); // i18n-ignore
 }
 
 /**

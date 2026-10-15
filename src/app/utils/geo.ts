@@ -2,6 +2,8 @@
  * Great-circle distance helpers (the only geography the engine needs; map
  * projection lives in ui/route-map with d3-geo).
  */
+import { t } from '../i18n/t';
+
 
 export interface LatLng {
   lat: number;
@@ -21,9 +23,9 @@ export function greatCircleKm(a: LatLng, b: LatLng): number {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
-/** '10,354 km' (rounded, en-CA grouping). */
+/** '10,354 km' / '10 354 km' (rounded). */
 export function formatKm(n: number): string {
-  return `${Math.round(n).toLocaleString('en-CA')} km`;
+  return t('ui.km', { n: Math.round(n) });
 }
 
 /** The closest of `places` to `from` by great-circle distance, or null when there are none. Pure: nothing is stored. */

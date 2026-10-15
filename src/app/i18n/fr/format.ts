@@ -34,4 +34,8 @@ export const format: Translation<typeof en> = {
   'format.dur.hmm': '{h}\u00a0h\u00a0{mm}',
   'format.clock.am': '{h}:{mm}\u00a0a.m.',
   'format.clock.pm': '{h}:{mm}\u00a0p.m.',
+  /** Time-zone difference from the hub (tzDiffLabel) */
+  'format.tz.zero': '0\u00a0h',
+  'format.tz.h': '{sign}{h}\u00a0h',
+  'format.tz.hm': '{sign}{h}\u00a0h\u00a0{mm}',
 };

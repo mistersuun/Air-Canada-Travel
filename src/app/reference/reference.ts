@@ -5,6 +5,8 @@
  * decoding, formatting and the Trip Prep items. Facts and their source and
  * date only, no interpretation.
  */
+import { intlLocale } from '../i18n/locale';
+import { t } from '../i18n/t';
 import { addDays, formatKey } from '../utils/time';
 
 export interface Advisory { level: 0 | 1 | 2 | 3; text: string; updated: string | null; url: string; regional: boolean }
@@ -86,9 +88,10 @@ export function fxLine(code: string | null, fx: FxTable | null): { text: string;
   const rate = code && fx ? fx.rates.get(code) : undefined;
   if (!code || !fx || !rate || code === 'CAD') return null;
   const digits = (n: number) => n >= 100 ? 0 : n >= 10 ? 1 : 2;
+  const num = (n: number) => n.toLocaleString(intlLocale(), { minimumFractionDigits: digits(n), maximumFractionDigits: digits(n), useGrouping: false });
   const pair = rate < 0.1
-    ? `1 ${code} = ${(1 / rate).toFixed(digits(1 / rate))} CAD`
-    : `1 CAD = ${rate.toFixed(digits(rate))} ${code}`;
+    ? `1 ${code} = ${num(1 / rate)} CAD`
+    : `1 CAD = ${num(rate)} ${code}`;
   return { text: pair, source: `ECB, ${shortDate(fx.date, fx.date)}` };
 }
 
@@ -147,7 +150,7 @@ export function holidayKey(h: Holiday): string {
 
 /** 'updated Sep 30' or ''. */
 export function advisoryUpdated(a: Advisory, todayKey: string): string {
-  return a.updated ? `updated ${shortDate(a.updated, todayKey)}` : '';
+  return a.updated ? t('dest.ref.updated', { date: shortDate(a.updated, todayKey) }) : '';
 }
 
 /** Holidays on or after `fromKey` within `days`, soonest first, at most `max`. */
@@ -170,6 +173,6 @@ export function holidayName(h: Holiday): string {
 
 /** 'Public holiday', or 'Public holiday in some regions' when it is not nationwide. */
 export function holidayNote(h: Holiday): string {
-  return h.global ? 'Public holiday' : 'Public holiday in some regions';
+  return t(h.global ? 'dest.ref.holiday' : 'dest.ref.holidayRegional');
 }
 

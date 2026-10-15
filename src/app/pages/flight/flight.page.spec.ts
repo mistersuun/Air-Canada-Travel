@@ -7,6 +7,7 @@ import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { ShareService } from '../../state/share.service';
 import { MemoryStorage } from '../../state/testing';
+import { setLocale } from '../../i18n/locale';
 import { FlightPage } from './flight.page';
 
 /** Wed Oct 7 2026, 08:00 in Montréal. */
@@ -234,5 +235,28 @@ describe('FlightPage', () => {
     configure({ showConnections: false });
     const a = await render();
     expect(a.cmp.itineraries().every(i => !i.hubs.length)).toBe(true);
+  });
+});
+
+describe('FlightPage in French', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    setLocale('en');
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the ticket, countdown and sections in Canadian French', async () => {
+    configure({ showConnections: false });
+    setLocale('fr');
+    const { el, text } = await render();
+    expect(text('h1')).toBe('Détails du vol');
+    expect(text('.tk .hd .ui-tag')).toBe('SANS ESCALE');
+    expect(Object.keys(cells(el))).toEqual(['Date', 'Vol', 'Appareil', 'Durée', 'Fréquence', 'Décalage']);
+    expect(text('.cd')).toMatch(/^Départ aujourd'hui · dans \d/);
+    expect(el.querySelector('[aria-label="Partager ce vol"]')).not.toBeNull();
+    expect(text()).toContain('Si vous manquez celui-ci');
+    expect(text()).toContain('Horaires publiés seulement');
+    expect(text()).not.toMatch(/Flight details|Departs|If you miss|Round trip|Other options|Schedules, not seats|Show all/);
   });
 });

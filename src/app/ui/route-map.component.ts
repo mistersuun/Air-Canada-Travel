@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { GeoProjection, geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { findDestination, findHub } from '../utils/airports';
+import { t } from '../i18n/t';
 import { GeoService } from '../state/geo.service';
 
 export interface MapPoint {
@@ -315,8 +316,8 @@ export class RouteMapComponent {
   protected readonly ariaLabel = computed(() => {
     const n = this.points().length;
     const hot = this.highlight();
-    const base = `Map of ${n} route${n === 1 ? '' : 's'} from ${this.hub()}`;
-    return hot ? `${base}, ${this.cityOf(hot)} highlighted` : base;
+    const base = t('ui.map.aria', { n, hub: this.hub() });
+    return hot ? t('ui.map.aria.hot', { base, city: this.cityOf(hot) }) : base;
   });
 
   private readonly pointers = new Map<number, { x: number; y: number }>();

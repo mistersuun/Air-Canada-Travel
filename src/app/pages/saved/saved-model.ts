@@ -8,6 +8,7 @@
  * "No flights published".
  * Watching: every favourite with this week's dots.
  */
+import { t } from '../../i18n/t';
 import type { Coverage } from '../../data/schedule-index';
 import { getSchedulesForRoute } from '../../data/schedule-index';
 import { routeOnlyNoteOn } from '../../data/route-network';
@@ -114,7 +115,7 @@ export function upcoming(
       weekDays: countFlyingDays(hub, code, week, addDays(week, 6)),
       thisWeek: week === thisWeek,
       endsOn: routeEndsOn(hub, code, today, coverage.to),
-      season: routeSeason(hub, code) ?? 'Year-round',
+      season: routeSeason(hub, code) ?? t('dest.yearRound'),
     });
   }
   items.sort((a, b) => a.flight.depUtc - b.flight.depUtc || a.city.localeCompare(b.city));
@@ -138,8 +139,8 @@ export function heroMeta(u: UpcomingItem): string {
 
 /** 'AC912 · 3× this week · ends Oct 22' (second card). */
 export function cardMeta(u: UpcomingItem): string {
-  const freq = u.weekDays >= 7 ? 'Daily' : u.thisWeek ? `${u.weekDays}× this week` : `${u.weekDays}× that week`;
-  return [prettyFlight(u.flight.flightNumber), freq, u.endsOn ? `ends ${u.endsOn}` : '']
+  const freq = u.weekDays >= 7 ? t('format.daily') : u.thisWeek ? t('dest.timesWeek', { n: u.weekDays }) : t('saved.thatWeek', { n: u.weekDays });
+  return [prettyFlight(u.flight.flightNumber), freq, u.endsOn ? t('saved.ends', { date: u.endsOn }) : '']
     .filter(Boolean).join(' · ');
 }
 
@@ -175,8 +176,8 @@ export function directDots(hub: string, code: string, week: string, coverage: Co
 
 /** Watching meta: 'Tue Thu Sat', 'Daily', 'Connections only' (the amber dots say which days), 'No flights this week'. */
 export function watchingMeta(item: Pick<StarredItem, 'dayKeys' | 'days' | 'direct'>): string {
-  if (!item.dayKeys.length) return 'No flights this week';
-  const days = item.dayKeys.length === 7 ? 'Daily' : item.days;
-  return item.direct ? days : 'Connections only';
+  if (!item.dayKeys.length) return t('ui.dots.none');
+  const days = item.dayKeys.length === 7 ? t('format.daily') : item.days;
+  return item.direct ? days : t('dest.connectionsOnly');
 }
 

@@ -232,7 +232,7 @@ export async function loadSchedules(
     installSchedules((await res.json()) as SchedulesFile);
     return true;
   } catch (err) {
-    console.error(`[schedules] could not load ${url}:`, err);
+    console.error(`[schedules] could not load ${url}:`, err); // i18n-ignore
     return false;
   }
 }

@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { placeFromDestination } from '../../places/place';
 import { AppStateService } from '../../state/app-state.service';
 import { type FlightLeg, type Trip, isFinalStatus } from '../../trips/model';
@@ -24,7 +25,7 @@ export interface TripAddition {
 /** The trip whose dates cover `dayKey` (outbound date … home-by date), soonest first. */
 export function coveringTrip(trips: readonly Trip[], dayKey: string | null): Trip | null {
   if (!dayKey) return null;
-  return trips.find(t => t.outboundDate <= dayKey && dayKey <= t.homeBy.dateKey) ?? null;
+  return trips.find(tr => tr.outboundDate <= dayKey && dayKey <= tr.homeBy.dateKey) ?? null;
 }
 
 /**
@@ -60,10 +61,10 @@ export function tripAddition(trip: Trip, code: string, dayKey: string): TripAddi
   template: `
     @if (addition(); as a) {
       <button type="button" class="ui-btn ui-btn--ghost b" (click)="add(a)">
-        <app-icon name="suitcase" [size]="18" />Add to {{ a.trip.name }}</button>
+        <app-icon name="suitcase" [size]="18" />{{ t('dest.trip.add', { name: a.trip.name }) }}</button>
     } @else {
       <button type="button" class="ui-btn ui-btn--ghost b" (click)="start()">
-        <app-icon name="suitcase" [size]="18" />Start a trip to {{ city() }}</button>
+        <app-icon name="suitcase" [size]="18" />{{ t('dest.trip.start', { city: city() }) }}</button>
     }
   `,
   styles: [`
@@ -73,6 +74,7 @@ export function tripAddition(trip: Trip, code: string, dayKey: string): TripAddi
   `],
 })
 export class DestTripActionsComponent {
+  protected readonly t = t;
   readonly code = input.required<string>();
 
   private readonly state = inject(AppStateService);
@@ -103,7 +105,7 @@ export class DestTripActionsComponent {
     // Never pick a flight for the user: send them to choose one (the day's flights, else the day picker).
     // Same source as the flight page: nonstops, plus connections when they are shown.
     const flies = (this.state.showConnections() ? allItineraries(hub, code, dep, this.state.connect()) : directItineraries(hub, code, dep)).length > 0;
-    this.state.flash('Trip started. Pick your flight to add it.');
+    this.state.flash(t('dest.trip.started'));
     void this.router.navigate(flies ? flightPath(code, dep) : calendarPath(code), {
       queryParams: flies ? this.state.globalParams() : { ...this.state.globalParams(), dep },
     });
@@ -116,10 +118,10 @@ export class DestTripActionsComponent {
         const before = a.backupOf.alternates.length;
         this.trips.addAlternate(a.trip.id, a.backupOf.id, a.it);
         const added = (this.trips.trip(a.trip.id)?.legs.find(l => l.id === a.backupOf!.id) as FlightLeg | undefined)?.alternates.length ?? before;
-        this.state.flash(added > before ? `${nums} added as a backup` : `${nums} is already in this trip`);
+        this.state.flash(added > before ? t('dest.trip.addedBackup', { nums }) : t('dest.trip.already', { nums }));
       } else {
         this.trips.addFlightLeg(a.trip.id, a.it, a.role);
-        this.state.flash(`${nums} added to ${a.trip.name}`);
+        this.state.flash(t('dest.trip.added', { nums, name: a.trip.name }));
       }
     }
     void this.router.navigateByUrl(tripUrl(a.trip.id));

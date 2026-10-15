@@ -2,16 +2,17 @@
  * Calendar page model: month grids, availability per day, the depart/return
  * selection rules and the labels. Pure functions over the schedule engine.
  */
+import { t } from '../../i18n/t';
 import type { Coverage } from '../../data/schedule-index';
 import { getDestinationCodes } from '../../data/schedule-index';
 import { routeOnlyNoteOn } from '../../data/route-network';
 import type { Destination } from '../../data/destinations';
-import { isOutside, shortDay } from '../../ui/format';
+import { isOutside, longDay, shortDay } from '../../ui/format';
 import { findDestination } from '../../utils/airports';
 import { NO_OPTS, bestItinerary, type ConnectOptions } from '../../utils/connections';
 import { matchesQuery } from '../../utils/routes';
 import {
-  WEEKDAY_LONG, addDays, addMonths, diffDays, formatKey, isDateKey, monthKeys, monthOf, weekStartKey, weekdayIndex,
+  addDays, addMonths, diffDays, formatKey, isDateKey, monthKeys, monthOf, weekStartKey, weekdayIndex,
 } from '../../utils/time';
 import { flightsOn, nextFlightDate } from '../../utils/week';
 
@@ -120,35 +121,38 @@ export function nextSelection(sel: CalSelection, key: string): CalSelection {
 
 /** 'Oct 8 – 15', 'Oct 28 – Nov 4'. */
 export function rangeLabel(dep: string, ret: string): string {
-  const a = formatKey(dep, { month: 'short', day: 'numeric' });
-  const b = monthOf(dep) === monthOf(ret)
-    ? formatKey(ret, { day: 'numeric' })
-    : formatKey(ret, { month: 'short', day: 'numeric' });
-  return `${a} – ${b}`;
+  const md = { month: 'short', day: 'numeric' } as const;
+  const parts = {
+    start: formatKey(dep, md),
+    end: formatKey(ret, md),
+    startDay: formatKey(dep, { day: 'numeric' }),
+    endDay: formatKey(ret, { day: 'numeric' }),
+  };
+  return t(monthOf(dep) === monthOf(ret) ? 'format.range.sameMonth' : 'format.range.twoMonths', parts);
 }
 
 /** '7 nights', '1 night'. */
 export function nightsLabel(dep: string, ret: string): string {
   const n = diffDays(dep, ret);
-  return `${n} night${n === 1 ? '' : 's'}`;
+  return t('flight.nights', { n });
 }
 
 /** The footer button: 'Select Oct 8 – 15 · 7 nights', 'Select Thu, Oct 8 · one way', or a prompt. */
 export function selectLabel(dep: string | null, ret: string | null): string {
-  if (!dep) return 'Select a departure date';
-  if (!ret) return `Select ${shortDay(dep)} · one way`;
-  return `Select ${rangeLabel(dep, ret)} · ${nightsLabel(dep, ret)}`;
+  if (!dep) return t('calendar.select.none');
+  if (!ret) return t('calendar.select.oneWay', { date: shortDay(dep) });
+  return t('calendar.select.range', { range: rangeLabel(dep, ret), nights: nightsLabel(dep, ret) });
 }
 
 /** Screen-reader label for a day cell. */
 export function dayAria(d: CalDay, field: CalField): string {
-  const date = `${WEEKDAY_LONG[weekdayIndex(d.key)]}, ${formatKey(d.key, { month: 'long', day: 'numeric' })}`;
+  const date = longDay(d.key);
   let what: string;
-  if (d.past) what = 'past';
-  else if (d.outside) what = 'not yet published';
-  else if (d.direct) what = `${d.direct} ${field === 'ret' ? 'return ' : ''}departure${d.direct === 1 ? '' : 's'}`;
-  else if (d.connect) what = 'connection only';
-  else what = 'no nonstop';
+  if (d.past) what = t('calendar.aria.past');
+  else if (d.outside) what = t('dest.avail.unpublished');
+  else if (d.direct) what = t(field === 'ret' ? 'calendar.aria.ret' : 'calendar.aria.dep', { n: d.direct });
+  else if (d.connect) what = t('dest.avail.connOnly');
+  else what = t('calendar.aria.none');
   return `${date}, ${what}`;
 }
 
@@ -194,10 +198,10 @@ export interface ChooserRow {
  */
 export function chooserMeta(hub: string, d: Destination, today: string): string {
   const next = nextFlightDate(hub, d.code, today);
-  if (next) return `${d.country} · next ${shortDay(next)}`;
+  if (next) return t('calendar.meta.next', { country: d.country, date: shortDay(next) });
   const routeNote = routeOnlyNoteOn(hub, d.code, today);
   if (routeNote) return `${d.country} · ${routeNote}`;
-  return `${d.country} · no nonstop published`;
+  return t('calendar.meta.none', { country: d.country });
 }
 
 /** Favourites first, then every destination with a published nonstop from the hub, filtered by `query`. */

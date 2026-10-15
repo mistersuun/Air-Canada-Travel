@@ -1,3 +1,4 @@
+import { t } from '../../i18n/t';
 import { tzOffsetMin } from '../../utils/time';
 import { greatCircleKm } from '../../utils/geo';
 
@@ -6,10 +7,11 @@ export interface FactHub { code: string; lat: number; lng: number; tz: string }
 
 const DAY_MS = 86_400_000;
 
-function ordinal(n: number): string {
+/** The ordinal class of a rank: 'st' (1, 21), 'nd', 'rd' or 'th'; each language's suffix comes from dest.fact.ord. */
+function ordinalClass(n: number): string {
   const v = n % 100;
-  if (v >= 11 && v <= 13) return `${n}th`;
-  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`;
+  if (v >= 11 && v <= 13) return 'th';
+  return ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
 }
 
 /** '3rd-longest nonstop from YYZ' among the hub's `nonstops`; null when the destination is not one of them or there are fewer than 3. */
@@ -19,9 +21,9 @@ export function distanceRankFact(dest: FactPoint, hub: FactHub, nonstops: readon
   const km = (p: FactPoint) => greatCircleKm(hub, p);
   const sorted = [...all].sort((a, b) => km(b) - km(a) || a.code.localeCompare(b.code));
   const rank = sorted.findIndex(p => p.code === dest.code) + 1;
-  if (rank === 1) return `The longest nonstop from ${hub.code}`;
-  if (rank === sorted.length) return `The shortest nonstop from ${hub.code}`;
-  return `${ordinal(rank)}-longest nonstop from ${hub.code}`;
+  if (rank === 1) return t('dest.fact.longest', { hub: hub.code });
+  if (rank === sorted.length) return t('dest.fact.shortest', { hub: hub.code });
+  return t('dest.fact.rank', { rank, ord: t('dest.fact.ord', { k: ordinalClass(rank) }), hub: hub.code });
 }
 
 /** Hours of daylight on `now`'s UTC day at a latitude (standard declination + sunrise equation); null for polar day or night. */
@@ -42,15 +44,15 @@ export function daylightFact(dest: FactPoint, now: number): string | null {
   const h = daylightHours(dest.lat, now);
   if (h === null) return null;
   const whole = Math.round(h);
-  return `About ${whole} ${whole === 1 ? 'hour' : 'hours'} of daylight today`;
+  return t('dest.fact.daylight', { n: whole });
 }
 
 /** 'The northernmost destination from YYZ' / 'The southernmost ...' (among the hub's `nonstops`; null when the destination is not one of them). */
 export function extremeFact(dest: FactPoint, hub: FactHub, nonstops: readonly FactPoint[]): string | null {
   if (!nonstops.some(p => p.code === dest.code) || nonstops.length < 3) return null;
   const all = nonstops;
-  if (all.every(p => p.code === dest.code || p.lat < dest.lat)) return `The northernmost destination from ${hub.code}`;
-  if (all.every(p => p.code === dest.code || p.lat > dest.lat)) return `The southernmost destination from ${hub.code}`;
+  if (all.every(p => p.code === dest.code || p.lat < dest.lat)) return t('dest.fact.north', { hub: hub.code });
+  if (all.every(p => p.code === dest.code || p.lat > dest.lat)) return t('dest.fact.south', { hub: hub.code });
   return null;
 }
 

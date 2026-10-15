@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import type { TimeFormat } from '../../state/prefs.service';
 import { scheduleFacts } from '../../trips/engine/facts';
@@ -21,23 +22,23 @@ import { factsView } from './flight-model';
     @if (!view().empty || records().length || view().holiday) {
     <section class="ui-card fc" aria-labelledby="fc-h" data-facts>
       <div class="fc__h">
-        <h2 class="ui-label" id="fc-h">This day on this route</h2>
+        <h2 class="ui-label" id="fc-h">{{ t('flight.facts.title') }}</h2>
         <app-provenance-tag [value]="view().covered ? 'scheduled' : 'unknown'" />
       </div>
       @if (view().empty) {
-        <p class="fc__unk" data-empty>No departures this day in our schedule data.</p>
+        <p class="fc__unk" data-empty>{{ t('flight.facts.empty') }}</p>
       } @else if (view().covered) {
         <dl class="ui-ess tn fc__ess">
-          @for (t of view().tiles; track t.label) {
-            <div><dt>{{ t.label }}</dt><dd>{{ t.value }}</dd></div>
+          @for (tile of view().tiles; track tile.label) {
+            <div><dt>{{ tile.label }}</dt><dd>{{ tile.value }}</dd></div>
           }
         </dl>
       } @else {
-        <p class="fc__unk" data-unknown>Unknown · not published yet</p>
+        <p class="fc__unk" data-unknown>{{ t('flight.facts.unknownLine') }}</p>
       }
       @for (r of records(); track $index; let first = $first) {
         <p class="fc__rec" data-record>
-          <span>@if (first) { <b>Your record</b> · }{{ r }}</span>
+          <span>@if (first) { <b>{{ t('flight.facts.record') }}</b> · }{{ r }}</span>
           @if (first) { <app-provenance-tag value="saved" /> }
         </p>
       }
@@ -68,6 +69,7 @@ import { factsView } from './flight-model';
   `],
 })
 export class FactsCardComponent {
+  protected readonly t = t;
   readonly origin = input.required<string>();
   readonly dest = input.required<string>();
   readonly dateKey = input.required<string>();

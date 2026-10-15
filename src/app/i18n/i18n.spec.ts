@@ -22,6 +22,7 @@ const SAME_IN_FRENCH: ReadonlySet<string> = new Set<MsgKey>([
   'trips.mode.train', 'trips.modeLabel.train', 'trips.tab.plan', 'trips.leg.mode', 'trips.leg.note', 'trips.off.trains', 'trips.off.photos',
   'today.mode.train', 'passes.add.photo', 'passes.add.pdf', 'passes.add.date',
   'files.photos', 'files.photo', 'files.note', 'files.meta.pdfPages', 'files.meta.pdf', 'files.meta.photo', 'files.cat.photos', 'files.cat.notes',
+  'flight.cell.date', 'flight.viaPlace', 'map.sort.distance', 'map.count', 'share.mode.train', 'share.trip.tabImage',
 ]);
 
 afterEach(() => setLocale('en'));

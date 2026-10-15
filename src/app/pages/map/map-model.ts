@@ -4,6 +4,7 @@
  * turns "show these points inside the visible part of the map" into the
  * `[center]` / `[zoom]` inputs of app-route-map.
  */
+import { t } from '../../i18n/t';
 import { geoCentroid, geoNaturalEarth1 } from 'd3-geo';
 import type { Coverage } from '../../data/schedule-index';
 import { DotDay, entryDots } from '../../ui/dot-row.component';
@@ -90,8 +91,8 @@ export function sortItems(items: readonly MapItem[], sort: MapSort): MapItem[] {
 export function itemMeta(i: MapItem): string {
   const parts: string[] = [];
   if (i.durationMin !== null) parts.push(hm(i.durationMin));
-  if (i.kind === 'direct') parts.push(`${i.count} this week`);
-  else parts.push(i.via ? `via ${i.via}` : 'Connections only');
+  if (i.kind === 'direct') parts.push(t('map.thisWeek', { n: i.count }));
+  else parts.push(i.via ? t('format.via', { hubs: i.via }) : t('dest.connectionsOnly'));
   return parts.join(' · ');
 }
 

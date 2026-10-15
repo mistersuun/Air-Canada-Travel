@@ -36,4 +36,8 @@ export const format = {
   'format.dur.hmm': '{h}h {mm}m',
   'format.clock.am': '{h}:{mm} AM',
   'format.clock.pm': '{h}:{mm} PM',
+  /** Time-zone difference from the hub (tzDiffLabel) */
+  'format.tz.zero': '0h',
+  'format.tz.h': '{sign}{h}h',
+  'format.tz.hm': '{sign}{h}h{mm}',
 } satisfies Messages;

@@ -3,6 +3,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { IconComponent } from '../components/shared/icons.component';
+import { t } from '../i18n/t';
 
 /** Drag distance (px) that closes the bottom sheet. */
 export const SHEET_DRAG_CLOSE_PX = 120;
@@ -33,7 +34,7 @@ let nextId = 0;
            (pointerup)="dragEnd()" (pointercancel)="dragEnd(true)"></div>
       <header class="gs__head">
         <h2 class="gs__title ui-h3" [id]="titleId">{{ title() }}</h2>
-        <button type="button" class="ui-circ ui-circ--glass gs__x" (click)="close()" [attr.aria-label]="'Close ' + title().toLowerCase()">
+        <button type="button" class="ui-circ ui-circ--glass gs__x" (click)="close()" [attr.aria-label]="t('ui.close', { title: title().toLowerCase() })">
           <app-icon name="close" [size]="18" [strokeWidth]="2" />
         </button>
       </header>
@@ -82,6 +83,7 @@ let nextId = 0;
   `],
 })
 export class GlassSheetComponent {
+  protected readonly t = t;
   private readonly doc = inject(DOCUMENT);
   readonly title = input<string>('');
   readonly open = model(false);

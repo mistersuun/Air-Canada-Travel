@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, booleanAttribute, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { flightPath } from '../../ui/links';
 import { itinKey } from '../../ui/format';
@@ -18,27 +19,27 @@ import type { TimelineItem } from './dest-model';
   template: `
     @if (items().length) {
       <ol class="ui-tl" [attr.aria-label]="label() || null">
-        @for (t of items(); track key(t); let first = $first) {
+        @for (row of items(); track key(row); let first = $first) {
           <li>
             @if (linked()) {
               <a class="ui-tl__it" [class.ui-tl__it--now]="first"
-                 [routerLink]="path(t)" [queryParams]="state.globalParams()">
-                <div class="d">{{ t.dateLabel }}</div>
-                <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
+                 [routerLink]="path(row)" [queryParams]="state.globalParams()">
+                <div class="d">{{ row.dateLabel }}</div>
+                <div class="x"><b>{{ row.time }}</b><span>{{ row.detail }}</span></div>
+                <div class="ui-sub tn">{{ row.sub }}@for (r of tags(row); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
               </a>
             } @else {
               <div class="ui-tl__it" [class.ui-tl__it--now]="first">
-                <div class="d">{{ t.dateLabel }}</div>
-                <div class="x"><b>{{ t.time }}</b><span>{{ t.detail }}</span></div>
-                <div class="ui-sub tn">{{ t.sub }}@for (r of tags(t); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
+                <div class="d">{{ row.dateLabel }}</div>
+                <div class="x"><b>{{ row.time }}</b><span>{{ row.detail }}</span></div>
+                <div class="ui-sub tn">{{ row.sub }}@for (r of tags(row); track $index) { <span class="ui-tag ui-tag--blue you" data-you><span aria-hidden="true">{{ r.text }}</span><span class="ui-visually-hidden">{{ r.aria }}</span></span> }</div>
               </div>
             }
           </li>
         }
       </ol>
       @if (more()) {
-        <button type="button" class="ui-link more" (click)="showMore.emit()">Show more</button>
+        <button type="button" class="ui-link more" (click)="showMore.emit()">{{ t('dest.showMore') }}</button>
       }
     } @else {
       <ng-content />
@@ -52,6 +53,7 @@ import type { TimelineItem } from './dest-model';
   `],
 })
 export class DestTimelineComponent {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
 
   readonly items = input<readonly TimelineItem[]>([]);
@@ -64,15 +66,15 @@ export class DestTimelineComponent {
 
   readonly showMore = output<void>();
 
-  protected key(t: TimelineItem): string {
-    return itinKey(t.it);
+  protected key(row: TimelineItem): string {
+    return itinKey(row.it);
   }
 
-  protected tags(t: TimelineItem): readonly { text: string; aria: string }[] {
-    return this.records()[itinKey(t.it)] ?? [];
+  protected tags(row: TimelineItem): readonly { text: string; aria: string }[] {
+    return this.records()[itinKey(row.it)] ?? [];
   }
 
-  protected path(t: TimelineItem): string[] {
-    return flightPath(this.code(), t.it.dateKey, t.it);
+  protected path(row: TimelineItem): string[] {
+    return flightPath(this.code(), row.it.dateKey, row.it);
   }
 }

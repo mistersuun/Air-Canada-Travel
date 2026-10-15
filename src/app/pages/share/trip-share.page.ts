@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, computed, effect, inject, input, signal, untracked,
 } from '@angular/core';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SHARE_ENV, type ShareEnv, copyText, downloadBlob, shareImage, shareText } from '../../share/share-out';
 import { renderTripCard } from '../../share/trip-card';
@@ -36,47 +37,47 @@ type Tab = 'image' | 'text';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare ts">
-      @if (trip(); as t) {
+      @if (trip(); as tr) {
         <header class="ts__head">
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Close" data-close (click)="back()">
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('common.close')" data-close (click)="back()">
             <app-icon name="close" [size]="18" />
           </button>
           <div class="ts__title">
-            <h1 class="ui-h3">Share trip</h1>
-            <p class="ts__sub">{{ t.name }}</p>
+            <h1 class="ui-h3">{{ t('share.trip.title') }}</h1>
+            <p class="ts__sub">{{ tr.name }}</p>
           </div>
           <span class="ts__sp" aria-hidden="true"></span>
         </header>
 
-        <app-seg class="ts__seg" stretch [options]="tabs" [value]="tab()" (valueChange)="setTab($event)" ariaLabel="Share as" />
+        <app-seg class="ts__seg" stretch [options]="tabs()" [value]="tab()" (valueChange)="setTab($event)" [ariaLabel]="t('share.trip.as')" />
 
         @if (tab() === 'image') {
           <div class="ts__card" [class.is-busy]="!url()" data-preview>
             @if (url(); as src) {
-              <img [src]="src" [alt]="'Trip card. ' + text()" width="1080" [attr.height]="height()">
+              <img [src]="src" [alt]="t('share.trip.alt', { text: text() })" width="1080" [attr.height]="height()">
             } @else if (failed()) {
-              <p class="ts__fail" role="status">The image couldn't be drawn on this browser. You can share the plan as text.</p>
+              <p class="ts__fail" role="status">{{ t('share.trip.fail') }}</p>
             } @else {
-              <span class="ui-visually-hidden" role="status">Drawing the card…</span>
+              <span class="ui-visually-hidden" role="status">{{ t('share.drawing') }}</span>
             }
           </div>
         } @else {
           <pre class="ts__txt tn" tabindex="0" role="textbox" aria-readonly="true" aria-multiline="true"
-               aria-label="Text to share" data-text>{{ text() }}</pre>
+               [attr.aria-label]="t('share.trip.textAria')" data-text>{{ text() }}</pre>
         }
 
         @if (hasNote() || backups()) {
-          <section class="ui-card ts__opts" aria-label="What to include">
+          <section class="ui-card ts__opts" [attr.aria-label]="t('share.include')">
             @if (hasNote()) {
               <label class="ts__sw" for="ts-split">
-                <span><b>Include "If we split up"</b><span class="ts__muted">Your note for companions</span></span>
+                <span><b>{{ t('share.trip.split') }}</b><span class="ts__muted">{{ t('share.trip.splitHint') }}</span></span>
                 <input id="ts-split" type="checkbox" role="switch" class="switch" data-split
                        [checked]="includeSplit()" (change)="includeSplit.set($any($event.target).checked)">
               </label>
             }
             @if (backups(); as b) {
               <label class="ts__sw" for="ts-backups">
-                <span><b>Include backups</b><span class="ts__muted tn">{{ b }}</span></span>
+                <span><b>{{ t('share.trip.backups') }}</b><span class="ts__muted tn">{{ b }}</span></span>
                 <input id="ts-backups" type="checkbox" role="switch" class="switch" data-backups
                        [checked]="includeBackups()" (change)="includeBackups.set($any($event.target).checked)">
               </label>
@@ -85,39 +86,39 @@ type Tab = 'image' | 'text';
         }
 
         @if (tab() === 'image') {
-          <section class="ui-card ts__incl" aria-label="What the image has" data-checklist>
+          <section class="ui-card ts__incl" [attr.aria-label]="t('share.trip.imageHas')" data-checklist>
             <ul>
               <li class="y"><app-icon name="check" [size]="15" [strokeWidth]="2.4" />
-                <span>{{ opts().includeSplitNote ? 'Legs, times and your split-up note' : 'Legs and times' }}</span></li>
+                <span>{{ opts().includeSplitNote ? t('share.trip.legsSplit') : t('share.trip.legs') }}</span></li>
               <li class="n"><app-icon name="close" [size]="15" [strokeWidth]="2.4" />
-                <span><span class="ui-visually-hidden">Never included: </span>Boarding passes and booking codes</span></li>
+                <span><span class="ui-visually-hidden">{{ t('share.trip.never') }} </span>{{ t('share.trip.neverPasses') }}</span></li>
               <li class="n"><app-icon name="close" [size]="15" [strokeWidth]="2.4" />
-                <span><span class="ui-visually-hidden">Never included: </span>Files and photos</span></li>
+                <span><span class="ui-visually-hidden">{{ t('share.trip.never') }} </span>{{ t('share.trip.neverFiles') }}</span></li>
             </ul>
           </section>
         } @else {
           <p class="ts__note" data-never>
             <app-icon name="lock" [size]="16" [strokeWidth]="2" />
-            <span>Booking codes, boarding passes and files are never added, even if you turn everything on.</span>
+            <span>{{ t('share.trip.note') }}</span>
           </p>
         }
 
         <div class="ts__acts">
           <button type="button" class="ui-btn ui-btn--dark" data-share (click)="share()"
                   [disabled]="tab() === 'image' && !blob()">
-            <app-icon name="share" [size]="17" /> Share…
+            <app-icon name="share" [size]="17" /> {{ t('share.shareDots') }}
           </button>
           @if (tab() === 'image') {
             <button type="button" class="ui-btn ui-btn--ghost" data-save (click)="save()" [disabled]="!blob()">
-              <app-icon name="download" [size]="17" /> Save image
+              <app-icon name="download" [size]="17" /> {{ t('share.saveImage') }}
             </button>
           } @else {
             <button type="button" class="ui-btn ui-btn--ghost" data-copy (click)="copy()">
-              <app-icon name="copy" [size]="17" /> Copy text
+              <app-icon name="copy" [size]="17" /> {{ t('share.trip.copy') }}
             </button>
           }
         </div>
-        <p class="ts__foot">Times are local. A standby plan, not a booking. Made on this phone.</p>
+        <p class="ts__foot">{{ t('share.trip.foot') }}</p>
       }
     </div>
   `,
@@ -184,6 +185,7 @@ type Tab = 'image' | 'text';
   `],
 })
 export class TripSharePage {
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly render = inject(CARD_RENDERER);
@@ -191,19 +193,22 @@ export class TripSharePage {
 
   readonly id = input.required<string>();
 
-  protected readonly tabs: SegOption[] = [{ value: 'image', label: 'Image' }, { value: 'text', label: 'Text' }];
+  protected readonly tabs = computed<SegOption[]>(() => [
+    { value: 'image', label: t('share.trip.tabImage') },
+    { value: 'text', label: t('share.trip.tabText') },
+  ]);
   protected readonly tab = signal<Tab>('image');
   protected readonly includeSplit = signal(true);
   protected readonly includeBackups = signal(false);
 
-  protected readonly trip = computed(() => this.trips.trips().find(t => t.id === this.id()) ?? null);
+  protected readonly trip = computed(() => this.trips.trips().find(tr => tr.id === this.id()) ?? null);
   protected readonly hasNote = computed(() => {
-    const t = this.trip();
-    return !!t && splitNote(t) !== null;
+    const tr = this.trip();
+    return !!tr && splitNote(tr) !== null;
   });
   protected readonly backups = computed(() => {
-    const t = this.trip();
-    return t && hasBackups(t) ? backupsSummary(t) : '';
+    const tr = this.trip();
+    return tr && hasBackups(tr) ? backupsSummary(tr) : '';
   });
   readonly opts = computed<ShareOptions>(() => ({
     includeSplitNote: this.includeSplit() && this.hasNote(),
@@ -211,8 +216,8 @@ export class TripSharePage {
     fmt: this.state.timeFormat(),
   }));
   readonly text = computed(() => {
-    const t = this.trip();
-    return t ? tripShareText(t, this.opts()) : '';
+    const tr = this.trip();
+    return tr ? tripShareText(tr, this.opts()) : '';
   });
 
   protected readonly blob = signal<Blob | null>(null);
@@ -224,10 +229,10 @@ export class TripSharePage {
   constructor() {
     // Re-draw the card whenever the trip or an option changes; the newest draw wins.
     effect(() => {
-      const t = this.trip();
+      const tr = this.trip();
       const o = this.opts();
-      if (!t) return;
-      untracked(() => void this.draw(t, o));
+      if (!tr) return;
+      untracked(() => void this.draw(tr, o));
     });
     inject(DestroyRef).onDestroy(() => {
       this.drawn++;
@@ -266,27 +271,27 @@ export class TripSharePage {
   }
 
   private title(): string {
-    const t = this.trip();
-    return t ? `${t.goal.name} trip plan` : 'Trip plan';
+    const tr = this.trip();
+    return tr ? t('share.trip.planOf', { goal: tr.goal.name }) : t('share.trip.plan');
   }
 
   protected async share(): Promise<void> {
-    const t = this.trip();
-    if (!t) return;
+    const tr = this.trip();
+    if (!tr) return;
     if (this.tab() === 'text') {
       this.flashText(await shareText(this.text(), this.title(), this.env()));
       return;
     }
     const blob = this.blob();
     if (!blob) return;
-    this.flashImage(await shareImage(blob, shareFilename(t), this.title(), this.env()));
+    this.flashImage(await shareImage(blob, shareFilename(tr), this.title(), this.env()));
   }
 
   protected save(): void {
-    const t = this.trip();
+    const tr = this.trip();
     const blob = this.blob();
-    if (!t || !blob) return;
-    this.flashImage(downloadBlob(blob, shareFilename(t), this.env()));
+    if (!tr || !blob) return;
+    this.flashImage(downloadBlob(blob, shareFilename(tr), this.env()));
   }
 
   protected async copy(): Promise<void> {
@@ -294,13 +299,13 @@ export class TripSharePage {
   }
 
   private flashText(r: 'shared' | 'copied' | 'cancelled' | 'failed'): void {
-    if (r === 'copied') this.state.flash('Copied');
-    else if (r === 'failed') this.state.flash("Couldn't copy. Select the text and copy it.");
+    if (r === 'copied') this.state.flash(t('common.copied'));
+    else if (r === 'failed') this.state.flash(t('share.trip.copyFailed'));
   }
 
   private flashImage(r: 'shared' | 'downloaded' | 'cancelled' | 'failed'): void {
-    if (r === 'downloaded') this.state.flash('Image saved');
-    else if (r === 'failed') this.state.flash("Couldn't save the image");
+    if (r === 'downloaded') this.state.flash(t('share.imageSaved'));
+    else if (r === 'failed') this.state.flash(t('share.imageFailed'));
   }
 
   protected back(): void {

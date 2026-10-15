@@ -1,18 +1,19 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
 import { ClimateService } from '../../recs/climate.service';
-import { MONTH_SHORT, climateFor } from '../../recs/climate';
+import { climateFor } from '../../recs/climate';
+import { t } from '../../i18n/t';
 import { forecastOn, weatherText, withinForecast, type DayForecast } from '../../recs/forecast';
 import { ForecastService } from '../../recs/forecast.service';
 import { NOW } from '../../state/app-state.service';
 import { airportTz } from '../../utils/airports';
-import { formatKey, todayKey } from '../../utils/time';
+import { formatKey, monthShort, todayKey } from '../../utils/time';
 import type { ClimateMonth } from '../../recs/model';
 
 export interface WeatherParts { typical: string | null; forecast: string | null }
 
 /** 'Oct 13° / 7°' (no label); null without normals. Pure. */
 export function typicalPart(c: ClimateMonth | null): string | null {
-  return c ? `${MONTH_SHORT[c.month - 1]} ${c.tmaxC}° / ${c.tminC}°` : null;
+  return c ? `${monthShort(c.month - 1)} ${c.tmaxC}° / ${c.tminC}°` : null;
 }
 
 /** 'Wed 15° / 9°, rain possible' for the day; null without a forecast. Pure. */
@@ -32,8 +33,8 @@ export function forecastPart(d: DayForecast | null, dayLabel: string): string | 
   template: `
     @if (parts(); as p) {
       <p class="wx ui-sub tn" data-weather-line>
-        @if (p.typical) { <span class="wx__i"><b>Typical</b> {{ p.typical }}</span> }
-        @if (p.forecast) { <span class="wx__i"><b>Forecast</b> {{ p.forecast }}</span> }
+        @if (p.typical) { <span class="wx__i"><b>{{ t('dest.wx.typical') }}</b> {{ p.typical }}</span> }
+        @if (p.forecast) { <span class="wx__i"><b>{{ t('dest.fc.label') }}</b> {{ p.forecast }}</span> }
       </p>
     }
   `,
@@ -45,6 +46,7 @@ export function forecastPart(d: DayForecast | null, dayLabel: string): string | 
   `],
 })
 export class DestWeatherLineComponent {
+  protected readonly t = t;
   private readonly climate = inject(ClimateService);
   private readonly forecast = inject(ForecastService);
   private readonly now = inject(NOW);

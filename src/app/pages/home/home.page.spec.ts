@@ -473,8 +473,11 @@ describe('HomePage in French', () => {
     expect(el.querySelector<HTMLInputElement>('[data-search-input]')!.placeholder).toMatch(/^Rechercher parmi \d+ destinations/);
     expect(el.querySelector('.f')!.getAttribute('aria-label')).toBe('Filtrer et trier');
     expect([...el.querySelector('#h-nonstop')!.parentElement!.querySelectorAll('.dow i')].map(i => i.textContent).join('')).toBe('LMMJVSD');
-    // The hub picker and week strip (ui/) are converted with chunk C.
-    expect(text()).not.toMatch(/Nonstop this week|Editor's pick|Show all|Seasonal/);
+    // The hub picker and week strip (ui/) are French too.
+    expect(el.querySelector('app-hub-picker .picker')!.getAttribute('aria-label')).toMatch(/^Aéroport d'attache\s*: .*\. Modifier$/);
+    expect(el.querySelector('app-week-strip .ws')!.getAttribute('aria-label')).toMatch(/^Semaine du /);
+    expect(el.querySelector('app-week-strip .cap__label')!.getAttribute('aria-label')).toMatch(/Choisir une date$/);
+    expect(text()).not.toMatch(/Nonstop this week|Editor's pick|Show all|Seasonal|This week|Home airport/);
   });
 
   it('switches language live, without a reload', async () => {

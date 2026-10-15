@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { destinationFact, dismissFact, dismissedFacts } from './fun-fact';
 
@@ -10,10 +11,10 @@ import { destinationFact, dismissFact, dismissedFacts } from './fun-fact';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (shown(); as f) {
-      <aside class="ff" data-fun-fact aria-label="A fact about {{ city() }}">
+      <aside class="ff" data-fun-fact [attr.aria-label]="t('flight.fact.aria', { city: cityName() })">
         <app-icon name="sparkle" [size]="16" />
-        <p><b>While you wait</b> {{ f }}</p>
-        <button type="button" class="ff__x" aria-label="Hide facts about {{ city() }}" data-fun-fact-dismiss (click)="hide()">
+        <p><b>{{ t('flight.fact.wait') }}</b> {{ f }}</p>
+        <button type="button" class="ff__x" [attr.aria-label]="t('flight.fact.hide', { city: cityName() })" data-fun-fact-dismiss (click)="hide()">
           <app-icon name="close" [size]="14" />
         </button>
       </aside>
@@ -35,7 +36,9 @@ export class FunFactCardComponent {
   readonly code = input.required<string>();
   readonly hub = input.required<string>();
   readonly nowMs = input.required<number>();
-  readonly city = input('this destination');
+  readonly city = input('');
+  protected readonly t = t;
+  protected readonly cityName = computed(() => this.city() || t('flight.thisDest'));
 
   private readonly off = signal<ReadonlySet<string>>(dismissedFacts());
   protected readonly shown = computed(() =>

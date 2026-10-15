@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -22,9 +23,9 @@ import { NoteSheetComponent } from './note-sheet.component';
   template: `
     <section class="ln" aria-labelledby="ln-h" data-load-notes>
       <div class="ui-sec-h ln__h">
-        <h2 class="ui-h3" id="ln-h">Your load notes</h2>
+        <h2 class="ui-h3" id="ln-h">{{ t('flight.notes.title') }}</h2>
         @if (flights().length) {
-          <button type="button" class="ui-link ln__add" data-add (click)="sheetOpen.set(true)">Add</button>
+          <button type="button" class="ui-link ln__add" data-add (click)="sheetOpen.set(true)">{{ t('flight.notes.add') }}</button>
         }
       </div>
       <div class="ui-card ln__list">
@@ -36,12 +37,12 @@ import { NoteSheetComponent } from './note-sheet.component';
               @if (r.text) { <span class="ln__tx">{{ r.text }}</span> }
               <span class="ln__m tn">{{ r.when }}</span>
             </div>
-            <button type="button" class="ln__rm" [attr.aria-label]="'Remove note ' + r.title" (click)="trips.removeLoadNote(r.id)">
+            <button type="button" class="ln__rm" [attr.aria-label]="t('flight.notes.remove', { title: r.title })" (click)="trips.removeLoadNote(r.id)">
               <app-icon name="close" [size]="15" />
             </button>
           </div>
         } @empty {
-          <p class="ln__empty" data-empty>Write down what you see in your load tool. Notes stay on this device.</p>
+          <p class="ln__empty" data-empty>{{ t('flight.notes.empty') }}</p>
         }
       </div>
     </section>
@@ -78,6 +79,7 @@ import { NoteSheetComponent } from './note-sheet.component';
   `],
 })
 export class LoadNotesComponent {
+  protected readonly t = t;
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
 

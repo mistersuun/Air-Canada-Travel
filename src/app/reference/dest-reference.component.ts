@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { t } from '../i18n/t';
 import { currencyCode } from '../pages/destination/currency';
 import { AirportInfoService, airportInfo, cityOptionLabel, loungeLabel, terminalLabel } from '../places/airport-info';
 import {
@@ -21,19 +22,19 @@ import { ReferenceService } from './reference.service';
       <p class="r r--adv tn" [class.is-quiet]="quiet()" data-advisory>
         <span>{{ a.text }}</span>
         @if (updated()) { <span> · {{ updated() }}</span> }
-        @if (a.regional) { <span> · regional advisories in effect</span> }
-        <span> · </span><a [href]="a.url" target="_blank" rel="noopener">travel.gc.ca</a>
+        @if (a.regional) { <span> · {{ t('dest.ref.regional') }}</span> }
+        <span> · </span><a [href]="a.url" target="_blank" rel="noopener">{{ advisoryHost }}</a>
       </p>
     }
     @if (fx(); as f) {
       <p class="r tn" data-fx>
         <button type="button" class="fxb" data-fx-toggle [attr.aria-expanded]="convOpen()" aria-controls="fx-conv" (click)="convOpen.set(!convOpen())">
-          {{ f.text }} · {{ f.source }}<span class="fxb__h"> · {{ convOpen() ? 'hide converter' : 'convert' }}</span>
+          {{ f.text }} · {{ f.source }}<span class="fxb__h"> · {{ convOpen() ? t('dest.ref.hideConv') : t('dest.ref.convert') }}</span>
         </button>
       </p>
       @if (convOpen()) {
-        <div class="conv" id="fx-conv" data-converter role="group" aria-label="Currency converter">
-          <label class="conv__f"><span>CAD</span>
+        <div class="conv" id="fx-conv" data-converter role="group" [attr.aria-label]="t('dest.ref.converterAria')">
+          <label class="conv__f"><span>{{ cadCode }}</span>
             <input type="text" inputmode="decimal" autocomplete="off" data-conv-cad [value]="cad()" (input)="onCad($any($event.target).value)"></label>
           <span class="conv__eq" aria-hidden="true">⇄</span>
           <label class="conv__f"><span>{{ code() }}</span>
@@ -43,13 +44,13 @@ import { ReferenceService } from './reference.service';
     }
     @if (airport(); as ap) {
       <div class="ap" data-airport>
-        <p class="r ap__h"><b>Airport</b> · {{ airportCode() }}</p>
-        @if (terminal(); as t) { <p class="r" data-terminal>Air Canada: {{ t }}</p> }
+        <p class="r ap__h"><b>{{ t('dest.ref.airport') }}</b> · {{ airportCode() }}</p>
+        @if (terminal(); as tm) { <p class="r" data-terminal>{{ t('dest.ref.acTerminal', { terminal: tm }) }}</p> }
         @if (lounge(); as l) { <p class="r" data-lounge>{{ l }}</p> }
         @for (o of ap.toCity; track o.note) {
           <p class="r tn" data-to-city>{{ label(o) }}</p>
         }
-        <p class="r r--src">Typical times, not a timetable · reviewed {{ ap.reviewed }} · {{ ap.source }}</p>
+        <p class="r r--src">{{ t('dest.ref.typicalTimes', { date: ap.reviewed, source: ap.source }) }}</p>
       </div>
     }
     @for (h of holidays(); track key(h)) {
@@ -79,6 +80,9 @@ import { ReferenceService } from './reference.service';
   `],
 })
 export class DestReferenceComponent {
+  protected readonly advisoryHost = 'travel.gc.ca';
+  protected readonly cadCode = 'CAD';
+  protected readonly t = t;
   private readonly ref = inject(ReferenceService);
 
   readonly iso2 = input<string | null | undefined>(null);
@@ -102,10 +106,10 @@ export class DestReferenceComponent {
   protected readonly local = computed(() => this.side('local'));
 
   private side(which: 'cad' | 'local'): string {
-    const t = this.typed();
-    if (t.side === which) return t.text;
+    const typed = this.typed();
+    if (typed.side === which) return typed.text;
     const r = this.rate();
-    return r ? convertAmount(t.text, r, which === 'local') : '';
+    return r ? convertAmount(typed.text, r, which === 'local') : '';
   }
 
   constructor() {

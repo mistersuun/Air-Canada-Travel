@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { destPath } from '../../ui/links';
@@ -40,7 +41,7 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
   imports: [RouterLink, IconComponent, DestRowComponent, RouteMapComponent, SegComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h1 class="sr-only">Route map</h1>
+    <h1 class="sr-only">{{ t('map.title') }}</h1>
     <div class="box" [style.left.px]="box().x" [style.top.px]="box().y" [style.width.px]="box().w" [style.height.px]="box().h">
       <app-route-map #rmap class="map" interactive view="fit" [hub]="state.hub()" [points]="points()"
                      [highlight]="hot()" [labels]="labels()" [center]="frame().center" [zoom]="frame().zoom" [viewport]="viewport()"
@@ -50,40 +51,40 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
     <div class="top">
       <label class="ui-search ui-glass search">
         <app-icon name="search" [size]="17" />
-        <input type="search" data-search-input placeholder="Search the map" aria-label="Search the map"
+        <input type="search" data-search-input [placeholder]="t('map.search')" [attr.aria-label]="t('map.search')"
                autocomplete="off" enterkeyhint="search" [value]="state.query()" (input)="onSearch($event)" />
         @if (state.query()) {
-          <button type="button" class="clear" aria-label="Clear search" (click)="state.setQuery('')">
+          <button type="button" class="clear" [attr.aria-label]="t('map.clearSearch')" (click)="state.setQuery('')">
             <app-icon name="close" [size]="15" />
           </button>
         }
       </label>
-      <button type="button" class="ui-circ ui-circ--glass locate m-only" aria-label="Recentre on {{ state.hubName() }}"
+      <button type="button" class="ui-circ ui-circ--glass locate m-only" [attr.aria-label]="t('map.recentre', { hub: state.hubName() })"
               (click)="locate()">
         <app-icon name="locate" [size]="19" [strokeWidth]="2" />
       </button>
     </div>
 
     <div class="ctrls d-only">
-      <button type="button" class="ui-circ ui-circ--glass" aria-label="Recentre on {{ state.hubName() }}" (click)="locate()">
+      <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('map.recentre', { hub: state.hubName() })" (click)="locate()">
         <app-icon name="locate" [size]="19" [strokeWidth]="2" />
       </button>
-      <button type="button" class="ui-circ ui-circ--glass zm" aria-label="Zoom in" (click)="zoom(1.5)">+</button>
-      <button type="button" class="ui-circ ui-circ--glass zm" aria-label="Zoom out" (click)="zoom(1 / 1.5)">−</button>
+      <button type="button" class="ui-circ ui-circ--glass zm" [attr.aria-label]="t('map.zoomIn')" (click)="zoom(1.5)">+</button>
+      <button type="button" class="ui-circ ui-circ--glass zm" [attr.aria-label]="t('map.zoomOut')" (click)="zoom(1 / 1.5)">−</button>
     </div>
 
     <section class="panel ui-glass" [class.is-open]="expanded()" aria-labelledby="map-count">
-      <button type="button" class="handle m-only" [attr.aria-label]="expanded() ? 'Collapse list' : 'Expand list'"
+      <button type="button" class="handle m-only" [attr.aria-label]="expanded() ? t('map.collapse') : t('map.expand')"
               [attr.aria-expanded]="expanded()" (pointerdown)="dragStart($event)" (pointerup)="dragEnd($event)"
               (keydown.enter)="toggle()" (keydown.space)="$event.preventDefault(); toggle()"><i></i></button>
       <div class="hd">
         <h2 id="map-count" class="ui-h3 tn">{{ countLabel() }}</h2>
-        <app-seg [options]="sortOptions" [value]="sort()" (valueChange)="setSort($event)" ariaLabel="Sort by" />
+        <app-seg [options]="sortOptions()" [value]="sort()" (valueChange)="setSort($event)" [ariaLabel]="t('map.sortBy')" />
       </div>
       <div #list class="list">
         @for (i of listed(); track i.code) {
           @if ($index === firstConnect()) {
-            <h3 class="grp ui-label">Connections only · {{ connectCount() }}</h3>
+            <h3 class="grp ui-label">{{ t('map.connGroup', { n: connectCount() }) }}</h3>
           }
           <app-dest-row [attr.data-code]="i.code" [code]="i.code" [small]="km(i)" [meta]="meta(i)" [dots]="i.dots"
                         [selectedDay]="dayIndex()" [highlight]="i.code === sel()" [chevron]="false"
@@ -94,19 +95,19 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
                         (focus)="hovered.set(i.code)" (blur)="hovered.set(null)">
             @if (i.code === sel()) {
               <a trailing class="open" [routerLink]="open(i.code)" [queryParams]="state.globalParams()"
-                 [attr.aria-label]="'Open ' + i.city" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">›</a>
+                 [attr.aria-label]="t('map.open', { city: i.city })" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">›</a>
             }
           </app-dest-row>
         } @empty {
           <div class="empty">
             @if (state.query()) {
-              <p class="ui-sub">No destinations match “{{ state.query() }}”.</p>
-              <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setQuery('')">Clear search</button>
+              <p class="ui-sub">{{ t('map.noMatch', { query: state.query() }) }}</p>
+              <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setQuery('')">{{ t('map.clearSearch') }}</button>
             } @else if (outside()) {
-              <p class="ui-sub">Schedules for this week aren’t published yet.</p>
-              <button type="button" class="ui-btn ui-btn--sm" (click)="state.jumpToCoverage()">Go to last published week</button>
+              <p class="ui-sub">{{ t('map.notPublished') }}</p>
+              <button type="button" class="ui-btn ui-btn--sm" (click)="state.jumpToCoverage()">{{ t('dest.lastPublished') }}</button>
             } @else {
-              <p class="ui-sub">No flights from {{ state.hubName() }} {{ state.selectedDateKey() ? 'on this day' : 'this week' }}.</p>
+              <p class="ui-sub">{{ t('map.noFlights', { hub: state.hubName(), when: state.selectedDateKey() ? 'day' : 'week' }) }}</p>
             }
           </div>
         }
@@ -190,6 +191,7 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
   `],
 })
 export class MapPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -201,10 +203,10 @@ export class MapPage {
   protected readonly map = viewChild<RouteMapComponent>('rmap');
   private readonly listEl = viewChild<ElementRef<HTMLElement>>('list');
 
-  protected readonly sortOptions: readonly SegOption[] = [
-    { value: 'distance', label: 'Distance' },
-    { value: 'time', label: 'Time' },
-  ];
+  protected readonly sortOptions = computed<SegOption[]>(() => [
+    { value: 'distance', label: t('map.sort.distance') },
+    { value: 'time', label: t('map.sort.time') },
+  ]);
 
   /** Page size (measured), drives the framing maths. */
   private readonly size = signal({ w: 375, h: 812 });
@@ -267,7 +269,7 @@ export class MapPage {
     const all = this.listed().length;
     const direct = all - this.connectCount();
     const n = direct || all;
-    return `${n} destination${n === 1 ? '' : 's'}`;
+    return t('map.count', { n });
   });
 
   /** The part of the page the list does not cover. */
@@ -339,7 +341,7 @@ export class MapPage {
 
   protected rowLabel(i: MapItem): string {
     const sel = i.code === this.sel();
-    return `${i.city}, ${formatKm(i.km)}, ${itemMeta(i)}${sel ? '. Selected; press again to open' : ''}`;
+    return `${i.city}, ${formatKm(i.km)}, ${itemMeta(i)}${sel ? t('map.rowSelected') : ''}`;
   }
 
   protected open(code: string): string[] {

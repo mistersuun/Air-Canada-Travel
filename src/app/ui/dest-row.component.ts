@@ -60,7 +60,7 @@ import { DotDay, DotRowComponent } from './dot-row.component';
     .nm, .tm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .nm { font-weight: 600; font-size: 15px; }
     .nm small { font-weight: 500; color: var(--ink-3); font-size: 12px; margin-left: 6px; }
-    :host(.wrap-meta) .tm { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    :host(.wrap-meta) .tm { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
     .tm { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
     .dots { margin-left: auto; }
     .chev { color: var(--ink-3); font-size: 18px; line-height: 1; margin-left: 8px; flex: none; }
@@ -88,7 +88,7 @@ export class DestRowComponent {
   readonly selectedDay = input<number | null>(null);
   readonly highlight = input(false, { transform: booleanAttribute });
   readonly chevron = input(true, { transform: booleanAttribute });
-  /** Let the meta line take two lines instead of one with an ellipsis. */
+  /** Let the meta line take two lines instead of one with an ellipsis (three in French, where the facts run longer). */
   readonly wrapMeta = input(false, { transform: booleanAttribute });
   readonly thumb = input<'photo' | 'mono'>('photo');
 

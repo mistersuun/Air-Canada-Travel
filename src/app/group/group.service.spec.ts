@@ -9,9 +9,10 @@ import { MemoryStorage } from '../state/testing';
 import { TRIPS_KEY } from '../trips/model';
 import { TRIPS_STORAGE } from '../trips/storage';
 import { SEVILLE_TRIPS_FILE } from '../trips/testing/seville-fixture';
+import { fromBase64Url } from '../trips/share-codec';
 import { parseGroupFragment } from './group-crypto';
-import { parseGroupDoc } from './group-doc';
-import { GroupService } from './group.service';
+import { groupExpiry, parseGroupDoc, tripLastDate } from './group-doc';
+import { GroupService, type GroupRecord } from './group.service';
 
 const NOW_MS = Date.parse('2026-10-01T13:41:00Z');
 
@@ -43,12 +44,20 @@ function serverFetch(store: GroupStore, sent: { url: string; init: RequestInit }
     const headers = init.headers as Record<string, string>;
     const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
     if (init.method === 'GET') { const r = await getGroup(store, id, Date.now()); return reply(r.status, r.body); }
-    if (init.method === 'DELETE') { const r = await deleteGroup(store, id, headers['X-Group-Write']); return reply(r.status, r.body); }
+    if (init.method === 'DELETE') { const r = await deleteGroup(store, id, headers['X-Group-Write'], headers['X-Group-Owner']); return reply(r.status, r.body); }
     const body = parsePutBody(JSON.parse(init.body as string));
     if (!body) return reply(400, { error: 'bad-request' });
-    const r = await putGroup(store, id, headers['X-Group-Write'], body, Date.now());
+    const r = await putGroup(store, id, headers['X-Group-Write'], body, Date.now(), undefined, headers['X-Group-Owner']);
     return reply(r.status, r.body);
   });
+}
+
+function indexOfBytes(hay: Uint8Array, needle: Uint8Array): number {
+  outer: for (let i = 0; i + needle.length <= hay.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
+    return i;
+  }
+  return -1;
 }
 
 describe('GroupService (client against the real server logic)', () => {
@@ -81,7 +90,10 @@ describe('GroupService (client against the real server logic)', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const raw = [...store.m.values()][0].v;
-    for (const secret of [r.record.key, r.record.write!, 'Ana', trip.name]) expect(raw).not.toContain(secret);
+    // Short plaintexts like 'Ana' can match inside base64 text by chance, so look for them in the decoded ciphertext bytes.
+    for (const secret of [r.record.key, r.record.write!]) expect(raw).not.toContain(secret);
+    const bytes = fromBase64Url((JSON.parse(raw) as { ciphertext: string }).ciphertext);
+    for (const plain of ['Ana', trip.name]) expect(indexOfBytes(bytes, new TextEncoder().encode(plain))).toBe(-1);
     for (const s of sent) {
       expect(s.url).not.toContain(r.record.key);
       expect(String(s.init.body ?? '')).not.toContain(r.record.key);
@@ -143,7 +155,7 @@ describe('GroupService (client against the real server logic)', () => {
     const created = await svc.create(trip, 'Ana', NOW_MS);
     if (!created.ok) throw new Error('create failed');
     const link = svc.linkOf(created.record);
-    expect(await svc.stop(link)).toBe(true);
+    expect(await svc.stop(link, created.record.ownerToken)).toBe(true);
     expect(await svc.load(link)).toEqual({ ok: false, reason: 'gone' });
   });
 
@@ -229,5 +241,135 @@ describe('GroupService (client against the real server logic)', () => {
     }));
     const fresh = TestBed.runInInjectionContext(() => new GroupService());
     expect(Object.keys(fresh.all())).toEqual(['BBBBBBBBBBBBBBBBBBBBBB']);
+  });
+
+  describe('owner token', () => {
+    it('is made at creation, sent as a header, stored server-side only as a hash, and never in a link', async () => {
+      const r = await svc.create(trip, 'Ana', NOW_MS);
+      if (!r.ok) throw new Error('create failed');
+      const owner = r.record.ownerToken!;
+      expect(owner).toMatch(/^[A-Za-z0-9_-]{43}$/);
+      expect(owner).not.toBe(r.record.write);
+      expect((sent[0].init.headers as Record<string, string>)['X-Group-Owner']).toBe(owner);
+      expect(String(sent[0].init.body)).not.toContain(owner);
+      const raw = [...store.m.values()][0].v;
+      expect(raw).not.toContain(owner);
+      expect(JSON.parse(raw).ownerHash).toBeTruthy();
+      expect(svc.urlOf(svc.linkOf(r.record))).not.toContain(owner);
+      expect(JSON.parse(localStorage.getItem('ac.groups.v1')!)[r.record.id].ownerToken).toBe(owner);
+    });
+
+    it('stop needs it: the write token alone (a companion with an edit link) is refused', async () => {
+      const r = await svc.create(trip, 'Ana', NOW_MS);
+      if (!r.ok) throw new Error('create failed');
+      const link = svc.linkOf(r.record);
+      expect(await svc.stop(link)).toBe(false);
+      expect(store.m.size).toBe(1);
+      expect(await svc.stop(link, r.record.ownerToken)).toBe(true);
+      expect(store.m.size).toBe(0);
+    });
+
+    it('a group made before owner tokens can still be stopped with the write token', async () => {
+      const id = 'CCCCCCCCCCCCCCCCCCCCCC';
+      const write = 'w'.repeat(22);
+      await putGroup(store, id, write, parsePutBody({ ciphertext: 'c'.repeat(40), iv: 'i'.repeat(16), baseVersion: 0 })!, Date.now());
+      expect(await svc.stop({ id, key: 'k'.repeat(43), write }, null)).toBe(true);
+      expect(store.m.size).toBe(0);
+    });
+
+    it('a record saved before owner tokens loads with ownerToken null', () => {
+      localStorage.setItem('ac.groups.v1', JSON.stringify({
+        AAAAAAAAAAAAAAAAAAAAAA: { id: 'AAAAAAAAAAAAAAAAAAAAAA', key: 'k', write: 'w', memberId: 'm', name: 'n', owner: true, tripId: 't', expiresAt: null },
+      }));
+      const fresh = TestBed.runInInjectionContext(() => new GroupService());
+      expect(fresh.recordFor('AAAAAAAAAAAAAAAAAAAAAA')?.ownerToken).toBeNull();
+    });
+  });
+
+  describe('expiry', () => {
+    it('ownerExpiry only proposes a date more than a day beyond the current one, and only for the owner', async () => {
+      const r = await svc.create(trip, 'Ana', NOW_MS);
+      if (!r.ok) throw new Error('create failed');
+      const want = groupExpiry(trip, NOW_MS);
+      const t = Date.parse(want);
+      expect(svc.ownerExpiry(r.record, new Date(t - 2 * 86_400_000).toISOString(), NOW_MS)).toBe(want);
+      expect(svc.ownerExpiry(r.record, new Date(t - 3_600_000).toISOString(), NOW_MS)).toBeUndefined();
+      expect(svc.ownerExpiry(r.record, new Date(t + 86_400_000).toISOString(), NOW_MS)).toBeUndefined();
+      expect(svc.ownerExpiry(r.record, null, NOW_MS)).toBe(want);
+      expect(svc.ownerExpiry({ ...r.record, owner: false }, null, NOW_MS)).toBeUndefined();
+      expect(svc.ownerExpiry({ ...r.record, tripId: 'gone' }, null, NOW_MS)).toBeUndefined();
+      expect(svc.ownerExpiry(null, null, NOW_MS)).toBeUndefined();
+    });
+
+    it('ownerExpiry does not extend once the trip ended more than 30 days ago', async () => {
+      const r = await svc.create(trip, 'Ana', NOW_MS);
+      if (!r.ok) throw new Error('create failed');
+      const end = Date.parse(`${tripLastDate(trip)}T23:59:59Z`);
+      expect(svc.ownerExpiry(r.record, null, end + 29 * 86_400_000)).toBeDefined();
+      expect(svc.ownerExpiry(r.record, null, end + 31 * 86_400_000)).toBeUndefined();
+    });
+
+    it('create stores the expiry the server answered with', async () => {
+      const r = await svc.create(trip, 'Ana', Date.now());
+      if (!r.ok) throw new Error('create failed');
+      const served = (await svc.load(svc.linkOf(r.record)));
+      expect(served.ok && served.expiresAt).toBe(r.record.expiresAt);
+    });
+
+    it('an owner save extends the group; a companion save does not', async () => {
+      const r = await svc.create(trip, 'Ana', Date.now());
+      if (!r.ok) throw new Error('create failed');
+      const link = svc.linkOf(r.record);
+      const opened = await svc.load(link);
+      if (!opened.ok) throw new Error('load failed');
+      const later = new Date(Date.now() + 85 * 86_400_000).toISOString();
+      const companion = await svc.save(link, opened.doc, opened.version, later);
+      expect(companion.ok && companion.expiresAt).toBe(r.record.expiresAt);
+      const owner = await svc.save(link, opened.doc, opened.ok && companion.ok ? companion.version : 0, later, r.record.ownerToken);
+      expect(owner.ok && owner.expiresAt).toBe(later);
+    });
+  });
+
+  describe('several tabs', () => {
+    const rec = (id: string): GroupRecord => ({ id, key: 'k', write: null, memberId: 'm', name: 'n', owner: false, ownerToken: null, tripId: null, expiresAt: null });
+
+    it('a write re-reads storage first, so another tab\'s group is not dropped', () => {
+      svc.remember(rec('AAAAAAAAAAAAAAAAAAAAAA'));
+      // Another tab adds B and this tab does not hear about it.
+      const stored = JSON.parse(localStorage.getItem('ac.groups.v1')!);
+      stored['BBBBBBBBBBBBBBBBBBBBBB'] = rec('BBBBBBBBBBBBBBBBBBBBBB');
+      localStorage.setItem('ac.groups.v1', JSON.stringify(stored));
+      svc.remember(rec('CCCCCCCCCCCCCCCCCCCCCC'));
+      expect(Object.keys(JSON.parse(localStorage.getItem('ac.groups.v1')!)).sort()).toEqual(['AAAAAAAAAAAAAAAAAAAAAA', 'BBBBBBBBBBBBBBBBBBBBBB', 'CCCCCCCCCCCCCCCCCCCCCC']);
+      expect(Object.keys(svc.all()).sort()).toHaveLength(3);
+    });
+
+    it('update does not bring back a group another tab forgot', () => {
+      svc.remember(rec('AAAAAAAAAAAAAAAAAAAAAA'));
+      localStorage.setItem('ac.groups.v1', '{}'); // the other tab forgot it
+      svc.update({ ...rec('AAAAAAAAAAAAAAAAAAAAAA'), name: 'changed' });
+      expect(svc.recordFor('AAAAAAAAAAAAAAAAAAAAAA')).toBeNull();
+      expect(JSON.parse(localStorage.getItem('ac.groups.v1')!)).toEqual({});
+      svc.remember(rec('BBBBBBBBBBBBBBBBBBBBBB'));
+      svc.update({ ...rec('BBBBBBBBBBBBBBBBBBBBBB'), name: 'changed' });
+      expect(svc.recordFor('BBBBBBBBBBBBBBBBBBBBBB')?.name).toBe('changed');
+    });
+
+    it('forget also leaves another tab\'s groups alone', () => {
+      svc.remember(rec('AAAAAAAAAAAAAAAAAAAAAA'));
+      const stored = JSON.parse(localStorage.getItem('ac.groups.v1')!);
+      stored['BBBBBBBBBBBBBBBBBBBBBB'] = rec('BBBBBBBBBBBBBBBBBBBBBB');
+      localStorage.setItem('ac.groups.v1', JSON.stringify(stored));
+      svc.forget('AAAAAAAAAAAAAAAAAAAAAA');
+      expect(Object.keys(JSON.parse(localStorage.getItem('ac.groups.v1')!))).toEqual(['BBBBBBBBBBBBBBBBBBBBBB']);
+    });
+
+    it('a storage event from another tab refreshes the list', () => {
+      localStorage.setItem('ac.groups.v1', JSON.stringify({ DDDDDDDDDDDDDDDDDDDDDD: rec('DDDDDDDDDDDDDDDDDDDDDD') }));
+      window.dispatchEvent(new StorageEvent('storage', { key: 'ac.groups.v1' }));
+      expect(svc.recordFor('DDDDDDDDDDDDDDDDDDDDDD')).not.toBeNull();
+      window.dispatchEvent(new StorageEvent('storage', { key: 'something.else' }));
+      expect(Object.keys(svc.all())).toEqual(['DDDDDDDDDDDDDDDDDDDDDD']);
+    });
   });
 });

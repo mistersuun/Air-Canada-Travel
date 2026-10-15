@@ -17,6 +17,8 @@
  * Nothing in here knows about destinations or time zones; see utils/.
  */
 
+import { FETCH_TIMEOUT_BIG_MS, fetchWithTimeout } from '../utils/fetch-timeout';
+
 /** One published schedule row: a flight on some weekdays between two dates. */
 export interface FlightSchedule {
   fromDate: string;
@@ -215,11 +217,6 @@ export function installSchedules(file: SchedulesFile): void {
   resetScheduleSource();
 }
 
-/** True once published data is installed. */
-export function schedulesLoaded(): boolean {
-  return baseline.routes.length > 0;
-}
-
 /**
  * Fetches and installs public/data/schedules.json (app startup). The service
  * worker serves it from cache offline. Resolves false, leaving the source
@@ -227,7 +224,7 @@ export function schedulesLoaded(): boolean {
  */
 export async function loadSchedules(
   url: string = SCHEDULES_URL,
-  fetchFn: typeof fetch = (...a) => fetch(...a),
+  fetchFn: typeof fetch = (u, init) => fetchWithTimeout(u, init, FETCH_TIMEOUT_BIG_MS),
 ): Promise<boolean> {
   try {
     const res = await fetchFn(url);
@@ -235,7 +232,7 @@ export async function loadSchedules(
     installSchedules((await res.json()) as SchedulesFile);
     return true;
   } catch (err) {
-    console.error(`[schedules] could not load ${url}:`, err);
+    console.error(`[schedules] could not load ${url}:`, err); // i18n-ignore
     return false;
   }
 }
@@ -245,6 +242,7 @@ export function scheduleVersion(): number {
   return version;
 }
 
+/** Every installed route with its schedule records (the data-integrity specs walk this). */
 export function getRouteSchedules(): readonly ScheduleRoute[] {
   return state.routes;
 }
@@ -285,11 +283,6 @@ export function getCoverage(hub?: string | null): Coverage {
     if (w) return { from: w.from, to: w.to, generatedAt, hub };
   }
   return { from: state.global.from, to: state.global.to, generatedAt, hub: null };
-}
-
-/** Coverage window per airport code (origins and destinations). */
-export function getCoverageByAirport(): ReadonlyMap<string, CoverageWindow> {
-  return state.byAirport;
 }
 
 /** True when `dateKey` lies inside the (hub's) published window, inclusive. */

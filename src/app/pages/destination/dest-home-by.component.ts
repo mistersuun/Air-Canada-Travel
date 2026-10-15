@@ -4,15 +4,17 @@ import { IconComponent } from '../../components/shared/icons.component';
 import { gatewaysNear } from '../../places/reach';
 import { AppStateService } from '../../state/app-state.service';
 import type { Trip } from '../../trips/model';
+import { lastStopPlace } from '../../trips/stops';
 import { TripsService } from '../../trips/trips.service';
 import { tripPath, tripQuery } from '../../ui/links';
-import { WEEKDAY_SHORT, weekdayIndex } from '../../utils/time';
+import { t } from '../../i18n/t';
+import { weekdayIndex, weekdayShort } from '../../utils/time';
 import { buildReturnView, returnGateway, triesLabel } from '../trips/return/return-model';
 
 /** The first active trip that could fly home from `code`: its return gateway, the goal itself, or a gateway near the goal. */
 export function tripHomeFrom(trips: readonly Trip[], code: string): Trip | null {
-  return trips.find(t => code !== t.homeAirport && (
-    returnGateway(t) === code || t.goal.acCode === code || gatewaysNear(t.goal).some(g => g.code === code)
+  return trips.find(tr => code !== tr.homeAirport && (
+    returnGateway(tr) === code || lastStopPlace(tr).acCode === code || gatewaysNear(lastStopPlace(tr)).some(g => g.code === code)
   )) ?? null;
 }
 
@@ -68,13 +70,13 @@ export class DestHomeByComponent {
     const trip = tripHomeFrom(this.trips.activeTrips(), code);
     if (!trip) return null;
     const v = buildReturnView(trip, this.state.connect(), this.state.timeFormat(), code);
-    const wd = (k: string) => WEEKDAY_SHORT[weekdayIndex(k)];
-    const parts = [`${triesLabel(v.flyTries)} from ${code} if you fly ${wd(v.flyKey)}`];
-    if (v.startKey && v.startTries !== null) parts.push(`${v.startTries} if you start ${wd(v.startKey)}`);
+    const wd = (k: string) => weekdayShort(weekdayIndex(k));
+    const parts = [t('dest.homeBy.fly', { tries: triesLabel(v.flyTries), code, day: wd(v.flyKey) })];
+    if (v.startKey && v.startTries !== null) parts.push(t('dest.homeBy.start', { n: v.startTries, day: wd(v.startKey) }));
     return {
       name: trip.name,
       deadline: v.deadline,
-      counts: v.covered ? parts.join(' · ') : `${parts.join(' · ')} · some days unknown`,
+      counts: v.covered ? parts.join(' · ') : t('dest.homeBy.unknown', { parts: parts.join(' · ') }),
       link: tripPath(trip.id),
       // The Return tab counts from this airport too, so the numbers match.
       query: { ...this.state.globalParams(), ...tripQuery('return'), ...(code !== v.defaultGateway ? { retFrom: code } : {}) },

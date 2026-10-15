@@ -3,6 +3,7 @@
  * only: never a percentage, never odds. Pure.
  */
 import { instanceKey, type Outcome } from '../model';
+import { t, type MsgKey } from '../../i18n/t';
 import { weekdayIndex } from '../../utils/time';
 
 export interface HistoryCounts {
@@ -64,26 +65,31 @@ export function historyFor(log: { outcomes: readonly Outcome[] }, q: HistoryQuer
 
 /** 'tried 4, boarded 3' (+ ' (1 some of us)' when any). Counts only. */
 export function historyText(c: HistoryCounts): string {
-  return `tried ${c.tried}, boarded ${c.boarded}${c.partial ? ` (${c.partial} some of us)` : ''}`;
+  return t(c.partial ? 'trips.history.textSome' : 'trips.history.text', { tried: c.tried, boarded: c.boarded, partial: c.partial });
 }
 
-const WEEKDAY_PLURAL = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'] as const;
+const WEEKDAY_PLURAL: readonly MsgKey[] = [
+  'trips.history.mondays', 'trips.history.tuesdays', 'trips.history.wednesdays', 'trips.history.thursdays',
+  'trips.history.fridays', 'trips.history.saturdays', 'trips.history.sundays',
+];
 
 /** 'AC834: tried 4, boarded 3 (Fridays 2 of 2)', or null when you have not tried it. Counts only. */
 export function recordLine(h: History, flightNumber: string, dateKey: string): string | null {
   if (!h.overall.tried) return null;
-  const w = h.sameWeekday.tried
-    ? ` (${WEEKDAY_PLURAL[weekdayIndex(dateKey)]} ${h.sameWeekday.boarded} of ${h.sameWeekday.tried})`
-    : '';
-  return `${flightNumber}: ${historyText(h.overall)}${w}`;
+  const text = historyText(h.overall);
+  if (!h.sameWeekday.tried) return t('trips.history.line', { flight: flightNumber, text });
+  return t('trips.history.lineDay', {
+    flight: flightNumber, text, day: t(WEEKDAY_PLURAL[weekdayIndex(dateKey)]),
+    boarded: h.sameWeekday.boarded, tried: h.sameWeekday.tried,
+  });
 }
 
 /** 'you: 3/4' (boarded of tried) for a destination departures row, or null when tried is 0. */
 export function recordTag(c: HistoryCounts): string | null {
-  return c.tried ? `you: ${c.boarded}/${c.tried}` : null;
+  return c.tried ? t('trips.history.tag', { boarded: c.boarded, tried: c.tried }) : null;
 }
 
 /** 'Your record: boarded 3 of 4' for assistive tech. */
 export function recordAria(c: HistoryCounts): string {
-  return `Your record: boarded ${c.boarded} of ${c.tried}`;
+  return t('trips.history.aria', { boarded: c.boarded, tried: c.tried });
 }

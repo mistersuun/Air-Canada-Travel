@@ -301,7 +301,7 @@ describe('GatewayPage', () => {
     const el = h.routeNativeElement!;
     expect(text(el)).toContain('Not found in our schedule data Thu Oct 8 · next Fri Oct 9');
     const start = [...el.querySelectorAll('button')].find(b => b.textContent!.includes('Start this trip')) as HTMLButtonElement;
-    expect(start.disabled).toBe(true);
+    expect(start.getAttribute('aria-disabled')).toBe('true');
   });
 });
 

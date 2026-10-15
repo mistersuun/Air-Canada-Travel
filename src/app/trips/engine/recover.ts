@@ -15,7 +15,9 @@ import { MINUTE_MS, addDays, diffDays, utcToLocal } from '../../utils/time';
 import type { FlightInstance } from '../../utils/week';
 import { GroundEstimate, airportEnd, arrivalAtGoal, groundEstimate, unknownGround } from '../../places/ground';
 import { gatewaysNear } from '../../places/reach';
+import { t } from '../../i18n/t';
 import { Trip, TripLeg, isFinalStatus } from '../model';
+import { stopForLeg } from '../stops';
 import { buildItinerary, legStartUtc, refDepUtc } from './legs';
 
 export const BOARDING_CLOSED_MIN = 40;   // departures this soon (or sooner) from now are greyed "boarding has likely closed"
@@ -33,8 +35,6 @@ export interface ReachableOption {
   nightsAtGoal: number | null;                     // nights until the trip's first leg that leaves the goal area
   returnStillWorks: boolean | null;                // the trip's planned return legs still come after the arrival
 }
-
-export const CLOSED_REASON = 'boarding has likely closed';
 
 interface Ctx {
   trip: Trip;
@@ -110,7 +110,7 @@ export function leavesGoalArea(trip: Trip, leg: TripLeg): boolean {
     const from = greatCircleKm(leg.from, trip.goal);
     return from <= GOAL_AREA_KM && greatCircleKm(leg.to, trip.goal) > from + 1;
   }
-  return leg.role === 'return';
+  return leg.role === 'return' || leg.role === 'onward';
 }
 
 export function legDepartureKey(leg: TripLeg): string {
@@ -218,7 +218,7 @@ export function stillReachable(input: {
       const usable = it.departUtc > closedBefore;
       // A one-stop that lands after a usable direct to the same gateway adds nothing.
       if (k && directUsableArr !== null && (!usable || it.arriveUtc >= directUsableArr)) continue;
-      gwOptions.push(decorate(ctx, gateway, it, usable ? 'usable' : 'closed', usable ? null : CLOSED_REASON, 'tonight', ground));
+      gwOptions.push(decorate(ctx, gateway, it, usable ? 'usable' : 'closed', usable ? null : t('trips.recover.closed'), 'tonight', ground));
     }
 
     // Missed connections: the next feeder to a hub lands after the hub's last onward flight that day.
@@ -234,9 +234,9 @@ export function stillReachable(input: {
       const ready = feeder.arrUtc + ctx.minConnect * MINUTE_MS;
       if (onward.some(f => f.depUtc >= ready)) continue;
       const missed = onward[onward.length - 1];
-      const reason = missed.depUtc < feeder.arrUtc
-        ? `${feeder.flightNumber} lands ${feeder.arrLocal}, after ${missed.flightNumber} leaves at ${missed.depLocal}`
-        : `${feeder.flightNumber} lands ${feeder.arrLocal}, too close to ${missed.flightNumber} at ${missed.depLocal}`;
+      const reason = t(missed.depUtc < feeder.arrUtc ? 'trips.recover.landsAfter' : 'trips.recover.landsTooClose', {
+        feeder: feeder.flightNumber ?? '', land: feeder.arrLocal, onward: missed.flightNumber ?? '', dep: missed.depLocal,
+      });
       gwOptions.push(decorate(ctx, gateway, buildItinerary([feeder, missed]), 'missedConnection', reason, 'tonight', ground));
     }
     tonight.push(...gwOptions);
@@ -262,7 +262,7 @@ export function missOneOutbound(trip: Trip, legId: string, connect: ConnectOptio
   const leg = trip.legs.find(l => l.id === legId);
   if (!leg || leg.kind !== 'flight' || !leg.refs.length) return { tonight: [], tomorrow: [] };
   const ref = leg.refs[0];
-  const r = stillReachable({ trip, at: ref.origin, nowMs: refDepUtc(ref), connect });
+  const r = stillReachable({ trip: { ...trip, goal: stopForLeg(trip, leg) }, at: ref.origin, nowMs: refDepUtc(ref), connect });
   const isSelf = (o: ReachableOption) => o.itinerary.legs[0].flightNumber === ref.flightNumber && o.itinerary.dateKey === ref.dateKey;
   return { tonight: r.tonight.filter(o => !isSelf(o)), tomorrow: r.tomorrow.filter(o => !isSelf(o)) };
 }

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { t, type MsgKey } from '../../../i18n/t';
 import { IconComponent } from '../../../components/shared/icons.component';
 import { aboutDuration, airportEnd, groundEstimate, onwardLinks } from '../../../places/ground';
 import { GroundTimetableService } from '../../../places/ground-timetable.service';
@@ -17,7 +18,7 @@ import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import { flightPath } from '../../../ui/links';
 import { findDestination, findHub } from '../../../utils/airports';
 import { findAlternatives, type Itinerary } from '../../../utils/connections';
-import { WEEKDAY_SHORT, toUtcMs, weekdayIndex } from '../../../utils/time';
+import { toUtcMs, weekdayIndex, weekdayShort } from '../../../utils/time';
 import {
   MODE_LABEL, dayLabel, flightNumbers, groundLabel, groundRide, legById, refsRoute, refsTimes,
 } from '../trips-model';
@@ -56,30 +57,30 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
           @if (arrival(); as a) { <p class="ls__fc"><app-forecast-line [code]="a.code" [dateKey]="a.dateKey" /></p> }
           @if (f.provenance === 'unknown') {
             @if (routeNote(); as rn) {
-              <p class="ls__warn ui-sub" data-route-only>{{ rn }}. Check the Air Canada app before you go.
-                <a class="ui-link" [href]="acUrl" target="_blank" rel="noopener">Open in aircanada.com</a></p>
+              <p class="ls__warn ui-sub" data-route-only>{{ t('trips.leg.routeOnly', { note: rn }) }}
+                <a class="ui-link" [href]="acUrl" target="_blank" rel="noopener">{{ t('trips.leg.openAc') }}</a></p>
             } @else {
-              <p class="ls__warn ui-sub">Not found in the latest schedules. Check the Air Canada app before you go.</p>
+              <p class="ls__warn ui-sub">{{ t('trips.leg.notFound') }}</p>
             }
           }
 
           <fieldset class="ls__st">
-            <legend class="ui-label">Your status</legend>
-            <div class="st" role="group" aria-label="Leg status">
+            <legend class="ui-label">{{ t('trips.leg.yourStatus') }}</legend>
+            <div class="st" role="group" [attr.aria-label]="t('trips.leg.statusAria')">
               @for (s of statuses; track s) {
                 <button type="button" class="st__b" [class.on]="f.status === s" [attr.aria-pressed]="f.status === s"
                         [attr.data-status]="s" (click)="setStatus(s)">{{ statusLabel[s] }}</button>
               }
             </div>
-            @if (f.status === 'abandoned') { <p class="ui-sub ls__hint">Dropped: you swapped to another flight.</p> }
-            <p class="ui-sub ls__hint">Listing stays your own step, in your airline's app.</p>
+            @if (f.status === 'abandoned') { <p class="ui-sub ls__hint">{{ t('trips.leg.dropped') }}</p> }
+            <p class="ui-sub ls__hint">{{ t('trips.leg.listingStep') }}</p>
           </fieldset>
 
           <app-leg-passes [trip]="trip()" [leg]="f" (swapped)="closed.emit()" />
           <app-leg-files [trip]="trip()" [leg]="f" />
 
           <section class="ls__sec">
-            <h3 class="ui-h3" tabindex="-1" data-backups-h>Backups</h3>
+            <h3 class="ui-h3" tabindex="-1" data-backups-h>{{ t('trips.leg.backups') }}</h3>
             @for (b of backups(); track b.alt.id) {
               <div class="opt" [attr.data-alt]="b.alt.id">
                 <div class="opt__tx">
@@ -87,13 +88,13 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
                   <span class="tn">{{ b.meta }}</span>
                 </div>
                 @if (canSwap()) {
-                  <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-use (click)="useInstead(b.alt)">Use instead</button>
+                  <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost" data-use (click)="useInstead(b.alt)">{{ t('trips.leg.useInstead') }}</button>
                 }
-                <button type="button" class="ui-circ ui-circ--glass opt__x" [attr.aria-label]="'Remove backup ' + b.title"
+                <button type="button" class="ui-circ ui-circ--glass opt__x" [attr.aria-label]="t('trips.leg.removeBackup', { title: b.title })"
                         (click)="removeAlt(b.alt)"><app-icon name="close" [size]="16" /></button>
               </div>
             } @empty {
-              <p class="ui-sub">No backups yet. A backup is another flight you could try if this one doesn't work out.</p>
+              <p class="ui-sub">{{ t('trips.leg.noBackups') }}</p>
             }
 
             @if (adding()) {
@@ -101,20 +102,20 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
                 @for (r of candidates(); track r.key) {
                   <div class="opt">
                     <div class="opt__tx"><b class="tn">{{ r.title }}</b><span class="tn">{{ r.meta }}</span></div>
-                    <button type="button" class="ui-btn ui-btn--sm ui-btn--dark" data-add-one (click)="addAlt(r.it)">Add</button>
+                    <button type="button" class="ui-btn ui-btn--sm ui-btn--dark" data-add-one (click)="addAlt(r.it)">{{ t('trips.edit.add') }}</button>
                   </div>
                 } @empty {
-                  <p class="ui-sub" tabindex="-1" data-add-empty>No later option found in our schedule data for this route.</p>
+                  <p class="ui-sub" tabindex="-1" data-add-empty>{{ t('trips.leg.noLater') }}</p>
                 }
               </div>
             } @else if (!isFinal()) {
-              <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost ls__add" data-add (click)="openAdd()">Add a backup</button>
+              <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost ls__add" data-add (click)="openAdd()">{{ t('trips.leg.addBackup') }}</button>
             }
           </section>
 
           @if (detailsLink(); as l) {
             <a class="ui-btn ui-btn--ghost ui-btn--block" [routerLink]="l.path" [queryParams]="l.query" data-details>
-              <app-icon name="plane" [size]="16" /> Open flight details
+              <app-icon name="plane" [size]="16" /> {{ t('trips.leg.details') }}
             </a>
           }
         </div>
@@ -125,12 +126,12 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
             <app-provenance-tag [value]="rideProvenance()" />
           </p>
           @if (ride()?.exit; as x) {
-            <p class="ls__fact tn" data-exit-fact><span>{{ x.label }} · allow about {{ hm(x.min) }}</span>
+            <p class="ls__fact tn" data-exit-fact><span>{{ t('trips.leg.allow', { label: x.label, dur: hm(x.min) }) }}</span>
               <app-provenance-tag value="estimated" /></p>
           }
-          @if (timetable(); as t) {
-            @if (t.source === 'timetable') {
-              <p class="ls__fact tn" data-timetable-fact><span>{{ t.timetable?.operator }} timetable · {{ t.timetable?.rideText }} ride</span>
+          @if (timetable(); as tt) {
+            @if (tt.source === 'timetable') {
+              <p class="ls__fact tn" data-timetable-fact><span>{{ t('trips.leg.timetable', { operator: tt.timetable?.operator ?? '', ride: tt.timetable?.rideText ?? '' }) }}</span>
                 <app-provenance-tag value="scheduled" /></p>
             }
             @if (timetableLines().length) {
@@ -143,42 +144,42 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
           <app-leg-files [trip]="trip()" [leg]="g" />
 
           <form class="ed" novalidate (submit)="saveGround($event)" data-ground-editor>
-            <h3 class="ui-h3">Your train or bus</h3>
+            <h3 class="ui-h3">{{ t('trips.leg.yourRide') }}</h3>
             <label class="fld">
-              <span class="ui-label">Mode</span>
+              <span class="ui-label">{{ t('trips.leg.mode') }}</span>
               <select [value]="mode()" (change)="mode.set($any($event.target).value)" name="mode">
                 @for (m of modes; track m) { <option [value]="m" [selected]="m === mode()">{{ modeLabel[m] }}</option> }
               </select>
             </label>
             <div class="row2">
-              <label class="fld"><span class="ui-label">Leaves</span>
+              <label class="fld"><span class="ui-label">{{ t('trips.leg.leaves') }}</span>
                 <input type="date" name="depDate" required [value]="depDate()" (input)="depDate.set($any($event.target).value)"></label>
-              <label class="fld"><span class="ui-label">At</span>
+              <label class="fld"><span class="ui-label">{{ t('trips.leg.at') }}</span>
                 <input type="time" name="depTime" required [value]="depTime()" (input)="depTime.set($any($event.target).value)"></label>
             </div>
             <div class="row2">
-              <label class="fld"><span class="ui-label">Arrives</span>
+              <label class="fld"><span class="ui-label">{{ t('trips.leg.arrives') }}</span>
                 <input type="date" name="arrDate" required [value]="arrDate()" (input)="arrDate.set($any($event.target).value)"></label>
-              <label class="fld"><span class="ui-label">At</span>
+              <label class="fld"><span class="ui-label">{{ t('trips.leg.at') }}</span>
                 <input type="time" name="arrTime" required [value]="arrTime()" (input)="arrTime.set($any($event.target).value)"></label>
             </div>
-            <label class="fld"><span class="ui-label">Note</span>
-              <input type="text" name="note" maxlength="200" placeholder="Booking code, station, platform…" [value]="note()"
+            <label class="fld"><span class="ui-label">{{ t('trips.leg.note') }}</span>
+              <input type="text" name="note" maxlength="200" [placeholder]="t('trips.leg.notePh')" [value]="note()"
                      (input)="note.set($any($event.target).value)"></label>
-            @if (error()) { <p class="ed__err" role="alert">{{ error() }}</p> }
-            <button type="submit" class="ui-btn ui-btn--dark ui-btn--block" data-save>Save</button>
+            @if (error(); as e) { <p class="ed__err" role="alert">{{ t(e) }}</p> }
+            <button type="submit" class="ui-btn ui-btn--dark ui-btn--block" data-save>{{ t('trips.leg.save') }}</button>
           </form>
 
           <section class="ls__sec">
             <a class="ui-btn ui-btn--dark ui-btn--block" [href]="links().google" target="_blank" rel="noopener" data-onward>
-              <app-icon name="external" [size]="16" /> Find onward transport
+              <app-icon name="external" [size]="16" /> {{ t('trips.leg.onward') }}
             </a>
-            <p class="ui-sub ls__also">Also:
-              <a class="ui-link" [href]="links().skyscanner" target="_blank" rel="noopener">Skyscanner</a>
+            <p class="ui-sub ls__also">{{ t('trips.leg.also') }}
+              <a class="ui-link" [href]="links().skyscanner" target="_blank" rel="noopener">{{ skyscanner }}</a>
             </p>
           </section>
           @if (g.provenance !== 'saved') {
-            <app-other-ways [from]="g.from" [to]="g.to" [dateKey]="g.dateKey" [toAirport]="g.to.code" heading="Other ways there" />
+            <app-other-ways [from]="g.from" [to]="g.to" [dateKey]="g.dateKey" [toAirport]="g.to.code" [heading]="t('trips.leg.otherWays')" />
           }
         </div>
       }
@@ -219,6 +220,9 @@ interface BackupRow { key: string; it: Itinerary; title: string; meta: string }
   `],
 })
 export class LegSheetComponent {
+  /** A brand name, the same in both languages. */
+  protected readonly skyscanner = 'Skyscanner';
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -261,7 +265,7 @@ export class LegSheetComponent {
     const f = this.flight();
     if (f) return `${flightNumbers(f.refs)} · ${refsRoute(f.refs)}`;
     const g = this.ground();
-    return g ? `${g.from.name} → ${g.to.name}` : 'Leg';
+    return g ? `${g.from.name} → ${g.to.name}` : t('trips.leg.title');
   });
 
   protected readonly isFinal = computed(() => {
@@ -329,7 +333,7 @@ export class LegSheetComponent {
   protected readonly arrDate = signal('');
   protected readonly arrTime = signal('');
   protected readonly note = signal('');
-  protected readonly error = signal('');
+  protected readonly error = signal<MsgKey | null>(null);
 
   protected readonly groundFact = computed(() => {
     const g = this.ground();
@@ -361,8 +365,8 @@ export class LegSheetComponent {
     return est.timetable ? est : null;
   });
   protected readonly timetableLines = computed(() => {
-    const t = this.timetable();
-    return t ? groundTimetableLines(t) : [];
+    const tt = this.timetable();
+    return tt ? groundTimetableLines(tt) : [];
   });
 
   protected readonly links = computed(() => {
@@ -376,14 +380,14 @@ export class LegSheetComponent {
     effect(() => {
       const g = this.ground();
       if (!g) return;
-      const t = g.userTimes;
+      const ut = g.userTimes;
       this.mode.set(g.mode);
-      this.depDate.set(t?.depDateKey ?? g.dateKey);
-      this.depTime.set(t?.depLocal ?? '');
-      this.arrDate.set(t?.arrDateKey ?? g.dateKey);
-      this.arrTime.set(t?.arrLocal ?? '');
+      this.depDate.set(ut?.depDateKey ?? g.dateKey);
+      this.depTime.set(ut?.depLocal ?? '');
+      this.arrDate.set(ut?.arrDateKey ?? g.dateKey);
+      this.arrTime.set(ut?.arrLocal ?? '');
       this.note.set(g.note);
-      this.error.set('');
+      this.error.set(null);
     });
   }
 
@@ -396,7 +400,7 @@ export class LegSheetComponent {
   protected useInstead(alt: Alternate): void {
     const f = this.flight();
     if (!f) return;
-    const plan = alternateSwapPlan(this.trip(), alt);
+    const plan = alternateSwapPlan(this.trip(), f, alt);
     if (!plan) return;
     this.trips.swapLeg(this.trip().id, f.id, plan.it, plan.ground);
     this.closed.emit();
@@ -412,8 +416,8 @@ export class LegSheetComponent {
     // The focused close button is gone: move to the next backup's, else the Backups heading.
     const next = before.filter(a => a.id !== alt.id)[Math.max(0, idx - (idx >= before.length - 1 ? 1 : 0))];
     this.focusAfterRender(next ? `[data-alt="${next.id}"] .opt__x` : '[data-backups-h]');
-    this.state.flash(`Removed backup ${flightNumbers(alt.refs)}`, {
-      label: 'Undo',
+    this.state.flash(t('trips.leg.removed', { flight: flightNumbers(alt.refs) }), {
+      label: t('trips.undo'),
       run: () => this.trips.updateLeg(id, f.id, { alternates: before } as Partial<FlightLeg>),
     });
   }
@@ -433,7 +437,7 @@ export class LegSheetComponent {
     const f = this.flight();
     if (!f) return;
     this.trips.addAlternate(this.trip().id, f.id, it);
-    this.state.flash(`Added ${it.legs.map(l => l.flightNumber ?? 'an estimated leg').join(' + ')} as a backup`);
+    this.state.flash(t('trips.leg.added', { flights: it.legs.map(l => l.flightNumber ?? t('trips.service.estimatedLeg')).join(' + ') }));
   }
 
   protected saveGround(e: Event): void {
@@ -442,27 +446,27 @@ export class LegSheetComponent {
     if (!g) return;
     const dd = this.depDate(), dt = this.depTime(), ad = this.arrDate(), at = this.arrTime();
     if (!dd || !dt || !ad || !at) {
-      this.error.set('Add the departure and arrival dates and times.');
+      this.error.set('trips.leg.errFill');
       return;
     }
     // Compare instants: a trip into an earlier zone (Spain → Portugal) can arrive at an earlier clock time.
     const fromTz = endTz(g.from) ?? 'UTC';
     const toTz = endTz(g.to) ?? fromTz;
     if (toUtcMs(ad, at, toTz) < toUtcMs(dd, dt, fromTz)) {
-      this.error.set('The arrival is before the departure.');
+      this.error.set('trips.leg.errOrder');
       return;
     }
-    this.error.set('');
+    this.error.set(null);
     this.trips.saveGroundTimes(this.trip().id, g.id,
       { depDateKey: dd, depLocal: dt, arrDateKey: ad, arrLocal: at }, this.mode(), this.note().trim().slice(0, 200));
-    this.state.flash('Saved · Saved by you');
+    this.state.flash(t('trips.leg.saved'));
   }
 
   private describe(refs: FlightLeg['refs']): { title: string; meta: string } {
     const last = refs[refs.length - 1];
     const city = last ? findDestination(last.dest)?.city ?? findHub(last.dest)?.name ?? last.dest : '';
     const first = refs[0];
-    const day = first ? WEEKDAY_SHORT[weekdayIndex(first.dateKey)] : '';
+    const day = first ? weekdayShort(weekdayIndex(first.dateKey)) : '';
     return {
       title: `${flightNumbers(refs)} · ${refsRoute(refs)}`,
       meta: [day, refsTimes(refs, this.state.timeFormat()), city].filter(Boolean).join(' · '),

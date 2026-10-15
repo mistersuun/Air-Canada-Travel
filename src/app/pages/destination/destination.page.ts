@@ -3,6 +3,8 @@ import {
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
+import { regionLabel } from '../../i18n/labels';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
 import { RecentService } from '../../state/recent.service';
@@ -20,6 +22,7 @@ import { calendarPath, flightPath } from '../../ui/links';
 import { hubDisplayName, itinKey, prettyFlight, tzDiffLabel } from '../../ui/format';
 import { tap } from '../../ui/haptics';
 import { getDestinationCodes } from '../../data/schedule-index';
+import { seasonEvent } from '../home/home-model';
 import { dailyFact } from './fun-facts';
 import { currencyName } from './currency';
 import {
@@ -38,14 +41,20 @@ import { TripsService } from '../../trips/trips.service';
 import { DestHomeByComponent } from './dest-home-by.component';
 import { DestTripActionsComponent } from './dest-trip-actions.component';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
-import { ROUTE_ONLY_TEXT } from '../../data/route-network';
+import { routeOnlyText } from '../../data/route-network';
+
+/** 'Via YYZ' / 'Via YYZ': the shared 'via {hubs}' with a capital, for a seg option. */
+function viaLabel(hub: string | null): string {
+  const s = t('format.via', { hubs: hub ?? '—' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export type DestTab = 'departures' | 'returns' | 'map';
-const TABS: readonly SegOption[] = [
-  { value: 'departures', label: 'Departures' },
-  { value: 'returns', label: 'Returns' },
-  { value: 'map', label: 'Map' },
-];
+const TABS = [
+  { value: 'departures', label: 'dest.tab.departures' },
+  { value: 'returns', label: 'dest.tab.returns' },
+  { value: 'map', label: 'dest.tab.map' },
+] as const;
 
 /** Timeline rows shown before "Show more" (mobile shows one fewer). */
 export const PAGE_SIZE = 5;
@@ -82,15 +91,15 @@ const AC_URL = 'https://www.aircanada.com/';
     <header class="hero">
       <app-dest-photo class="hero__img" [code]="code()" size="hero" eager [alt]="photoAlt()" (photoShown)="heroShown.set($event)" />
       <div class="hero__bar">
-        <button type="button" class="ui-circ" aria-label="Back" (click)="back()">
+        <button type="button" class="ui-circ" [attr.aria-label]="t('ui.back')" (click)="back()">
           <app-icon name="arrow-left" [size]="18" />
         </button>
         <div class="hero__acts">
-          <button type="button" class="ui-circ" aria-label="Share" (click)="shareIt()">
+          <button type="button" class="ui-circ" [attr.aria-label]="t('ui.share')" (click)="shareIt()">
             <app-icon name="share" [size]="18" />
           </button>
           <button type="button" class="ui-circ star" [class.pop]="popped()" (animationend)="popped.set(false)" [attr.aria-pressed]="isFav()"
-                  [attr.aria-label]="isFav() ? 'Remove ' + city() + ' from Saved' : 'Save ' + city()"
+                  [attr.aria-label]="isFav() ? t('dest.unsave', { city: city() }) : t('dest.save', { city: city() })"
                   (click)="toggleFav()">
             <app-icon name="star" [size]="18" [filled]="isFav()" />
           </button>
@@ -98,7 +107,7 @@ const AC_URL = 'https://www.aircanada.com/';
       </div>
       @if (heroShown() && credit(); as c) {
         <p class="credit">
-          <a [href]="c.sourceUrl" target="_blank" rel="noopener">Photo</a> ·
+          <a [href]="c.sourceUrl" target="_blank" rel="noopener">{{ t('settings.photo') }}</a> ·
           @if (c.authorUrl) { <a [href]="c.authorUrl" target="_blank" rel="noopener">{{ c.author }}</a> } @else { {{ c.author }} } ·
           @if (c.licenseUrl) { <a [href]="c.licenseUrl" target="_blank" rel="noopener license">{{ c.license }}</a> } @else { {{ c.license }} }
         </p>
@@ -123,73 +132,74 @@ const AC_URL = 'https://www.aircanada.com/';
             <span class="ui-tag ui-tag--neutral">{{ s.season }}</span>
           </div>
           @if (s.meta) { <p class="ui-sub tn meta m-only">{{ s.meta }}</p> }
+          @if (seasonTag(); as st) { <p class="season"><span class="ui-tag ui-tag--amber" data-season>{{ st }}</span></p> }
           <app-dest-weather-line [code]="code()" [dateKey]="climateDay()" />
         </div>
         @if (next(); as n) {
           <a class="next d-only" [routerLink]="flightLink(n.it)" [queryParams]="state.globalParams()">
-            <span class="ui-sub">Next departure</span>
+            <span class="ui-sub">{{ t('dest.nextDeparture') }}</span>
             <span class="next__when tn">{{ n.when }}</span>
             <span class="ui-sub tn">{{ n.detail }}</span>
           </a>
         }
         <div class="head__btns d-only">
-          <a class="ui-btn ui-btn--ghost" [routerLink]="calLink()" [queryParams]="state.globalParams()">Plan dates</a>
-          <a class="ui-btn wide" [href]="acUrl" target="_blank" rel="noopener">Open in aircanada.com</a>
+          <a class="ui-btn ui-btn--ghost" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
+          <a class="ui-btn wide" [href]="acUrl" target="_blank" rel="noopener">{{ t('dest.openAc') }}</a>
         </div>
         <app-dest-trip-actions class="d-only" [code]="code()" />
       </section>
 
-      <app-seg class="tabs m-only" stretch [options]="tabs" [value]="tab()" (valueChange)="setTab($event)"
-               ariaLabel="Destination sections" />
+      <app-seg class="tabs m-only" stretch [options]="tabs()" [value]="tab()" (valueChange)="setTab($event)"
+               [ariaLabel]="t('dest.tabs.aria')" />
 
       @switch (status().kind) {
         @case ('route-only') {
           <div class="notice" role="status">
             <app-provenance-tag value="unknown" />
-            <p>{{ routeOnlyText }}.
+            <p>{{ routeOnlyText() }}.
               @if (routeOnlyDetail()) { <span class="ui-sub">{{ routeOnlyDetail() }}</span> }
             </p>
             <div class="notice__acts">
-              <a class="ui-btn ui-btn--dark ui-btn--sm" [href]="acUrl" target="_blank" rel="noopener">Open in aircanada.com</a>
+              <a class="ui-btn ui-btn--dark ui-btn--sm" [href]="acUrl" target="_blank" rel="noopener">{{ t('dest.openAc') }}</a>
               @if (hasConnections() && !state.showConnections()) {
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setShowConnections(true)">Show connections</button>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setShowConnections(true)">{{ t('dest.showConnections') }}</button>
               }
             </div>
           </div>
         }
         @case ('outside') {
           <div class="notice" role="status">
-            <span class="ui-tag ui-tag--amber">Not published</span>
-            <p>Schedules for {{ weekLabel() }} aren't published yet.</p>
-            <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="state.jumpToCoverage()">Go to last published week</button>
+            <span class="ui-tag ui-tag--amber">{{ t('dest.notPublished') }}</span>
+            <p>{{ t('dest.outside', { week: weekLabel() }) }}</p>
+            <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="state.jumpToCoverage()">{{ t('dest.lastPublished') }}</button>
           </div>
         }
         @case ('no-nonstop') {
           <div class="notice" role="status">
             @if (nextNonstop(); as nn) {
-              <span class="ui-tag ui-tag--amber">No nonstop this week</span>
-              <p>Next nonstop: <b class="tn">{{ nn.label }}</b>.</p>
+              <span class="ui-tag ui-tag--amber">{{ t('dest.noNonstopWeek') }}</span>
+              <p>{{ t('dest.nextNonstop') }} <b class="tn">{{ nn.label }}</b>.</p>
             } @else {
-              <span class="ui-tag ui-tag--amber">Connections only</span>
-              <p>No nonstop from {{ hubName() }} is published.
-                @if (!state.showConnections()) { Turn on connections to see the ways there. }
+              <span class="ui-tag ui-tag--amber">{{ t('dest.connectionsOnly') }}</span>
+              <p>{{ t('dest.noNonstopFrom', { hub: hubName() }) }}
+                @if (!state.showConnections()) { {{ t('dest.turnOnConn') }} }
               </p>
             }
             <div class="notice__acts">
               @if (nextNonstop(); as nn) {
-                <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="state.goToWeek(nn.key)">Go to that week</button>
+                <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="state.goToWeek(nn.key)">{{ t('dest.goToWeek') }}</button>
               }
               @if (hasConnections() && !state.showConnections()) {
-                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setShowConnections(true)">Show connections</button>
+                <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setShowConnections(true)">{{ t('dest.showConnections') }}</button>
               }
             </div>
           </div>
         }
         @case ('not-served') {
           <div class="notice" role="status">
-            <span class="ui-tag ui-tag--red">Not served</span>
-            <p>Not currently served from {{ hubName() }}.
-              @if (otherHubs().length) { Flies from: }
+            <span class="ui-tag ui-tag--red">{{ t('dest.notServed') }}</span>
+            <p>{{ t('dest.notServedFrom', { hub: hubName() }) }}
+              @if (otherHubs().length) { {{ t('dest.fliesFrom') }} }
             </p>
             @if (otherHubs().length) {
               <div class="notice__acts">
@@ -207,30 +217,30 @@ const AC_URL = 'https://www.aircanada.com/';
       <section class="card dep" [class.is-empty]="!outItems().length" [class.m-hide]="tab() !== 'departures'" aria-labelledby="dep-h">
         <app-dest-trip-actions class="m-only" [code]="code()" />
         <div class="ui-sec-h d-only">
-          <h2 id="dep-h" class="ui-h3">Next departures</h2>
+          <h2 id="dep-h" class="ui-h3">{{ t('dest.nextDepartures') }}</h2>
           <span class="ui-tag ui-tag--blue">{{ state.hub() }} → {{ code() }}</span>
         </div>
         @if (outOptions().length) {
           <app-seg class="out-seg" [options]="outOptions()" [value]="outMode()" (valueChange)="setOutMode($event)"
-                   ariaLabel="Departures" />
+                   [ariaLabel]="t('dest.tab.departures')" />
         }
         <app-dest-timeline [items]="outItems()" [code]="code()" [records]="records()" linked [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
-                           [label]="'Departures from ' + hubName()">
+                           [label]="t('dest.departuresFrom', { hub: hubName() })">
           <div class="empty">
             @if (routeOnly()) {
-              <p>{{ routeOnlyText }}.</p>
-              <a class="ui-link" [href]="acUrl" target="_blank" rel="noopener">Check times on aircanada.com</a>
+              <p>{{ routeOnlyText() }}.</p>
+              <a class="ui-link" [href]="acUrl" target="_blank" rel="noopener">{{ t('dest.checkAc') }}</a>
             } @else if (nextAhead(); as na) {
-              <p>No nonstop in the next {{ horizonWeeks }} weeks.</p>
-              <button type="button" class="ui-link" (click)="state.jumpTo(na.key)">Next flight: {{ na.label }}</button>
+              <p>{{ t('dest.noNonstopWeeks', { n: horizonWeeks }) }}</p>
+              <button type="button" class="ui-link" (click)="state.jumpTo(na.key)">{{ t('dest.nextFlight', { date: na.label }) }}</button>
             } @else if (hasConnections() && !state.showConnections()) {
-              <p>Only connections fly here from {{ hubName() }}.</p>
-              <button type="button" class="ui-link" (click)="state.setShowConnections(true)">Show connections</button>
+              <p>{{ t('dest.onlyConnections', { hub: hubName() }) }}</p>
+              <button type="button" class="ui-link" (click)="state.setShowConnections(true)">{{ t('dest.showConnections') }}</button>
             } @else if (farConnection(); as fc) {
-              <p>No connections in the next {{ horizonWeeks }} weeks.</p>
-              <button type="button" class="ui-link" (click)="state.jumpTo(fc.key)">Next connection: {{ fc.label }}</button>
+              <p>{{ t('dest.noConnWeeks', { n: horizonWeeks }) }}</p>
+              <button type="button" class="ui-link" (click)="state.jumpTo(fc.key)">{{ t('dest.nextConnection', { date: fc.label }) }}</button>
             } @else {
-              <p>No departures published from {{ hubName() }}.</p>
+              <p>{{ t('dest.noDepartures', { hub: hubName() }) }}</p>
             }
           </div>
         </app-dest-timeline>
@@ -238,42 +248,42 @@ const AC_URL = 'https://www.aircanada.com/';
 
       <section class="card ret" [class.is-empty]="!retItems().length" [class.m-hide]="tab() !== 'returns'" aria-labelledby="ret-h">
         <div class="ui-sec-h ret__h">
-          <h2 id="ret-h" class="ui-h3">Return flights</h2>
+          <h2 id="ret-h" class="ui-h3">{{ t('dest.returnFlights') }}</h2>
           @if (retOptions().length > 1) {
             <app-seg [options]="retOptions()" [value]="retMode()" (valueChange)="setRetMode($event)"
-                     ariaLabel="Return flights" />
+                     [ariaLabel]="t('dest.returnFlights')" />
           }
         </div>
         <app-dest-timeline [items]="retItems()" [more]="retMore()" (showMore)="retLimit.set(retLimit() + 5)"
-                           [label]="'Returns to ' + hubName()">
-          <div class="empty"><p>No return flights to {{ hubName() }} in the next {{ horizonWeeks }} weeks.</p></div>
+                           [label]="t('dest.returnsTo', { hub: hubName() })">
+          <div class="empty"><p>{{ t('dest.noReturn', { hub: hubName(), n: horizonWeeks }) }}</p></div>
         </app-dest-timeline>
         <app-dest-home-by [code]="code()" />
       </section>
 
       <div class="side" [class.m-hide]="tab() !== 'map'">
-        <section class="card mapc" aria-label="Route map">
+        <section class="card mapc" [attr.aria-label]="t('dest.mapAria')">
           @defer (on viewport) {
             <app-route-map class="map" [hub]="state.hub()" [points]="points()" [highlight]="code()" [labels]="mapLabels()"
                            [view]="mapView()" [padding]="mapView() === 'fit' ? 56 : 16" />
           } @placeholder {
             <div class="map map--ph"></div>
           }
-          <div class="dist"><span class="ui-sub">Great-circle</span><b class="tn">{{ distance() }}</b></div>
+          <div class="dist"><span class="ui-sub">{{ t('dest.greatCircle') }}</span><b class="tn">{{ distance() }}</b></div>
         </section>
         <section class="card ess" aria-labelledby="ess-h">
-          <h2 id="ess-h" class="ui-h3 ess__h">Essentials</h2>
+          <h2 id="ess-h" class="ui-h3 ess__h">{{ t('dest.essentials') }}</h2>
           <div class="ui-ess">
-            <div><span class="ic"><app-icon name="clock" [size]="16" /></span><span>Time zone</span><b class="tn">{{ tz() }}</b></div>
-            <div><span class="ic"><app-icon name="currency" [size]="16" /></span><span>Currency</span><b>{{ currency() || '—' }}</b></div>
-            <div><span class="ic"><app-icon name="sun" [size]="16" /></span><span>Season</span><b>{{ s.season }}</b></div>
-            <div><span class="ic"><app-icon name="plane" [size]="16" /></span><span>Aircraft</span><b>{{ s.aircraftShort || '—' }}</b></div>
+            <div><span class="ic"><app-icon name="clock" [size]="16" /></span><span>{{ t('dest.timeZone') }}</span><b class="tn">{{ tz() }}</b></div>
+            <div><span class="ic"><app-icon name="currency" [size]="16" /></span><span>{{ t('dest.currency') }}</span><b>{{ currency() || '—' }}</b></div>
+            <div><span class="ic"><app-icon name="sun" [size]="16" /></span><span>{{ t('dest.season') }}</span><b>{{ s.season }}</b></div>
+            <div><span class="ic"><app-icon name="plane" [size]="16" /></span><span>{{ t('dest.aircraft') }}</span><b>{{ s.aircraftShort || '—' }}</b></div>
           </div>
-          <app-dest-reference [iso2]="dest()?.iso2" [todayKey]="climateDay()" />
+          <app-dest-reference [iso2]="dest()?.iso2" [airportCode]="code()" [todayKey]="climateDay()" />
           <app-dest-climate [code]="code()" [dateKey]="climateDay()" />
           <app-dest-forecast [code]="code()" [dateKey]="climateDay()" />
           <app-events-card [code]="code()" [from]="eventsFrom()" [to]="eventsTo()" />
-          @if (fact(); as f) { <p class="ui-sub fact" data-fact><b>Did you know</b> · {{ f }}</p> }
+          @if (fact(); as f) { <p class="ui-sub fact" data-fact><b>{{ t('dest.didYouKnow') }}</b> · {{ f }}</p> }
         </section>
       </div>
 
@@ -285,8 +295,8 @@ const AC_URL = 'https://www.aircanada.com/';
       </section>
 
       <div class="m-actions m-only">
-        <a class="ui-btn ui-btn--block" [routerLink]="calLink()" [queryParams]="state.globalParams()">Plan dates</a>
-        <a class="ui-btn ui-btn--ghost ui-btn--block" [href]="acUrl" target="_blank" rel="noopener">aircanada.com</a>
+        <a class="ui-btn ui-btn--block" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
+        <a class="ui-btn ui-btn--ghost ui-btn--block" [href]="acUrl" target="_blank" rel="noopener">{{ acHost }}</a>
       </div>
     </div>
     @if (!d) { <p class="ui-visually-hidden">{{ code() }}</p> }
@@ -295,7 +305,7 @@ const AC_URL = 'https://www.aircanada.com/';
     :host { display: block; min-height: 100dvh; background: var(--bg); }
 
     /* ── Hero ─────────────────────────────────────────────────────────── */
-    .hero { position: relative; height: 380px; overflow: hidden; background: var(--fill); }
+    .hero { position: relative; height: min(380px, 40vh); min-height: 240px; overflow: hidden; background: var(--fill); }
     .hero__img { position: absolute; inset: 0; }
     .hero::after {
       content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -305,6 +315,8 @@ const AC_URL = 'https://www.aircanada.com/';
       position: absolute; z-index: 2; top: calc(env(safe-area-inset-top) + 12px); left: 16px; right: 16px;
       display: flex; justify-content: space-between;
     }
+    /* A dark scrim behind the circle buttons keeps them visible on bright photos in light and dark. */
+    .hero .ui-circ { background: rgba(0, 0, 0, .42); border-color: rgba(255, 255, 255, .45); box-shadow: 0 1px 6px rgba(0, 0, 0, .25); }
     .hero__acts { display: flex; gap: 8px; }
     .star.pop { animation: ui-pop 240ms var(--ease-out); }
     .star[aria-pressed='true'] { color: #FFFFFF; background: var(--red); border-color: color-mix(in srgb, var(--red) 60%, #FFFFFF); }
@@ -323,6 +335,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .city { font-size: 34px; font-weight: 650; letter-spacing: -.025em; line-height: 1.12; min-width: 0; overflow-wrap: anywhere; }
     .code { font-size: 24px; color: var(--ink-3); flex: none; }
     .meta { margin-top: 2px; }
+    .season { margin-top: 8px; }
     .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .next { display: flex; flex-direction: column; align-items: flex-end; text-align: right; border-radius: 14px; }
     .next__when { font-size: 30px; font-weight: 650; letter-spacing: -.02em; line-height: 1.2; }
@@ -376,7 +389,7 @@ const AC_URL = 'https://www.aircanada.com/';
     @media (min-width: 720px) {
       .m-only { display: none !important; }
       .handle { display: none; }
-      .hero { height: 360px; }
+      .hero { height: 360px; min-height: 0; }
       .hero__bar { top: 22px; left: 32px; right: 32px; }
       .hero__acts { gap: 10px; }
       .credit { right: 28px; bottom: 104px; max-width: 60%; }
@@ -422,6 +435,7 @@ const AC_URL = 'https://www.aircanada.com/';
   `],
 })
 export class DestinationPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly photos = inject(PhotoService);
   private readonly sharer = inject(ShareService);
@@ -434,8 +448,9 @@ export class DestinationPage {
   /** ?tab= (mobile seg), bound from the query by withComponentInputBinding. */
   readonly tabParam = input<string | undefined>(undefined, { alias: 'tab' });
 
-  protected readonly tabs = TABS;
+  protected readonly tabs = computed<SegOption[]>(() => TABS.map(o => ({ value: o.value, label: t(o.label) })));
   protected readonly acUrl = AC_URL;
+  protected readonly acHost = 'aircanada.com';
   protected readonly horizonWeeks = Math.round(HORIZON_DAYS / 7);
 
   private readonly mobile = this.media(MOBILE_QUERY);
@@ -443,8 +458,8 @@ export class DestinationPage {
   protected readonly monthCount = computed(() => (this.mobile() ? 1 : this.desktop() ? 3 : 2));
 
   readonly tab = computed<DestTab>(() => {
-    const t = this.tabParam();
-    return t === 'returns' || t === 'map' ? t : 'departures';
+    const tabKey = this.tabParam();
+    return tabKey === 'returns' || tabKey === 'map' ? tabKey : 'departures';
   });
 
   // ── Destination facts ─────────────────────────────────────────────────────
@@ -515,7 +530,7 @@ export class DestinationPage {
   protected readonly outOptions = computed<SegOption[]>(() => {
     const via = this.outViaAlso();
     return via.length
-      ? [{ value: 'nonstop', label: 'Nonstop' }, { value: 'via', label: `Via ${bestHub(via) ?? 'hub'}` }]
+      ? [{ value: 'nonstop', label: t('format.nonstop') }, { value: 'via', label: viaLabel(bestHub(via)) }]
       : [];
   });
   /** What the outbound timeline lists: nonstops (or connections when picked), else connections when shown. */
@@ -562,8 +577,8 @@ export class DestinationPage {
   });
   protected readonly retOptions = computed<SegOption[]>(() => {
     const via = this.retVia();
-    const opts: SegOption[] = [{ value: 'nonstop', label: 'Nonstop', disabled: !this.retDirect().length }];
-    if (via.length) opts.push({ value: 'via', label: `Via ${bestHub(via) ?? 'hub'}` });
+    const opts: SegOption[] = [{ value: 'nonstop', label: t('format.nonstop'), disabled: !this.retDirect().length }];
+    if (via.length) opts.push({ value: 'via', label: viaLabel(bestHub(via)) });
     return opts;
   });
   private readonly retList = computed(() => (this.retMode() === 'via' ? this.retVia() : this.retDirect()));
@@ -574,6 +589,13 @@ export class DestinationPage {
   // ── Header ────────────────────────────────────────────────────────────────
   protected readonly summary = computed(() =>
     destSummary(this.state.hub(), this.code(), this.state.weekStartKey(), this.outDirect().length ? this.outDirect() : this.outVia()));
+  /** 'Seasonal · last nonstop Oct 23' when the nonstop is about to end or pause (same rule as Home's "Seasonal & ending soon"). */
+  protected readonly seasonTag = computed(() => {
+    const ev = seasonEvent(this.state.hub(), this.code(), this.outToday());
+    if (!ev || ev.kind === 'starts') return null;
+    const d = formatKey(ev.dateKey, { month: 'short', day: 'numeric' });
+    return t(ev.kind === 'pauses' ? 'dest.seasonPauses' : 'dest.seasonLast', { date: d });
+  });
   protected readonly next = computed(() => nextDeparture(this.outList()[0], this.outToday(), this.state.timeFormat()));
 
   // ── States ────────────────────────────────────────────────────────────────
@@ -586,7 +608,7 @@ export class DestinationPage {
   protected readonly hasConnections = computed(() => this.outVia().length > 0 || !!this.farConnection());
   protected readonly status = computed(() =>
     destState(this.state.hub(), this.code(), this.state.weekStartKey(), this.outToday(), this.state.coverage(), this.hasConnections()));
-  protected readonly routeOnlyText = ROUTE_ONLY_TEXT;
+  protected readonly routeOnlyText = routeOnlyText;
   protected readonly routeOnly = computed(() => this.status().kind === 'route-only');
   protected readonly routeOnlyDetail = computed(() => {
     const s = this.status();
@@ -665,9 +687,9 @@ export class DestinationPage {
     if (!outcomes.length) return out;
     const seen = new Set<string>();
     const cache = new Map<string, HistoryCounts>();
-    for (const t of this.outItems()) {
+    for (const row of this.outItems()) {
       const tags: { text: string; aria: string }[] = [];
-      for (const l of t.it.legs) {
+      for (const l of row.it.legs) {
         const n = prettyFlight(l.flightNumber);
         if (!n || l.estimated) continue;
         const k = `${n}|${l.origin}|${l.dest}`;
@@ -676,9 +698,9 @@ export class DestinationPage {
         let c = cache.get(k);
         if (!c) cache.set(k, c = historyFor({ outcomes }, { flightNumber: n, route: { origin: l.origin, dest: l.dest } }).overall);
         const tag = recordTag(c);
-        if (tag) tags.push({ text: t.it.legs.length > 1 ? `${n} ${tag}` : tag, aria: `${n}. ${recordAria(c)}` });
+        if (tag) tags.push({ text: row.it.legs.length > 1 ? `${n} ${tag}` : tag, aria: `${n}. ${recordAria(c)}` });
       }
-      if (tags.length) out[itinKey(t.it)] = tags;
+      if (tags.length) out[itinKey(row.it)] = tags;
     }
     return out;
   });
@@ -699,7 +721,7 @@ export class DestinationPage {
   }
 
   shareIt(): void {
-    void this.sharer.share(`Flights to ${this.city()}`);
+    void this.sharer.share(t('dest.share.text', { city: this.city() }));
   }
 
   toggleFav(): void {
@@ -710,20 +732,20 @@ export class DestinationPage {
     tap();
     if (!was) this.popped.set(true);
     if (was) {
-      this.state.flash(`Removed ${city}`, {
-        label: 'Undo',
+      this.state.flash(t('dest.removed', { city }), {
+        label: t('ui.undo'),
         run: () => {
           if (!this.state.favouriteSet().has(code)) this.state.toggleFavourite(code);
         },
       });
     } else {
-      this.state.flash(`Saved ${city}`);
+      this.state.flash(t('dest.saved', { city }));
     }
   }
 
-  setTab(t: string | undefined): void {
+  setTab(tabKey: string | undefined): void {
     void this.router.navigate([], {
-      queryParams: { tab: t && t !== 'departures' ? t : null },
+      queryParams: { tab: tabKey && tabKey !== 'departures' ? tabKey : null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
       scroll: 'manual',

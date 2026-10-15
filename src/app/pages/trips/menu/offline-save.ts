@@ -1,3 +1,4 @@
+import { t } from '../../../i18n/t';
 import { SCHEDULES_URL } from '../../../data/schedule-index';
 import { CITIES_URL } from '../../../places/city-index';
 import { GROUND_URL } from '../../../places/ground-timetable.service';
@@ -33,15 +34,15 @@ export function tripDestCode(trip: Trip): string | null {
  * trip has ground legs; photos only when the destination has one in the manifest.
  */
 export function offlineItems(trip: Trip, hasPhoto: (code: string) => boolean, hasHero: (code: string) => boolean = () => false): OfflineItem[] {
-  const items: OfflineItem[] = [{ id: 'schedules', label: 'Schedules', urls: [SCHEDULES_URL] }];
-  if (trip.legs.some(l => l.kind === 'ground')) items.push({ id: 'ground', label: 'Trains', urls: [GROUND_URL] });
-  items.push({ id: 'cities', label: 'City info', urls: [CITIES_URL] });
-  items.push({ id: 'climate', label: 'Weather', urls: [CLIMATE_URL] });
+  const items: OfflineItem[] = [{ id: 'schedules', label: t('trips.off.schedules'), urls: [SCHEDULES_URL] }];
+  if (trip.legs.some(l => l.kind === 'ground')) items.push({ id: 'ground', label: t('trips.off.trains'), urls: [GROUND_URL] });
+  items.push({ id: 'cities', label: t('trips.off.cities'), urls: [CITIES_URL] });
+  items.push({ id: 'climate', label: t('trips.off.weather'), urls: [CLIMATE_URL] });
   const code = tripDestCode(trip);
   if (code && hasPhoto(code)) {
     const urls = [`${PHOTO_BASE}${code}-400.webp`, `${PHOTO_BASE}${code}.webp`];
     if (hasHero(code)) urls.push(`${PHOTO_BASE}${code}-1920.webp`);
-    items.push({ id: 'photos', label: 'Photos', urls });
+    items.push({ id: 'photos', label: t('trips.off.photos'), urls });
   }
   return items;
 }
@@ -67,7 +68,7 @@ export function offlineReportLabel(results: readonly OfflineItemResult[]): strin
 /** The toast: all saved, or what is still missing. */
 export function offlineFlash(results: readonly OfflineItemResult[]): string {
   const missing = results.filter(r => !r.ok).map(r => r.label);
-  if (!missing.length) return 'Saved for offline';
-  if (results.find(r => r.id === 'schedules')?.ok === false) return 'Plan saved. Schedules need a connection to download.';
-  return `Saved for offline, but not yet: ${missing.join(', ')}`;
+  if (!missing.length) return t('trips.off.saved');
+  if (results.find(r => r.id === 'schedules')?.ok === false) return t('trips.off.planSaved');
+  return t('trips.off.partial', { missing: missing.join(', ') });
 }

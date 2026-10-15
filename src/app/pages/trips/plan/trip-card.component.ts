@@ -1,12 +1,19 @@
 import { ChangeDetectionStrategy, Component, booleanAttribute, computed, inject, input, output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { t } from '../../../i18n/t';
 import { IconComponent } from '../../../components/shared/icons.component';
+import { GroupService } from '../../../group/group.service';
+import { AvatarChipComponent } from '../../../group/ui/avatar-chip.component';
 import { AppStateService } from '../../../state/app-state.service';
+import { PrefsService } from '../../../state/prefs.service';
 import type { Trip } from '../../../trips/model';
 import { LegStatusTagComponent } from '../../../trips/ui/leg-status-tag.component';
 import { ProvenanceTagComponent } from '../../../trips/ui/provenance-tag.component';
+import { isMultiStop, stopNames } from '../../../trips/stops';
 import { tripPath, tripQuery } from '../../../ui/links';
+import { TriesMeterComponent } from '../return/tries-meter.component';
+import { triesHomeLeft } from '../return/tries-meter';
 import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel, tripDatesLabel } from '../trips-model';
 
 /**
@@ -21,36 +28,44 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
 @Component({
   selector: 'app-trip-card',
   standalone: true,
-  imports: [RouterLink, NgTemplateOutlet, IconComponent, LegStatusTagComponent, ProvenanceTagComponent],
+  imports: [RouterLink, NgTemplateOutlet, IconComponent, AvatarChipComponent, LegStatusTagComponent, ProvenanceTagComponent, TriesMeterComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="ui-card tc" [class.is-compact]="compact()">
       <div class="tc__hd">
         <div class="tc__goal">
-          <div class="ui-label">Goal</div>
+          <div class="ui-label">{{ t('trips.card.goal') }}</div>
           @if (mode() === 'link') {
-            <h2 class="ui-h2 tc__name"><a [routerLink]="tripLink()" [queryParams]="state.globalParams()">{{ trip().goal.name }}</a></h2>
+            <h2 class="ui-h2 tc__name"><a [routerLink]="tripLink()" [queryParams]="state.globalParams()">{{ heading() }}</a></h2>
           } @else {
-            <h2 class="ui-h2 tc__name">{{ trip().goal.name }}</h2>
+            <h2 class="ui-h2 tc__name">{{ heading() }}</h2>
           }
           <p class="ui-sub tn tc__dates">{{ dates() }}</p>
+          @if (groupNames().length) {
+            <p class="tc__grp" data-group-indicator>
+              <span class="tc__grpav">@for (n of groupNames(); track $index) { <app-avatar-chip [name]="n" [showName]="false" /> }</span>
+              <span class="ui-sub">{{ t('trips.card.group') }}</span>
+            </p>
+          }
         </div>
         <span class="ui-tag tc__cd" [class]="'ui-tag--' + cd().tone" data-countdown [attr.title]="cdTitle()">{{ cd().text }}</span>
       </div>
 
       @if (compact()) {
-        <p class="ui-sub tc__sum">{{ partyText() }} · From {{ trip().fromHub }} · {{ summary() }}</p>
+        <p class="ui-sub tc__sum">{{ partyText() }} · {{ t('trips.card.from', { hub: trip().fromHub }) }} · {{ summary() }}</p>
+        @if (tries() !== null) { <app-tries-meter class="tc__tries" [count]="tries()!" /> }
       } @else {
         <div class="tc__chips">
           @if (mode() === 'button') {
-            <button type="button" class="tc__chip" data-party (click)="partyPick.emit()">{{ partyText() }}<span class="ui-visually-hidden">, edit travellers</span></button>
+            <button type="button" class="tc__chip" data-party (click)="partyPick.emit()">{{ partyText() }}<span class="ui-visually-hidden">{{ t('trips.card.editTravellers') }}</span></button>
           } @else {
             <span class="tc__chip" data-party>{{ partyText() }}</span>
           }
-          <span class="tc__chip">From {{ trip().fromHub }}</span>
+          <span class="tc__chip">{{ t('trips.card.from', { hub: trip().fromHub }) }}</span>
+          @if (tries() !== null) { <app-tries-meter class="tc__tries" [count]="tries()!" /> }
         </div>
 
-        <ol class="tl" aria-label="Legs">
+        <ol class="tl" [attr.aria-label]="t('trips.card.legs')">
           @for (r of rows(); track r.id) {
             <li class="tl__it" [class.is-ground]="r.kind === 'ground'" [class.is-done]="r.done" [attr.data-leg]="r.id">
               <span class="tl__ic" aria-hidden="true"><b><app-icon [name]="r.icon" [size]="12" [strokeWidth]="2.2" /></b><u></u></span>
@@ -71,11 +86,11 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
               }
             </li>
           } @empty {
-            <li class="tl__none ui-sub">No legs yet. Add a flight from a destination or a flight page.</li>
+            <li class="tl__none ui-sub">{{ t('trips.card.none') }}</li>
           }
           <li class="tl__end"><i aria-hidden="true"><app-icon name="home" [size]="12" [filled]="true" /></i><span>{{ home() }}</span>
             @if (noReturn() && mode() !== 'static') {
-              <a class="tl__ret ui-link" data-no-return [routerLink]="tripLink()" [queryParams]="returnQuery()">No return flight yet · see Return</a>
+              <a class="tl__ret ui-link" data-no-return [routerLink]="tripLink()" [queryParams]="returnQuery()">{{ t('trips.card.noReturn') }}</a>
             }
           </li>
         </ol>
@@ -88,7 +103,7 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
         @if (r.status) { <app-leg-status-tag [status]="r.status" /> }
         @else if (r.provenance) { <app-provenance-tag [value]="r.provenance" /> }
       </span>
-      <span class="tl__m tn">{{ r.meta }}@if (r.status && r.provenance) {<span class="ui-visually-hidden"> · </span><app-provenance-tag class="tl__pv" [value]="r.provenance" />}</span>
+      <span class="tl__m tn">{{ r.meta }}@if (r.listing && mode() === 'link') {<span class="tl__lst ui-tag" [class.ui-tag--teal]="r.listing.open" [class.ui-tag--neutral]="!r.listing.open" data-listing>{{ r.listing.label }}</span>}@if (r.status && r.provenance) {<span class="ui-visually-hidden"> · </span><app-provenance-tag class="tl__pv" [value]="r.provenance" />}</span>
     </ng-template>
   `,
   styles: [`
@@ -100,6 +115,8 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     .tc__name a { color: inherit; }
     .tc__name a:hover { color: var(--blue); }
     .tc__dates { margin-top: 2px; }
+    .tc__grp { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; }
+    .tc__grpav { display: flex; }
     .tc__cd { flex: none; margin-top: 2px; }
     .tc__chips { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
     .tc__chip {
@@ -110,6 +127,8 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
     button.tc__chip { cursor: pointer; min-height: 32px; }
     button.tc__chip:hover { color: var(--ink); }
     .tc__sum { margin-top: 10px; }
+    .tc__tries { margin-top: 6px; }
+    .tc__chips .tc__tries { margin: 0 0 0 4px; align-self: center; }
 
     .tl { list-style: none; margin: 14px 0 0; padding: 0; display: grid; }
     .tl__it { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; }
@@ -125,12 +144,16 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
       display: block; width: 100%; text-align: left; padding: 0 0 12px; min-width: 0; color: var(--ink);
       border-radius: 10px; min-height: 44px;
     }
+    /* Rows that open something show a chevron. */
+    a.tl__b, button.tl__b { position: relative; padding-right: 22px; }
+    a.tl__b::after, button.tl__b::after { content: '›'; position: absolute; right: 4px; top: 2px; font-size: 18px; line-height: 1.2; color: var(--ink-3); }
     a.tl__b:hover .tl__t, button.tl__b:hover .tl__t { color: var(--blue); }
     .tl__top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
     .tl__t { font-weight: 650; font-size: 14px; line-height: 1.35; min-width: 0; }
     .tl__top > :last-child { flex: none; }
     .tl__m { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
     .tl__pv { margin-left: 6px; vertical-align: 1px; }
+    .tl__lst { margin-left: 6px; font-size: 10.5px; padding: 1px 7px; vertical-align: 1px; }
     .tl__pv ::ng-deep .ui-tag { font-size: 10.5px; padding: 1px 7px; }
     .is-done .tl__t { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--ink-3); }
     .is-done .tl__ic b { background: var(--fill); color: var(--ink-3); }
@@ -144,24 +167,44 @@ import { compactSummary, countdown, homeLabel, legRows, needsReturn, partyLabel,
   `],
 })
 export class TripCardComponent {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
+  private readonly groups = inject(GroupService);
+  /** Nicknames of the group this device started for the trip (on the trips list only). */
+  protected readonly groupNames = computed(() => {
+    // The list only: the detail page has its own group card.
+    if (this.mode() !== 'link') return [];
+    this.groups.all();
+    const r = this.groups.forTrip(this.trip().id);
+    return r ? (r.names?.length ? r.names : [r.name]).filter(Boolean).slice(0, 4) : [];
+  });
+  private readonly prefs = inject(PrefsService);
 
   readonly trip = input.required<Trip>();
   /** 'link': legs and the goal link to the trip; 'button': legs emit legPick; 'static': read only. */
   readonly mode = input<'link' | 'button' | 'static'>('static');
   readonly compact = input(false, { transform: booleanAttribute });
 
+  /** Show the tries-home meter (the Trips list only). */
+  readonly showTries = input(false, { transform: booleanAttribute });
+
   readonly legPick = output<string>();
   readonly partyPick = output<void>();
 
   protected readonly cd = computed(() => countdown(this.trip(), this.state.nowMs()));
-  protected readonly cdTitle = computed(() => (/sleeps$/.test(this.cd().text) ? `${this.cd().text} to ${this.trip().goal.name}` : this.cd().text));
+  /** The goal, or all stops ('Seville, Lisbon and Porto') on a multi-stop trip. */
+  protected readonly heading = computed(() => isMultiStop(this.trip()) ? stopNames(this.trip()) : this.trip().goal.name);
+  protected readonly cdTitle = computed(() => (this.cd().sleeps ? t('trips.card.cdTitle', { text: this.cd().text, goal: this.trip().goal.name }) : this.cd().text));
   protected readonly dates = computed(() => tripDatesLabel(this.trip(), this.state.timeFormat()));
   protected readonly partyText = computed(() => partyLabel(this.trip().party));
-  protected readonly rows = computed(() => legRows(this.trip(), this.state.timeFormat()));
+  protected readonly rows = computed(() => legRows(this.trip(), this.state.timeFormat(), { nowMs: this.state.nowMs(), hours: this.prefs.listingHours() }));
   protected readonly home = computed(() => homeLabel(this.trip()));
   protected readonly summary = computed(() => compactSummary(this.trip()));
   protected readonly tripLink = computed(() => tripPath(this.trip().id));
+
+  /** The minute: the count need not recompute on every clock tick. */
+  private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / 60_000) * 60_000);
+  protected readonly tries = computed(() => (this.showTries() ? triesHomeLeft(this.trip(), this.state.connect(), this.nowMin()) : null));
 
   protected readonly noReturn = computed(() => this.trip().legs.length > 0 && needsReturn(this.trip()));
 

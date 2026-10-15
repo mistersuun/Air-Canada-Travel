@@ -4,6 +4,7 @@ import type { FlightRef, LegStatus } from '../../trips/model';
 import { RouteMapComponent } from '../../ui/route-map.component';
 import { findDestination, findHub } from '../../utils/airports';
 import { formatKm } from '../../utils/geo';
+import { t } from '../../i18n/t';
 import { inAirProgress } from './in-air';
 
 /** The "In the air" card on Today: distance left and a small map, estimated from the schedule. */
@@ -14,12 +15,12 @@ import { inAirProgress } from './in-air';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (air(); as a) {
-      <section class="ui-card ia" aria-label="In the air" data-in-air>
+      <section class="ui-card ia" [attr.aria-label]="t('today.inAir')" data-in-air>
         <app-route-map class="ia__map" [hub]="ref().origin" [points]="points()" [highlight]="ref().dest"
                        [progress]="a.progress" [labels]="[ref().origin, ref().dest]" [pulse]="false" />
         <div class="ia__ct">
-          <b>In the air · @if (a.kmLeft < 50) { Landing soon } @else { about <span class="tn" data-km>{{ km(a.kmLeft) }}</span> to go }</b>
-          <small>Estimated from the schedule</small>
+          <b>@if (landingSoon(a.kmLeft)) { {{ t('today.inAir.soon') }} } @else { {{ togo().before }}<span class="tn" data-km>{{ km(a.kmLeft) }}</span>{{ togo().after }} }</b>
+          <small>{{ t('today.inAir.estimated') }}</small>
         </div>
       </section>
     }
@@ -42,11 +43,20 @@ export class TodayInAirComponent {
    */
   readonly status = input<LegStatus>('planned');
 
+  protected readonly t = t;
+  /** 'about ' + km + ' to go': the number sits in its own element, so the message is split at it. */
+  protected readonly togo = computed(() => {
+    const [before, after] = t('today.inAir.togo', { km: '\u0000' }).split('\u0000');
+    return { before, after };
+  });
   protected readonly air = computed(() => (this.status() === 'boarded' ? inAirProgress(this.ref(), this.state.nowMs()) : null));
   protected readonly points = computed(() => {
     const d = findDestination(this.ref().dest) ?? findHub(this.ref().dest);
     return d ? [{ code: d.code, lat: d.lat, lng: d.lng }] : [];
   });
+  protected landingSoon(km: number): boolean {
+    return km < 50;
+  }
   protected km(n: number): string {
     return formatKm(n);
   }

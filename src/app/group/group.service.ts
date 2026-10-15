@@ -4,9 +4,10 @@ import type { SharedTripPreview, Trip } from '../trips/model';
 import { decodeTripShare, encodeTripShare } from '../trips/share-codec';
 import { TripsService } from '../trips/trips.service';
 import {
-  type GroupLink, buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newMemberId, newWriteToken,
+  type GroupLink, buildGroupLink, decryptText, encryptText, generateGroupKey, newGroupId, newMemberId, newOwnerToken, newWriteToken,
 } from './group-crypto';
-import { type GroupDoc, type MemberStatus, capMembers, forGroup, groupExpiry, mergeGroupDocs, parseGroupDoc, serializeGroupDoc } from './group-doc';
+import { LEG_STATUSES, type LegStatus } from '../trips/model';
+import { type GroupDoc, type MemberStatus, MAX_NAME, capMembers, forGroup, groupExpiry, mergeGroupDocs, tripLastDate, parseGroupDoc, serializeGroupDoc } from './group-doc';
 
 export const GROUP_ENDPOINT = '/.netlify/functions/group';
 const STORAGE_KEY = 'ac.groups.v1';
@@ -22,14 +23,29 @@ export interface GroupRecord {
   name: string;
   /** True when this device created the group ("Stop sharing" is offered). */
   owner: boolean;
+  /** Proof of ownership for delete and a longer expiry; only on the creating device, never in a link. Null on groups made before it existed. */
+  ownerToken: string | null;
   tripId: string | null;
   /** When the server will delete it (ISO), so expired entries can be dropped from this device. */
   expiresAt: string | null;
+  /** Nicknames seen at the last visit (me first), for the little avatars on the trip card. Nicknames only. */
+  names?: string[];
+  /** My own status per flight leg, kept here too because a client that predates per-leg statuses drops it from the shared doc on save. */
+  myLegs?: Record<string, LegStatus>;
 }
 
 export type GroupFailure = 'unavailable' | 'gone' | 'invalid' | 'forbidden' | 'too-large' | 'budget';
 export type LoadResult = { ok: true; doc: GroupDoc; version: number; expiresAt: string | null } | { ok: false; reason: GroupFailure };
-export type SaveResult = { ok: true; doc: GroupDoc; version: number } | { ok: false; reason: GroupFailure };
+export type SaveResult = { ok: true; doc: GroupDoc; version: number; expiresAt: string | null } | { ok: false; reason: GroupFailure };
+
+function storedLegs(v: unknown): Record<string, LegStatus> | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const out: Record<string, LegStatus> = {};
+  for (const [id, st] of Object.entries(v)) {
+    if (Object.keys(out).length < 12 && typeof st === 'string' && (LEG_STATUSES as readonly string[]).includes(st)) out[id] = st as LegStatus;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 interface Reply { status: number; json: Record<string, unknown> | null }
 
@@ -43,10 +59,19 @@ export class GroupService {
   private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
 
+  constructor() {
+    // Another tab remembered or forgot a group: pick it up, so this tab never writes back a stale list.
+    this.doc.defaultView?.addEventListener('storage', e => {
+      if (e.key === null || e.key === STORAGE_KEY) this.records.set(this.readStored() ?? this.records());
+    });
+  }
+
   /** Highest version seen per group this session: an older answer (a stale cache or replay) is ignored. */
   private readonly seen = new Map<string, number>();
   private readonly records = signal<Record<string, GroupRecord>>(this.readRecords());
   readonly all = this.records.asReadonly();
+  /** The last successful read per group, so a screen that only wants a glance does not fetch again. */
+  private readonly recent = new Map<string, { at: number; res: Extract<LoadResult, { ok: true }> }>();
 
   recordFor(id: string): GroupRecord | null {
     return this.records()[id] ?? null;
@@ -58,16 +83,26 @@ export class GroupService {
   }
 
   remember(r: GroupRecord): void {
-    this.records.update(m => ({ ...m, [r.id]: r }));
-    this.writeRecords();
+    this.mutate(m => ({ ...m, [r.id]: r }));
+  }
+
+  /** Updates a record this device already has; does nothing when another tab forgot it meanwhile (so it is not brought back). */
+  update(r: GroupRecord): void {
+    this.mutate(m => (m[r.id] ? { ...m, [r.id]: r } : m));
   }
 
   forget(id: string): void {
-    this.records.update(m => {
+    this.mutate(m => {
       const { [id]: _gone, ...rest } = m;
       return rest;
     });
-    this.writeRecords();
+  }
+
+  /** Applies a change to what storage holds now (not this tab's copy), so another tab's records survive. */
+  private mutate(change: (m: Record<string, GroupRecord>) => Record<string, GroupRecord>): void {
+    const next = change(this.readStored() ?? this.records());
+    this.records.set(next);
+    this.writeRecords(next);
   }
 
   linkOf(r: GroupRecord, viewOnly = false): GroupLink {
@@ -81,10 +116,11 @@ export class GroupService {
 
   // ── Network ────────────────────────────────────────────────────────────
 
-  private async call(method: 'GET' | 'PUT' | 'DELETE', id: string, write: string | null, body?: unknown): Promise<Reply> {
+  private async call(method: 'GET' | 'PUT' | 'DELETE', id: string, write: string | null, body?: unknown, owner?: string | null): Promise<Reply> {
     try {
       const headers: Record<string, string> = { Accept: 'application/json' };
       if (write) headers['X-Group-Write'] = write;
+      if (owner) headers['X-Group-Owner'] = owner;
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       const res = await fetch(`${GROUP_ENDPOINT}?id=${encodeURIComponent(id)}`, {
         method, headers, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer',
@@ -122,14 +158,23 @@ export class GroupService {
     const doc = text === null ? null : parseGroupDoc(text);
     if (!doc) return { ok: false, reason: 'invalid' };
     this.seen.set(link.id, j['version']);
-    return { ok: true, doc, version: j['version'], expiresAt: typeof j['expiresAt'] === 'string' ? j['expiresAt'] : null };
+    const res = { ok: true as const, doc, version: j['version'], expiresAt: typeof j['expiresAt'] === 'string' ? j['expiresAt'] : null };
+    this.recent.set(link.id, { at: Date.now(), res });
+    return res;
+  }
+
+  /** `load`, unless this session already read the group less than `maxAgeMs` ago. */
+  async loadRecent(link: GroupLink, maxAgeMs: number = 60_000): Promise<LoadResult> {
+    const hit = this.recent.get(link.id);
+    return hit && Date.now() - hit.at < maxAgeMs ? hit.res : this.load(link);
   }
 
   /**
    * Writes `doc` on top of `version`. On a 409 the current doc is fetched, merged
    * (member entries by updatedAt) and the write retried, up to three times.
+   * `expiresAt` (a later date; the server never shortens) and `ownerToken` come from the creating device only.
    */
-  async save(link: GroupLink, doc: GroupDoc, version: number, expiresAt?: string): Promise<SaveResult> {
+  async save(link: GroupLink, doc: GroupDoc, version: number, expiresAt?: string, ownerToken?: string | null): Promise<SaveResult> {
     if (!link.write) return { ok: false, reason: 'forbidden' };
     let mine = doc;
     let base = version;
@@ -137,10 +182,11 @@ export class GroupService {
       mine = { ...mine, members: capMembers(mine.members) };
       const sealed = await encryptText(serializeGroupDoc(mine), link.key, link.id);
       if (sealed.ciphertext.length > MAX_CIPHERTEXT) return { ok: false, reason: 'too-large' };
-      const r = await this.call('PUT', link.id, link.write, { ...sealed, baseVersion: base, ...(expiresAt ? { expiresAt } : {}) });
+      const r = await this.call('PUT', link.id, link.write, { ...sealed, baseVersion: base, ...(expiresAt ? { expiresAt } : {}) }, ownerToken);
       if (r.status === 200 && r.json && typeof r.json['version'] === 'number') {
         this.seen.set(link.id, r.json['version']);
-        return { ok: true, doc: mine, version: r.json['version'] };
+        this.recent.set(link.id, { at: Date.now(), res: { ok: true, doc: mine, version: r.json['version'], expiresAt: typeof r.json['expiresAt'] === 'string' ? r.json['expiresAt'] : null } });
+        return { ok: true, doc: mine, version: r.json['version'], expiresAt: typeof r.json['expiresAt'] === 'string' ? r.json['expiresAt'] : null };
       }
       if (r.status !== 409) return { ok: false, reason: this.fail(r) };
       const remote = await this.load(link);
@@ -151,11 +197,26 @@ export class GroupService {
     return { ok: false, reason: 'unavailable' };
   }
 
-  /** "Stop sharing": deletes the group on the server (write token required). */
-  async stop(link: GroupLink): Promise<boolean> {
+  /** "Stop sharing": deletes the group on the server (write token, plus the owner token where the group has one). */
+  async stop(link: GroupLink, ownerToken?: string | null): Promise<boolean> {
     if (!link.write) return false;
-    const r = await this.call('DELETE', link.id, link.write);
+    const r = await this.call('DELETE', link.id, link.write, undefined, ownerToken);
     return r.status === 200 || r.status === 404 || r.status === 410;
+  }
+
+  /**
+   * The later expiry to send when the owner saves or opens the group: the trip's own
+   * (groupExpiry) when it is more than a day beyond `current`, else undefined (no churn).
+   */
+  ownerExpiry(rec: GroupRecord | null, current: string | null, nowMs: number = Date.now()): string | undefined {
+    if (!rec?.owner || !rec.tripId) return undefined;
+    const trip = this.trips.trip(rec.tripId);
+    if (!trip) return undefined;
+    // A trip that ended long ago has nothing left to keep alive for.
+    if (Date.parse(`${tripLastDate(trip)}T23:59:59Z`) + 30 * 86_400_000 < nowMs) return undefined;
+    const want = groupExpiry(trip, nowMs);
+    const cur = current ? Date.parse(current) : NaN;
+    return Number.isFinite(cur) && Date.parse(want) - cur <= 86_400_000 ? undefined : want;
   }
 
   // ── Create ──────────────────────────────────────────────────────────────
@@ -167,7 +228,7 @@ export class GroupService {
     const at = new Date(nowMs).toISOString();
     const memberId = newMemberId();
     const name = nickname.trim().slice(0, 24) || 'Me';
-    const record: GroupRecord = { id: newGroupId(), key: await generateGroupKey(), write: newWriteToken(), memberId, name, owner: true, tripId: trip.id, expiresAt: null };
+    const record: GroupRecord = { id: newGroupId(), key: await generateGroupKey(), write: newWriteToken(), memberId, name, owner: true, ownerToken: newOwnerToken(), tripId: trip.id, expiresAt: null };
     // A big trip that does not fit is retried without its backups.
     const variants: Trip[] = [shared, { ...shared, legs: shared.legs.map(l => (l.kind === 'flight' ? { ...l, alternates: [] } : l)) }];
     const expiresAt = groupExpiry(trip, nowMs);
@@ -180,9 +241,9 @@ export class GroupService {
         continue;
       }
       const doc: GroupDoc = { s: 1, plan, planAt: at, members: { [memberId]: { name, planLabel: '', arrival: null, updatedAt: at } }, meetup: null };
-      const saved = await this.save(this.linkOf(record), doc, 0, expiresAt);
+      const saved = await this.save(this.linkOf(record), doc, 0, expiresAt, record.ownerToken);
       if (saved.ok) {
-        const rec = { ...record, expiresAt };
+        const rec = { ...record, expiresAt: saved.expiresAt ?? expiresAt };
         this.remember(rec);
         return { ok: true, record: rec };
       }
@@ -201,7 +262,7 @@ export class GroupService {
   /** My entry in the doc (stamped now), for a status edit. */
   withMember(doc: GroupDoc, memberId: string, patch: Partial<MemberStatus> & { name: string }, nowMs: number = Date.now()): GroupDoc {
     const cur = doc.members[memberId];
-    const next: MemberStatus = { name: patch.name, planLabel: patch.planLabel ?? cur?.planLabel ?? '', arrival: patch.arrival === undefined ? (cur?.arrival ?? null) : patch.arrival, updatedAt: new Date(nowMs).toISOString() };
+    const next: MemberStatus = { name: patch.name, planLabel: patch.planLabel ?? cur?.planLabel ?? '', arrival: patch.arrival === undefined ? (cur?.arrival ?? null) : patch.arrival, ...((patch.legs ?? cur?.legs) ? { legs: patch.legs ?? cur?.legs } : {}), updatedAt: new Date(nowMs).toISOString() };
     return { ...doc, members: { ...doc.members, [memberId]: next } };
   }
 
@@ -212,26 +273,34 @@ export class GroupService {
   // ── Storage ─────────────────────────────────────────────────────────────
 
   private readRecords(): Record<string, GroupRecord> {
+    return this.readStored() ?? {};
+  }
+
+  /** What storage holds now; null when storage is blocked. */
+  private readStored(): Record<string, GroupRecord> | null {
     try {
-      const raw = JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) ?? '{}') as Record<string, Partial<GroupRecord>>;
+      const store = globalThis.localStorage;
+      if (!store) return null;
+      const raw = JSON.parse(store.getItem(STORAGE_KEY) ?? '{}') as Record<string, Partial<GroupRecord>>;
       const out: Record<string, GroupRecord> = {};
       for (const [id, r] of Object.entries(raw)) {
         if (r && r.id === id && typeof r.key === 'string' && typeof r.memberId === 'string' && typeof r.name === 'string') {
           const expiresAt = typeof r.expiresAt === 'string' && Number.isFinite(Date.parse(r.expiresAt)) ? r.expiresAt : null;
           // The server deletes it at expiry: drop the entry (and its key) from this device too.
           if (expiresAt && Date.parse(expiresAt) <= Date.now()) continue;
-          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, tripId: typeof r.tripId === 'string' ? r.tripId : null, expiresAt };
+          const myLegs = storedLegs(r.myLegs);
+          out[id] = { id, key: r.key, write: typeof r.write === 'string' ? r.write : null, memberId: r.memberId, name: r.name, owner: r.owner === true, ownerToken: typeof r.ownerToken === 'string' ? r.ownerToken : null, tripId: typeof r.tripId === 'string' ? r.tripId : null, expiresAt, ...(Array.isArray(r.names) ? { names: r.names.filter((n): n is string => typeof n === 'string').map(n => n.slice(0, MAX_NAME)).slice(0, 6) } : {}), ...(myLegs ? { myLegs } : {}) };
         }
       }
       return out;
     } catch {
-      return {};
+      return null;
     }
   }
 
-  private writeRecords(): void {
+  private writeRecords(records: Record<string, GroupRecord>): void {
     try {
-      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(this.records()));
+      globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(records));
     } catch {
       // Storage blocked: the group still works until the tab closes.
     }

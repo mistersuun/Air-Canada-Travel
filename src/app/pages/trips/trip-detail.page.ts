@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { t, type MsgKey } from '../../i18n/t';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { recapPath } from '../../extras/links';
 import { returnBoarded } from '../../logbook/logbook';
@@ -8,6 +9,8 @@ import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { tripsPath } from '../../ui/links';
+import { GroupCardComponent } from '../../group/ui/group-card.component';
+import { TripShareSheetComponent } from './menu/trip-share-sheet.component';
 import { TripMenuComponent } from './menu/trip-menu.component';
 import { PlanTabComponent } from './plan/plan-tab.component';
 import { PrepTabComponent } from './prep/prep-tab.component';
@@ -16,70 +19,83 @@ import { tripSubtitle } from './trips-model';
 import { TripExtrasComponent } from '../../files/ui/trip-extras.component';
 
 export type TripTab = 'plan' | 'prep' | 'return';
-export const TRIP_TABS: SegOption[] = [
-  { value: 'plan', label: 'Plan' },
-  { value: 'prep', label: 'Prep' },
-  { value: 'return', label: 'Return' },
+const TRIP_TABS: { value: TripTab; label: MsgKey }[] = [
+  { value: 'plan', label: 'trips.tab.plan' },
+  { value: 'prep', label: 'trips.tab.prep' },
+  { value: 'return', label: 'trips.tab.return' },
 ];
 
 /**
  * Trip detail (/trips/:id?tab=plan|prep|return&leg=<legId>): a header with
- * back, the trip name and "Spain and Portugal · 2 travellers", and a share
- * circle that opens the trip menu (offline, share, calendar); then the
+ * back, the trip name and "Spain and Portugal · 2 travellers", a Share
+ * circle (the Share sheet) and a "⋯" circle (More: offline, calendar, delete);
+ * a "Travelling with friends?" card on the Plan tab; then the
  * Plan | Prep | Return seg (?tab=, replaceUrl) and the three tab hosts.
  */
 @Component({
   selector: 'app-trip-detail-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripExtrasComponent],
+  imports: [RouterLink, IconComponent, SegComponent, PlanTabComponent, PrepTabComponent, ReturnTabComponent, TripMenuComponent, TripShareSheetComponent, GroupCardComponent, TripExtrasComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
-      @if (trip(); as t) {
+      @if (trip(); as tp) {
         <header class="td__head">
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('trips.detail.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
           <div class="td__title">
-            <h1 class="ui-h3">{{ t.name }}</h1>
+            <h1 class="ui-h3">{{ tp.name }}</h1>
             <p class="td__sub tn">{{ subtitle() }}</p>
           </div>
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Share and offline" data-menu (click)="menuOpen.set(true)">
-            <app-icon name="external" [size]="18" />
-          </button>
+          <div class="td__acts">
+            <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('trips.detail.share')" data-share-open (click)="openShare(false)">
+              <app-icon name="share-box" [size]="18" />
+            </button>
+            <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('trips.detail.more')" data-menu (click)="menuOpen.set(true)">
+              <app-icon name="more" [size]="18" [strokeWidth]="2.6" />
+            </button>
+          </div>
         </header>
         @if (trips.readOnly()) {
-          <p class="ui-sub td__ro">These trips were saved by a newer version of the app. You can look, but changes won't be kept.</p>
+          <p class="ui-sub td__ro">{{ t('trips.detail.newer') }}</p>
         }
-        @if (t.sharedFrom) {
-          <p class="ui-sub td__ro">A copy of a shared plan. Changes stay on this device.</p>
+        @if (tp.sharedFrom) {
+          <p class="ui-sub td__ro">{{ t('trips.detail.copy') }}</p>
         }
         @if (recapReady()) {
-          <a class="td__recap" data-recap [routerLink]="recapLink(t.id)" [queryParams]="state.globalParams()">
+          <a class="td__recap" data-recap [routerLink]="recapLink(tp.id)" [queryParams]="state.globalParams()">
             <app-icon name="share" [size]="17" />
-            <span><b>Make a recap</b><span class="ui-sub">A picture of the trip to share. Counts only.</span></span>
+            <span><b>{{ t('trips.detail.recap') }}</b><span class="ui-sub">{{ t('trips.detail.recapSub') }}</span></span>
           </a>
         }
-        <app-trip-extras [trip]="t" />
-        <app-seg stretch [options]="tabs" [value]="activeTab()" (valueChange)="setTab($event)" ariaLabel="Trip sections" />
+        <app-trip-extras [trip]="tp" />
+        <app-seg stretch [options]="tabs()" [value]="activeTab()" (valueChange)="setTab($event)" [ariaLabel]="t('trips.detail.sections')" />
         @switch (activeTab()) {
-          @case ('prep') { <app-prep-tab [trip]="t" /> }
-          @case ('return') { <app-return-tab [trip]="t" [from]="retFrom() ?? null" /> }
-          @default { <app-plan-tab [trip]="t" [leg]="leg()" /> }
+          @case ('prep') { <app-prep-tab [trip]="tp" /> }
+          @case ('return') { <app-return-tab [trip]="tp" [from]="retFrom() ?? null" /> }
+          @default {
+            <app-group-card [trip]="tp" (start)="openShare(true)" />
+            <app-plan-tab [trip]="tp" [leg]="leg()" />
+          }
+        }
+        @if (shareOpen()) {
+          <app-trip-share-sheet [trip]="tp" [startGroup]="startGroup()" (closed)="shareOpen.set(false)" />
         }
         @if (menuOpen()) {
-          <app-trip-menu [trip]="t" (closed)="menuOpen.set(false)" (deleted)="afterDelete()" />
+          <app-trip-menu [trip]="tp" (closed)="menuOpen.set(false)" (deleted)="afterDelete()" />
         }
       } @else {
         <section class="ui-card empty" role="status" data-empty>
-          <h1 class="ui-h3">Trip not found</h1>
-          <p class="ui-sub">This link doesn't match a trip saved on this device.</p>
-          <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="tripsLink" [queryParams]="state.globalParams()">Back to Trips</a>
+          <h1 class="ui-h3">{{ t('trips.detail.notFound') }}</h1>
+          <p class="ui-sub">{{ t('trips.detail.notFoundText') }}</p>
+          <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="tripsLink" [queryParams]="state.globalParams()">{{ t('trips.detail.backToTrips') }}</a>
         </section>
       }
     </div>
   `,
   styles: [`
     .td { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
-    .td__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .td__head { display: grid; grid-template-columns: 96px minmax(0, 1fr) 96px; align-items: center; gap: 8px; }
+    .td__acts { display: flex; gap: 8px; justify-self: end; }
     .td__title { min-width: 0; text-align: center; }
     .td__title h1 { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .td__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; }
@@ -97,6 +113,7 @@ export const TRIP_TABS: SegOption[] = [
   `],
 })
 export class TripDetailPage {
+  protected readonly t = t;
   protected readonly trips = inject(TripsService);
   private readonly router = inject(Router);
   protected readonly state = inject(AppStateService);
@@ -113,25 +130,33 @@ export class TripDetailPage {
   /** ?retFrom=: the airport the Return tab counts from (defaults to the trip's return airport). ?from= is the global hub. */
   readonly retFrom = input<string | undefined>(undefined);
 
-  protected readonly tabs = TRIP_TABS;
+  protected readonly tabs = computed<SegOption[]>(() => TRIP_TABS.map(x => ({ value: x.value, label: t(x.label) })));
   protected readonly menuOpen = signal(false);
-  protected readonly trip = computed(() => this.trips.trips().find(t => t.id === this.id()) ?? null);
+  protected readonly shareOpen = signal(false);
+  /** True when the Share sheet was opened from the "Travelling with friends?" card. */
+  protected readonly startGroup = signal(false);
+  protected readonly trip = computed(() => this.trips.trips().find(x => x.id === this.id()) ?? null);
   protected readonly subtitle = computed(() => {
-    const t = this.trip();
-    return t ? tripSubtitle(t) : '';
+    const tr = this.trip();
+    return tr ? tripSubtitle(tr) : '';
   });
   protected readonly activeTab = computed<TripTab>(() => {
-    const t = this.tab();
-    return t === 'prep' || t === 'return' ? t : 'plan';
+    const tab = this.tab();
+    return tab === 'prep' || tab === 'return' ? tab : 'plan';
   });
 
   /** True once the way home is boarded: then the trip can be recapped. */
   protected readonly recapReady = computed(() => {
-    const t = this.trip();
-    return !!t && returnBoarded(t);
+    const tr = this.trip();
+    return !!tr && returnBoarded(tr);
   });
   protected recapLink(id: string): string[] {
     return recapPath(id);
+  }
+
+  protected openShare(startGroup: boolean): void {
+    this.startGroup.set(startGroup);
+    this.shareOpen.set(true);
   }
 
   protected setTab(value: string | null | undefined): void {

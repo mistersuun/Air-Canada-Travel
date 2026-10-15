@@ -5,6 +5,8 @@
  * defensively: AeroAPI fields may be missing or null and nothing here throws.
  */
 
+import { isRec, type Rec } from './http.ts';
+
 export interface StatusEnd {
   scheduled: string | null;
   estimated: string | null;
@@ -69,53 +71,6 @@ export function cacheSeconds(depMs: number, nowMs: number): number {
   return Math.min(1800, Math.max(300, Math.floor((ahead - 6 * HOUR_MS) / 1000)));
 }
 
-/** Key of the per-day AeroAPI call counter (UTC date). */
-export function budgetKey(nowMs: number): string {
-  return `calls-${new Date(nowMs).toISOString().slice(0, 10)}`;
-}
-
-/** AEROAPI_DAILY_LIMIT, default 40; junk falls back to the default. */
-export function dailyLimit(raw: string | undefined): number {
-  const n = Number(raw);
-  return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 40;
-}
-
-/** The slice of a Netlify Blobs store the budget needs (conditional writes on an ETag). */
-export interface CounterStore {
-  getWithMetadata(key: string): Promise<{ data: string; etag?: string } | null>;
-  set(key: string, value: string, options: { onlyIfNew: true } | { onlyIfMatch: string }): Promise<{ modified: boolean }>;
-}
-
-/**
- * Daily AeroAPI call budget over a key/value store (Netlify Blobs, strong
- * consistency, in production). Race-free: every write is conditional (create
- * only if new, or update only if the ETag read is still current) and retried a
- * few times, so concurrent misses cannot over-spend. A store failure or lost
- * race refuses the call (fails closed).
- */
-export function makeBudget(store: CounterStore, limit: number) {
-  return async (nowMs: number, calls = 1): Promise<boolean> => {
-    try {
-      const key = budgetKey(nowMs);
-      for (let attempt = 0; attempt < 4; attempt++) {
-        const cur = await store.getWithMetadata(key);
-        const used = cur ? Number(cur.data) : 0;
-        const n = Number.isFinite(used) ? used : 0;
-        if (n + calls > limit) return false;
-        const r = cur
-          ? await store.set(key, String(n + calls), { onlyIfMatch: cur.etag ?? '' })
-          : await store.set(key, String(calls), { onlyIfNew: true });
-        if (r.modified) return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  };
-}
-
-type Rec = Record<string, unknown>;
-const isRec = (v: unknown): v is Rec => typeof v === 'object' && v !== null && !Array.isArray(v);
 const str = (v: unknown, max = 40): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 const iso = (v: unknown): string | null => {
   const s = str(v, 40);
@@ -207,14 +162,59 @@ export function inboundIdToFetch(f: Rec, nowMs: number, hours = 6): string | nul
   return ahead <= hours * HOUR_MS && ahead >= -HOUR_MS ? id : null;
 }
 
-/** Best-effort fixed-window limiter (memory is per function instance). */
-export function makeLimiter(max: number, windowMs: number): (key: string, nowMs: number) => boolean {
-  const hits = new Map<string, { n: number; reset: number }>();
-  return (key, nowMs) => {
-    if (hits.size > 5000) for (const [k, v] of hits) if (v.reset <= nowMs) hits.delete(k);
-    const h = hits.get(key);
-    if (!h || h.reset <= nowMs) { hits.set(key, { n: 1, reset: nowMs + windowMs }); return true; }
-    h.n += 1;
-    return h.n <= max;
-  };
+/**
+ * The one query string a request is cached under. The CDN varies on the raw
+ * ident|origin|dep values, so 'ac834', 'AC834' and ' ACA834' would otherwise be
+ * three entries (three AeroAPI calls). Returns null when the request is already
+ * canonical; else the canonical 'ident=AC834&origin=YVR&dep=…' to redirect to.
+ */
+export function canonicalQuery(params: URLSearchParams, ident: string, origin: string, dep: string): string | null {
+  const want = new URLSearchParams({ ident: displayIdent(ident), origin, dep }).toString();
+  const keys = [...params.keys()];
+  const canonical = keys.length === 3 && keys.join(',') === 'ident,origin,dep'
+    && params.get('ident') === displayIdent(ident) && params.get('origin') === origin && params.get('dep') === dep;
+  return canonical ? null : want;
+}
+
+/** How long a looked-up inbound aircraft is reused (it moves slowly; the main answer is cached for 5 minutes). */
+export const INBOUND_TTL_MS = 15 * 60_000;
+
+/** The slice of a Netlify Blobs store the inbound cache needs. */
+export interface InboundStore {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<unknown>;
+  delete?(key: string): Promise<unknown>;
+}
+
+/**
+ * The inbound aircraft's leg for `faFlightId`: from the store when looked up in the last
+ * 15 minutes, else via `fetchInbound` (which spends budget; null = refused or failed) and
+ * stored. A failed lookup is not cached. The store is best effort: any error just means a lookup.
+ */
+export async function cachedInbound(
+  store: InboundStore | null, faFlightId: string, nowMs: number,
+  fetchInbound: () => Promise<FlightStatus['inbound'] | undefined>,
+): Promise<FlightStatus['inbound']> {
+  const key = `inbound-${faFlightId}`;
+  try {
+    const raw = store ? await store.get(key) : null;
+    if (raw) {
+      let c: { at?: unknown; inbound?: unknown } | null = null;
+      try { c = JSON.parse(raw) as { at?: unknown; inbound?: unknown }; } catch { /* malformed */ }
+      if (c && typeof c.at === 'number' && nowMs - c.at >= 0 && nowMs - c.at < INBOUND_TTL_MS) {
+        return isRec(c.inbound) ? normalizeCachedInbound(c.inbound) : null;
+      }
+      // Stale or malformed: remove it, so keys for flights that are over do not pile up in the store.
+      await store?.delete?.(key);
+    }
+  } catch { /* unreadable: look it up */ }
+  const fresh = await fetchInbound();
+  if (fresh === undefined) return null;
+  try { await store?.set(key, JSON.stringify({ at: nowMs, inbound: fresh })); } catch { /* best effort */ }
+  return fresh;
+}
+
+function normalizeCachedInbound(c: Rec): FlightStatus['inbound'] {
+  const ident = str(c['ident']);
+  return ident ? { ident, landed: iso(c['landed']), estimatedIn: iso(c['estimatedIn']) } : null;
 }

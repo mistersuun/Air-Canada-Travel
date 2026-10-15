@@ -12,7 +12,10 @@ import { ShellShortcutsDirective } from './shell/shortcuts';
 import { TabBarComponent } from './shell/tab-bar.component';
 import { TopNavComponent } from './shell/top-nav.component';
 import { TripsService } from './trips/trips.service';
+import { ListingNotifierService } from './trips/listing-notifier.service';
 import { hasSkywash, isPassView } from './shell/nav-model';
+import { LocaleService } from './i18n/locale.service';
+import { t } from './i18n/t';
 
 interface ToastView {
   message: string;
@@ -38,11 +41,22 @@ interface ToastView {
   },
   template: `
     <!-- Handled in code: with <base href="/"> a bare #main resolves to /#main and would leave the page. -->
-    <a class="skip-link" href="#main" (click)="skipToMain($event, main)">Skip to content</a>
+    <a class="skip-link" href="#main" (click)="skipToMain($event, main)">{{ t('shell.skip') }}</a>
     @if (state.dataLoad() === 'failed') {
       <div class="data-banner" role="alert">
-        <span>Couldn't load flight schedules. Results are empty, not cancelled.</span>
-        <button type="button" class="ui-tag ui-tag--amber" (click)="state.retryDataLoad()">Retry</button>
+        <span>{{ t('shell.data.failed') }}</span>
+        <button type="button" class="ui-tag ui-tag--amber" (click)="state.retryDataLoad()">{{ t('common.retry') }}</button>
+      </div>
+    }
+    @if (state.dataLoad() === 'loading') {
+      <div class="data-banner" role="status">
+        <span>{{ t('shell.data.loading') }}</span>
+      </div>
+    }
+    @if (state.dataLoad() === 'ready') {
+      <div class="data-banner" role="status">
+        <span>{{ t('shell.data.ready') }}</span>
+        <button type="button" class="ui-tag ui-tag--amber" (click)="state.reloadPage()">{{ t('common.refresh') }}</button>
       </div>
     }
     <app-top-nav />
@@ -60,8 +74,8 @@ interface ToastView {
         <app-onboarding-sheet (closed)="onboarding.finish()" />
       }
     }
-    @if (toast(); as t) {
-      <app-toast [message]="t.message" [actionLabel]="t.actionLabel" (action)="t.onAction()" (dismiss)="t.onDismiss()" />
+    @if (toast(); as n) {
+      <app-toast [message]="n.message" [actionLabel]="n.actionLabel" (action)="n.onAction()" (dismiss)="n.onDismiss()" />
     }
   `,
   styles: [`
@@ -76,12 +90,20 @@ interface ToastView {
   `],
 })
 export class AppComponent {
+  protected readonly t = t;
+  // Set by the app initializer already; injected here too so the shell never renders before it.
+  private readonly i18n = inject(LocaleService);
   protected readonly state = inject(AppStateService);
   protected readonly pwa = inject(PwaUpdateService);
   protected readonly onboarding = inject(OnboardingService);
   private readonly trips = inject(TripsService);
   private readonly doc = inject(DOCUMENT);
   private readonly badge = inject(AppBadgeService);   // keeps the app-icon badge in step
+  private readonly listing = inject(ListingNotifierService);
+
+  constructor() {
+    this.listing.check(this.state.nowMs());   // local notification only if permission was already granted
+  }
 
   protected skipToMain(e: Event, main: HTMLElement): void {
     e.preventDefault();
@@ -95,8 +117,8 @@ export class AppComponent {
   protected readonly toast = computed<ToastView | null>(() => {
     if (this.pwa.broken()) {
       return {
-        message: 'The app needs to reload to repair itself',
-        actionLabel: 'Reload',
+        message: t('shell.update.broken'),
+        actionLabel: t('common.reload'),
         onAction: () => this.pwa.reload(),
         onDismiss: () => this.pwa.dismissBroken(),
       };
@@ -104,8 +126,8 @@ export class AppComponent {
     // Never interrupt a boarding pass with a reload prompt; it shows once the user leaves.
     if (this.pwa.ready() && !isPassView(this.state.path())) {
       return {
-        message: 'New schedules available',
-        actionLabel: 'Reload',
+        message: t('shell.update.ready'),
+        actionLabel: t('common.reload'),
         onAction: () => this.pwa.reload(),
         onDismiss: () => this.pwa.dismiss(),
       };
@@ -121,8 +143,13 @@ export class AppComponent {
   });
 
   onVisibilityChange(): void {
-    if (this.doc.visibilityState !== 'visible') return;
+    if (this.doc.visibilityState !== 'visible') {
+      this.pwa.noteHidden();
+      return;
+    }
+    if (this.pwa.reloadOnResume(this.state.path())) return;
     this.state.refreshToday();
+    this.listing.check(this.state.nowMs());
     this.pwa.check();
     this.trips.checkChanges();
   }

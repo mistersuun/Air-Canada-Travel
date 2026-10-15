@@ -7,12 +7,13 @@ import type { Trip, TripLeg } from '../../trips/model';
 import type { PassRecord } from '../model';
 import { PassSwapService, swapOfferFor } from '../pass-swap.service';
 import { PassesService } from '../passes.service';
+import { t } from '../../i18n/t';
 
 /** '2 passes · seat 34K, 34J', '1 pass · seat 34K', '1 pass'. */
 export function legPassesMeta(seats: readonly (string | null)[]): string {
   const n = seats.length;
   const s = seats.filter((x): x is string => !!x);
-  return `${n} ${n === 1 ? 'pass' : 'passes'}${s.length ? ` · seat ${s.join(', ')}` : ''}`;
+  return s.length ? t('passes.countSeat', { n, seats: s.join(', ') }) : t('passes.count', { n });
 }
 
 /**
@@ -31,7 +32,7 @@ export function legPassesMeta(seats: readonly (string | null)[]): string {
         <div class="lp__swap" data-swap-offer>
           <p>{{ o.offer.text }}</p>
           <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-swap [disabled]="swapping()" (click)="swap(o.pass)">
-            Swap to {{ o.offer.flightNumber }}
+            {{ t('passes.swapTo', { flight: o.offer.flightNumber }) }}
           </button>
         </div>
       }
@@ -39,15 +40,15 @@ export function legPassesMeta(seats: readonly (string | null)[]): string {
         <a class="lp lp--show" [routerLink]="showLink()" [queryParams]="state.globalParams()" data-show-pass>
           <span class="lp__ic" aria-hidden="true"><app-icon name="barcode" [size]="18" [strokeWidth]="2" /></span>
           <span class="lp__tx">
-            <b>Show boarding pass</b>
-            <span class="lp__meta"><small class="tn">{{ meta() }}</small><span class="lp__lock"><app-icon name="lock" [size]="12" [strokeWidth]="2.2" />Not shared</span></span>
+            <b>{{ t('passes.show') }}</b>
+            <span class="lp__meta"><small class="tn">{{ meta() }}</small><span class="lp__lock"><app-icon name="lock" [size]="12" [strokeWidth]="2.2" />{{ t('passes.notShared') }}</span></span>
           </span>
           <app-icon class="lp__chev" name="chevron-right" [size]="16" />
         </a>
-        <a class="ui-link lp__more" [routerLink]="addLink()" [queryParams]="addQuery()" data-add-another>Add another pass</a>
+        <a class="ui-link lp__more" [routerLink]="addLink()" [queryParams]="addQuery()" data-add-another>{{ t('passes.addAnother') }}</a>
       } @else {
         <a class="ui-btn ui-btn--ghost ui-btn--block lp__add" [routerLink]="addLink()" [queryParams]="addQuery()" data-add-pass>
-          <app-icon name="barcode" [size]="16" [strokeWidth]="2" />Add boarding pass
+          <app-icon name="barcode" [size]="16" [strokeWidth]="2" />{{ t('passes.add') }}
         </a>
       }
     }
@@ -82,6 +83,7 @@ export function legPassesMeta(seats: readonly (string | null)[]): string {
 export class LegPassesComponent {
   private readonly passes = inject(PassesService);
   protected readonly state = inject(AppStateService);
+  protected readonly t = t;
 
   readonly trip = input.required<Trip>();
   readonly leg = input.required<TripLeg>();

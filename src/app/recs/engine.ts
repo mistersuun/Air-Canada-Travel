@@ -13,6 +13,8 @@
  */
 import { DESTINATIONS, Destination, HUBS } from '../data/destinations';
 import { getCoverage, getSchedulesForRoute, isCovered } from '../data/schedule-index';
+import { typeLabel } from '../i18n/labels';
+import { t } from '../i18n/t';
 import { CORRIDORS } from '../places/corridors';
 import type { TimeFormat } from '../state/prefs.service';
 import { refsFromItinerary } from '../trips/engine/legs';
@@ -20,12 +22,12 @@ import type { Outcome } from '../trips/model';
 import { destPath, flightPath, reachPath } from '../ui/links';
 import { findDestination } from '../utils/airports';
 import { ConnectOptions, Itinerary, allItineraries, directItinerary } from '../utils/connections';
-import { WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, hhmmToMin, weekdayIndex } from '../utils/time';
+import { addDays, diffDays, formatClock, formatKey, hhmmToMin, weekdayIndex, weekdayLong, weekdayShort as weekdayShortAt } from '../utils/time';
 import { flightsOn } from '../utils/week';
 import { climateFor } from './climate';
-import { LongWeekend, longWeekends, pickDays } from './long-weekends';
+import { LongWeekend, holidayName, longWeekends, pickDays } from './long-weekends';
 import { ClimateIndex, Reason, RecGroup, RecLine, Recommendation, TravelProfile, TripStyle } from './model';
-import { daysRange, joinAnd, stylesDisplay } from './profile';
+import { daysRange, joinAnd, stylesLabels } from './profile';
 
 export interface RecInput {
   profile: TravelProfile;
@@ -88,16 +90,16 @@ function longDate(key: string): string {
 }
 
 function weekdayShort(key: string): string {
-  return WEEKDAY_SHORT[weekdayIndex(key)];
+  return weekdayShortAt(weekdayIndex(key));
 }
 
-/** '1h30', '45min', '7h'. */
+/** '1h30', '45min', '7h' ('1 h 30', '45 min', '7 h'). */
 export function shortDuration(min: number): string {
   const m = Math.max(0, Math.round(min / 5) * 5);
   const h = Math.floor(m / 60);
   const r = m % 60;
-  if (!h) return `${r}min`;
-  return r ? `${h}h${String(r).padStart(2, '0')}` : `${h}h`;
+  if (!h) return t('recs.dur.min', { m: r });
+  return r ? t('recs.dur.hm', { h, mm: String(r).padStart(2, '0') }) : t('recs.dur.h', { h });
 }
 
 function median(xs: readonly number[]): number {
@@ -122,7 +124,7 @@ export function dayItineraries(input: RecInput, from: string, to: string, day: s
 }
 
 function via(it: Itinerary): string {
-  return it.hubs.length ? ` via ${it.hubs.join(', ')}` : '';
+  return it.hubs.length ? ` ${t('format.via', { hubs: it.hubs.join(', ') })}` : '';
 }
 
 function clock(hhmm: string, fmt: TimeFormat | undefined): string {
@@ -143,10 +145,10 @@ function profileReason(parts: string[]): Reason[] {
 function profileParts(p: TravelProfile): string[] {
   if (isEmptyProfile(p)) return [];
   const parts: string[] = [];
-  const d = daysRange(p.days, ' to ');
-  if (d) parts.push(`you travel ${d}`);
-  if (p.styles.length) parts.push(`like ${joinAnd(stylesDisplay(p.styles))}`);
-  if (p.maxFlightHours !== null) parts.push(`flights under ${p.maxFlightHours}h`);
+  const d = daysRange(p.days, t('recs.days.to'));
+  if (d) parts.push(t('recs.profile.travel', { days: d }));
+  if (p.styles.length) parts.push(t('recs.profile.like', { styles: joinAnd(stylesLabels(p.styles)) }));
+  if (p.maxFlightHours !== null) parts.push(t('recs.profile.under', { h: p.maxFlightHours }));
   return parts;
 }
 
@@ -176,7 +178,7 @@ function upcoming(input: RecInput, code: string, profileDaysOnly: boolean): Upco
  * '9 flights in the next 2 weeks · about 6h35'.
  */
 export function scheduleLine(u: Upcoming, todayKey: string, fmt?: TimeFormat): string {
-  const dur = `about ${shortDuration(median(u.its.map(it => it.totalMin)))}`;
+  const dur = t('recs.sched.about', { dur: shortDuration(median(u.its.map(it => it.totalMin))) });
   const week = u.its.filter(it => it.legs.length === 1 && diffDays(todayKey, it.dateKey) < 7);
   const byNumber = new Map<string, Itinerary[]>();
   for (const it of week) {
@@ -194,14 +196,12 @@ export function scheduleLine(u: Upcoming, todayKey: string, fmt?: TimeFormat): s
   }
   if (best) {
     const min = hhmmToMin(best.t);
-    const when = min >= 17 * 60 ? 'most evenings' : min < 12 * 60 ? 'most mornings' : 'most days';
-    return `${best.n} ${clock(best.t, fmt)} ${when} · ${dur}`;
+    const part = min >= 17 * 60 ? 'evening' : min < 12 * 60 ? 'morning' : 'day';
+    return t('recs.sched.usual', { flight: best.n, time: clock(best.t, fmt), part, dur });
   }
   const stops = u.its.filter(it => it.legs.length > 1).length;
-  const what = stops === 0 ? `flight${u.count === 1 ? '' : 's'}`
-    : stops === u.count ? `one-stop option${u.count === 1 ? '' : 's'}`
-    : 'options, some with a stop,';
-  return `${u.count} ${what} in the next 2 weeks · ${dur}`;
+  const kind = stops === 0 ? 'nonstop' : stops === u.count ? 'oneStop' : 'mixed';
+  return t('recs.sched.count', { kind, n: u.count, dur });
 }
 
 // ── Kind: holiday ───────────────────────────────────────────────────────────
@@ -246,10 +246,10 @@ function holidayRecsFor(input: RecInput, lw: LongWeekend, outKey: string, backKe
   const fmt = input.fmt;
   const outDay = weekdayShort(outKey);
   const backDay = weekdayShort(backKey);
-  const hName = lw.holiday.name;
+  const hName = holidayName(lw.holiday.name);
   const holidayText = p.length === 'day' || p.length === 'week'
     ? hName
-    : `Holiday ${WEEKDAY_LONG[weekdayIndex(lw.observedKey)]}`;
+    : t('recs.reason.holidayDay', { weekday: weekdayLong(weekdayIndex(lw.observedKey)) });
 
   const recs: Recommendation[] = [];
   for (const d of CANDIDATES) {
@@ -264,13 +264,13 @@ function holidayRecsFor(input: RecInput, lw: LongWeekend, outKey: string, backKe
     const lines: RecLine[] = [];
     if (out.length > 2 || back.length > 2) {
       const viaOut = out.every(it => it.hubs.length) ? via(out[0]) : '';
-      lines.push({ text: `${out.length} flight${out.length === 1 ? '' : 's'} out ${outDay}${viaOut} · ${back.length} back ${backDay}`, label: 'scheduled' });
+      lines.push({ text: t('recs.line.counts', { n: out.length, outDay, via: viaOut, back: back.length, backDay }), label: 'scheduled' });
       const each = (median(out.map(it => it.totalMin)) + median(back.map(it => it.totalMin))) / 2;
-      lines.push({ text: `About ${shortDuration(each)} each way`, label: null });
+      lines.push({ text: t('recs.line.eachWay', { dur: shortDuration(each) }), label: null });
     } else {
       const times = (its: Itinerary[]) => its.map(it => `${clock(it.legs[0].depLocal, fmt)}${via(it)}`).join(', ');
-      lines.push({ text: `Out ${outDay} ${times(out)}`, label: 'scheduled' });
-      lines.push({ text: `Back ${backDay} ${times(back)}`, label: 'scheduled' });
+      lines.push({ text: t('recs.line.out', { day: outDay, times: times(out) }), label: 'scheduled' });
+      lines.push({ text: t('recs.line.back', { day: backDay, times: times(back) }), label: 'scheduled' });
     }
 
     const shortest = Math.min(...out.map(it => it.totalMin));
@@ -368,18 +368,18 @@ export function seasonEndingRecs(input: RecInput): Recommendation[] {
     const id = recId('seasonEnding', code, null);
     if (input.profile.dismissed.includes(id)) continue;
 
-    let text = `Last flight there ${lastOut.flightNumber ?? ''} ${shortDay(last)}`.replace('  ', ' ');
+    let text = t('recs.season.lastThere', { flight: lastOut.flightNumber ?? '', date: shortDay(last) }).replace('  ', ' ');
     const lastHome = lastFlightOnOrBefore(code, input.hub, addDays(last, 3), last);
-    if (lastHome) text += ` · last home ${lastHome.flightNumber ?? ''} ${shortDay(lastHome.dateKey)}`.replace('  ', ' ');
+    if (lastHome) text += ` · ${t('recs.season.lastHome', { flight: lastHome.flightNumber ?? '', date: shortDay(lastHome.dateKey) })}`.replace('  ', ' ');
     const back = w.resume ? firstFlightOnOrAfter(input.hub, code, w.resume) : null;
-    const backText = w.resume ? `Back from ${longDate(back?.dateKey ?? w.resume)}` : 'No later flights published yet';
+    const backText = w.resume ? t('recs.season.backFrom', { date: longDate(back?.dateKey ?? w.resume) }) : t('recs.season.noLater');
 
     out.push({
       id, kind: 'seasonEnding', code, placeId: null, title: d.city,
       out: null, back: null,
       lines: [{ text, label: 'scheduled' }, { text: backText, label: 'scheduled' }],
       weather: null,
-      reason: [{ kind: 'starred', text: `You starred ${d.city}` }],
+      reason: [{ kind: 'starred', text: t('recs.reason.starred', { city: d.city }) }],
       link: { path: destPath(code), query: {} },
       rank: -diffDays(input.todayKey, last),
     });
@@ -400,7 +400,7 @@ export function styleRecs(input: RecInput, exclude: ReadonlySet<string>): Recomm
     if (p.dismissed.includes(id)) continue;
     const u = upcoming(input, d.code, true);
     if (u.count < 3) continue;
-    const reason = `Matches ${d.type}${p.maxFlightHours !== null ? `, under ${p.maxFlightHours}h` : ''}`;
+    const reason = t('recs.reason.matches', { type: typeLabel(d.type), limit: p.maxFlightHours !== null ? 'under' : 'none', h: p.maxFlightHours ?? 0 });
     recs.push({
       id, kind: 'style', code: d.code, placeId: null, title: d.city,
       out: null, back: null,
@@ -434,7 +434,7 @@ export function logRecs(input: RecInput): Recommendation[] {
     const id = recId('yourLog', code, null);
     if (p.dismissed.includes(id)) continue;
 
-    const lines: RecLine[] = [{ text: `You boarded ${boarded} of ${tried} tries`, label: 'saved' }];
+    const lines: RecLine[] = [{ text: t('recs.line.boarded', { boarded, tried }), label: 'saved' }];
     const u = upcoming(input, code, false);
     if (u.count) lines.unshift({ text: scheduleLine(u, input.todayKey, input.fmt), label: 'scheduled' });
 
@@ -444,14 +444,14 @@ export function logRecs(input: RecInput): Recommendation[] {
       const max = p.maxFlightHours;
       const underMax = max !== null && u.count > 0 && median(u.its.map(it => it.totalMin)) <= max * 60;
       if (typeFits || underMax) {
-        parts.push(`it's ${typeFits ? `a ${d.type} trip` : 'a trip'}${underMax ? ` under ${max}h` : ''}`);
+        parts.push(t('recs.reason.logTrip', { kind: typeFits ? 'typed' : 'plain', type: typeLabel(d.type), under: underMax ? 'yes' : 'no', max: max ?? 0 }));
       }
     }
     recs.push({
       id, kind: 'yourLog', code, placeId: null, title: d.city,
       out: null, back: null, lines,
       weather: climateFor(input.climate, code, nextMonth(input.todayKey)),
-      reason: [{ kind: 'log', text: 'Your own outcome log' }, ...parts.map(text => ({ kind: 'profile' as const, text }))],
+      reason: [{ kind: 'log', text: t('recs.reason.log') }, ...parts.map(text => ({ kind: 'profile' as const, text }))],
       link: { path: destPath(code), query: {} },
       rank: boarded * 10 - (tried - boarded),
     });
@@ -481,13 +481,14 @@ export function onwardRecs(input: RecInput, exclude: ReadonlySet<string>): Recom
     }
     if (!dep) continue;
     const gateway = findDestination(c.code)?.city ?? c.code;
-    const mode = (c.modeLabel ?? c.mode).toLowerCase();
     return [{
       id, kind: 'onward', code: null, placeId, title: c.city,
       out: null, back: null,
-      lines: [{ text: `${c.city} via ${gateway} · ${mode} about ${shortDuration(c.rideMin)}`, label: 'estimated' }],
+      lines: [{ text: c.modeLabel
+        ? t('recs.line.onwardNamed', { city: c.city, gateway, mode: c.modeLabel, dur: shortDuration(c.rideMin) })
+        : t(c.mode === 'train' ? 'recs.line.onwardTrain' : 'recs.line.onwardBus', { city: c.city, gateway, dur: shortDuration(c.rideMin) }), label: 'estimated' }],
       weather: null,
-      reason: [{ kind: 'profile', text: 'Onward travel set to Any, City trip' }],
+      reason: [{ kind: 'profile', text: t('recs.reason.onward') }],
       link: { path: reachPath(placeId), query: { dep } },
       rank: -c.rideMin,
     }];
@@ -530,7 +531,7 @@ export function weatherSeason(input: RecInput): WeatherSeason | null {
 }
 
 export function weatherGroupTitle(season: WeatherSeason): string {
-  return season === 'cold' ? 'Escape the cold' : 'Cooler escapes';
+  return t(season === 'cold' ? 'recs.group.cold' : 'recs.group.hot');
 }
 
 /**
@@ -564,11 +565,11 @@ export function weatherRecs(input: RecInput): Recommendation[] {
       id, kind: 'weather', code: d.code, placeId: null, title: d.city,
       out: null, back: null,
       lines: [
-        { text: `Trade ${home.tmaxC}° for ${there.tmaxC}°`, label: 'typical' },
-        { text: `Nonstop ${weekdayShort(next.dateKey)}`, label: 'scheduled' },
+        { text: t('recs.line.trade', { home: home.tmaxC, there: there.tmaxC }), label: 'typical' },
+        { text: t('recs.line.nonstopDay', { day: weekdayShort(next.dateKey) }), label: 'scheduled' },
       ],
       weather: null,   // the highs are already in the first line
-      reason: [{ kind: 'schedule', text: season === 'cold' ? 'Warmer than home this month' : 'Cooler than home this month' }],
+      reason: [{ kind: 'schedule', text: t(season === 'cold' ? 'recs.reason.warmer' : 'recs.reason.cooler') }],
       link: { path: flightPath(d.code, next.dateKey), query: {} },
       deltaC: delta,
       rank: Math.abs(delta) * 1000 - next.at / 3_600_000,
@@ -587,20 +588,25 @@ export function weatherRecs(input: RecInput): Recommendation[] {
 export function whyText(r: Recommendation): string {
   let s = '';
   for (const reason of r.reason) {
-    const t = reason.text.trim().replace(/\.$/, '');
-    if (!t) continue;
-    if (!s) s = t[0].toUpperCase() + t.slice(1);
-    else if (t[0] === t[0].toLowerCase() && t[0] !== t[0].toUpperCase()) s += `, and ${t}`;
-    else s += `. ${t}`;
+    const txt = reason.text.trim().replace(/\.$/, '');
+    if (!txt) continue;
+    if (!s) s = txt[0].toUpperCase() + txt.slice(1);
+    else if (txt[0] === txt[0].toLowerCase() && txt[0] !== txt[0].toUpperCase()) s += t('recs.why.and', { text: txt });
+    else s += `. ${txt}`;
   }
   return s ? `${s}.` : '';
 }
 
 /** 'Thanksgiving long weekend in 8 days' ('tomorrow' at 1 day, 'today' at 0). */
 export function holidayGroupTitle(name: string, todayKey: string, outKey: string): string {
-  const n = diffDays(todayKey, outKey);
-  const when = n <= 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n} days`;
-  return `${name} long weekend ${when}`;
+  const parts = holidayGroupParts(name, todayKey, outKey);
+  return t('recs.group.title', parts);
+}
+
+/** The two halves of a long-weekend title: 'Thanksgiving long weekend' and 'in 8 days'. */
+export function holidayGroupParts(name: string, todayKey: string, outKey: string): { name: string; when: string } {
+  const n = Math.max(0, diffDays(todayKey, outKey));
+  return { name: t('recs.group.lwName', { name: holidayName(name) }), when: t('recs.group.when', { n }) };
 }
 
 /** 'Fri Oct 9 → Mon Oct 12'. */
@@ -641,7 +647,7 @@ export function recommend(input: RecInput): RecGroup[] {
       ...(lws.length ? holidayRecs(input, lws[0]).slice(0, 1) : []),
     ];
     const items = takeUnique(pool, used, 3);
-    return items.length ? [{ id: 'ideas', title: 'Ideas for later', aside: null, items }] : [];
+    return items.length ? [{ id: 'ideas', title: t('recs.group.ideas'), aside: null, items }] : [];
   }
 
   const used = new Set<string>();
@@ -655,12 +661,13 @@ export function recommend(input: RecInput): RecGroup[] {
     groups.push({
       id: lw.id,
       title: holidayGroupTitle(lw.name, input.todayKey, outKey),
+      ...holidayGroupParts(lw.name, input.todayKey, outKey),
       aside: holidayGroupAside(outKey, backKey),
       items,
     });
   }
   const season = takeUnique(seasonEndingRecs(input), used, 2);
-  if (season.length) groups.push({ id: 'season', title: 'Season ends soon', aside: null, items: season });
+  if (season.length) groups.push({ id: 'season', title: t('recs.group.season'), aside: null, items: season });
   const wx = weatherSeason(input);
   if (wx) {
     const items = takeUnique(weatherRecs(input), used, WEATHER_MAX);
@@ -668,7 +675,7 @@ export function recommend(input: RecInput): RecGroup[] {
   }
   if (!empty) {
     const more = takeUnique([...logRecs(input), ...styleRecs(input, used), ...onwardRecs(input, used)], used, 3);
-    if (more.length) groups.push({ id: 'more', title: 'More for you', aside: null, items: more });
+    if (more.length) groups.push({ id: 'more', title: t('recs.group.more'), aside: null, items: more });
   }
 
   // Cap the total, trimming from the end.

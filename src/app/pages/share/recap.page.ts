@@ -1,17 +1,19 @@
 import {
   ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, computed, effect, inject, input, signal, untracked,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { recapLine, returnBoarded, tripRecap } from '../../logbook/logbook';
 import {
   DEFAULT_RECAP_OPTIONS, type RecapOptions, loadDestPhoto, recapFilename, renderRecapCard,
 } from '../../share/recap-card';
-import { downloadBlob, shareImage } from '../../share/share-out';
+import { SHARE_ENV, downloadBlob, shareImage } from '../../share/share-out';
 import { AppStateService } from '../../state/app-state.service';
 import { PhotoService } from '../../state/photo.service';
 import type { Trip } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
-import { SHARE_ENV } from './trip-share.page';
+import { tripPath } from '../../ui/links';
 
 /** Draws the recap (the real canvas renderer by default; specs stub it). */
 export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions) => Promise<Blob>>('RECAP_RENDERER', {
@@ -33,44 +35,49 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
 @Component({
   selector: 'app-recap-page',
   standalone: true,
-  imports: [IconComponent],
+  imports: [IconComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="rp ui-page ui-page--bare">
-      @if (trip(); as t) {
+      @if (trip(); as tr) {
         <header class="rp__head">
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Close" data-close (click)="back()">
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('common.close')" data-close (click)="back()">
             <app-icon name="close" [size]="18" />
           </button>
           <div class="rp__title">
-            <h1 class="ui-h3">Trip recap</h1>
-            <p class="rp__sub">{{ t.name }}</p>
+            <h1 class="ui-h3">{{ t('share.recap.title') }}</h1>
+            <p class="rp__sub">{{ tr.name }}</p>
           </div>
           <span class="rp__sp" aria-hidden="true"></span>
         </header>
 
         @if (!ready()) {
-          <p class="ui-sub rp__wait" data-not-ready role="status">A recap is available once your way home is marked as boarded.</p>
+          <section class="ui-card rp__empty" data-not-ready role="status">
+            <span class="rp__empty-ic" aria-hidden="true"><app-icon name="plane" [size]="26" /></span>
+            <h2 class="ui-h3">{{ t('share.recap.emptyTitle') }}</h2>
+            <p class="ui-sub">{{ t('share.recap.emptyText') }}</p>
+            <a class="ui-btn ui-btn--sm" [routerLink]="planPath(tr.id)">{{ t('share.recap.openPlan') }}</a>
+          </section>
         } @else {
           <div class="rp__card" [class.is-busy]="!url()" data-preview>
             @if (url(); as src) {
               <img [src]="src" [alt]="alt()" width="1080" [attr.height]="height()">
             } @else if (failed()) {
-              <p class="rp__fail" role="status">The image couldn't be drawn on this browser.</p>
+              <p class="rp__fail" role="status">{{ t('share.recap.fail') }}</p>
             } @else {
-              <span class="ui-visually-hidden" role="status">Drawing the card…</span>
+              <span class="ui-visually-hidden" role="status">{{ t('share.drawing') }}</span>
             }
           </div>
 
-          <section class="ui-card rp__opts" aria-label="What to include">
+          <section class="ui-card rp__opts" [attr.aria-label]="t('share.include')">
             <label class="rp__sw" for="rp-arc">
-              <span><b>Route arc</b><span class="rp__muted">A dashed line from home to {{ t.goal.name }}</span></span>
+              <span><b>{{ t('share.recap.arc') }}</b><span class="rp__muted">{{ t('share.recap.arcHint') }}</span></span>
               <input id="rp-arc" type="checkbox" role="switch" class="switch" data-arc
                      [checked]="arc()" (change)="arc.set($any($event.target).checked)">
             </label>
             @if (hasTries()) {
               <label class="rp__sw" for="rp-record">
-                <span><b>Standby record</b><span class="rp__muted tn">{{ recordText() }}</span></span>
+                <span><b>{{ t('share.recap.record') }}</b><span class="rp__muted tn">{{ recordText() }}</span></span>
                 <input id="rp-record" type="checkbox" role="switch" class="switch" data-record
                        [checked]="record()" (change)="record.set($any($event.target).checked)">
               </label>
@@ -79,15 +86,15 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
 
           <p class="rp__note" data-never>
             <app-icon name="lock" [size]="16" [strokeWidth]="2" />
-            <span>Counts only. Booking codes, boarding passes, files and notes are never added.</span>
+            <span>{{ t('share.recap.never') }}</span>
           </p>
 
           <div class="rp__acts">
             <button type="button" class="ui-btn ui-btn--dark" data-share (click)="share()" [disabled]="!blob()">
-              <app-icon name="share" [size]="17" /> Share…
+              <app-icon name="share" [size]="17" /> {{ t('share.shareDots') }}
             </button>
             <button type="button" class="ui-btn ui-btn--ghost" data-save (click)="save()" [disabled]="!blob()">
-              <app-icon name="download" [size]="17" /> Save image
+              <app-icon name="download" [size]="17" /> {{ t('share.saveImage') }}
             </button>
           </div>
         }
@@ -100,8 +107,11 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
     .rp__title { min-width: 0; text-align: center; }
     .rp__title h1 { margin: 0; }
     .rp__sub { font-size: 12.5px; color: var(--ink-2); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rp__sp { width: 40px; flex: none; }
-    .rp__wait { text-align: center; margin-top: 24px; }
+    .rp__sp { width: 44px; flex: none; }
+    .rp__empty { display: grid; justify-items: center; gap: 8px; margin-top: 24px; padding: 28px 22px; text-align: center; }
+    .rp__empty h2, .rp__empty p { margin: 0; }
+    .rp__empty .ui-btn { margin-top: 6px; }
+    .rp__empty-ic { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--fill); color: var(--ink-2); }
     .rp__card {
       margin-top: 12px; border-radius: 22px; overflow: hidden; box-shadow: var(--shadow-l);
       background: linear-gradient(165deg, #CFE6FF 0%, #EAF3FF 46%, #FFFFFF 100%);
@@ -142,7 +152,9 @@ export const RECAP_RENDERER = new InjectionToken<(trip: Trip, opts: RecapOptions
   `],
 })
 export class RecapPage {
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
+  protected readonly planPath = tripPath;
   private readonly state = inject(AppStateService);
   private readonly render = inject(RECAP_RENDERER);
   private readonly env = inject(SHARE_ENV);
@@ -153,26 +165,26 @@ export class RecapPage {
   /** Off by default: nobody's tries are shared unless they choose. */
   protected readonly record = signal(DEFAULT_RECAP_OPTIONS.standbyRecord);
 
-  protected readonly trip = computed(() => this.trips.trips().find(t => t.id === this.id()) ?? null);
+  protected readonly trip = computed(() => this.trips.trips().find(tr => tr.id === this.id()) ?? null);
   protected readonly ready = computed(() => {
-    const t = this.trip();
-    return !!t && returnBoarded(t);
+    const tr = this.trip();
+    return !!tr && returnBoarded(tr);
   });
   private readonly summary = computed(() => {
-    const t = this.trip();
-    return t ? tripRecap(t, this.trips.outcomes()) : null;
+    const tr = this.trip();
+    return tr ? tripRecap(tr, this.trips.outcomes()) : null;
   });
   protected readonly hasTries = computed(() => (this.summary()?.tries ?? 0) > 0);
   protected readonly recordText = computed(() => {
     const s = this.summary();
-    return s ? `Boarded ${s.boarded} of ${s.tries} ${s.tries === 1 ? 'try' : 'tries'}` : '';
+    return s ? t('share.recap.recordText', { b: s.boarded, n: s.tries }) : '';
   });
   readonly opts = computed<RecapOptions>(() => ({
-    arc: this.arc(), standbyRecord: this.record() && this.hasTries(), outcomes: this.trips.outcomes(),
+    arc: this.arc(), standbyRecord: this.record() && this.hasTries(), outcomes: this.trips.outcomes(), allTrips: this.trips.trips(),
   }));
   protected readonly alt = computed(() => {
     const s = this.summary();
-    return s ? `Trip recap. ${recapLine(s)}` : 'Trip recap';
+    return s ? t('share.recap.alt', { line: recapLine(s) }) : t('share.recap.title');
   });
 
   protected readonly blob = signal<Blob | null>(null);
@@ -183,10 +195,10 @@ export class RecapPage {
 
   constructor() {
     effect(() => {
-      const t = this.trip();
+      const tr = this.trip();
       const o = this.opts();
-      if (!t || !this.ready()) return;
-      untracked(() => void this.draw(t, o));
+      if (!tr || !this.ready()) return;
+      untracked(() => void this.draw(tr, o));
     });
     inject(DestroyRef).onDestroy(() => {
       this.drawn++;
@@ -220,20 +232,20 @@ export class RecapPage {
   }
 
   protected async share(): Promise<void> {
-    const t = this.trip();
+    const tr = this.trip();
     const blob = this.blob();
-    if (!t || !blob) return;
-    const r = await shareImage(blob, recapFilename(t), `${t.goal.name} trip recap`, this.env());
-    if (r === 'downloaded') this.state.flash('Image saved');
-    else if (r === 'failed') this.state.flash("Couldn't save the image");
+    if (!tr || !blob) return;
+    const r = await shareImage(blob, recapFilename(tr), t('share.recap.shareTitle', { goal: tr.goal.name }), this.env());
+    if (r === 'downloaded') this.state.flash(t('share.imageSaved'));
+    else if (r === 'failed') this.state.flash(t('share.imageFailed'));
   }
 
   protected save(): void {
-    const t = this.trip();
+    const tr = this.trip();
     const blob = this.blob();
-    if (!t || !blob) return;
-    const r = downloadBlob(blob, recapFilename(t), this.env());
-    this.state.flash(r === 'downloaded' ? 'Image saved' : "Couldn't save the image");
+    if (!tr || !blob) return;
+    const r = downloadBlob(blob, recapFilename(tr), this.env());
+    this.state.flash(r === 'downloaded' ? t('share.imageSaved') : t('share.imageFailed'));
   }
 
   protected back(): void {

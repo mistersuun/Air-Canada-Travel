@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { makeLimiter } from './flight-status';
+import { makeLimiter } from './limits';
 import {
-  DAY_MS, MAX_CIPHERTEXT, computeExpiry, deleteGroup, getGroup, groupDailyCreates, hashToken, parsePutBody, putGroup, sweepGroups, validId, validToken, type GroupStore,
+  DAY_MS, MAX_CIPHERTEXT, computeExpiry, deleteGroup, getGroup, hashToken, parsePutBody, putGroup, SWEEP_CONCURRENCY, sweepGroups, validId, validToken, type GroupStore,
 } from './group';
 
 const NOW = Date.parse('2026-10-06T15:00:00Z');
 const ID = 'AAAAAAAAAAAAAAAAAAAAAA';
 const TOKEN = 'tokentokentokentokentoken';
+const OWNER = 'ownerownerownerownerowner';
 const body = (over: Record<string, unknown> = {}) => parsePutBody({ ciphertext: 'c'.repeat(40), iv: 'i'.repeat(16), baseVersion: 0, ...over })!;
 
 /** A fake Blobs store: strong consistency, ETag per write, conditional writes. */
@@ -50,12 +51,6 @@ describe('validation', () => {
     expect(Date.parse(computeExpiry(new Date(NOW + 400 * DAY_MS).toISOString(), NOW))).toBe(NOW + 90 * DAY_MS);
     expect(Date.parse(computeExpiry(new Date(NOW - DAY_MS).toISOString(), NOW))).toBe(NOW + DAY_MS);
     expect(Date.parse(computeExpiry(new Date(NOW + 10 * DAY_MS).toISOString(), NOW))).toBe(NOW + 10 * DAY_MS);
-  });
-});
-
-describe('groupDailyCreates', () => {
-  it('defaults to 50 and parses GROUP_DAILY_CREATES', () => {
-    expect([groupDailyCreates(undefined), groupDailyCreates('10'), groupDailyCreates('0'), groupDailyCreates('x'), groupDailyCreates('-1'), groupDailyCreates('')]).toEqual([50, 10, 0, 50, 50, 50]);
   });
 });
 
@@ -105,11 +100,44 @@ describe('create / read / update', () => {
     const rs = await Promise.all([1, 2, 3].map(() => putGroup(s, ID, TOKEN, body(), NOW)));
     expect(rs.filter(r => r.status === 200)).toHaveLength(1);
   });
-  it('an update keeps the original expiry', async () => {
+  it('an update without expiresAt keeps the original expiry', async () => {
     const s = memory();
-    const first = await putGroup(s, ID, TOKEN, body({ expiresAt: new Date(NOW + 10 * DAY_MS).toISOString() }), NOW);
-    const second = await putGroup(s, ID, TOKEN, body({ baseVersion: 1, expiresAt: new Date(NOW + 80 * DAY_MS).toISOString() }), NOW);
+    const first = await putGroup(s, ID, TOKEN, body({ expiresAt: new Date(NOW + 10 * DAY_MS).toISOString() }), NOW, undefined, OWNER);
+    const second = await putGroup(s, ID, TOKEN, body({ baseVersion: 1 }), NOW, undefined, OWNER);
     expect((second.body as { expiresAt: string }).expiresAt).toBe((first.body as { expiresAt: string }).expiresAt);
+  });
+  it('the owner can lengthen the expiry (clamped to 90 days) but never shorten it', async () => {
+    const s = memory();
+    await putGroup(s, ID, TOKEN, body({ expiresAt: new Date(NOW + 10 * DAY_MS).toISOString() }), NOW, undefined, OWNER);
+    const longer = await putGroup(s, ID, TOKEN, body({ baseVersion: 1, expiresAt: new Date(NOW + 40 * DAY_MS).toISOString() }), NOW, undefined, OWNER);
+    expect((longer.body as { expiresAt: string }).expiresAt).toBe(new Date(NOW + 40 * DAY_MS).toISOString());
+    const shorter = await putGroup(s, ID, TOKEN, body({ baseVersion: 2, expiresAt: new Date(NOW + 20 * DAY_MS).toISOString() }), NOW, undefined, OWNER);
+    expect((shorter.body as { expiresAt: string }).expiresAt).toBe(new Date(NOW + 40 * DAY_MS).toISOString());
+    const huge = await putGroup(s, ID, TOKEN, body({ baseVersion: 3, expiresAt: new Date(NOW + 400 * DAY_MS).toISOString() }), NOW, undefined, OWNER);
+    expect((huge.body as { expiresAt: string }).expiresAt).toBe(new Date(NOW + 90 * DAY_MS).toISOString());
+    expect((await getGroup(s, ID, NOW)).body).toMatchObject({ expiresAt: new Date(NOW + 90 * DAY_MS).toISOString() });
+  });
+  it('a write-token holder without the owner token cannot lengthen a group that has an owner', async () => {
+    const s = memory();
+    const first = await putGroup(s, ID, TOKEN, body({ expiresAt: new Date(NOW + 10 * DAY_MS).toISOString() }), NOW, undefined, OWNER);
+    for (const who of [undefined, 'otherotherotherotherother']) {
+      const r = await putGroup(s, ID, TOKEN, body({ baseVersion: JSON.parse(s.m.get(ID)!.v).version as number, expiresAt: new Date(NOW + 80 * DAY_MS).toISOString() }), NOW, undefined, who);
+      expect(r.status).toBe(200);
+      expect((r.body as { expiresAt: string }).expiresAt).toBe((first.body as { expiresAt: string }).expiresAt);
+    }
+  });
+  it('a group made before owner tokens lets the write token lengthen it', async () => {
+    const s = memory();
+    await putGroup(s, ID, TOKEN, body({ expiresAt: new Date(NOW + 10 * DAY_MS).toISOString() }), NOW);
+    const r = await putGroup(s, ID, TOKEN, body({ baseVersion: 1, expiresAt: new Date(NOW + 50 * DAY_MS).toISOString() }), NOW);
+    expect((r.body as { expiresAt: string }).expiresAt).toBe(new Date(NOW + 50 * DAY_MS).toISOString());
+  });
+  it('stores only the owner token hash', async () => {
+    const s = memory();
+    await putGroup(s, ID, TOKEN, body(), NOW, undefined, OWNER);
+    expect(s.m.get(ID)!.v).not.toContain(OWNER);
+    expect(JSON.parse(s.m.get(ID)!.v).ownerHash).toBe(hashToken(OWNER));
+    expect(JSON.stringify((await getGroup(s, ID, NOW)).body)).not.toContain('ownerHash');
   });
 });
 
@@ -133,6 +161,21 @@ describe('expiry and deletion', () => {
     expect(s.m.has(ID)).toBe(false);
     expect((await deleteGroup(s, ID, TOKEN)).status).toBe(404);
   });
+  it('DELETE on a group with an owner token needs it as well as the write token', async () => {
+    const s = memory();
+    await putGroup(s, ID, TOKEN, body(), NOW, undefined, OWNER);
+    expect((await deleteGroup(s, ID, TOKEN)).status).toBe(403);
+    expect((await deleteGroup(s, ID, TOKEN, 'otherotherotherotherother')).status).toBe(403);
+    expect((await deleteGroup(s, ID, 'wrongwrongwrongwrongwrong', OWNER)).status).toBe(403);
+    expect(s.m.has(ID)).toBe(true);
+    expect((await deleteGroup(s, ID, TOKEN, OWNER)).status).toBe(200);
+    expect(s.m.has(ID)).toBe(false);
+  });
+  it('DELETE on a group made before owner tokens still works with the write token alone', async () => {
+    const s = memory();
+    await putGroup(s, ID, TOKEN, body(), NOW);
+    expect((await deleteGroup(s, ID, TOKEN)).status).toBe(200);
+  });
   it('the sweep removes expired and unreadable records, keeps live ones', async () => {
     const s = memory();
     const A = 'BBBBBBBBBBBBBBBBBBBBBB';
@@ -141,6 +184,22 @@ describe('expiry and deletion', () => {
     await s.set('junk', 'not json', { onlyIfNew: true });
     expect(await sweepGroups(s, NOW + 5 * DAY_MS)).toBe(2);
     expect([...s.m.keys()]).toEqual([A]);
+  });
+  it('the sweep reads at most 8 blobs at once and still visits every one', async () => {
+    const s = memory();
+    for (let i = 0; i < 30; i++) await s.set(`junk-${i}`, 'not json', { onlyIfNew: true });
+    let inFlight = 0;
+    let peak = 0;
+    const get = s.getWithMetadata;
+    s.getWithMetadata = async k => {
+      inFlight++; peak = Math.max(peak, inFlight);
+      await new Promise(r => setTimeout(r, 1));
+      try { return await get(k); } finally { inFlight--; }
+    };
+    expect(await sweepGroups(s, NOW)).toBe(30);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(SWEEP_CONCURRENCY);
+    expect(s.m.size).toBe(0);
   });
 });
 

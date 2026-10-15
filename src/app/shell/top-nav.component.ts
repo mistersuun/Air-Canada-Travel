@@ -3,18 +3,19 @@ import { RouterLink } from '@angular/router';
 import { AppStateService } from '../state/app-state.service';
 import { IconComponent } from '../components/shared/icons.component';
 import { NavSection, hidesTopNav, navSection } from './nav-model';
+import { MsgKey, t } from '../i18n/t';
 
 interface NavLink {
   section: NavSection;
-  label: string;
+  label: MsgKey;
   path: string;
 }
 
 export const NAV_LINKS: readonly NavLink[] = [
-  { section: 'explore', label: 'Explore', path: '/' },
-  { section: 'map', label: 'Map', path: '/map' },
-  { section: 'trips', label: 'Trips', path: '/trips' },
-  { section: 'calendar', label: 'Calendar', path: '/calendar' },
+  { section: 'explore', label: 'shell.nav.explore', path: '/' },
+  { section: 'map', label: 'shell.nav.map', path: '/map' },
+  { section: 'trips', label: 'shell.nav.trips', path: '/trips' },
+  { section: 'calendar', label: 'shell.nav.calendar', path: '/calendar' },
 ];
 
 /**
@@ -32,9 +33,9 @@ export const NAV_LINKS: readonly NavLink[] = [
     '[class.is-overlay]': "section() === 'map'",
   },
   template: `
-    <nav class="tn-row" aria-label="Main">
+    <nav class="tn-row" [attr.aria-label]="t('shell.nav.main')">
       <div class="tn-left">
-        <a class="logo" routerLink="/" [queryParams]="state.globalParams()" aria-label="Routes, Explore">
+        <a class="logo" routerLink="/" [queryParams]="state.globalParams()" [attr.aria-label]="t('shell.nav.logo')">
           <span class="logo__sq" aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>
           </span>
@@ -43,7 +44,7 @@ export const NAV_LINKS: readonly NavLink[] = [
         <div class="seg ui-glass">
           @for (l of links; track l.section) {
             <a class="seg__a" [class.on]="l.section === section()" [routerLink]="l.path"
-               [queryParams]="state.globalParams()" [attr.aria-current]="l.section === section() ? 'page' : null">{{ l.label }}</a>
+               [queryParams]="state.globalParams()" [attr.aria-current]="l.section === section() ? 'page' : null">{{ t(l.label) }}</a>
           }
         </div>
       </div>
@@ -56,7 +57,7 @@ export const NAV_LINKS: readonly NavLink[] = [
             <span class="ui-sub tn data">{{ info.updatedLabel }}</span>
           }
         }
-        <button type="button" class="ui-circ ui-circ--glass" (click)="state.openSettings()" aria-label="Settings"
+        <button type="button" class="ui-circ ui-circ--glass" (click)="state.openSettings()" [attr.aria-label]="t('shell.nav.settings')"
                 aria-haspopup="dialog">
           <app-icon name="gear" [size]="19" [strokeWidth]="2" />
         </button>
@@ -92,6 +93,7 @@ export const NAV_LINKS: readonly NavLink[] = [
 export class TopNavComponent {
   protected readonly state = inject(AppStateService);
   protected readonly links = NAV_LINKS;
+  protected readonly t = t;
   protected readonly section = computed(() => navSection(this.state.path()));
   protected readonly hidden = computed(() => hidesTopNav(this.state.path()));
 }

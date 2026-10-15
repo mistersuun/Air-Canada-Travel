@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { SettingsFilesBodyComponent } from './settings-files-body.component';
+import { t } from '../../i18n/t';
 
 /**
  * Settings "Files on this phone" (extras spec §6.2). Settings ships with the
@@ -15,7 +16,7 @@ import { SettingsFilesBodyComponent } from './settings-files-body.component';
     @defer (on idle) {
       <app-settings-files-body />
     } @placeholder (minimum 0ms) {
-      <section class="grp" aria-busy="true"><p class="ui-label">Files on this phone</p></section>
+      <section class="grp" aria-busy="true"><p class="ui-label">{{ t('files.settings.title') }}</p></section>
     }
   `,
   styles: [`
@@ -23,4 +24,6 @@ import { SettingsFilesBodyComponent } from './settings-files-body.component';
     .grp { display: grid; gap: 14px; padding: 14px 16px; border-radius: 18px; background: var(--fill); min-height: 96px; }
   `],
 })
-export class SettingsFilesComponent {}
+export class SettingsFilesComponent {
+  protected readonly t = t;
+}

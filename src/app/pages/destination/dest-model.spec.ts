@@ -44,6 +44,12 @@ describe('small helpers', () => {
     expect(zoneAbbr('Europe/London', 'GB', NOON)).toBe('BST');
     expect(zoneAbbr('Not/AZone', 'XX', NOON)).toBe('');
   });
+
+  it('uses the overridden offset for zones whose rules changed (Winnipeg stays on UTC-5)', () => {
+    expect(zoneAbbr('America/Winnipeg', 'CA', Date.parse('2026-12-01T18:00:00Z'))).toBe('GMT-5');
+    expect(zoneAbbr('America/Vancouver', 'CA', Date.parse('2026-12-01T18:00:00Z'))).toBe('GMT-7');
+    expect(zoneAbbr('America/Winnipeg', 'CA', Date.parse('2026-10-01T18:00:00Z'))).not.toMatch(/^GMT/);
+  });
 });
 
 describe('currency', () => {
@@ -91,7 +97,7 @@ describe('upcoming and timelineItems', () => {
     expect(a.dateLabel).toBe('Today, Oct 1 · in 10h 10m');
     expect(a.time).toBe('22:10');
     expect(a.detail).toBe('AC864 · arrives 10:00 +1');
-    expect(a.sub).toBe(`A330-300 · ${hm(its[0].totalMin)}`);
+    expect(a.sub).toBe(`A330-300 · 297 seats · ${hm(its[0].totalMin)}`);
     expect(b.dateLabel).toBe('Fri, Oct 2');
     expect(timelineItems(its, '2026-10-01', NOON, '12h', false)[0]).toMatchObject({
       dateLabel: 'Today, Oct 1', time: '10:10 PM', detail: 'AC864 · arrives 10:00 AM +1',

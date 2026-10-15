@@ -56,6 +56,9 @@ export interface RecGroup {
   id: string;                    // 'lw:2026-10-12', 'season', 'ideas'
   title: string;                 // 'Thanksgiving long weekend in 8 days' | 'Season ends soon' | 'Ideas for later'
   aside: string | null;          // 'Fri Oct 9 → Mon Oct 12'
+  /** Long-weekend groups: the two halves of `title` ('Thanksgiving long weekend', 'in 8 days'), for the card header. */
+  name?: string;
+  when?: string;
   items: Recommendation[];
 }
 

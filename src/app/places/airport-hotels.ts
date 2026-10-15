@@ -1,4 +1,6 @@
 import { Injectable, InjectionToken, inject, signal } from '@angular/core';
+import { t } from '../i18n/t';
+import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 /**
  * Hotels near the airports, from public/data/airport-hotels.json (built by
@@ -23,7 +25,7 @@ export interface AirportHotelsFile {
 }
 
 export const AIRPORT_HOTELS_URL = 'data/airport-hotels.json';
-export const OSM_ATTRIBUTION = '© OpenStreetMap contributors';
+export const OSM_ATTRIBUTION = '© OpenStreetMap contributors';   // i18n-ignore
 export const ODBL_URL = 'https://opendatacommons.org/licenses/odbl/1-0/';
 
 /** Decodes the file; null when the shape is wrong (never throws). */
@@ -59,7 +61,7 @@ export function decodeAirportHotels(raw: unknown): AirportHotelsFile | null {
 /** Rounded to the nearest half kilometre (straight-line, not a walking time): 'about 0.5 km', 'about 1 km', 'about 1.5 km'. */
 export function distanceLabel(m: number): string {
   const km = Math.max(0.5, Math.round(m / 500) / 2);
-  return `about ${km} km`;
+  return t('places.hotels.distance', { km });
 }
 
 /** Google Maps link to one hotel by coordinates (plain link). */
@@ -71,7 +73,7 @@ export function hotelMapUrl(h: AirportHotel): string {
 export const AIRPORT_HOTELS_FETCH = new InjectionToken<() => Promise<unknown>>('AIRPORT_HOTELS_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
-    const res = await fetch(AIRPORT_HOTELS_URL);
+    const res = await fetchWithTimeout(AIRPORT_HOTELS_URL);
     if (!res.ok) {
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
       if (res.status >= 500 || offline) throw new Error(`airport-hotels.json: HTTP ${res.status}`);
@@ -79,7 +81,8 @@ export const AIRPORT_HOTELS_FETCH = new InjectionToken<() => Promise<unknown>>('
     }
     try {
       return await res.json();
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) throw err;
       return null;
     }
   },

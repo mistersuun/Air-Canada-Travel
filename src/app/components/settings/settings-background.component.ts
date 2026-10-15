@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DOCUMENT, inject, signal } from '@a
 import {
   SCHEDULE_CHECK_MIN_INTERVAL_MS, SCHEDULE_CHECK_TAG, backgroundChecksSupport, type BackgroundChecksSupport,
 } from '../../share-in/share-payload';
+import { MsgKey, t } from '../../i18n/t';
 
 interface PeriodicSyncLike {
   register(tag: string, opts: { minInterval: number }): Promise<void>;
@@ -25,12 +26,12 @@ type RegWithSync = ServiceWorkerRegistration & { periodicSync?: PeriodicSyncLike
       <section class="grp" data-settings-background>
         <label class="row" for="settings-bg">
           <span class="row__tx">
-            <span class="nm">Background schedule checks</span>
-            <span class="hint">Once or twice a day, look for new schedules and send a notification. Android and Chrome only; the browser decides when it runs, so it is best effort.</span>
+            <span class="nm">{{ t('settings.bg.title') }}</span>
+            <span class="hint">{{ t('settings.bg.hint') }}</span>
           </span>
           <input id="settings-bg" type="checkbox" role="switch" class="switch" [checked]="on()" [disabled]="busy()" (change)="toggle($event)">
         </label>
-        @if (msg()) { <p class="hint" role="status" data-bg-msg>{{ msg() }}</p> }
+        @if (msg(); as m) { <p class="hint" role="status" data-bg-msg>{{ t(m) }}</p> }
       </section>
     }
   `,
@@ -58,7 +59,9 @@ export class SettingsBackgroundComponent {
   protected readonly support = signal<BackgroundChecksSupport>({ supported: false, reason: 'no-sw' });
   protected readonly on = signal(false);
   protected readonly busy = signal(false);
-  protected readonly msg = signal<string | null>(null);
+  /** A message key, so a shown message follows a language switch. */
+  protected readonly msg = signal<MsgKey | null>(null);
+  protected readonly t = t;
 
   constructor() {
     void this.detect();
@@ -92,14 +95,14 @@ export class SettingsBackgroundComponent {
       const perm = w.Notification.permission === 'granted' ? 'granted' : await w.Notification.requestPermission();
       if (perm !== 'granted') {
         box.checked = false;
-        this.msg.set('Notifications are blocked, so there is nothing to show. Allow them in your browser settings to turn this on.');
+        this.msg.set('settings.bg.blocked');
         return;
       }
       await sync.register(SCHEDULE_CHECK_TAG, { minInterval: SCHEDULE_CHECK_MIN_INTERVAL_MS });
       this.on.set(true);
     } catch {
       box.checked = this.on();
-      this.msg.set('This browser would not allow it. Install the app to your home screen or desktop and try again.');
+      this.msg.set('settings.bg.failed');
     } finally {
       this.busy.set(false);
     }

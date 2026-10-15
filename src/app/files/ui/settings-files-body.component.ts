@@ -4,7 +4,8 @@ import { PassesService } from '../../passes/passes.service';
 import { AppStateService } from '../../state/app-state.service';
 import { TripsService } from '../../trips/trips.service';
 import { FilesService } from '../files.service';
-import { MEMORY_WARNING } from '../model';
+import { memoryWarning } from '../model';
+import { t } from '../../i18n/t';
 import { formatBytes } from '../quota';
 
 /** Largest "backup with files" Import reads (bytes): 50 MB of files grow by a third in base64. */
@@ -17,13 +18,13 @@ export function estimateBackupBytes(fileBytes: number): number {
 
 /** '14.2 MB · 9 files in 2 trips'. */
 export function settingsUsageLine(count: number, bytes: number, trips: number): string {
-  if (!count) return 'No files yet';
-  return `${formatBytes(bytes)} · ${count} ${count === 1 ? 'file' : 'files'} in ${trips} ${trips === 1 ? 'trip' : 'trips'}`;
+  if (!count) return t('files.none');
+  return t('files.settings.usage', { size: formatBytes(bytes), n: count, trips });
 }
 
 /** '3 files from deleted trips · 4.1 MB'. */
 export function orphansLine(count: number, bytes: number): string {
-  return `${count} ${count === 1 ? 'file' : 'files'} from deleted trips · ${formatBytes(bytes)}`;
+  return t('files.settings.orphans', { n: count, size: formatBytes(bytes) });
 }
 
 /**
@@ -40,26 +41,26 @@ export function orphansLine(count: number, bytes: number): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="grp" data-settings-files>
-      <p class="ui-label">Files on this phone</p>
+      <p class="ui-label">{{ t('files.settings.title') }}</p>
       <div class="use">
         <span class="nm tn" data-files-usage>{{ usageLine() }}</span>
         @if (files.status() === 'memory') {
-          <span class="hint warn">{{ memoryWarning }}</span>
+          <span class="hint warn">{{ memoryWarning() }}</span>
         } @else {
           <span class="hint" data-keep>{{ keepLine() }}</span>
         }
       </div>
 
       <label class="row" for="sf-backup">
-        <span class="row__tx"><span class="nm">Include files in backups</span><span class="hint">Adds your files to a separate backup</span></span>
+        <span class="row__tx"><span class="nm">{{ t('files.settings.include') }}</span><span class="hint">{{ t('files.settings.include.hint') }}</span></span>
         <input id="sf-backup" type="checkbox" role="switch" class="switch" data-sf-backup
                [checked]="prefs().includeInBackup" (change)="files.setPrefs({ includeInBackup: checked($event) })">
       </label>
       @if (prefs().includeInBackup) {
         <div class="acts">
-          <button type="button" class="btn" data-sf-export [disabled]="busy()" (click)="exportFiles()">Export backup with files</button>
+          <button type="button" class="btn" data-sf-export [disabled]="busy()" (click)="exportFiles()">{{ t('files.settings.export') }}</button>
           <label class="btn" [class.is-off]="busy()">
-            Import backup with files
+            {{ t('files.settings.import') }}
             <input type="file" accept="application/json,.json" class="ui-visually-hidden" data-sf-import
                    [disabled]="busy()" (change)="importFile($event)">
           </label>
@@ -68,27 +69,27 @@ export function orphansLine(count: number, bytes: number): string {
       @if (result(); as r) { <p class="res" [class.is-err]="r.error" role="status" data-sf-result>{{ r.text }}</p> }
 
       <label class="row" for="sf-passes">
-        <span class="row__tx"><span class="nm">Delete boarding passes the day after you're home</span><span class="hint">For new passes; change it on each pass</span></span>
+        <span class="row__tx"><span class="nm">{{ t('files.settings.deletePasses') }}</span><span class="hint">{{ t('files.settings.deletePasses.hint') }}</span></span>
         <input id="sf-passes" type="checkbox" role="switch" class="switch" data-sf-passes
                [checked]="prefs().deletePassesAfterTrip" (change)="files.setPrefs({ deletePassesAfterTrip: checked($event) })">
       </label>
       <label class="row" for="sf-photos">
-        <span class="row__tx"><span class="nm">Make photos smaller</span><span class="hint">Saves space and removes the location from camera photos</span></span>
+        <span class="row__tx"><span class="nm">{{ t('files.settings.smaller') }}</span><span class="hint">{{ t('files.settings.smaller.hint') }}</span></span>
         <input id="sf-photos" type="checkbox" role="switch" class="switch" data-sf-photos
                [checked]="prefs().compressPhotos" (change)="files.setPrefs({ compressPhotos: checked($event) })">
       </label>
-      <p class="hint">Boarding passes are never exported or shared.</p>
+      <p class="hint">{{ t('files.settings.neverExported') }}</p>
 
       @if (orphans().count) {
         <div class="orph" data-sf-orphans>
           <span class="hint tn">{{ orphansText() }}</span>
           @if (confirming()) {
             <span class="orph__acts">
-              <button type="button" class="mini" (click)="confirming.set(false)">Keep</button>
-              <button type="button" class="mini mini--del" data-sf-orphans-confirm (click)="removeOrphans()">Delete them</button>
+              <button type="button" class="mini" (click)="confirming.set(false)">{{ t('files.settings.keep') }}</button>
+              <button type="button" class="mini mini--del" data-sf-orphans-confirm (click)="removeOrphans()">{{ t('files.settings.deleteThem') }}</button>
             </span>
           } @else {
-            <button type="button" class="mini mini--del" data-sf-orphans-delete (click)="confirming.set(true)">Delete</button>
+            <button type="button" class="mini mini--del" data-sf-orphans-delete (click)="confirming.set(true)">{{ t('files.delete') }}</button>
           }
         </div>
       }
@@ -140,7 +141,8 @@ export class SettingsFilesBodyComponent {
   private readonly state = inject(AppStateService);
   private readonly doc = inject(DOCUMENT);
 
-  protected readonly memoryWarning = MEMORY_WARNING;
+  protected readonly t = t;
+  protected readonly memoryWarning = memoryWarning;
   protected readonly prefs = this.files.prefs;
   protected readonly busy = signal(false);
   protected readonly confirming = signal(false);
@@ -153,7 +155,7 @@ export class SettingsFilesBodyComponent {
     return settingsUsageLine(u.count, u.bytes, tripIds.size);
   });
   protected readonly keepLine = computed(() =>
-    persistNote(this.info(), isIos(this.doc.defaultView?.navigator)) ?? 'Kept until you delete them.');
+    persistNote(this.info(), isIos(this.doc.defaultView?.navigator)) ?? t('files.settings.kept'));
   private readonly tripIds = computed(() => this.trips.trips().map(t => t.id));
   protected readonly orphans = computed(() => this.files.orphans(this.tripIds()));
   protected readonly orphansText = computed(() => orphansLine(this.orphans().count, this.orphans().bytes));
@@ -171,7 +173,7 @@ export class SettingsFilesBodyComponent {
     const est = estimateBackupBytes(this.files.attachments().reduce((n, a) => n + a.bytes, 0));
     if (est > MAX_FILES_BACKUP_BYTES) {
       this.result.set({
-        text: `This backup would be about ${formatBytes(est)}, too large to import again. Delete some large files, or use Export trips.`,
+        text: t('files.settings.tooBig', { size: formatBytes(est) }),
         error: true,
       });
       return;
@@ -191,9 +193,9 @@ export class SettingsFilesBodyComponent {
       a.remove();
       setTimeout(() => win?.URL.revokeObjectURL(url), 10_000);
       this.trips.markBackedUp();
-      this.result.set({ text: `Downloaded ${a.download} (${formatBytes(blob.size)})`, error: false });
+      this.result.set({ text: t('files.settings.downloaded', { name: a.download, size: formatBytes(blob.size) }), error: false });
     } catch {
-      this.result.set({ text: 'Could not create the backup on this browser.', error: true });
+      this.result.set({ text: t('files.settings.backupFailed'), error: true });
     } finally {
       this.busy.set(false);
     }
@@ -205,7 +207,7 @@ export class SettingsFilesBodyComponent {
     input.value = '';
     if (!file) return;
     if (file.size > MAX_FILES_BACKUP_BYTES) {
-      this.result.set({ text: 'That file is too large to import here.', error: true });
+      this.result.set({ text: t('files.settings.tooLarge'), error: true });
       return;
     }
     this.busy.set(true);
@@ -215,13 +217,13 @@ export class SettingsFilesBodyComponent {
         this.result.set({ text: r.error, error: true });
         return;
       }
-      const t = r.trips, f = r.files;
-      const msg = `Added ${t.added} ${t.added === 1 ? 'trip' : 'trips'}, updated ${t.updated}; added ${f.added} ${f.added === 1 ? 'file' : 'files'}`
-        + (f.skipped ? `, skipped ${f.skipped}` : '');
+      const tr = r.trips, f = r.files;
+      const msg = t(f.skipped ? 'files.settings.importedSkipped' : 'files.settings.imported',
+        { added: tr.added, updated: tr.updated, fadded: f.added, skipped: f.skipped });
       this.result.set({ text: msg, error: false });
       this.state.flash(msg);
     } catch {
-      this.result.set({ text: 'Could not read that file.', error: true });
+      this.result.set({ text: t('files.settings.readFailed'), error: true });
     } finally {
       this.busy.set(false);
     }
@@ -230,6 +232,6 @@ export class SettingsFilesBodyComponent {
   async removeOrphans(): Promise<void> {
     this.confirming.set(false);
     const n = await this.files.removeOrphans(this.tripIds());
-    this.state.flash(n === 1 ? '1 file deleted' : `${n} files deleted`);
+    this.state.flash(t('files.settings.deleted', { n }));
   }
 }

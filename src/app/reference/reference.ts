@@ -5,7 +5,9 @@
  * decoding, formatting and the Trip Prep items. Facts and their source and
  * date only, no interpretation.
  */
-import { addDays, diffDays, formatKey } from '../utils/time';
+import { intlLocale } from '../i18n/locale';
+import { t } from '../i18n/t';
+import { addDays, formatKey } from '../utils/time';
 
 export interface Advisory { level: 0 | 1 | 2 | 3; text: string; updated: string | null; url: string; regional: boolean }
 export interface Holiday { date: string; name: string; localName: string; global: boolean }
@@ -86,10 +88,54 @@ export function fxLine(code: string | null, fx: FxTable | null): { text: string;
   const rate = code && fx ? fx.rates.get(code) : undefined;
   if (!code || !fx || !rate || code === 'CAD') return null;
   const digits = (n: number) => n >= 100 ? 0 : n >= 10 ? 1 : 2;
+  const num = (n: number) => n.toLocaleString(intlLocale(), { minimumFractionDigits: digits(n), maximumFractionDigits: digits(n), useGrouping: false });
   const pair = rate < 0.1
-    ? `1 ${code} = ${(1 / rate).toFixed(digits(1 / rate))} CAD`
-    : `1 CAD = ${rate.toFixed(digits(rate))} ${code}`;
+    ? `1 ${code} = ${num(1 / rate)} CAD`
+    : `1 CAD = ${num(rate)} ${code}`;
   return { text: pair, source: `ECB, ${shortDate(fx.date, fx.date)}` };
+}
+
+/** The rate (units of `code` per 1 CAD) when a usable one exists, else null. */
+export function fxRate(code: string | null, fx: FxTable | null): number | null {
+  const rate = code && fx ? fx.rates.get(code) : undefined;
+  return rate && rate > 0 && code !== 'CAD' ? rate : null;
+}
+
+/**
+ * Parse what a person typed: '12.5', '12,5' (one comma and 1-2 digits is a decimal), '1,200' (a comma
+ * before exactly three digits is thousands), '1,200.50' and '1.200,50' (the last separator is the
+ * decimal), spaces ignored. Null when it is not a non-negative number.
+ */
+export function parseAmount(text: string): number | null {
+  let t = text.trim().replace(/\s/g, '');
+  if (!t || /[^\d.,]/.test(t)) return null;
+  const lastDot = t.lastIndexOf('.');
+  const lastComma = t.lastIndexOf(',');
+  if (lastDot >= 0 && lastComma >= 0) {
+    const dec = lastDot > lastComma ? '.' : ',';
+    const grp = dec === '.' ? ',' : '.';
+    t = t.split(grp).join('').replace(dec, '.');
+  } else if (lastComma >= 0) {
+    const after = t.length - lastComma - 1;
+    const single = t.indexOf(',') === lastComma;
+    t = single && after !== 3 ? t.replace(',', '.') : t.split(',').join('');
+  }
+  if (!/^\d*\.?\d*$/.test(t) || t === '.' || !t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** An amount for an input: two decimals under 100, else whole units; '' for null. */
+export function amountText(n: number | null): string {
+  if (n === null) return '';
+  const r = n >= 100 ? Math.round(n) : Math.round(n * 100) / 100;
+  return String(r);
+}
+
+/** CAD to local when `fromCad`, else local to CAD, at `rate` local units per CAD. */
+export function convertAmount(text: string, rate: number, fromCad: boolean): string {
+  const n = parseAmount(text);
+  return amountText(n === null ? null : fromCad ? n * rate : n / rate);
 }
 
 /** Whether a level is shown quietly: normal precautions and no regional advisory. */
@@ -104,7 +150,7 @@ export function holidayKey(h: Holiday): string {
 
 /** 'updated Sep 30' or ''. */
 export function advisoryUpdated(a: Advisory, todayKey: string): string {
-  return a.updated ? `updated ${shortDate(a.updated, todayKey)}` : '';
+  return a.updated ? t('dest.ref.updated', { date: shortDate(a.updated, todayKey) }) : '';
 }
 
 /** Holidays on or after `fromKey` within `days`, soonest first, at most `max`. */
@@ -127,10 +173,6 @@ export function holidayName(h: Holiday): string {
 
 /** 'Public holiday', or 'Public holiday in some regions' when it is not nationwide. */
 export function holidayNote(h: Holiday): string {
-  return h.global ? 'Public holiday' : 'Public holiday in some regions';
+  return t(h.global ? 'dest.ref.holiday' : 'dest.ref.holidayRegional');
 }
 
-/** Days from today to the holiday (for the aria text). */
-export function daysUntil(h: Holiday, fromKey: string): number {
-  return diffDays(fromKey, h.date);
-}

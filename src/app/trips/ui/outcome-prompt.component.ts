@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DOCUMENT, EnvironmentInjector, afterNextRender, computed, inject, input } from '@angular/core';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { formatKey } from '../../utils/time';
 import type { OutcomePrompt } from '../engine/today';
@@ -16,7 +17,7 @@ export function outcomeChoices(partySize: number): OutcomeChoice[] {
   const kinds: OutcomeKind[] = solo ? ['allBoarded', 'noneBoarded', 'didntTry'] : ['allBoarded', 'someBoarded', 'noneBoarded', 'didntTry'];
   return kinds.map(kind => ({
     kind,
-    label: solo && kind === 'allBoarded' ? 'I boarded' : OUTCOME_LABEL[kind],
+    label: solo && kind === 'allBoarded' ? t('trips.outcome.iBoarded') : OUTCOME_LABEL[kind],
     primary: kind === 'allBoarded',
   }));
 }
@@ -41,14 +42,14 @@ export function outcomeHeading(p: OutcomePrompt): string {
   template: `
     <section class="ui-card op" [attr.aria-labelledby]="hid()" data-outcome-prompt>
       <p class="ui-label op__k tn">{{ heading() }}</p>
-      <h2 class="ui-h3 op__h" [id]="hid()">How did it go?</h2>
+      <h2 class="ui-h3 op__h" [id]="hid()">{{ t('trips.outcome.how') }}</h2>
       <div class="op__g" [class.op__g--3]="choices().length === 3">
         @for (c of choices(); track c.kind) {
           <button type="button" class="ui-btn op__b" [class.ui-btn--dark]="c.primary" [class.ui-btn--ghost]="!c.primary"
                   [attr.data-kind]="c.kind" (click)="record(c.kind, $event)">{{ c.label }}</button>
         }
       </div>
-      <button type="button" class="ui-link op__skip" data-skip (click)="skip()">Skip this flight</button>
+      <button type="button" class="ui-link op__skip" data-skip (click)="skip()">{{ t('trips.outcome.skip') }}</button>
     </section>
   `,
   styles: [`
@@ -63,6 +64,7 @@ export function outcomeHeading(p: OutcomePrompt): string {
   `],
 })
 export class OutcomePromptComponent {
+  protected readonly t = t;
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly doc = inject(DOCUMENT);
@@ -91,8 +93,8 @@ export class OutcomePromptComponent {
       celebrate(ev?.currentTarget as Element | null);
       success();
     }
-    this.state.flash(cleared ? clearedMessage(p.ref.origin, p.ref.dest, kind === 'someBoarded') : `${p.ref.flightNumber}: ${OUTCOME_LABEL[kind]} · saved`, {
-      label: 'Undo',
+    this.state.flash(cleared ? clearedMessage(p.ref.origin, p.ref.dest, kind === 'someBoarded') : t('trips.outcome.saved', { flight: p.ref.flightNumber, outcome: OUTCOME_LABEL[kind] }), {
+      label: t('trips.undo'),
       run: () => {
         if (saved) this.trips.removeOutcome(saved.id);
         if (before) this.trips.setLegStatus(before.tripId, before.legId, before.status);

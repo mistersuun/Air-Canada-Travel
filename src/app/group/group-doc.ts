@@ -6,7 +6,8 @@
  * blanked by `forGroup` before encoding: every leg's note and "If we split
  * up". Load notes are not included either.
  */
-import type { Trip } from '../trips/model';
+import { LEG_STATUSES, type LegStatus, type Trip } from '../trips/model';
+import { t } from '../i18n/t';
 
 export const MAX_NAME = 24;
 export const MAX_PLAN_LABEL = 40;
@@ -19,6 +20,12 @@ export interface MemberStatus {
   planLabel: string;
   /** Expected arrival, ISO instant, or null. */
   arrival: string | null;
+  /**
+   * My own status per flight leg id ('listed', 'boarded'…); absent on entries from older versions.
+   * A client that predates this field drops it when it saves its own status, so each device also keeps its
+   * own legs in its GroupRecord (myLegs) and quietly writes them back when its entry comes back without them.
+   */
+  legs?: Record<string, LegStatus>;
   updatedAt: string;
 }
 
@@ -44,7 +51,19 @@ export function sanitizeMember(v: unknown): MemberStatus | null {
   const name = clean(v['name'], MAX_NAME);
   const updatedAt = isoOrNull(v['updatedAt']);
   if (!name || !updatedAt) return null;
-  return { name, planLabel: clean(v['planLabel'], MAX_PLAN_LABEL), arrival: isoOrNull(v['arrival']), updatedAt };
+  const legs = sanitizeLegs(v['legs']);
+  return { name, planLabel: clean(v['planLabel'], MAX_PLAN_LABEL), arrival: isoOrNull(v['arrival']), ...(legs ? { legs } : {}), updatedAt };
+}
+
+const MAX_LEG_STATUSES = 12;
+function sanitizeLegs(v: unknown): Record<string, LegStatus> | null {
+  if (!isRec(v)) return null;
+  const out: Record<string, LegStatus> = {};
+  for (const [id, st] of Object.entries(v)) {
+    if (Object.keys(out).length >= MAX_LEG_STATUSES) break;
+    if (/^[A-Za-z0-9_-]{1,40}$/.test(id) && typeof st === 'string' && (LEG_STATUSES as readonly string[]).includes(st)) out[id] = st as LegStatus;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** Parses decrypted JSON into a doc, dropping anything malformed. Null when unusable. */
@@ -140,11 +159,46 @@ export function planLabelSuggestions(trip: Trip): string[] {
   for (const l of trip.legs) {
     if (l.kind !== 'flight') continue;
     const f = l.refs[0]?.flightNumber;
-    if (f) out.push(`On ${f}`);
+    if (f) out.push(t('group.planOn', { flight: f }));
     for (const a of l.alternates) {
       const af = a.refs[0]?.flightNumber;
-      if (af) out.push(`Plan B: ${af}`);
+      if (af) out.push(t('group.planB', { flight: af }));
     }
   }
   return [...new Set(out)].slice(0, 8);
+}
+
+// ── Friends on each leg ─────────────────────────────────────────────────────
+
+/** Statuses a friend can set on a leg from the group page. */
+export const MEMBER_LEG_STATUSES: readonly LegStatus[] = ['planned', 'listed', 'checkedIn', 'boarded', 'notBoarded'];
+
+/** Up to two initials of a nickname ('Alex' -> 'A', 'Sam Lee' -> 'SL'). */
+export function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = [...(parts[0] ?? '?')][0] ?? '?';
+  const second = parts.length > 1 ? [...parts[parts.length - 1]][0] : '';
+  return (first + second).toUpperCase();
+}
+
+/** A hue (0..359) derived from the name, so the same nickname always gets the same colour. */
+export function nameHue(name: string): number {
+  let h = 0;
+  for (const ch of name.trim().toLowerCase()) h = (h * 31 + ch.codePointAt(0)!) >>> 0;
+  return h % 360;
+}
+
+export interface LegFriend { id: string; me: boolean; name: string; status: LegStatus }
+
+/** Who has said something about this leg: me first, then by name. Members who set nothing are left out. */
+export function friendsOnLeg(doc: GroupDoc, legId: string, me: string | null): LegFriend[] {
+  return memberList(doc, me)
+    .filter(m => m.status.legs?.[legId])
+    .map(m => ({ id: m.id, me: m.me, name: m.status.name, status: m.status.legs![legId] }));
+}
+
+/** True when two or more members have said something about this leg and every one of them is boarded. Members with no status for the leg are not counted (they may not be on it). */
+export function everyoneBoarded(doc: GroupDoc, legId: string): boolean {
+  const on = Object.values(doc.members).filter(m => m.legs?.[legId]);
+  return on.length >= 2 && on.every(m => m.legs![legId] === 'boarded');
 }

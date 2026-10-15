@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MAX_QUERY_LENGTH, parseUrlState, serializeUrlState } from './url-state';
+import { MAX_QUERY_LENGTH, parseUrlState } from './url-state';
 
 describe('parseUrlState', () => {
   it('reads every field', () => {
@@ -38,16 +38,3 @@ describe('parseUrlState', () => {
   });
 });
 
-describe('serializeUrlState', () => {
-  it('writes fields in a stable order and skips empty ones', () => {
-    expect(serializeUrlState({ q: 'lis', dest: 'LHR', from: 'YUL', day: '2026-10-07' })).toBe(
-      '?from=YUL&day=2026-10-07&dest=LHR&q=lis',
-    );
-    expect(serializeUrlState({})).toBe('');
-  });
-
-  it('round-trips', () => {
-    const s = { from: 'YYZ', day: '2026-10-07', week: '2026-10-05', region: 'Asia & Pacific', dest: 'LHR', q: 'são' };
-    expect(parseUrlState(serializeUrlState(s))).toEqual(s);
-  });
-});

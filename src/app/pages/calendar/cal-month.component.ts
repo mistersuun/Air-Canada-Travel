@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { t } from '../../i18n/t';
 import type { Coverage } from '../../data/schedule-index';
 import { NO_OPTS, type ConnectOptions } from '../../utils/connections';
+import { weekdayLetters } from '../../utils/time';
 import {
   barWidth, dayAria, monthDays, monthTitle, monthWeeks, type CalDay, type CalField,
 } from './cal-model';
-
-const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /**
  * One month of the range picker (`.cal` in the mockup): a 7-column grid of
@@ -23,9 +23,9 @@ const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h2 class="ui-h3 mh" [class.mh--dim]="unpublished()" [id]="'m-' + ym()">{{ title() }}</h2>
-    @if (unpublished()) { <p class="ms">Not yet published</p> }
+    @if (unpublished()) { <p class="ms">{{ t('dest.avail.notYet') }}</p> }
     <div class="wkh wkh--own" aria-hidden="true">
-      @for (w of weekdays; track $index) { <span>{{ w }}</span> }
+      @for (w of weekdays(); track $index) { <span>{{ w }}</span> }
     </div>
     <div class="cal" role="grid" [attr.aria-labelledby]="'m-' + ym()" [class.cal--dim]="unpublished()">
       @for (row of weeks(); track $index) {
@@ -111,7 +111,8 @@ export class CalMonthComponent {
 
   readonly pick = output<string>();
 
-  protected readonly weekdays = WEEKDAYS;
+  protected readonly t = t;
+  protected readonly weekdays = computed(() => weekdayLetters());
   protected readonly bar = barWidth;
 
   readonly days = computed<CalDay[]>(() =>

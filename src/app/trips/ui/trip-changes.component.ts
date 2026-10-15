@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Router } from '@angular/router';
-import { IconComponent } from '../../components/shared/icons.component';
+import { IconComponent, type IconName } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { tripPath, tripQuery } from '../../ui/links';
 import { formatKey } from '../../utils/time';
@@ -44,15 +45,15 @@ export function changeCard(trip: Trip, c: PendingChange, minConnect: number): Ch
   if (c.kind === 'outsideCoverage') {
     return {
       ...base, warn: false,
-      title: `Schedules for ${day(old.dateKey)} aren't published yet`,
-      body: `${fn} stays as you planned it. We check again each time you open the app.`,
+      title: t('trips.change.outsideTitle', { day: day(old.dateKey) }),
+      body: t('trips.change.outsideBody', { flight: fn }),
     };
   }
   if (c.kind === 'notFound' || !c.next) {
     return {
       ...base, warn: true,
-      title: `${fn} not found in the latest schedules · ${day(old.dateKey)}`,
-      body: 'Your plan keeps the old times until you choose.',
+      title: t('trips.change.notFoundTitle', { flight: fn, day: day(old.dateKey) }),
+      body: t('trips.change.notFoundBody'),
     };
   }
   const next = c.next;
@@ -60,7 +61,7 @@ export function changeCard(trip: Trip, c: PendingChange, minConnect: number): Ch
   if (next.depLocal !== old.depLocal) moved.push(`${old.depLocal} → ${next.depLocal}`);
   if (next.arrLocal !== old.arrLocal || next.arrDateKey !== old.arrDateKey) {
     const offset = next.arrDateKey !== old.arrDateKey ? ` (${day(next.arrDateKey)})` : '';
-    moved.push(`${moved.length ? 'lands' : 'Lands'} ${old.arrLocal} → ${next.arrLocal}${offset}`);
+    moved.push(t(moved.length ? 'trips.change.landsMid' : 'trips.change.landsStart', { old: old.arrLocal, next: next.arrLocal, offset }));
   }
   const refs: FlightRef[] = leg.refs.map((r, i) => (i === c.refIndex ? { ...next, flightNumber: r.flightNumber } : r));
   const notes: string[] = [];
@@ -71,20 +72,22 @@ export function changeCard(trip: Trip, c: PendingChange, minConnect: number): Ch
     if (gap < minConnect) {
       warn = true;
       notes.push(gap < 0
-        ? `Now lands after ${refs[i].flightNumber} leaves.`
-        : `Leaves ${Math.round(gap)} min to connect to ${refs[i].flightNumber}, under your ${minConnect} min.`);
+        ? t('trips.change.landsAfterLeaves', { flight: refs[i].flightNumber })
+        : t('trips.change.tightConnect', { gap: Math.round(gap), flight: refs[i].flightNumber, min: minConnect }));
     }
   }
   const last = refs[refs.length - 1];
   if (last.dest === trip.homeAirport) {
     const late = refArrUtc(last) > deadlineUtc(trip.homeBy, trip.homeAirport);
     if (late) warn = true;
-    notes.push(late ? 'Now lands after your deadline.' : 'Still home by your deadline.');
+    notes.push(t(late ? 'trips.change.landsAfterDeadline' : 'trips.change.stillHome'));
   }
   return {
     ...base, warn,
-    title: `${fn} retimed in the new schedules`,
-    body: `${day(old.dateKey)}: ${moved.join(', ') || 'times changed'}.${notes.length ? ` ${notes.join(' ')}` : ''}`,
+    title: t('trips.change.retimedTitle', { flight: fn }),
+    body: t(notes.length ? 'trips.change.body' : 'trips.change.bodyPlain', {
+      day: day(old.dateKey), moved: moved.join(', ') || t('trips.change.timesChanged'), notes: notes.join(' '),
+    }),
   };
 }
 
@@ -113,7 +116,7 @@ export function changeCards(trip: Trip, minConnect: number): ChangeCard[] {
   host: { '[style.display]': "visible() ? 'block' : 'none'" },
   template: `
     @if (!compact() && trips.scheduleNotice(); as n) {
-      <p class="tc__info" data-notice><app-icon name="info" [size]="16" /><span>{{ n }}</span></p>
+      <p class="tc__info" data-notice><app-icon name="info" [size]="16" /><span>{{ t(n) }}</span></p>
     }
     @for (c of cards(); track c.id) {
       @if (c.kind === 'outsideCoverage') {
@@ -125,7 +128,7 @@ export function changeCards(trip: Trip, minConnect: number): ChangeCard[] {
         <article class="ui-card tc" data-change [attr.data-kind]="c.kind">
           <div class="tc__top">
             <span class="tc__ic" [class.is-warn]="c.warn" aria-hidden="true">
-              <app-icon [name]="c.kind === 'notFound' ? 'warning' : 'clock'" [size]="16" [strokeWidth]="2" />
+              <app-icon [name]="icon(c)" [size]="16" [strokeWidth]="2" />
             </span>
             <div class="tc__rt">
               <b>{{ c.title }}</b>
@@ -134,11 +137,11 @@ export function changeCards(trip: Trip, minConnect: number): ChangeCard[] {
           </div>
           <div class="tc__acts">
             @if (c.kind === 'retimed') {
-              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-accept (click)="accept(c.id)">Accept</button>
+              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-accept (click)="accept(c.id)">{{ t('trips.change.accept') }}</button>
             } @else {
-              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-keep (click)="keep(c.id)">Keep my plan</button>
+              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" data-keep (click)="keep(c.id)">{{ t('trips.change.keep') }}</button>
             }
-            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-backups (click)="seeBackups(c)">See backups</button>
+            <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" data-backups (click)="seeBackups(c)">{{ t('trips.change.seeBackups') }}</button>
           </div>
         </article>
       }
@@ -169,6 +172,7 @@ export function changeCards(trip: Trip, minConnect: number): ChangeCard[] {
   `],
 })
 export class TripChangesComponent {
+  protected readonly t = t;
   protected readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
   private readonly router = inject(Router);
@@ -181,6 +185,10 @@ export class TripChangesComponent {
     return this.compact() ? all.filter(c => c.kind !== 'outsideCoverage') : all;
   });
   protected readonly visible = computed(() => this.cards().length > 0 || (!this.compact() && !!this.trips.scheduleNotice()));
+
+  protected icon(c: ChangeCard): IconName {
+    return c.kind === 'notFound' ? 'warning' : 'clock';
+  }
 
   protected accept(changeId: string): void {
     this.trips.acceptChange(this.trip().id, changeId);

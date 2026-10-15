@@ -2,11 +2,12 @@
  * View-model for the flight page (/flight/:code/:date/:flight?). Pure
  * functions only, so the page stays thin and every rule is unit-tested.
  */
+import { t } from '../../i18n/t';
 import type { Alternatives, Itinerary } from '../../utils/connections';
 import { isLayoverAlert, LONG_LAYOVER } from '../../utils/connections';
 import type { FlightInstance } from '../../utils/week';
 import { flightsOn } from '../../utils/week';
-import { aircraftName } from '../../utils/aircraft';
+import { aircraftName, aircraftCompact, aircraftWithSeats, shortAircraft } from '../../utils/aircraft';
 import { airportName, airportTz, isHub } from '../../utils/airports';
 import { addDays, formatClock, formatDuration, formatKey, utcToLocal, weekStartKey, weekKeys } from '../../utils/time';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -62,9 +63,7 @@ export function placeName(code: string): string {
 }
 
 /** 'A330-300', '777-300ER': the aircraft name without the maker. */
-export function shortAircraft(code: string | null | undefined): string {
-  return aircraftName(code).replace(/^(Airbus|Boeing)\s+/, '');
-}
+export { shortAircraft };
 
 /** Days in the week of `dateKey` on which this flight number operates. */
 export function weekFrequency(leg: FlightInstance): number {
@@ -76,8 +75,8 @@ export function weekFrequency(leg: FlightInstance): number {
 
 /** 'Daily', '6× / wk', '—'. */
 export function frequencyLabel(n: number): string {
-  if (n >= 7) return 'Daily';
-  return n > 0 ? `${n}× / wk` : '—';
+  if (n >= 7) return t('format.daily');
+  return n > 0 ? t('flight.perWeek', { n }) : '—';
 }
 
 export interface TicketCell {
@@ -128,7 +127,7 @@ export function ticketModel(it: Itinerary, fmt: TimeFormat = '24h', minConnect =
     dest: it.dest,
     destCity: placeName(it.dest),
     nonstop: !it.hubs.length,
-    tag: it.hubs.length ? `${it.hubs.length} STOP${it.hubs.length > 1 ? 'S' : ''} · ${it.hubs.join(' ')}` : 'NON-STOP',
+    tag: it.hubs.length ? t('flight.tag.stops', { n: it.hubs.length, hubs: it.hubs.join(' ') }) : t('flight.tag.nonstop'),
     duration: formatDuration(it.totalMin),
     dep: formatClock(first.depLocal, fmt),
     depDate: shortDay(it.dateKey),
@@ -140,24 +139,24 @@ export function ticketModel(it: Itinerary, fmt: TimeFormat = '24h', minConnect =
       route: `${leg.origin} → ${leg.dest}`,
       estimated: leg.estimated,
       cells: [
-        { label: 'Date', value: formatKey(leg.dateKey, { month: 'short', day: 'numeric' }) },
+        { label: t('flight.cell.date'), value: formatKey(leg.dateKey, { month: 'short', day: 'numeric' }) },
         leg.estimated
-          ? { label: 'Flight', value: 'Estimated', title: 'Not from published schedules: verify on aircanada.com' }
+          ? { label: t('flight.cell.flight'), value: t('dest.estimated'), title: t('flight.notPublishedVerify') }
           : {
-              label: 'Flight',
+              label: t('flight.cell.flight'),
               value: prettyFlight(leg.flightNumber),
-              title: leg.altFlightNumbers?.length ? `Also filed as ${leg.altFlightNumbers.map(prettyFlight).join(', ')}` : undefined,
+              title: leg.altFlightNumbers?.length ? t('flight.alsoFiled', { nums: leg.altFlightNumbers.map(prettyFlight).join(', ') }) : undefined,
             },
-        { label: 'Aircraft', value: shortAircraft(leg.aircraft) || '—', title: aircraftName(leg.aircraft) || undefined },
-        { label: 'Duration', value: hm(leg.durationMin) },
-        { label: 'Frequency', value: frequencyLabel(weekFrequency(leg)) },
-        { label: 'Time diff', value: tzDiffLabel(airportTz(leg.dest), airportTz(leg.origin), leg.depUtc) },
+        { label: t('dest.aircraft'), value: aircraftWithSeats(leg.aircraft) || '—', title: aircraftName(leg.aircraft) || undefined },
+        { label: t('flight.cell.duration'), value: hm(leg.durationMin) },
+        { label: t('flight.cell.frequency'), value: frequencyLabel(weekFrequency(leg)) },
+        { label: t('flight.cell.timeDiff'), value: tzDiffLabel(airportTz(leg.dest), airportTz(leg.origin), leg.depUtc) },
       ],
     })),
     layovers: it.layovers.map((min, i) => ({
-      text: `${formatDuration(min)} in ${placeName(it.legs[i].dest)}`,
+      text: t('flight.layover', { dur: formatDuration(min), place: placeName(it.legs[i].dest) }),
       alert: isLayoverAlert(min, minConnect),
-      reason: min < minConnect ? 'Tight connection' : min > LONG_LAYOVER ? 'Long wait' : '',
+      reason: min < minConnect ? t('flight.tight') : min > LONG_LAYOVER ? t('flight.longWait') : '',
     })),
   };
 }
@@ -180,15 +179,17 @@ export interface OptionRow {
  */
 export function optionRow(it: Itinerary, fmt: TimeFormat = '24h', name?: string): OptionRow {
   const hub = it.hubs[0] ?? null;
-  const flights = it.legs.map(l => (l.estimated ? 'Est.' : prettyFlight(l.flightNumber))).join(' + ');
+  const flights = it.legs.map(l => (l.estimated ? t('flight.est') : prettyFlight(l.flightNumber))).join(' + ');
   const first = it.legs[0];
   const last = it.legs[it.legs.length - 1];
   const times = `${it.origin} ${formatClock(first.depLocal, fmt)} → ${it.dest} ${formatClock(last.arrLocal, fmt)}${supOffset(it.arrDayOffset)}`;
-  const aircraft = [...new Set(it.legs.map(l => shortAircraft(l.aircraft)).filter(Boolean))].join(' / ');
+  const aircraft = it.legs.length === 1
+    ? aircraftCompact(first.aircraft)
+    : [...new Set(it.legs.map(l => shortAircraft(l.aircraft)).filter(Boolean))].join(' / ');
   return {
     key: itinKey(it),
     tile: hub ?? (isHub(it.dest) ? it.origin : it.dest),
-    name: name ?? (hub ? `Via ${placeName(hub)}` : 'Nonstop'),
+    name: name ?? (hub ? t('flight.viaPlace', { place: placeName(hub) }) : t('format.nonstop')),
     small: hm(it.totalMin),
     meta: [flights, times, aircraft].filter(Boolean).join(' · '),
     date: it.dateKey,
@@ -206,11 +207,11 @@ export interface BackupGroup {
 /** "If you miss this": later same route, other routes the same day, first the next day. */
 export function backupGroups(alts: Alternatives, chosen: Itinerary, fmt: TimeFormat = '24h'): BackupGroup[] {
   const groups: BackupGroup[] = [
-    { id: 'later', label: chosen.hubs.length ? `Later via ${chosen.hubs.join(' ')}` : 'Later nonstop', rows: alts.laterSameRoute.slice(0, 2).map(i => optionRow(i, fmt)) },
-    { id: 'other', label: chosen.hubs.length ? 'Other routes, same day' : 'Connections, same day', rows: alts.otherHubsSameDay.slice(0, 2).map(i => optionRow(i, fmt)) },
+    { id: 'later', label: chosen.hubs.length ? t('flight.later.via', { hubs: chosen.hubs.join(' ') }) : t('flight.later.nonstop'), rows: alts.laterSameRoute.slice(0, 2).map(i => optionRow(i, fmt)) },
+    { id: 'other', label: chosen.hubs.length ? t('flight.other.routes') : t('flight.other.conn'), rows: alts.otherHubsSameDay.slice(0, 2).map(i => optionRow(i, fmt)) },
     {
       id: 'next',
-      label: `Next day · ${shortDay(addDays(chosen.dateKey, 1))}`,
+      label: t('flight.nextDay', { date: shortDay(addDays(chosen.dateKey, 1)) }),
       rows: alts.nextDayFirst ? [optionRow(alts.nextDayFirst, fmt)] : [],
     },
   ];
@@ -243,6 +244,8 @@ export function dayShort(key: string): string {
 export interface FactTile { label: string; value: string }
 export interface FactsView {
   covered: boolean;
+  /** Covered, but no departures that day: nothing to tabulate. */
+  empty: boolean;
   tiles: FactTile[];
   /** Neutral holiday note ('Canadian Thanksgiving weekend (Mon Oct 12). Often busy, check loads.'). */
   holiday: string | null;
@@ -253,21 +256,22 @@ export interface FactsView {
  * day, as plain counts and times (never odds). Outside coverage: no tiles.
  */
 export function factsView(f: ScheduleFacts, holiday: string | null, fmt: TimeFormat = '24h'): FactsView {
-  if (!f.covered) return { covered: false, tiles: [], holiday };
+  if (!f.covered) return { covered: false, empty: false, tiles: [], holiday };
   const n = f.departures.length;
   const times = f.departures.slice(0, 3).map(d => formatClock(d.depLocal, fmt)).join(', ') + (n > 3 ? ', …' : '');
   const aircraft = f.aircraft.slice(0, 2).map(a => (a.count > 1 ? `${a.name} ×${a.count}` : a.name)).join(', ');
   const next = f.nextDay;
   return {
     covered: true,
+    empty: n === 0,
     holiday,
-    tiles: [
-      { label: 'Departures', value: n ? `${n} · ${times}` : 'None in our schedule data' },
-      { label: 'Last one', value: f.last ? `${prettyFlight(f.last.flightNumber)} ${formatClock(f.last.depLocal, fmt)}` : '—' },
-      { label: 'Aircraft', value: aircraft || '—' },
+    tiles: n === 0 ? [] : [
+      { label: t('dest.tab.departures'), value: `${n} · ${times}` },
+      { label: t('flight.facts.last'), value: f.last ? `${prettyFlight(f.last.flightNumber)} ${formatClock(f.last.depLocal, fmt)}` : '—' },
+      { label: t('dest.aircraft'), value: aircraft || '—' },
       {
-        label: 'Next day',
-        value: !next.covered ? 'Unknown' : next.count ? `${next.count} departure${next.count === 1 ? '' : 's'}` : 'None in our schedule data',
+        label: t('flight.facts.nextDay'),
+        value: !next.covered ? t('flight.facts.unknown') : next.count ? t('flight.facts.count', { n: next.count }) : t('flight.facts.none'),
       },
     ],
   };
@@ -276,12 +280,11 @@ export function factsView(f: ScheduleFacts, holiday: string | null, fmt: TimeFor
 /** 'just now', '25 min ago', '3h ago', '2 days ago'. */
 export function agoLabel(ms: number): string {
   const min = Math.floor(ms / 60_000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min ago`;
+  if (min < 1) return t('flight.ago.now');
+  if (min < 60) return t('flight.ago.min', { n: min });
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d} day${d === 1 ? '' : 's'} ago`;
+  if (h < 24) return t('flight.ago.h', { n: h });
+  return t('format.daysAgo', { n: Math.floor(h / 24) });
 }
 
 export interface NoteRow {
@@ -300,8 +303,8 @@ export interface NoteRow {
  */
 export function noteRow(n: LoadNote, _partySize: number, nowMs: number, fmt: TimeFormat = '24h'): NoteRow {
   const nums: string[] = [];
-  if (n.open !== null) nums.push(`${n.open} open`);
-  if (n.listed !== null) nums.push(`${n.listed} listed`);
+  if (n.open !== null) nums.push(t('flight.note.open', { n: n.open }));
+  if (n.listed !== null) nums.push(t('flight.note.listed', { n: n.listed }));
   const ms = Date.parse(n.at);
   const local = Number.isFinite(ms) ? utcToLocal(ms, airportTz(n.origin)) : null;
   const today = utcToLocal(nowMs, airportTz(n.origin)).dateKey;
@@ -309,7 +312,7 @@ export function noteRow(n: LoadNote, _partySize: number, nowMs: number, fmt: Tim
   return {
     id: n.id,
     title: [prettyFlight(n.flightNumber), nums.join(', ')].filter(Boolean).join(' · '),
-    when: `You checked at ${at}${Number.isFinite(ms) ? ` · ${agoLabel(nowMs - ms)}` : ''}`,
+    when: `${t('flight.note.when', { at })}${Number.isFinite(ms) ? ` · ${agoLabel(nowMs - ms)}` : ''}`,
     text: n.text,
   };
 }
@@ -334,7 +337,7 @@ export function noteFlights(its: readonly Itinerary[], fmt: TimeFormat = '24h'):
 
 /** Active trips whose dates cover the day (from the day before the outbound to the home-by date). */
 export function tripsCovering(trips: readonly Trip[], dateKey: string): Trip[] {
-  return trips.filter(t => !t.archived && dateKey >= addDays(t.outboundDate, -1) && dateKey <= t.homeBy.dateKey);
+  return trips.filter(tr => !tr.archived && dateKey >= addDays(tr.outboundDate, -1) && dateKey <= tr.homeBy.dateKey);
 }
 
 /**
@@ -352,8 +355,10 @@ export function tripAwayAirports(trip: Trip): Set<string> {
       if (l.to.code) out.add(l.to.code);
     }
   }
-  if (trip.goal.acCode) out.add(trip.goal.acCode);
-  for (const g of gatewaysNear(trip.goal)) out.add(g.code);
+  for (const place of [trip.goal, ...(trip.stops ?? []).map(s => s.place)]) {
+    if (place.acCode) out.add(place.acCode);
+    for (const g of gatewaysNear(place)) out.add(g.code);
+  }
   out.delete(trip.fromHub);
   out.delete(trip.homeAirport);
   return out;
@@ -382,8 +387,8 @@ export function tripConnects(trip: Trip, it: { origin: string; dest: string }): 
  */
 export function tripsFor(trips: readonly Trip[], it: { origin: string; dest: string; dateKey: string } | Itinerary): Trip[] {
   const covering = new Set(tripsCovering(trips, it.dateKey));
-  return trips.filter(t => !t.archived && (
-    (covering.has(t) && tripConnects(t, it)) || ('legs' in it && tripTarget(t, it).kind === 'already')));
+  return trips.filter(tr => !tr.archived && (
+    (covering.has(tr) && tripConnects(tr, it)) || ('legs' in it && tripTarget(tr, it).kind === 'already')));
 }
 
 export type TripTarget =

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import { t } from '../../../i18n/t';
 import { IconComponent, type IconName } from '../../../components/shared/icons.component';
 import { AppStateService } from '../../../state/app-state.service';
 import type { TimeFormat } from '../../../state/prefs.service';
@@ -19,13 +20,13 @@ export interface MissRow {
 
 /** 'AC813 LIS 11:25 → YUL 13:50'. */
 export function segmentText(f: FlightInstance, fmt: TimeFormat = '24h'): string {
-  const num = prettyFlight(f.flightNumber) || 'Estimated leg';
+  const num = prettyFlight(f.flightNumber) || t('trips.miss.estimatedLeg');
   return `${num} ${f.origin} ${formatClock(f.depLocal, fmt)} → ${f.dest} ${formatClock(f.arrLocal, fmt)}${supOffset(f.arrDayOffset)}`;
 }
 
 /** '8h', '45 min': the spare time, whole hours from one hour up. */
 export function spareText(min: number): string {
-  return min >= 60 ? `${Math.floor(min / 60)}h` : `${Math.max(0, Math.round(min))} min`;
+  return min >= 60 ? t('trips.miss.hours', { h: Math.floor(min / 60) }) : t('trips.miss.minutes', { m: Math.max(0, Math.round(min)) });
 }
 
 /**
@@ -39,18 +40,17 @@ export function missRows(
   opts: { fmt?: TimeFormat; arrive?: string; lateNote?: string } = {},
 ): MissRow[] {
   const fmt = opts.fmt ?? '24h';
-  const arrive = opts.arrive ?? 'Home';
-  const lateNote = opts.lateNote ?? 'lands after your deadline';
+  const arrive = opts.arrive || t('trips.miss.home');
+  const lateNote = opts.lateNote || t('trips.deadline.late');
   return steps.map(s => {
     const it = s.itinerary;
     if (s.kind === 'late') {
       let line: string;
       if (!it) {
-        line = 'Nothing later found in our schedule data';
+        line = t('trips.miss.nothingLater');
       } else {
-        const nums = it.legs.map(l => prettyFlight(l.flightNumber) || 'an estimated leg').join(' + ');
-        const via = it.hubs.length ? ` via ${it.hubs.join(', ')}` : '';
-        line = `Next is ${nums} ${dayLabel(it.dateKey)}${via} · ${lateNote}`;
+        const nums = it.legs.map(l => prettyFlight(l.flightNumber) || t('trips.service.estimatedLeg')).join(' + ');
+        line = t(it.hubs.length ? 'trips.miss.nextVia' : 'trips.miss.next', { flights: nums, day: dayLabel(it.dateKey), hubs: it.hubs.join(', '), note: lateNote });
       }
       return { kind: s.kind, icon: 'close', title: s.label, lines: [line], itinerary: it };
     }
@@ -58,10 +58,10 @@ export function missRows(
     const lines: string[] = [];
     if (it.legs.length > 1) {
       const rest = it.legs.slice(1).map(l => segmentText(l, fmt)).join(', then ');
-      lines.push(`then ${rest} · ${it.legs.length} standby legs`);
+      lines.push(t('trips.miss.then', { rest, n: it.legs.length }));
     }
     if (s.kind === 'try' && s.slackMin !== null) {
-      lines.push(s.slackMin <= 0 ? `${arrive} right at your deadline` : `${arrive} with ${spareText(s.slackMin)} to spare`);
+      lines.push(s.slackMin <= 0 ? t('trips.miss.rightAt', { where: arrive }) : t('trips.miss.spare', { where: arrive, time: spareText(s.slackMin) }));
     }
     return {
       kind: s.kind,
@@ -90,7 +90,7 @@ export function missRows(
   imports: [IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <ol class="mc" aria-label="If you miss a flight">
+    <ol class="mc" [attr.aria-label]="t('trips.miss.aria')">
       @for (r of rows(); track $index) {
         <li class="mc__it" [class]="'mc__it mc__it--' + r.kind" [attr.data-step]="r.kind">
           <span class="mc__ic" aria-hidden="true"><b><app-icon [name]="r.icon" [size]="12" [strokeWidth]="2.2" /></b><u></u></span>
@@ -126,13 +126,14 @@ export function missRows(
   `],
 })
 export class MissChainComponent {
+  protected readonly t = t;
   private readonly state = inject(AppStateService);
 
   readonly steps = input.required<MissStep[]>();
   /** Who arrives with time to spare: 'Home' (return) or the gateway city (outbound). */
-  readonly arrive = input('Home');
+  readonly arrive = input('');
   /** Shown on the late step after the next flight. */
-  readonly lateNote = input('lands after your deadline');
+  readonly lateNote = input('');
   /** A button label on each try ('Use as return'); none when null. */
   readonly actionLabel = input<string | null>(null);
   readonly pick = output<Itinerary>();

@@ -2,7 +2,15 @@
  * Storage space checks (extras spec §4.3). The pure parts are tested; the
  * navigator calls degrade to "unknown" where a browser lacks them.
  */
+import { intlLocale } from '../i18n/locale';
+import { t } from '../i18n/t';
+
 const MB = 1024 * 1024;
+
+/** '14.2' / '14,2': one decimal in the UI language. */
+function oneDecimal(n: number): string {
+  return new Intl.NumberFormat(intlLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(n);
+}
 
 /** True for the browser's "storage full" errors (QuotaExceededError, Firefox's NS_ERROR_DOM_QUOTA_REACHED, legacy code 22). */
 export function isQuotaError(e: unknown): boolean {
@@ -19,15 +27,15 @@ export function checkRoom(bytes: number, estimate: { quota?: number; usage?: num
 
 /** 'Not enough space on this phone for this file (12.4 MB). …' */
 export function quotaText(bytes: number): string {
-  return `Not enough space on this phone for this file (${formatBytes(bytes)}). Delete some files or photos, then try again.`;
+  return t('files.error.quotaSize', { size: formatBytes(bytes) });
 }
 
 /** '820 KB', '14.2 MB', '1.1 GB' (1024-based, like the phone's own storage screens). */
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${Math.max(0, Math.round(bytes))} B`;
-  if (bytes < MB) return `${Math.round(bytes / 1024)} KB`;
-  if (bytes < 1024 * MB) return `${(bytes / MB).toFixed(1)} MB`;
-  return `${(bytes / (1024 * MB)).toFixed(1)} GB`;
+  if (bytes < 1024) return t('files.bytes.b', { n: Math.max(0, Math.round(bytes)) });
+  if (bytes < MB) return t('files.bytes.kb', { n: Math.round(bytes / 1024) });
+  if (bytes < 1024 * MB) return t('files.bytes.mb', { n: oneDecimal(bytes / MB) });
+  return t('files.bytes.gb', { n: oneDecimal(bytes / (1024 * MB)) });
 }
 
 export interface StorageInfo { persisted: boolean | null; quotaBytes: number | null; usageBytes: number | null; installed: boolean }

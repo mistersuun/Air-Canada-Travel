@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
 import { FORECAST_FETCH, FORECAST_STORAGE } from '../../recs/forecast.service';
 import { GROUND_FETCH, GroundTimetableService } from '../../places/ground-timetable.service';
+import { AIRPORT_INFO_FETCH } from '../../places/airport-info';
 import { FIXTURE_GROUND_FILE } from '../../places/testing/ground-fixture';
 import { groundTimetables, setGroundTimetables } from '../../places/timetable';
 import { AppStateService, NOW } from '../../state/app-state.service';
@@ -60,6 +61,7 @@ function configure(nowMs: number, store = seeded()) {
       { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
       { provide: STATUS_FETCH, useValue: async () => ({ status: 503, body: { error: 'not-configured' } }) },
       { provide: GROUND_FETCH, useValue: (groundFetch = vi.fn(async () => null)) },
+      { provide: AIRPORT_INFO_FETCH, useValue: async () => null },
       { provide: FORECAST_STORAGE, useValue: new MemoryStorage() },
       { provide: FORECAST_FETCH, useValue: (forecastFetch = vi.fn(async (_url: string) => FORECAST_RAW)) },
     ],
@@ -206,10 +208,57 @@ describe('Today', () => {
     expect(stored().archived).toBe(false);
   });
 
-  it('says "Nothing planned today" with a link to Trips', async () => {
-    const { el, text } = await render(TodayPage, AT_1640 + 3 * 86_400_000);
+  it('says "Nothing planned today" with a link to Trips when no trip is active or ahead', async () => {
+    const { el, text } = await render(TodayPage, AT_1640 + 20 * 86_400_000);
     expect(text('[data-empty] h1')).toBe('Nothing planned today');
     expect(el.querySelector('[data-empty] a')?.getAttribute('href')).toBe('/trips');
+  });
+
+  it('a future trip shows "Next trip in N days" with a link to it, not the bare empty state', async () => {
+    const { el, text } = await render(TodayPage, AT_1640 - 5 * 86_400_000);
+    expect(text('[data-upcoming]')).toBe('Next trip in 5 days');
+    expect(el.querySelector('[data-empty] a')?.getAttribute('href')).toBe(`/trips/${SEVILLE_IDS.trip}`);
+  });
+
+  it('a ground leg today shows the ride and "I made it" marks it done, with Undo', async () => {
+    const { el, text, stable, state, trips } = await render(TodayPage, toUtcMs('2026-10-09', '09:00', 'Europe/Madrid'));
+    expect(text('h1')).toBe('Madrid → Seville');
+    expect(el.querySelector('[data-ground]')).toBeTruthy();
+    expect(el.querySelector('[data-boarded]')).toBeNull();
+    el.querySelector<HTMLButtonElement>('[data-made-it]')!.click();
+    await stable();
+    expect(trips.trip(SEVILLE_IDS.trip)!.legs.find(l => l.id === SEVILLE_IDS.train)!.status).toBe('boarded');
+    expect(el.querySelector('[data-final]')).toBeTruthy();
+    expect(text('[data-final-msg]')).toBe('Madrid → Seville marked done.');
+    await vi.waitFor(() => expect(document.activeElement).toBe(el.querySelector('[data-final-msg]')));
+    state.notice()!.action!();
+    await stable();
+    expect(trips.trip(SEVILLE_IDS.trip)!.legs.find(l => l.id === SEVILLE_IDS.train)!.status).toBe('planned');
+    expect(text('h1')).toBe('Madrid → Seville');
+    expect(el.querySelector('[data-made-it]')).toBeTruthy();
+  });
+
+  it('the marked ground leg stays on screen when another open leg is planned the same day', async () => {
+    const store = seeded();
+    const file = JSON.parse(store.getItem(TRIPS_KEY)!);
+    const second = { ...file.trips[0].legs[1], id: 'train2', from: { name: 'Seville', lat: 37.39, lng: -5.98, tz: 'Europe/Madrid' }, to: { name: 'Cadiz', lat: 36.5, lng: -6.3, tz: 'Europe/Madrid' } };
+    file.trips[0].legs.push(second);
+    store.setItem(TRIPS_KEY, JSON.stringify(file));
+    const { el, text, stable } = await render(TodayPage, toUtcMs('2026-10-09', '09:00', 'Europe/Madrid'), {}, store);
+    expect(text('h1')).toBe('Madrid → Seville');
+    el.querySelector<HTMLButtonElement>('[data-made-it]')!.click();
+    await stable();
+    expect(text('h1')).toBe('Madrid → Seville');
+    expect(el.querySelector('[data-final]')).toBeTruthy();
+  });
+
+  it('a mid-trip day with nothing scheduled shows the day, the next leg, home-by and a trip link', async () => {
+    const { el, text } = await render(TodayPage, toUtcMs('2026-10-10', '12:00', 'Europe/Madrid'));
+    expect(text('[data-midtrip]')).toBe('Day 2 in Seville');
+    expect(text('[data-next]')).toContain('Next: Bus Seville → Lisbon');
+    expect(text('[data-home-by]')).toContain('Home by Tue Oct 13, 22:00');
+    expect(el.querySelector('[data-open-trip]')?.getAttribute('href')).toBe(`/trips/${SEVILLE_IDS.trip}`);
+    expect(el.querySelector('[data-empty]')).toBeNull();
   });
 
   it('makes no direct network calls besides the ground timetable (cached data); live status goes through its own injectable fetch', async () => {

@@ -5,6 +5,7 @@ import type { Attachment } from '../../files/model';
 import type { Trip } from '../../trips/model';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
 import { filesErrorText, itemMeta, scopeFromKey, scopeKey, scopeOptions } from './files-model';
+import { t } from '../../i18n/t';
 
 type Mode = 'menu' | 'rename' | 'move' | 'text';
 
@@ -28,27 +29,27 @@ type Mode = 'menu' | 'rename' | 'move' | 'text';
       @switch (mode()) {
         @case ('rename') {
           <form class="fs__form" (submit)="$event.preventDefault(); rename(nameIn.value, sheet)">
-            <label class="fs__lbl" for="fs-name">Name</label>
+            <label class="fs__lbl" for="fs-name">{{ t('files.name') }}</label>
             <input #nameIn id="fs-name" class="fs__in" [value]="a.title" maxlength="120" autocomplete="off" data-rename-input>
             <div class="fs__acts">
-              <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu')">Cancel</button>
-              <button type="submit" class="ui-btn ui-btn--dark" data-rename-save>Save</button>
+              <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu')">{{ t('files.cancel') }}</button>
+              <button type="submit" class="ui-btn ui-btn--dark" data-rename-save>{{ t('files.save') }}</button>
             </div>
           </form>
         }
         @case ('text') {
           <form class="fs__form" (submit)="$event.preventDefault(); saveText(textIn.value, sheet)">
-            <label class="fs__lbl" for="fs-text">{{ a.kind === 'address' ? 'Address' : 'Note' }}</label>
+            <label class="fs__lbl" for="fs-text">{{ a.kind === 'address' ? t('files.address') : t('files.note') }}</label>
             <textarea #textIn id="fs-text" class="fs__in fs__ta" rows="4" maxlength="4000" [value]="a.text ?? ''" data-text-input></textarea>
             <div class="fs__acts">
-              <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu')">Cancel</button>
-              <button type="submit" class="ui-btn ui-btn--dark" data-text-save>Save</button>
+              <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu')">{{ t('files.cancel') }}</button>
+              <button type="submit" class="ui-btn ui-btn--dark" data-text-save>{{ t('files.save') }}</button>
             </div>
           </form>
         }
         @case ('move') {
           <fieldset class="fs__move">
-            <legend class="ui-label">Move to</legend>
+            <legend class="ui-label">{{ t('files.moveTo') }}</legend>
             @for (o of options(); track o.key) {
               <label class="fs__opt">
                 <input type="radio" name="fs-move" [value]="o.key" [checked]="o.key === current()" (change)="pick.set(o.key)">
@@ -57,32 +58,32 @@ type Mode = 'menu' | 'rename' | 'move' | 'text';
             }
           </fieldset>
           <div class="fs__acts">
-            <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu')">Cancel</button>
-            <button type="button" class="ui-btn ui-btn--dark" data-move-save [disabled]="(pick() ?? current()) === current()" (click)="move(sheet)">Move</button>
+            <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu')">{{ t('files.cancel') }}</button>
+            <button type="button" class="ui-btn ui-btn--dark" data-move-save [disabled]="(pick() ?? current()) === current()" (click)="move(sheet)">{{ t('files.move') }}</button>
           </div>
         }
         @default {
-          <div class="fs__list" role="group" aria-label="File actions">
+          <div class="fs__list" role="group" [attr.aria-label]="t('files.actions')">
             @if (a.blobId || a.kind === 'address') {
               <button type="button" class="fs__row" data-act="open" (click)="open(sheet)">
                 <app-icon [name]="a.kind === 'address' ? 'map' : 'external'" [size]="18" />
-                <span>{{ a.kind === 'address' ? 'Open in Maps' : 'Open' }}</span>
+                <span>{{ a.kind === 'address' ? t('files.openInMaps') : t('common.open') }}</span>
               </button>
             }
             <button type="button" class="fs__row" data-act="rename" (click)="mode.set('rename')">
-              <app-icon name="note" [size]="18" /><span>Rename</span>
+              <app-icon name="note" [size]="18" /><span>{{ t('files.rename') }}</span>
             </button>
             @if (a.kind === 'note' || a.kind === 'address') {
               <button type="button" class="fs__row" data-act="text" (click)="mode.set('text')">
-                <app-icon name="note" [size]="18" /><span>{{ a.kind === 'address' ? 'Edit address' : 'Edit note' }}</span>
+                <app-icon name="note" [size]="18" /><span>{{ a.kind === 'address' ? t('files.editAddress') : t('files.editNote') }}</span>
               </button>
             }
             <button type="button" class="fs__row" data-act="move" (click)="mode.set('move')">
-              <app-icon name="calendar" [size]="18" /><span>Move to…</span>
+              <app-icon name="calendar" [size]="18" /><span>{{ t('files.moveToEllipsis') }}</span>
               <span class="fs__cur">{{ currentLabel() }}</span>
             </button>
             <button type="button" class="fs__row fs__row--del" data-act="delete" (click)="remove(sheet)">
-              <app-icon name="trash" [size]="18" /><span>Delete</span>
+              <app-icon name="trash" [size]="18" /><span>{{ t('files.delete') }}</span>
             </button>
           </div>
         }
@@ -118,6 +119,7 @@ type Mode = 'menu' | 'rename' | 'move' | 'text';
   `],
 })
 export class FileItemSheetComponent {
+  protected readonly t = t;
   private readonly files = inject(FilesService);
   readonly item = input.required<Attachment>();
   readonly trip = input.required<Trip>();
@@ -132,7 +134,7 @@ export class FileItemSheetComponent {
   protected readonly meta = computed(() => itemMeta(this.item()));
   protected readonly options = computed(() => scopeOptions(this.trip()));
   protected readonly current = computed(() => scopeKey(this.item().scope));
-  protected readonly currentLabel = computed(() => this.options().find(o => o.key === this.current())?.label ?? 'Whole trip');
+  protected readonly currentLabel = computed(() => this.options().find(o => o.key === this.current())?.label ?? t('files.wholeTrip'));
   protected async rename(value: string, sheet: GlassSheetComponent): Promise<void> {
     const v = value.trim();
     if (v && v !== this.item().title) await this.save({ title: v }, sheet);

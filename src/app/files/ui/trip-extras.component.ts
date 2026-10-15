@@ -5,10 +5,11 @@ import { addPassPath, filesPath, passPath } from '../../extras/links';
 import { PassesService } from '../../passes/passes.service';
 import type { Trip } from '../../trips/model';
 import { FilesService } from '../files.service';
+import { t } from '../../i18n/t';
 
 /** The chip texts: 'Passes · 2' / 'Add pass', 'Files · 7' / 'Files'. */
 export function extrasLabels(passes: number, files: number): { passes: string; files: string } {
-  return { passes: passes ? `Passes · ${passes}` : 'Add pass', files: files ? `Files · ${files}` : 'Files' };
+  return { passes: passes ? t('files.extras.passes', { n: passes }) : t('files.extras.addPass'), files: files ? t('files.extras.files', { n: files }) : t('files.extras.filesPlain') };
 }
 
 /**
@@ -22,7 +23,7 @@ export function extrasLabels(passes: number, files: number): { passes: string; f
   imports: [RouterLink, IconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <nav class="tx" aria-label="Passes and files">
+    <nav class="tx" [attr.aria-label]="t('files.extras.nav')">
       <a class="tx__chip" [routerLink]="passLink()" data-chip="passes"
          [attr.aria-label]="passAria()">
         <app-icon name="barcode" [size]="16" /><span class="tn">{{ labels().passes }}</span>
@@ -46,6 +47,7 @@ export function extrasLabels(passes: number, files: number): { passes: string; f
   `],
 })
 export class TripExtrasComponent {
+  protected readonly t = t;
   private readonly files = inject(FilesService);
   private readonly passes = inject(PassesService);
   readonly trip = input.required<Trip>();
@@ -57,7 +59,7 @@ export class TripExtrasComponent {
   /** Starts with the visible label (WCAG 2.5.3): 'Passes · 2 boarding passes', 'Add pass (boarding pass)'. */
   protected readonly passAria = computed(() => {
     const n = this.passCount();
-    return n ? `${this.labels().passes} boarding ${n === 1 ? 'pass' : 'passes'}` : `${this.labels().passes} (boarding pass)`;
+    return n ? t('files.extras.passAria', { label: this.labels().passes, n }) : t('files.extras.passAriaAdd', { label: this.labels().passes });
   });
   protected readonly passLink = computed(() => {
     const first = this.tripPasses()[0];

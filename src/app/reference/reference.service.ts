@@ -3,6 +3,7 @@ import {
   decodeAdvisories, decodeFx, decodeHolidays,
   type AdvisoryIndex, type FxTable, type HolidayIndex,
 } from './reference';
+import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
 export type ReferenceFile = 'advisories' | 'fx' | 'holidays';
 
@@ -14,7 +15,7 @@ export type ReferenceFile = 'advisories' | 'fx' | 'holidays';
 export const REFERENCE_FETCH = new InjectionToken<(name: ReferenceFile) => Promise<unknown>>('REFERENCE_FETCH', {
   providedIn: 'root',
   factory: () => async (name) => {
-    const res = await fetch(`data/${name}.json`);
+    const res = await fetchWithTimeout(`data/${name}.json`);
     if (!res.ok) {
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
       if (res.status >= 500 || offline) throw new Error(`${name}.json: HTTP ${res.status}`);
@@ -22,7 +23,8 @@ export const REFERENCE_FETCH = new InjectionToken<(name: ReferenceFile) => Promi
     }
     try {
       return await res.json();
-    } catch {
+    } catch (err) {
+      if (isAbortError(err)) throw err;
       return null;
     }
   },

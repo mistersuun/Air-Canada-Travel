@@ -8,6 +8,8 @@
  * 'boarded'. Both name the same flight instance by instanceKey
  * (flightNumber|origin|dateKey), so each flight is counted once.
  */
+import { intlLocale } from '../i18n/locale';
+import { formatNumber, t } from '../i18n/t';
 import { networkAirport } from '../data/route-network';
 import { countryName } from '../places/place';
 import { FlightLeg, FlightLog, FlightRef, Outcome, Trip, instanceKey, isFinalStatus } from '../trips/model';
@@ -218,7 +220,7 @@ export function statsOf(flights: readonly BoardedFlight[]): LogbookStats {
 export function aroundEarthLabel(n: number): string {
   if (!(n >= 0.05)) return '';
   const v = Math.round(n * 10) / 10;
-  return `${v.toLocaleString('en-CA', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} × around the Earth`;
+  return t('logbook.around', { n: v.toLocaleString(intlLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
 }
 
 // ---- Trip recap ---------------------------------------------------------
@@ -250,13 +252,13 @@ export function tripRecap(trip: Trip, outcomes: readonly Outcome[] = []): TripRe
 
 /** '4 flights · 11,240 km · 2 countries' (singulars handled). */
 export function recapLine(r: Pick<TripRecap, 'flights' | 'km' | 'countries'>): string {
-  const parts = [`${r.flights} ${r.flights === 1 ? 'flight' : 'flights'}`];
-  if (r.km > 0) parts.push(`${r.km.toLocaleString('en-CA')} km`);
-  if (r.countries > 0) parts.push(`${r.countries} ${r.countries === 1 ? 'country' : 'countries'}`);
+  const parts = [t('logbook.recap.flights', { n: r.flights })];
+  if (r.km > 0) parts.push(t('logbook.recap.km', { km: formatNumber(r.km) }));
+  if (r.countries > 0) parts.push(t('logbook.recap.countries', { n: r.countries }));
   return parts.join(' · ');
 }
 
 /** 'Boarded 3 of 4 tries'. */
 export function standbyRecordLine(r: Pick<TripRecap, 'tries' | 'boarded'>): string {
-  return `Boarded ${r.boarded} of ${r.tries} ${r.tries === 1 ? 'try' : 'tries'}`;
+  return t('logbook.recap.record', { boarded: r.boarded, n: r.tries });
 }

@@ -1,6 +1,6 @@
 import { Routes, UrlMatchResult, UrlSegment } from '@angular/router';
 import {
-  destTitle, flightTitle, knownDestination, knownTrip, legacyDestRedirect, tripTitle, validDate,
+  destTitle, flightTitle, knownDestination, knownTrip, legacyDestRedirect, tripTitle, unknownPage, validDate,
 } from './shell/route-guards';
 
 /**
@@ -9,6 +9,9 @@ import {
  * Build links with ui/links.ts (destPath, flightPath, calendarPath, and the
  * Trips v2 builders tripPath, tripImportPath, recoverPath, todayPath,
  * reachPath, gatewayPath).
+ *
+ * A static `title` is a message key; I18nTitleStrategy translates it (and
+ * re-runs title resolvers) in the UI language.
  */
 /** Matches flight/:code/:date with an optional trailing :flight slug. */
 export function flightMatcher(segments: UrlSegment[]): UrlMatchResult | null {
@@ -24,7 +27,7 @@ export const routes: Routes = [
     pathMatch: 'full',
     canActivate: [legacyDestRedirect],
     loadComponent: () => import('./pages/home/home.page').then(m => m.HomePage),
-    title: 'Routes',
+    title: 'shell.title.home',
   },
   {
     path: 'to/:code',
@@ -43,34 +46,34 @@ export const routes: Routes = [
   {
     path: 'map',
     loadComponent: () => import('./pages/map/map.page').then(m => m.MapPage),
-    title: 'Map · Routes',
+    title: 'shell.title.map',
   },
   {
     path: 'saved',
     loadComponent: () => import('./pages/saved/saved.page').then(m => m.SavedPage),
-    title: 'Saved · Routes',
+    title: 'shell.title.saved',
   },
   {
     path: 'calendar',
     loadComponent: () => import('./pages/calendar/calendar.page').then(m => m.CalendarPage),
-    title: 'Calendar · Routes',
+    title: 'shell.title.calendar',
   },
   {
     path: 'calendar/:code',
     canActivate: [knownDestination],
     loadComponent: () => import('./pages/calendar/calendar.page').then(m => m.CalendarPage),
-    title: 'Calendar · Routes',
+    title: 'shell.title.calendar',
   },
   {
     path: 'trips',
     loadComponent: () => import('./pages/trips/trips.page').then(m => m.TripsPage),
-    title: 'Trips · Routes',
+    title: 'shell.title.trips',
   },
   {
     // Before trips/:id so 'import' is never read as a trip id.
     path: 'trips/import',
     loadComponent: () => import('./pages/trips/import/trip-import.page').then(m => m.TripImportPage),
-    title: 'Shared trip · Routes',
+    title: 'shell.title.tripImport',
   },
   {
     path: 'trips/:id',
@@ -82,80 +85,80 @@ export const routes: Routes = [
     path: 'trips/:id/recover',
     canActivate: [knownTrip],
     loadComponent: () => import('./pages/today/recover.page').then(m => m.RecoverPage),
-    title: 'Still reachable · Routes',
+    title: 'shell.title.recover',
   },
   // Trip extras (extras spec §2.1): links via extras/links.ts.
   {
     path: 'trips/:id/files',
     canActivate: [knownTrip],
     loadComponent: () => import('./pages/files/trip-files.page').then(m => m.TripFilesPage),
-    title: 'Files · Routes',
+    title: 'shell.title.files',
   },
   {
     path: 'trips/:id/passes/add',
     canActivate: [knownTrip],
     loadComponent: () => import('./pages/passes/add-pass.page').then(m => m.AddPassPage),
-    title: 'Add boarding pass · Routes',
+    title: 'shell.title.addPass',
   },
   {
     path: 'trips/:id/pass/:passId',
     canActivate: [knownTrip],
     loadComponent: () => import('./pages/passes/pass-view.page').then(m => m.PassViewPage),
-    title: 'Boarding pass · Routes',
+    title: 'shell.title.pass',
   },
   {
     path: 'trips/:id/share',
     canActivate: [knownTrip],
     loadComponent: () => import('./pages/share/trip-share.page').then(m => m.TripSharePage),
-    title: 'Share trip · Routes',
+    title: 'shell.title.share',
   },
   {
     path: 'trips/:id/recap',
     canActivate: [knownTrip],
     loadComponent: () => import('./pages/share/recap.page').then(m => m.RecapPage),
-    title: 'Trip recap · Routes',
+    title: 'shell.title.recap',
   },
   {
     // Web Share Target (?id= from the service worker) and desktop File Handling.
     path: 'share-in',
     loadComponent: () => import('./pages/share-in/share-in.page').then(m => m.ShareInPage),
-    title: 'Add to a trip · Routes',
+    title: 'shell.title.shareIn',
   },
   {
     // End-to-end encrypted group plan: the key is in the URL fragment.
     path: 'g/:id',
     loadComponent: () => import('./pages/group/group.page').then(m => m.GroupPage),
-    title: 'Group trip · Routes',
+    title: 'shell.title.group',
   },
   {
     path: 'logbook',
     loadComponent: () => import('./pages/logbook/logbook.page').then(m => m.LogbookPage),
-    title: 'Logbook · Routes',
+    title: 'shell.title.logbook',
   },
   {
     path: 'profile',
     loadComponent: () => import('./pages/profile/profile.page').then(m => m.ProfilePage),
-    title: 'Travel profile · Routes',
+    title: 'shell.title.profile',
   },
   {
     path: 'weekend',
     loadComponent: () => import('./pages/weekend/weekend.page').then(m => m.WeekendPage),
-    title: 'Weekend finder · Routes',
+    title: 'shell.title.weekend',
   },
   {
     path: 'today',
     loadComponent: () => import('./pages/today/today.page').then(m => m.TodayPage),
-    title: 'Today · Routes',
+    title: 'shell.title.today',
   },
   {
     path: 'reach/:place',
     loadComponent: () => import('./pages/reach/reach.page').then(m => m.ReachPage),
-    title: 'Reach · Routes',
+    title: 'shell.title.reach',
   },
   {
     path: 'reach/:place/:code',
     loadComponent: () => import('./pages/reach/gateway.page').then(m => m.GatewayPage),
-    title: 'Reach · Routes',
+    title: 'shell.title.reach',
   },
-  { path: '**', redirectTo: '' },
+  { path: '**', canActivate: [unknownPage], children: [] },
 ];

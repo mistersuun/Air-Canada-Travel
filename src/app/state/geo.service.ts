@@ -2,6 +2,7 @@ import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { feature } from 'topojson-client';
 import type { GeometryCollection, Topology } from 'topojson-specification';
+import { FETCH_TIMEOUT_BIG_MS, fetchWithTimeout } from '../utils/fetch-timeout';
 
 export const LAND_URL = 'data/land-110m.json';
 
@@ -9,7 +10,7 @@ export const LAND_URL = 'data/land-110m.json';
 export const LAND_FETCH = new InjectionToken<() => Promise<unknown>>('LAND_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
-    const res = await fetch(LAND_URL);
+    const res = await fetchWithTimeout(LAND_URL, {}, FETCH_TIMEOUT_BIG_MS);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },

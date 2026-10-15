@@ -7,7 +7,7 @@ import { RecentService } from '../../state/recent.service';
 import { PhotoService } from '../../state/photo.service';
 import { airportTz, findDestination } from '../../utils/airports';
 import { activeFilterCount } from '../../utils/routes';
-import { formatKey, todayKey } from '../../utils/time';
+import { formatKey, todayKey, weekdayLetters } from '../../utils/time';
 import { IconComponent } from '../../components/shared/icons.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { DotDay, entryDots } from '../../ui/dot-row.component';
@@ -30,14 +30,21 @@ import { WeekCardComponent } from './week-card.component';
 import { ComingUpBannerComponent } from '../../trips/ui/coming-up-banner.component';
 import { TodayBannerComponent } from '../today/today-banner.component';
 import { ForYouComponent } from '../../recs/ui/for-you.component';
+import { t } from '../../i18n/t';
+import { regionLabel } from '../../i18n/labels';
 
 /** Phone layout (spec 1.4: mobile < 720px). */
 export const NARROW_QUERY = '(max-width: 719px)';
 
-const CONNECT_OPTIONS: SegOption[] = [
-  { value: 'direct', label: 'Nonstop' },
-  { value: 'connect', label: '+ Connections' },
-];
+const LEGEND_KEY = 'ac.legend.strip.v1';
+
+function readLegendSeen(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(LEGEND_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 interface ListRow {
   code: string;
@@ -71,37 +78,43 @@ interface ListRow {
         <div class="hero__main">
           @if (narrow()) {
             <div class="mtitle">
-              <div><p class="greet ui-sub">{{ greet() }}</p><h1 class="ui-h2 where">Where to?</h1></div>
+              <div><p class="greet ui-sub">{{ greet() }}</p><h1 class="ui-h2 where">{{ t('home.where') }}</h1></div>
               <app-hub-picker [hub]="state.hub()" size="sm" (hubChange)="state.setHub($event)" />
             </div>
           } @else {
             <p class="greet ui-sub">{{ greet() }}</p>
-            <div class="title"><h1 class="ui-display">Flying from</h1>
+            <div class="title"><h1 class="ui-display">{{ t('home.flyingFrom') }}</h1>
               <app-hub-picker [hub]="state.hub()" size="lg" (hubChange)="state.setHub($event)" /></div>
           }
           <div class="srow">
             <label class="ui-search ui-glass search">
               <app-icon name="search" [size]="18" [strokeWidth]="2" />
-              <span class="ui-visually-hidden">Search destinations</span>
+              <span class="ui-visually-hidden">{{ t('home.searchLabel') }}</span>
               <input type="search" data-search-input autocomplete="off" enterkeyhint="search" [placeholder]="placeholder()"
                      [value]="draft()" (input)="onSearch($event)" (keydown.escape)="clearSearch($event)">
               @if (draft()) {
-                <button type="button" class="x" (click)="clearSearch()" aria-label="Clear search"><app-icon name="close" [size]="16" [strokeWidth]="2.2" /></button>
+                <button type="button" class="x" (click)="clearSearch()" [attr.aria-label]="t('home.clearSearch')"><app-icon name="close" [size]="16" [strokeWidth]="2.2" /></button>
               }
               <button type="button" class="f" (click)="filtersOpen.set(true)" aria-haspopup="dialog"
-                      [attr.aria-label]="'Filter and sort' + (badge() ? ', ' + badge() + ' active' : '')">
+                      [attr.aria-label]="t('home.filterButton', { n: badge() })">
                 <app-icon name="filter" [size]="18" [strokeWidth]="2" />
                 @if (badge()) { <span class="badge tn" aria-hidden="true">{{ badge() }}</span> }
               </button>
             </label>
-            <app-seg class="conn" glass ariaLabel="Flights shown" [options]="connectOptions"
+            <app-seg class="conn" glass [ariaLabel]="t('home.flightsShown')" [options]="connectOptions()"
                      [value]="state.showConnections() ? 'connect' : 'direct'" (valueChange)="state.setShowConnections($event === 'connect')" />
           </div>
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
                           [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
+          @if (!legendSeen()) {
+            <p class="legend" data-legend>
+              <span>{{ t('home.legend') }}</span>
+              <button type="button" class="legend__x" (click)="dismissLegend()">{{ t('home.gotIt') }}</button>
+            </p>
+          }
           <div class="xrow">
-            <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">Weekend finder ›</a>
+            <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">{{ t('home.weekendFinder') }}</a>
             <app-surprise-sheet [entries]="results()" [timeFormat]="state.timeFormat()" />
           </div>
         </div>
@@ -112,16 +125,16 @@ interface ListRow {
       </div>
 
       @if (outside() || resultsMode()) {
-        <section class="sec results" aria-label="Destinations">
+        <section class="sec results" [attr.aria-label]="t('home.destinations')">
           @if (!outside()) {
             <div class="ui-sec-h rhead">
               <h2 class="ui-h2">{{ resultsTitle() }} <span class="count tn">{{ results().length + places().length }}</span></h2>
-              @if (viewAll()) { <a class="ui-link" [routerLink]="[]" [queryParams]="{ view: null }" queryParamsHandling="merge" [replaceUrl]="true">Back to Explore</a> }
+              @if (viewAll()) { <a class="ui-link" [routerLink]="[]" [queryParams]="{ view: null }" queryParamsHandling="merge" [replaceUrl]="true">{{ t('home.backToExplore') }}</a> }
             </div>
-            <div class="regions ui-snap-row" role="group" aria-label="Region">
+            <div class="regions ui-snap-row" role="group" [attr.aria-label]="t('home.region')">
               @for (r of regions; track r) {
                 <button type="button" class="rchip" [attr.aria-pressed]="state.region() === r" (click)="setRegion(r)">
-                  {{ r === 'All' ? 'All regions' : r === 'Starred' ? '★ Starred' : r }}</button>
+                  {{ regionLabel(r) }}</button>
               }
             </div>
             <app-filter-chips class="chips" [showRegion]="false" (cleared)="leaveAll()" />
@@ -137,7 +150,7 @@ interface ListRow {
       } @else {
         @if (recent().length) {
           <section class="sec recent" aria-labelledby="h-recent" data-recent>
-            <div class="ui-sec-h"><h2 class="ui-h2 st" id="h-recent">Recent</h2></div>
+            <div class="ui-sec-h"><h2 class="ui-h2 st" id="h-recent">{{ t('home.recent') }}</h2></div>
             <div class="rrow ui-snap-row">
               @for (r of recent(); track r.code) {
                 <a class="rchip" [routerLink]="dest(r.code)" [queryParams]="state.globalParams()">{{ r.city }} <b>{{ r.code }}</b></a>
@@ -148,8 +161,8 @@ interface ListRow {
         <app-for-you />
         @if (picks().length) {
           <section class="sec" aria-labelledby="h-picks">
-            <div class="ui-sec-h"><h2 class="ui-h2 st" id="h-picks">Editor's pick</h2>
-              <a [routerLink]="[]" [queryParams]="{ view: 'all' }" queryParamsHandling="merge" [replaceUrl]="true">See all</a></div>
+            <div class="ui-sec-h"><h2 class="ui-h2 st" id="h-picks">{{ t('home.picks') }}</h2>
+              <a [routerLink]="[]" [queryParams]="{ view: 'all' }" queryParamsHandling="merge" [replaceUrl]="true">{{ t('common.seeAll') }}</a></div>
             <div class="picks ui-snap-row">
               @for (p of picks(); track p.code) {
                 <app-photo-card class="pick" [code]="p.code" [title]="p.city" [meta]="narrow() ? p.metaShort : p.meta"
@@ -163,25 +176,25 @@ interface ListRow {
           <section class="lc ui-card" aria-labelledby="h-nonstop">
             <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-nonstop">{{ nonstopTitle() }}</h2>
               @if (!narrow()) {
-                <span class="dow" aria-hidden="true">@for (l of dayLetters; track $index) {<i>{{ l }}</i>}</span>
+                <span class="dow" aria-hidden="true">@for (l of dayLetters(); track $index) {<i>{{ l }}</i>}</span>
               }
             </div>
             @for (r of nonstop(); track r.code) {
-              <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()" />
+              <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)" [dots]="r.dots" [selectedDay]="focus()" wrapMeta />
             } @empty {
-              <p class="none ui-sub">No nonstop flights {{ state.selectedDateKey() ? 'on this day' : 'this week' }}.</p>
+              <p class="none ui-sub">{{ t('home.nonstop.none', { span: state.selectedDateKey() ? 'day' : 'week' }) }}</p>
             }
             @if (nonstopCount() > listLimit()) {
               <button type="button" class="ui-link showall" (click)="nonstopOpen.set(!nonstopOpen())" [attr.aria-expanded]="nonstopOpen()">
-                {{ nonstopOpen() ? 'Show less' : 'Show all ' + nonstopCount() + ' nonstop' }}</button>
+                {{ nonstopOpen() ? t('common.showLess') : t('home.nonstop.showAll', { n: nonstopCount() }) }}</button>
             }
           </section>
 
           @if (connections().length) {
             <section class="lc ui-card" aria-labelledby="h-conn">
-              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-conn">Connections only</h2>
+              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-conn">{{ t('home.connectionsOnly') }}</h2>
                 @if (!narrow()) {
-                  <span class="dow" aria-hidden="true">@for (l of dayLetters; track $index) {<i>{{ l }}</i>}</span>
+                  <span class="dow" aria-hidden="true">@for (l of dayLetters(); track $index) {<i>{{ l }}</i>}</span>
                 }
               </div>
               @for (r of connections(); track r.code) {
@@ -189,14 +202,14 @@ interface ListRow {
               }
               @if (connectionCount() > listLimit()) {
                 <button type="button" class="ui-link showall" (click)="connOpen.set(!connOpen())" [attr.aria-expanded]="connOpen()">
-                  {{ connOpen() ? 'Show less' : 'Show all ' + connectionCount() + ' connecting' }}</button>
+                  {{ connOpen() ? t('common.showLess') : t('home.connections.showAll', { n: connectionCount() }) }}</button>
               }
             </section>
           }
 
           @if (seasonal().length) {
             <section class="lc ui-card" [class.lc--wide]="connections().length > 0" aria-labelledby="h-season">
-              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-season">Seasonal &amp; ending soon</h2></div>
+              <div class="ui-sec-h lh"><h2 class="ui-h2 st" id="h-season">{{ t('home.seasonal') }}</h2></div>
               <div [class.cols]="connections().length > 0">
               @for (r of seasonRows(); track r.code) {
                 <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="dest(r.code)">
@@ -206,7 +219,7 @@ interface ListRow {
               </div>
               @if (seasonal().length > seasonLimit()) {
                 <button type="button" class="ui-link showall" (click)="seasonOpen.set(!seasonOpen())" [attr.aria-expanded]="seasonOpen()">
-                  {{ seasonOpen() ? 'Show less' : 'Show all ' + seasonal().length + ' seasonal' }}</button>
+                  {{ seasonOpen() ? t('common.showLess') : t('home.seasonal.showAll', { n: seasonal().length }) }}</button>
               }
             </section>
           }
@@ -235,6 +248,12 @@ interface ListRow {
       box-shadow: 0 0 0 2px var(--bg);
     }
     .conn { align-self: center; }
+    .legend {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 0;
+      font-size: 12.5px; color: var(--ink-2);
+    }
+    .legend__x { flex: none; position: relative; padding: 4px 8px; font-weight: 600; color: var(--blue); }
+    .legend__x::after { content: ''; position: absolute; inset: -8px -4px; }
     .strip { margin-top: 14px; }
 
     .sec { margin-top: 40px; }
@@ -263,9 +282,10 @@ interface ListRow {
     .count { color: var(--ink-3); font-weight: 600; margin-left: 4px; }
     .regions { gap: 8px; margin-bottom: 10px; padding: 2px 0; }
     .rchip {
-      flex: none; padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap;
+      position: relative; flex: none; padding: 7px 13px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap;
       background: var(--glass); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--hair);
     }
+    .rchip::after { content: ''; position: absolute; inset: -7px -2px; }
     .rchip:hover { color: var(--ink); }
     .rchip[aria-pressed='true'] { background: var(--ink); color: var(--bg); box-shadow: none; }
     .chips { margin-bottom: 14px; }
@@ -311,8 +331,24 @@ export class HomePage {
       return d && d.code !== this.state.hub() ? [{ code: d.code, city: d.city }] : [];
     }));
 
-  protected readonly connectOptions = CONNECT_OPTIONS;
-  protected readonly dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  /** The week-strip legend shows until dismissed once (per device). */
+  protected readonly legendSeen = signal(readLegendSeen());
+  protected dismissLegend(): void {
+    this.legendSeen.set(true);
+    try {
+      globalThis.localStorage?.setItem(LEGEND_KEY, '1');
+    } catch {
+      // Storage blocked: the legend returns next visit.
+    }
+  }
+
+  protected readonly t = t;
+  protected readonly regionLabel = regionLabel;
+  protected readonly connectOptions = computed<SegOption[]>(() => [
+    { value: 'direct', label: t('format.nonstop') },
+    { value: 'connect', label: t('home.plusConnections') },
+  ]);
+  protected readonly dayLetters = computed(() => weekdayLetters());
   protected readonly regions = REGION_CHIPS;
   protected readonly filtersOpen = signal(false);
   protected readonly seasonOpen = signal(false);
@@ -366,7 +402,7 @@ export class HomePage {
   protected readonly hubName = computed(() => this.state.hubInfo().name);
   protected readonly range = computed(() => weekRangeLabel(this.state.weekStartKey()));
   protected readonly placeholder = computed(() =>
-    this.narrow() ? 'Search destinations' : `Search ${this.state.allRoutes().length} destinations, countries or flight numbers`,
+    this.narrow() ? t('home.searchLabel') : t('home.searchPlaceholder', { n: this.state.allRoutes().length }),
   );
   protected readonly stripDots = computed(() => this.state.stats().departuresByWeekday.map(n => n > 0));
   protected readonly focus = computed(() =>
@@ -404,9 +440,11 @@ export class HomePage {
   }));
 
   protected readonly resultsTitle = computed(() => {
-    if (this.state.query()) return 'Results';
+    if (this.state.query()) return t('home.resultsTitle');
     const day = this.state.selectedDateKey();
-    return day ? `From ${this.state.hub()} · ${formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' })}` : 'All destinations';
+    return day
+      ? t('home.fromDay', { hub: this.state.hub(), date: formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' }) })
+      : t('home.allDestinations');
   });
 
   readonly picks = computed(() =>
@@ -424,9 +462,18 @@ export class HomePage {
   readonly nonstop = computed<ListRow[]>(() => {
     const short = this.narrow();
     const fmt = this.state.timeFormat();
+    // Routes in "Seasonal & ending soon" that end (not pause) carry an 'ends Oct 23' tag.
+    const ending = new Map(this.seasonal().filter(ev => ev.kind === 'ends').map(ev => [ev.code, ev.label]));
     return this.nonstopAll()
       .slice(0, this.nonstopOpen() ? undefined : this.listLimit())
-      .map(e => ({ code: e.destination.code, small: e.destination.code, meta: rowMeta(e, fmt, short), dots: entryDots(e) }));
+      .map(e => {
+        const ends = ending.get(e.destination.code);
+        // 'Ends Oct 23' leads the meta line (same wording as the seasonal section), so the name stays whole.
+        const meta = rowMeta(e, fmt, short);
+        return {
+          code: e.destination.code, small: e.destination.code, meta: ends ? `${ends} · ${meta}` : meta, dots: entryDots(e),
+        };
+      });
   });
 
   /** Rows shown in Nonstop / Connections before "All N" (fewer on phones). */
@@ -434,9 +481,9 @@ export class HomePage {
 
   protected readonly nonstopTitle = computed(() => {
     const day = this.state.selectedDateKey();
-    if (!day) return 'Nonstop this week';
-    if (this.narrow() && day === this.state.todayKey()) return 'Nonstop today';
-    return `Nonstop · ${formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+    if (!day) return t('home.nonstop.week');
+    if (this.narrow() && day === this.state.todayKey()) return t('home.nonstop.today');
+    return t('home.nonstop.day', { date: formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' }) });
   });
 
   readonly seasonal = computed(() => seasonEvents(this.state.hub(), this.hubToday()));

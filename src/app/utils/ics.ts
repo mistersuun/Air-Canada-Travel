@@ -14,6 +14,7 @@
  */
 import type { Itinerary } from './connections';
 import type { FlightInstance } from './week';
+import { t } from '../i18n/t';
 import { aircraftName } from './aircraft';
 import { airportName } from './airports';
 import { formatDayOffset, formatDuration } from './time';
@@ -28,7 +29,7 @@ export interface IcsOptions {
 }
 
 const CRLF = '\r\n';
-const PRODID = '-//AC Travel Planner//Schedule export//EN';
+const PRODID = '-//AC Travel Planner//Schedule export//EN'; // i18n-ignore
 const UID_DOMAIN = 'ac-travel-planner';
 
 /** Escapes a TEXT value (RFC 5545 §3.3.11). */
@@ -82,12 +83,12 @@ function addDaysKey(key: string, n: number): string {
 }
 
 function flightLabel(f: FlightInstance): string {
-  return f.flightNumber ? f.flightNumber.replace(/^([A-Z]{2})\s*/, '$1') : 'Estimated leg';
+  return f.flightNumber ? f.flightNumber.replace(/^([A-Z]{2})\s*/, '$1') : t('flight.ics.estLeg');
 }
 
 function legSummary(f: FlightInstance): string {
   return f.estimated
-    ? `Estimated domestic leg ${f.origin}→${f.dest} (verify)`
+    ? t('flight.ics.estSummary', { origin: f.origin, dest: f.dest })
     : `${flightLabel(f)} ${f.origin}→${f.dest}`;
 }
 
@@ -95,17 +96,20 @@ function legDescription(it: Itinerary, i: number): string {
   const f = it.legs[i];
   const lines: string[] = [];
   if (f.estimated) {
-    lines.push(`Estimated leg ${f.origin} → ${f.dest}: not from published schedules.`);
-    lines.push(`Around ${f.depLocal} local, about ${formatDuration(f.durationMin)}. Pick a real flight in the Air Canada app.`);
+    lines.push(t('flight.ics.estDesc1', { origin: f.origin, dest: f.dest }));
+    lines.push(t('flight.ics.estDesc2', { time: f.depLocal, dur: formatDuration(f.durationMin) }));
   } else {
     const plane = f.aircraft ? ` · ${aircraftName(f.aircraft)}` : '';
     lines.push(`Air Canada ${flightLabel(f)}${plane}`);
     const off = formatDayOffset(f.arrDayOffset);
-    lines.push(`${f.origin} ${f.depLocal} → ${f.dest} ${f.arrLocal}${off ? ` (${off} day)` : ''}, local times · ${formatDuration(f.durationMin)}`);
+    lines.push(t('flight.ics.times', {
+      origin: f.origin, dep: f.depLocal, dest: f.dest, arr: f.arrLocal,
+      off: off ? t('flight.ics.dayOffset', { off }) : '', dur: formatDuration(f.durationMin),
+    }));
   }
-  if (i > 0) lines.push(`After a ${formatDuration(it.layovers[i - 1])} layover in ${airportName(f.origin)}.`);
-  if (i < it.legs.length - 1) lines.push(`Then a ${formatDuration(it.layovers[i])} layover in ${airportName(f.dest)}.`);
-  lines.push('Schedule only, not a booking: verify on the Air Canada app.');
+  if (i > 0) lines.push(t('flight.ics.after', { dur: formatDuration(it.layovers[i - 1]), airport: airportName(f.origin) }));
+  if (i < it.legs.length - 1) lines.push(t('flight.ics.then', { dur: formatDuration(it.layovers[i]), airport: airportName(f.dest) }));
+  lines.push(t('flight.ics.note'));
   return lines.join('\n');
 }
 
@@ -136,7 +140,7 @@ function legEvent(it: Itinerary, i: number, stamp: string, alarm: boolean): stri
       'BEGIN:VALARM',
       'ACTION:DISPLAY',
       'TRIGGER:-PT24H',
-      `DESCRIPTION:${escapeIcsText(`Check in / list for ${flightLabel(f)} ${f.origin}→${f.dest}`)}`,
+      `DESCRIPTION:${escapeIcsText(t('flight.ics.alarm', { label: flightLabel(f), origin: f.origin, dest: f.dest }))}`,
       'END:VALARM',
     );
   }
@@ -152,7 +156,7 @@ export function buildIcs(input: Itinerary | readonly Itinerary[], destName = '',
   const list: readonly Itinerary[] = Array.isArray(input) ? input : [input as Itinerary];
   const stamp = icsUtc(opts.now === undefined ? Date.now() : +opts.now);
   const alarm = opts.alarm ?? true;
-  const name = opts.calendarName ?? (destName ? `Air Canada · ${destName}` : 'Air Canada flights');
+  const name = opts.calendarName ?? (destName ? `Air Canada · ${destName}` : t('flight.ics.calAll'));
 
   const lines = [
     'BEGIN:VCALENDAR',

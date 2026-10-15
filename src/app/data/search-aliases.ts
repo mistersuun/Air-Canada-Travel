@@ -9,14 +9,14 @@ import type { Destination, DestinationType } from './destinations';
 const A: Record<string, readonly string[]> = {
   // Caribbean & Mexico (states and islands)
   PUJ: ['La Altagracia', 'Hispaniola', 'Bavaro'], LRM: ['Hispaniola'], POP: ['Hispaniola'], AZS: ['Hispaniola'], SDQ: ['Hispaniola'],
-  NAS: ['New Providence', 'Paradise Island'], GGT: ['Exuma', 'Out Islands'], PLS: ['Turks and Caicos', 'Provo'],
+  NAS: ['New Providence', 'Paradise Island'], GGT: ['Exuma', 'Out Islands'], PLS: ['Turks and Caicos', 'Provo'], // i18n-ignore
   FDF: ['French Antilles'], PTP: ['French Antilles', 'Grande-Terre'], SXM: ['Saint Martin', 'St Martin'],
   UVF: ['Saint Lucia', 'Hewanorra'], SKB: ['Saint Kitts', 'Nevis'], SVD: ['Saint Vincent', 'Grenadines'], ANU: ['Barbuda'],
   POS: ['Trinidad', 'Tobago'], CUR: ['Dutch Caribbean', 'Willemstad'], AUA: ['Dutch Caribbean'], GCM: ['Grand Cayman'],
   SJU: ['Isla Verde', 'Luis Munoz Marin'], MBJ: ['Sangster'], BDA: ['LF Wade'],
   CUN: ['Quintana Roo', 'Riviera Maya', 'Yucatan'], TQO: ['Quintana Roo', 'Riviera Maya', 'Yucatan'], CZM: ['Quintana Roo', 'Riviera Maya'],
   MID: ['Yucatan'], PVR: ['Jalisco', 'Riviera Nayarit', 'Nayarit'], GDL: ['Jalisco'], SJD: ['Baja California Sur', 'Baja', 'Cabo'],
-  MTY: ['Nuevo Leon'], MEX: ['CDMX', 'Ciudad de Mexico', 'Benito Juarez'], ZIH: ['Guerrero', 'Zihuatanejo'],
+  MTY: ['Nuevo Leon'], MEX: ['CDMX', 'Ciudad de Mexico', 'Benito Juarez'], ZIH: ['Guerrero', 'Zihuatanejo'], // i18n-ignore
   HUX: ['Oaxaca'], PXM: ['Oaxaca'], MZT: ['Sinaloa'],
   // USA (state name, abbreviation, airport)
   LAX: ['California', 'CA'], SFO: ['California', 'CA', 'Bay Area'], SAN: ['California', 'CA'], SMF: ['California', 'CA'],
@@ -36,8 +36,8 @@ const A: Record<string, readonly string[]> = {
   STL: ['Missouri', 'MO'], IND: ['Indiana', 'IN'], SLC: ['Utah', 'UT'],
   // Europe and beyond (airport names, regions)
   LHR: ['Heathrow', 'England', 'UK', 'Britain', 'Great Britain'], MAN: ['England', 'UK', 'Britain', 'Ringway'], EDI: ['UK', 'Britain', 'Scotland'],
-  CDG: ['Charles de Gaulle', 'Roissy', 'Ile-de-France'], NCE: ['Cote d Azur', 'French Riviera', 'Riviera'], LYS: ['Saint-Exupery'],
-  FCO: ['Fiumicino', 'Lazio', 'Leonardo da Vinci'], MXP: ['Malpensa', 'Lombardy', 'Lombardia'], VCE: ['Marco Polo', 'Veneto'],
+  CDG: ['Charles de Gaulle', 'Roissy', 'Ile-de-France'], NCE: ['Cote d Azur', 'French Riviera', 'Riviera'], LYS: ['Saint-Exupery'], // i18n-ignore
+  FCO: ['Fiumicino', 'Lazio', 'Leonardo da Vinci'], MXP: ['Malpensa', 'Lombardy', 'Lombardia'], VCE: ['Marco Polo', 'Veneto'], // i18n-ignore
   NAP: ['Campania', 'Capodichino'], CTA: ['Sicily', 'Sicilia', 'Fontanarossa'], BCN: ['Catalonia', 'Catalunya', 'El Prat'],
   MAD: ['Barajas'], PMI: ['Mallorca', 'Majorca', 'Balearic', 'Balearics'], TFS: ['Canary Islands', 'Canarias', 'Canaries', 'Tenerife South'],
   LIS: ['Portela', 'Humberto Delgado'], OPO: ['Francisco Sa Carneiro'], PDL: ['Azores', 'Sao Miguel', 'Ponta Delgada'],
@@ -50,13 +50,13 @@ const A: Record<string, readonly string[]> = {
   SYD: ['Kingsford Smith', 'New South Wales', 'NSW'], BNE: ['Queensland', 'QLD'], AKL: ['North Island'],
   BOG: ['El Dorado'], CTG: ['Bolivar', 'Rafael Nunez'], GRU: ['Guarulhos', 'Sao Paulo'], GIG: ['Galeao'], LIM: ['Jorge Chavez'],
   SCL: ['Arturo Merino Benitez'], UIO: ['Mariscal Sucre'], BZE: ['Philip Goldson'], GUA: ['La Aurora'], SJO: ['Juan Santamaria'],
-  LIR: ['Guanacaste', 'Daniel Oduber'], RTB: ['Bay Islands', 'Islas de la Bahia'], CMN: ['Mohammed V'], DXB: ['United Arab Emirates', 'Emirates'], TLV: ['Ben Gurion'],
+  LIR: ['Guanacaste', 'Daniel Oduber'], RTB: ['Bay Islands', 'Islas de la Bahia'], CMN: ['Mohammed V'], DXB: ['United Arab Emirates', 'Emirates'], TLV: ['Ben Gurion'], // i18n-ignore
 };
 
 /** Country-level synonyms, by ISO 3166-1 alpha-2. */
 const COUNTRY: Record<string, readonly string[]> = {
   US: ['United States', 'America', 'US', 'States'], GB: ['UK', 'Britain'], AE: ['United Arab Emirates', 'Emirates'],
-  CZ: ['Czechia'], KR: ['Korea'], DO: ['DR'], TC: ['Turks and Caicos'],
+  CZ: ['Czechia'], KR: ['Korea'], DO: ['DR'], TC: ['Turks and Caicos'], // i18n-ignore
 };
 
 /** Trip-type words to the destination type they select ('beach' selects Sun). */

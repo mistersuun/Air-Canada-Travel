@@ -1,4 +1,5 @@
 import { Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
+import { fetchWithTimeout } from '../utils/fetch-timeout';
 
 /** One entry of public/img/dest/credits.json (written by scripts/photos). */
 export interface PhotoCredit {
@@ -35,7 +36,7 @@ export const CREDITS_URL = `${PHOTO_BASE}credits.json`;
 export const PHOTO_FETCH = new InjectionToken<(url: string) => Promise<unknown>>('PHOTO_FETCH', {
   providedIn: 'root',
   factory: () => async (url: string) => {
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },

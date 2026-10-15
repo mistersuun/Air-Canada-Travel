@@ -5,21 +5,50 @@
  * Times: flight times stay origin/dest-local (FlightRef local fields), user
  * timestamps are ISO instants, and `homeBy` is wall-clock at `homeAirport`.
  */
+import { t, type MsgKey } from '../i18n/t';
+
 export const TRIPS_KEY = 'ac.trips.v1';          // { schema, trips }
 export const FLIGHTLOG_KEY = 'ac.flightlog.v1';  // { schema, notes, outcomes, dismissed }
 export const TRIPS_CORRUPT_KEY = 'ac.trips.corrupt';
 export const FLIGHTLOG_CORRUPT_KEY = 'ac.flightlog.corrupt';
-export const TRIPS_SCHEMA = 1;
+/**
+ * Schema history of ac.trips.v1 (a newer number than the app knows loads read-only):
+ *   1: single `goal` per trip.
+ *   2: optional `stops` (see Stop). Migration 1 -> 2 is the identity: a v1 trip
+ *      has no stops, which means "one stop, the goal". Nothing is rewritten or
+ *      dropped, so a v1 file loads losslessly and a v2 file is never overwritten
+ *      by an older app (it reads it as newer, i.e. read-only).
+ * The flight log keeps its own schema number.
+ */
+export const TRIPS_SCHEMA = 2;
+export const FLIGHTLOG_SCHEMA = 1;
+/**
+ * The schema number to write: 1 while no trip has stops (so an older app keeps
+ * reading and writing the file), 2 as soon as one does.
+ */
+export function schemaFor(trips: readonly Pick<Trip, 'stops'>[]): 1 | 2 {
+  return trips.some(t => t.stops?.length) ? 2 : 1;
+}
 
 export type Provenance = 'scheduled' | 'estimated' | 'saved' | 'unknown';
-export const PROVENANCE_LABEL: Record<Provenance, string> =
-  { scheduled: 'Scheduled', estimated: 'Estimated', saved: 'Saved by you', unknown: 'Unknown' };
+
+/** A label map whose values are translated when read, so it follows a language switch. */
+export function labelMap<K extends string>(keys: Record<K, MsgKey>): Record<K, string> {
+  const out = {} as Record<K, string>;
+  for (const k of Object.keys(keys) as K[]) Object.defineProperty(out, k, { enumerable: true, get: () => t(keys[k]) });
+  return out;
+}
+
+export const PROVENANCE_LABEL: Record<Provenance, string> = labelMap({
+  scheduled: 'trips.provenance.scheduled', estimated: 'trips.provenance.estimated',
+  saved: 'trips.provenance.saved', unknown: 'trips.provenance.unknown',
+});
 
 export type LegStatus = 'planned' | 'listed' | 'checkedIn' | 'boarded' | 'notBoarded' | 'didntTry' | 'abandoned';
-export const LEG_STATUS_LABEL: Record<LegStatus, string> = {
-  planned: 'Planned', listed: 'Listed', checkedIn: 'Checked in', boarded: 'Boarded',
-  notBoarded: 'Not boarded', didntTry: "Didn't try", abandoned: 'Dropped',
-};
+export const LEG_STATUS_LABEL: Record<LegStatus, string> = labelMap({
+  planned: 'trips.status.planned', listed: 'trips.status.listed', checkedIn: 'trips.status.checkedIn', boarded: 'trips.status.boarded',
+  notBoarded: 'trips.status.notBoarded', didntTry: 'trips.status.didntTry', abandoned: 'trips.status.abandoned',
+});
 export const LEG_STATUSES: readonly LegStatus[] =
   ['planned', 'listed', 'checkedIn', 'boarded', 'notBoarded', 'didntTry', 'abandoned'];
 /** Statuses after which a leg is "done" (no more prompts, excluded from Today's "next flight"). */
@@ -113,12 +142,33 @@ export interface PendingChange {
   state: 'open' | 'accepted' | 'kept';
 }
 
+/**
+ * Multi-stop design note. `Trip.goal` stays the FIRST stop (every old
+ * consumer, link and backup keeps working). `stops` lists the stops AFTER the
+ * goal, in order; absent or empty means a single-stop trip. A stop is where
+ * you are from `arriveDate` until the next stop's arriveDate (or home).
+ * Per-consumer rule (see trips/stops.ts): things about getting there / the
+ * trip's identity (names, cards, prep, country, outbound timeline) use the
+ * first stop (goal); things about getting home (Return tab, home-by gateways,
+ * recovery away from the goal) use the LAST stop; "where am I today" uses
+ * currentStop(). Stops are not derived from 'onward' legs: a stop exists
+ * before its flight is chosen and a leg can be removed without losing the stop.
+ */
+export interface Stop {
+  id: string;
+  place: Place;
+  arriveDate: string;                // dateKey you get there
+  leaveDate?: string;                // dateKey you leave, when known
+}
+
 export interface Trip {
   v: 1;
   id: string;                        // 10 chars base36 from crypto.getRandomValues
   name: string;                      // 'Seville trip'
   createdAt: string; updatedAt: string;
-  goal: Place;
+  goal: Place;                       // the first stop
+  /** Stops after the goal, in order (absent = none). */
+  stops?: Stop[];
   party: Party;
   fromHub: string;                   // 'YUL', one of HUBS
   homeAirport: string;               // where "home" is; defaults to fromHub
@@ -148,8 +198,10 @@ export interface LoadNote {
 }
 
 export type OutcomeKind = 'allBoarded' | 'someBoarded' | 'noneBoarded' | 'didntTry';
-export const OUTCOME_LABEL: Record<OutcomeKind, string> =
-  { allBoarded: 'Everyone boarded', someBoarded: 'Some of us', noneBoarded: "Didn't board", didntTry: "Didn't try" };
+export const OUTCOME_LABEL: Record<OutcomeKind, string> = labelMap({
+  allBoarded: 'trips.outcome.allBoarded', someBoarded: 'trips.outcome.someBoarded',
+  noneBoarded: 'trips.outcome.noneBoarded', didntTry: 'trips.outcome.didntTry',
+});
 export const OUTCOME_KINDS: readonly OutcomeKind[] = ['allBoarded', 'someBoarded', 'noneBoarded', 'didntTry'];
 
 export interface Outcome {
@@ -162,8 +214,8 @@ export interface Outcome {
   recordedAt: string;
 }
 
-export interface FlightLog { schema: 1; notes: LoadNote[]; outcomes: Outcome[]; dismissed: string[] /* prompt keys */ }
-export interface TripsFile { schema: 1; trips: Trip[] }
+export interface FlightLog { schema: typeof FLIGHTLOG_SCHEMA; notes: LoadNote[]; outcomes: Outcome[]; dismissed: string[] /* prompt keys */ }
+export interface TripsFile { schema: 1 | 2; trips: Trip[] }
 
 /** Input of TripsService.create. */
 export interface NewTrip {
@@ -195,10 +247,10 @@ export function emptyTripsFile(): TripsFile {
 }
 
 export function emptyFlightLog(): FlightLog {
-  return { schema: 1, notes: [], outcomes: [], dismissed: [] };
+  return { schema: FLIGHTLOG_SCHEMA, notes: [], outcomes: [], dismissed: [] };
 }
 
 /** 'Seville trip'. */
 export function defaultTripName(goal: Place): string {
-  return `${goal.name} trip`;
+  return t('trips.defaultName', { name: goal.name });
 }

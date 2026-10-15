@@ -8,13 +8,15 @@ import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { PrefsService } from '../../state/prefs.service';
 import type { PrepItem } from '../../places/prep';
-import { LEG_STATUS_LABEL, type LegStatus, instanceKey } from '../../trips/model';
+import { type LegStatus, instanceKey } from '../../trips/model';
+import { t } from '../../i18n/t';
 import { TripsService } from '../../trips/trips.service';
 import { LegStatusTagComponent } from '../../trips/ui/leg-status-tag.component';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
-import { recoverPath, tripUrl, tripsPath } from '../../ui/links';
+import { recoverPath, tripPath, tripQuery, tripUrl, tripsPath } from '../../ui/links';
 import { PlansChangedSheetComponent, type PlansChangedChoice } from './plans-changed-sheet.component';
-import { type TodayTarget, resolveToday, statusForTick, todayView } from './today-model';
+import { type TodayTarget, groundTodayView, legStatusLabel, midTripView, resolveGroundToday, resolveToday, statusForTick, todayView, upcomingTripView } from './today-model';
+import { MODE_ICON } from '../trips/trips-model';
 import { TodayTimelineComponent } from './today-timeline.component';
 import { TodayInAirComponent } from './in-air.component';
 import { LiveStatusComponent } from '../../live/live-status.component';
@@ -37,13 +39,13 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
   template: `
     <div class="ui-page ui-page--bare td">
       <div class="td__top">
-        <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+        <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('today.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
       </div>
       @if (view(); as v) {
         <p class="ui-label td__eyebrow">{{ v.eyebrow }}</p>
         <h1 class="td__title">{{ v.title }}</h1>
 
-        <section class="ui-card td__flight" aria-label="Your flight">
+        <section class="ui-card td__flight" [attr.aria-label]="t('today.yourFlight')">
           <div class="td__row">
             <span class="td__when"><span class="td__time ui-cond tn">{{ v.time }}</span><span class="td__zone" data-zone>{{ v.zone }}</span></span>
             <span class="td__tags"><app-provenance-tag [value]="v.provenance" /><app-leg-status-tag [status]="v.status" /></span>
@@ -52,18 +54,18 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
           <app-live-status [flightNumber]="v.ref.flightNumber" [origin]="v.ref.origin" [depUtc]="depUtc(v.ref)"
                            [recoverLink]="live(v).link" [recoverParams]="live(v).params" [recoverLabel]="live(v).label" />
           @if (v.note; as n) {
-            <p class="td__note" data-note>Your note, {{ n.time }}: <b>{{ n.text }}</b></p>
+            <p class="td__note" data-note>{{ noteParts(n.time).before }}<b>{{ n.text }}</b>{{ noteParts(n.time).after }}</p>
           }
           @if (noteOpen()) {
             <form class="td__nf" (submit)="saveNote($event)">
-              <label class="ui-visually-hidden" for="td-note">Note for {{ v.ref.flightNumber }}</label>
+              <label class="ui-visually-hidden" for="td-note">{{ t('today.noteFor', { flight: v.ref.flightNumber }) }}</label>
               <input id="td-note" class="td__ni" type="text" maxlength="140" autocomplete="off"
-                     placeholder="Gate, delay, how many listed…" [value]="draft()" (input)="draft.set($any($event.target).value)" />
-              <button type="submit" class="ui-btn ui-btn--dark ui-btn--sm" [disabled]="!draft().trim()">Save</button>
+                     [placeholder]="t('today.notePlaceholder')" [value]="draft()" (input)="draft.set($any($event.target).value)" />
+              <button type="submit" class="ui-btn ui-btn--dark ui-btn--sm" [disabled]="!draft().trim()">{{ t('today.save') }}</button>
             </form>
           } @else {
             <button type="button" class="ui-link td__add" data-add-note (click)="openNote()">
-              {{ v.note ? 'Add a newer note' : 'Add a note (gate, delay, list)' }}
+              {{ v.note ? t('today.addNewerNote') : t('today.addNote') }}
             </button>
           }
         </section>
@@ -75,28 +77,28 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
         @if (!v.final) {
           <div class="td__acts">
             <button type="button" class="td__big ui-btn ui-btn--dark" data-boarded (click)="boarded($event)">
-              <app-icon name="check" [size]="18" [strokeWidth]="2.4" />I boarded
+              <app-icon name="check" [size]="18" [strokeWidth]="2.4" />{{ t('today.iBoarded') }}
             </button>
             <button type="button" class="td__big td__miss ui-btn" data-not-boarded (click)="notBoarded()">
-              <app-icon name="close" [size]="18" [strokeWidth]="2.4" />I didn't board
+              <app-icon name="close" [size]="18" [strokeWidth]="2.4" />{{ t('today.iDidntBoard') }}
             </button>
-            <button type="button" class="td__big td__chg ui-btn ui-btn--ghost" data-plans-changed (click)="sheetOpen.set(true)">Plans changed</button>
+            <button type="button" class="td__big td__chg ui-btn ui-btn--ghost" data-plans-changed (click)="sheetOpen.set(true)">{{ t('today.plansChanged') }}</button>
           </div>
         } @else {
           <div class="ui-card td__done" data-final>
-            <p tabindex="-1" data-final-msg><b>{{ v.ref.flightNumber }} marked {{ statusLabel(v.status) }}.</b></p>
+            <p tabindex="-1" data-final-msg><b>{{ t('today.markedAs', { flight: v.ref.flightNumber, status: statusLabel(v.status) }) }}</b></p>
             <div class="td__done-acts">
               @if (v.status === 'notBoarded' || v.status === 'didntTry') {
-                <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="toRecover()">What can I still reach?</button>
+                <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="toRecover()">{{ t('today.stillReach') }}</button>
               }
-              <a class="ui-btn ui-btn--ghost ui-btn--sm" [routerLink]="tripLink()">Open trip</a>
+              <a class="ui-btn ui-btn--ghost ui-btn--sm" [routerLink]="tripLink()">{{ t('today.openTrip') }}</a>
             </div>
           </div>
         }
 
         @if (v.left.length) {
           <section class="ui-card td__left" aria-labelledby="td-left">
-            <h2 class="ui-label" id="td-left">Left to do</h2>
+            <h2 class="ui-label" id="td-left">{{ t('today.leftToDo') }}</h2>
             @for (item of v.left; track item.id) {
               <button type="button" class="td__chk" role="checkbox" [attr.aria-checked]="item.done" [attr.data-item]="item.id" (click)="tick(item)">
                 <span class="td__box" [class.on]="item.done" aria-hidden="true">
@@ -114,13 +116,70 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
             <span class="td__ct"><b class="tn">{{ b.title }}</b><small>{{ b.detail }}</small></span>
           </button>
         }
-        <p class="td__foot">Gate, delay and list numbers are your own notes. Listing stays your own step.</p>
+        <p class="td__foot">{{ t('today.foot') }}</p>
+      } @else if (ground(); as g) {
+        <p class="ui-label td__eyebrow">{{ g.eyebrow }}</p>
+        <h1 class="td__title">{{ g.title }}</h1>
+
+        <section class="ui-card td__flight" [attr.aria-label]="t('today.yourRide')" data-ground>
+          <div class="td__row">
+            <span class="td__when">
+              <app-icon [name]="icon(g.mode)" [size]="26" />
+              @if (g.time) { <span class="td__time ui-cond tn">{{ g.time }}</span><span class="td__zone">{{ g.zone }}</span> }
+              @else { <span class="td__mode">{{ g.modeLabel }}</span> }
+            </span>
+            <span class="td__tags"><app-provenance-tag [value]="g.provenance" /></span>
+          </div>
+          <p class="td__sub tn">{{ g.sub }}</p>
+          @if (g.info) { <p class="td__sub" data-ground-info>{{ g.info }}</p> }
+          @if (g.note) { <p class="td__note">{{ groundNoteParts().before }}<b>{{ g.note }}</b>{{ groundNoteParts().after }}</p> }
+        </section>
+
+        @if (!g.final) {
+          <div class="td__acts">
+            <button type="button" class="td__big ui-btn ui-btn--dark" data-made-it (click)="madeIt(g.tripId, g.legId)">
+              <app-icon name="check" [size]="18" [strokeWidth]="2.4" />{{ t('today.iMadeIt') }}
+            </button>
+            <a class="td__big td__chg ui-btn ui-btn--ghost" data-ground-changed [routerLink]="planLink(g.tripId)" [queryParams]="planQuery(g.legId)">{{ t('today.plansChanged') }}</a>
+          </div>
+        } @else {
+          <div class="ui-card td__done" data-final>
+            <p tabindex="-1" data-final-msg><b>{{ t('today.markedDone', { title: g.title }) }}</b></p>
+            <div class="td__done-acts">
+              <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="planLink(g.tripId)">{{ t('today.openTrip') }}</a>
+            </div>
+          </div>
+        }
+        <p class="td__foot">{{ t('today.groundFoot') }}</p>
+      } @else if (mid(); as m) {
+        <p class="ui-label td__eyebrow">{{ m.eyebrow }}</p>
+        <h1 class="td__title" data-midtrip>{{ m.title }}</h1>
+        <p class="ui-sub td__mid-sub" data-quiet>{{ m.quiet }}</p>
+        @if (m.next; as n) {
+          <section class="ui-card td__left" [attr.aria-label]="t('today.nextLeg')" data-next>
+            <span class="td__ct"><b class="tn">{{ n.title }}</b><small>{{ n.detail }}@if (n.listing; as l) { · <span data-listing [class.td__lst-open]="l.open">{{ l.label }}</span>}</small></span>
+          </section>
+        }
+        <section class="ui-card td__left" [attr.aria-label]="t('today.homeByLabel')" data-home-by>
+          <span class="td__ct"><b class="tn">{{ m.homeBy.label }}</b><small>{{ m.homeBy.countdown }}</small></span>
+        </section>
+        @if (m.fact) { <p class="td__foot" data-fact>{{ m.fact }}</p> }
+        <div class="td__acts">
+          <a class="ui-btn ui-btn--dark td__big" data-open-trip [routerLink]="planLink(m.tripId)">{{ t('today.openTrip') }}</a>
+        </div>
       } @else {
         <div class="td__empty" data-empty>
-          <p class="ui-label">Today</p>
-          <h1 class="td__title">Nothing planned today</h1>
-          <p class="ui-sub">On a day you fly, this page shows your flight, what's left to do and your backups. It works offline.</p>
-          <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">Open Trips</a>
+          <p class="ui-label">{{ t('format.today') }}</p>
+          @if (upcoming(); as u) {
+            <h1 class="td__title" data-upcoming>{{ u.title }}</h1>
+            <p class="ui-sub">{{ t('today.upcomingText', { detail: u.detail }) }}</p>
+            @if (u.listing; as l) { <p class="ui-sub" data-listing [class.td__lst-open]="l.open">{{ l.label }}</p> }
+            <a class="ui-btn ui-btn--dark" [routerLink]="planLink(u.tripId)">{{ t('today.openTrip') }}</a>
+          } @else {
+            <h1 class="td__title">{{ t('today.nothing') }}</h1>
+            <p class="ui-sub">{{ t('today.nothingText') }}</p>
+            <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">{{ t('today.openTrips') }}</a>
+          }
         </div>
       }
     </div>
@@ -172,6 +231,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
     .td__ct { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
     .td__ct b { font-size: 15px; font-weight: 600; }
     .td__ct small { font-size: 12.5px; color: var(--ink-2); }
+    .td__lst-open { font-weight: 650; color: var(--teal-ink, var(--ink)); }
     .td__backup {
       display: flex; gap: 12px; align-items: center; width: 100%; margin-top: 14px; padding: 14px 16px; text-align: left; color: var(--ink);
     }
@@ -180,6 +240,8 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
       background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--amber-ink);
     }
     .td__foot { margin: 16px 2px 0; font-size: 12px; color: var(--ink-3); }
+    .td__mode { font-size: 24px; font-weight: 700; }
+    .td__mid-sub { margin: 6px 0 0; }
     .td__empty { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; padding-top: 8px; }
     .td__empty .ui-sub { margin: 0 0 6px; max-width: 46ch; }
     .td__empty .ui-label { margin: 0; }
@@ -205,6 +267,16 @@ export class TodayPage {
   readonly trip = input<string | undefined>(undefined);
   readonly leg = input<string | undefined>(undefined);
 
+  protected readonly t = t;
+  /** 'Your note, 17:55 YUL time: ' / '': the note itself is bold, so the message is split at it. */
+  protected noteParts(time: string): { before: string; after: string } {
+    const [before, after] = t('today.yourNoteAt', { time, text: '\u0000' }).split('\u0000');
+    return { before, after };
+  }
+  protected readonly groundNoteParts = computed(() => {
+    const [before, after] = t('today.yourNote', { text: '\u0000' }).split('\u0000');
+    return { before, after };
+  });
   protected readonly tripsLink = tripsPath();
   protected readonly sheetOpen = signal(false);
   protected readonly noteOpen = signal(false);
@@ -234,12 +306,47 @@ export class TodayPage {
     });
   });
 
+  /** A ground leg today (train, bus, car, ferry), when no flight is up. */
+  /** The ground leg marked done here; kept on screen so the page doesn't jump to another leg. */
+  private readonly heldGround = signal<{ target: TodayTarget; trip: string | undefined; leg: string | undefined } | null>(null);
+
+  protected readonly ground = computed(() => {
+    if (this.view()) return null;
+    const h = this.heldGround();
+    const t = h && h.trip === this.trip() && h.leg === this.leg()
+      ? h.target
+      : resolveGroundToday(this.trips.trips(), this.state.nowMs(), this.trip(), this.leg());
+    const trip = t ? this.trips.trips().find(x => x.id === t.tripId) : null;
+    return t && trip ? groundTodayView({ trip, legId: t.legId, nowMs: this.state.nowMs(), fmt: this.prefs.timeFormat() }) : null;
+  });
+
+  /** A day of a trip under way with nothing scheduled. */
+  protected readonly mid = computed(() =>
+    this.view() || this.ground() ? null : midTripView(this.trips.trips(), this.state.nowMs(), this.prefs.timeFormat(), this.trip(), this.prefs.listingHours()));
+
+  protected readonly upcoming = computed(() =>
+    this.view() || this.ground() || this.mid() ? null : upcomingTripView(this.trips.trips(), this.state.nowMs(), this.trip(), this.prefs.timeFormat(), this.prefs.listingHours()));
+
   protected readonly tripLink = computed(() => {
     const v = this.view();
     return v ? ['/trips', v.tripId] : this.tripsLink;
   });
 
   protected depUtc = refDepUtc;
+  protected icon = (mode: keyof typeof MODE_ICON) => MODE_ICON[mode] ?? 'pin';
+  protected planLink = tripPath;
+  protected planQuery = (legId: string) => tripQuery('plan', legId);
+
+  /** "I made it" on a ground leg: sets it Boarded (done), with Undo. */
+  protected madeIt(tripId: string, legId: string): void {
+    const before = this.trips.trip(tripId)?.legs.find(l => l.id === legId)?.status;
+    if (!before) return;
+    this.heldGround.set({ target: { tripId, legId }, trip: this.trip(), leg: this.leg() });
+    this.trips.setLegStatus(tripId, legId, 'boarded');
+    success();
+    this.state.flash(t('today.toast.done'), { label: t('common.undo'), run: () => this.trips.setLegStatus(tripId, legId, before) });
+    this.focusAfterRender('[data-final-msg], [data-made-it]');
+  }
 
   /** Where "Cancelled" points: Recover, or the Return tab for a return leg. */
   protected live(v: { tripId: string; legId: string; isReturn: boolean; ref: { origin: string } }) {
@@ -247,7 +354,7 @@ export class TodayPage {
   }
 
   protected statusLabel(s: LegStatus): string {
-    return LEG_STATUS_LABEL[s];
+    return legStatusLabel(s);
   }
 
   protected back(): void {
@@ -271,7 +378,7 @@ export class TodayPage {
     celebrate(ev?.currentTarget as Element | null);
     success();
     this.state.flash(clearedMessage(ref.origin, ref.dest), {
-      label: 'Undo',
+      label: t('common.undo'),
       run: () => {
         if (rec) this.trips.removeOutcome(rec.id);
         this.trips.setLegStatus(v.tripId, v.legId, before);
@@ -332,9 +439,9 @@ export class TodayPage {
       void this.router.navigateByUrl(tripUrl(v.tripId, 'return'));
     } else {
       const id = v.tripId;
-      const name = this.trips.trip(id)?.name ?? 'Trip';
+      const name = this.trips.trip(id)?.name ?? t('today.tripFallback');
       this.trips.archive(id);
-      this.state.flash(`${name} moved to Past trips`, { label: 'Undo', run: () => this.trips.archive(id, false) });
+      this.state.flash(t('today.toast.pastTrips', { name }), { label: t('common.undo'), run: () => this.trips.archive(id, false) });
       void this.router.navigate(tripsPath());
     }
   }

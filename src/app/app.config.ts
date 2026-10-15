@@ -9,6 +9,8 @@ import {
 } from '@angular/core';
 import {
   type ActivatedRouteSnapshot,
+  Router,
+  TitleStrategy,
   provideRouter,
   withComponentInputBinding,
   withInMemoryScrolling,
@@ -18,12 +20,16 @@ import {
 import { provideServiceWorker } from '@angular/service-worker';
 import { loadSchedules } from './data/schedule-index';
 import { loadRouteNetwork } from './data/route-network';
+import { createReloadGuard, startupLoad } from './startup';
 import { routes } from './app.routes';
 import { reloadOnChunkError } from './state/pwa-update.service';
 import { PhotoService } from './state/photo.service';
 import { AppStateService } from './state/app-state.service';
 import { PwaExtrasService } from './share-in/pwa-extras.service';
 import { stageDeepLink } from './shell/deep-link';
+import { LocaleService } from './i18n/locale.service';
+import { I18nTitleStrategy } from './i18n/title-strategy';
+import { t } from './i18n/t';
 
 /** '/to/LIS' for a route snapshot tree (query params and fragment ignored). */
 export function snapshotPath(root: ActivatedRouteSnapshot): string {
@@ -45,7 +51,7 @@ export const appConfig: ApplicationConfig = {
       withNavigationErrorHandler(e => {
         const state = inject(AppStateService);
         if (reloadOnChunkError(e.error, inject(DOCUMENT).defaultView, e.url) === 'blocked') {
-          state.flash("Couldn't open this page — check your connection.");
+          state.flash(t('shell.chunkError'));
         }
       }),
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' }),
@@ -58,24 +64,33 @@ export const appConfig: ApplicationConfig = {
         },
       }),
     ),
+    // document.title in the UI language (route titles are message keys).
+    { provide: TitleStrategy, useClass: I18nTitleStrategy },
     // Before the first navigation: stage an Explore entry under a deep link,
     // and load the schedules and route network (data, not code) and the photo
     // credits in parallel.
     provideAppInitializer(() => {
+      // First: the UI language is chosen before anything renders or builds text.
+      // A French device fetches its catalogue (a lazy chunk) alongside the data
+      // below; i18n.ready gives up after a short budget and starts in English.
+      const i18n = inject(LocaleService);
       const staged = stageDeepLink(inject(DOCUMENT).defaultView);
       const state = inject(AppStateService);
       if (staged) state.markStagedBack();
       const extras = inject(PwaExtrasService);
       extras.init();
       const photos = inject(PhotoService);
-      return Promise.all([loadSchedules(), loadRouteNetwork(), photos.load()]).then(([schedulesOk]) => {
-        state.reportDataLoad(schedulesOk);
-        extras.announceSchedules();
-      });
+      // Raced against a budget so a slow network cannot hold the first render;
+      // see startupLoad for what happens to the loads that finish later.
+      const doc = inject(DOCUMENT);
+      const guard = createReloadGuard(doc, inject(Router));
+      void photos.load();
+      const data = startupLoad(state, loadSchedules(), loadRouteNetwork(), () => extras.announceSchedules(), guard, doc);
+      return Promise.all([i18n.ready, data]).then(() => undefined);
     }),
     provideServiceWorker('sw.js', {
       enabled: !isDevMode(),
-      registrationStrategy: 'registerWhenStable:30000',
+      registrationStrategy: 'registerWhenStable:5000',
     }),
   ],
 };

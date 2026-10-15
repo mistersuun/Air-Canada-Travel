@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
 import { DestPhotoComponent } from '../../ui/dest-photo.component';
@@ -20,7 +21,7 @@ export function whyTexts(items: readonly Recommendation[]): string[] {
   return [...new Set(items.map(whyText).filter(Boolean))];
 }
 
-/** 'Thanksgiving long weekend in 8 days' → { name: 'Thanksgiving long weekend', when: 'in 8 days' }. */
+/** English titles only ('Thanksgiving long weekend in 8 days' → { name: 'Thanksgiving long weekend', when: 'in 8 days' }); groups carry their own name and when. */
 export function splitGroupTitle(title: string): { name: string; when: string | null } {
   const m = /^(.*\blong weekend) (in \d+ days|tomorrow|today)$/.exec(title);
   return m ? { name: m[1], when: m[2] } : { name: title, when: null };
@@ -29,7 +30,7 @@ export function splitGroupTitle(title: string): { name: string; when: string | n
 /** Hide a recommendation ("Not for me") with an Undo toast. */
 export function dismissWithUndo(profile: ProfileService, state: AppStateService, r: Recommendation): void {
   profile.dismiss(r.id);
-  state.flash(`Hidden ${r.title}`, { label: 'Undo', run: () => profile.undismiss(r.id) });
+  state.flash(t('recs.hidden', { title: r.title }), { label: t('recs.undo'), run: () => profile.undismiss(r.id) });
 }
 
 /**
@@ -57,7 +58,7 @@ export function dismissWithUndo(profile: ProfileService, state: AppStateService,
         <span class="nm"><b>{{ r.title }}</b>@if (r.code) {&ngsp;<span class="c">{{ r.code }}</span>}</span>
         @for (l of r.lines; track $index) {
           <span class="m tn" data-line>{{ l.text }}@if (tagged(r.lines, $index)) {&ngsp;@if (l.label === 'typical') {
-              <span class="ui-tag ui-tag--neutral tg" aria-label="Typical, not a forecast">Typical</span>
+              <span class="ui-tag ui-tag--neutral tg" [attr.aria-label]="t('recs.typicalAria')">{{ t('recs.typical') }}</span>
             } @else {
               <app-provenance-tag class="tg" [value]="l.label!" />
             }
@@ -68,12 +69,12 @@ export function dismissWithUndo(profile: ProfileService, state: AppStateService,
         }
         @if (r.weather; as w) {
           <span class="wx tn" data-weather><app-icon name="thermo" [size]="14" />{{ typical(w) }}
-            <span class="ui-tag ui-tag--neutral tg" aria-label="Typical, not a forecast">Typical</span></span>
+            <span class="ui-tag ui-tag--neutral tg" [attr.aria-label]="t('recs.typicalAria')">{{ t('recs.typical') }}</span></span>
         }
       </span>
       <app-icon class="chev" name="chevron-right" [size]="16" />
     </a>
-    <button type="button" class="x" [attr.aria-label]="'Not for me: ' + r.title" title="Not for me" data-dismiss
+    <button type="button" class="x" [attr.aria-label]="t('recs.notForMe', { title: r.title })" [title]="t('recs.notForMeShort')" data-dismiss
             (click)="dismiss.emit(r)">
       <app-icon name="close" [size]="15" />
     </button>
@@ -111,10 +112,11 @@ export class RecRowComponent {
   readonly thumb = input(true);
   readonly dismiss = output<Recommendation>();
 
+  protected readonly t = t;
   protected readonly tagged = tagged;
   protected readonly typical = typicalText;
   /** '+26° vs home' (a true minus sign for cooler). */
-  protected delta(c: number): string { return `${c >= 0 ? '+' : '\u2212'}${Math.abs(c)}° vs home`; }
+  protected delta(c: number): string { return t('recs.delta', { sign: c >= 0 ? '+' : '\u2212', n: Math.abs(c) }); }
   protected readonly query = computed(() => ({ ...this.state.globalParams(), ...this.rec().link.query }));
 }
 
@@ -146,7 +148,7 @@ export class RecRowComponent {
         }
       </div>
       @for (w of whys(); track w) {
-        <p class="why" data-why><b>Why this</b>&ngsp;<span>{{ w }}</span></p>
+        <p class="why" data-why><b>{{ t('recs.why') }}</b>&ngsp;<span>{{ w }}</span></p>
       }
     </article>
   `,
@@ -170,6 +172,7 @@ export class RecRowComponent {
   `],
 })
 export class RecCardComponent {
+  protected readonly t = t;
   readonly items = input.required<Recommendation[]>();
   /** The long-weekend group (shows the header); null for single cards. */
   readonly group = input<RecGroup | null>(null);
@@ -181,7 +184,7 @@ export class RecCardComponent {
   protected readonly head = computed(() => {
     const g = this.group();
     if (!g) return null;
-    return { ...splitGroupTitle(g.title), aside: g.aside };
+    return { ...(g.name !== undefined ? { name: g.name, when: g.when ?? null } : splitGroupTitle(g.title)), aside: g.aside };
   });
   protected readonly whys = computed(() => whyTexts(this.items()));
 }
@@ -196,6 +199,6 @@ export function cardsFor(g: RecGroup): CardSpec[] {
     items: [r],
     group: null,
     hero: g.id === 'season' && r.code ? r.code : null,
-    heroTag: g.id === 'season' ? 'Season ends soon' : '',
+    heroTag: g.id === 'season' ? t('recs.group.season') : '',
   }));
 }

@@ -3,11 +3,14 @@
 // sha256 of the write token. No accounts, no logging of bodies or headers.
 //   GET    ?id=            -> {ciphertext, iv, version, updatedAt, expiresAt}   (404 / 410)
 //   PUT    ?id=  X-Group-Write  {ciphertext, iv, baseVersion, expiresAt?}      (409 on conflict)
+//          X-Group-Owner (optional): the owner token. Stored hashed when the group is created;
+//          later it allows lengthening expiresAt (never shortening).
 //   (creating a group also spends from the GROUP_DAILY_CREATES budget: 503 {error:'budget'})
-//   DELETE ?id=  X-Group-Write                                                  ("Stop sharing")
+//   DELETE ?id=  X-Group-Write [+ X-Group-Owner when the group has one]         ("Stop sharing")
 import { getStore } from '@netlify/blobs';
-import { makeBudget, makeLimiter } from './lib/flight-status.ts';
-import { MAX_CIPHERTEXT, deleteGroup, groupDailyCreates, getGroup, parsePutBody, putGroup, validId, validToken, type GroupStore } from './lib/group.ts';
+import { json } from './lib/http.ts';
+import { dailyLimit, makeBudget, makeLimiter } from './lib/limits.ts';
+import { MAX_CIPHERTEXT, deleteGroup, getGroup, parsePutBody, putGroup, validId, validToken, type GroupStore } from './lib/group.ts';
 
 // Writes only (create, update, delete): 30 per IP per 10 minutes.
 const allowWrite = makeLimiter(30, 10 * 60_000);
@@ -17,13 +20,6 @@ const allowCreate = makeLimiter(5, 60 * 60_000);
 
 // Reads: a looser per-IP limit (several companions can share one network; the app polls every 2 minutes).
 const allowRead = makeLimiter(300, 10 * 60_000);
-
-function json(body: unknown, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
-  });
-}
 
 export default async (req: Request, context: { ip?: string }): Promise<Response> => {
   if (req.headers.get('sec-fetch-site') === 'cross-site') return json({ error: 'forbidden' }, 403);
@@ -35,12 +31,18 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
   const now = Date.now();
 
   let token = '';
+  let owner: string | undefined;
   if (method === 'GET') {
     if (!allowRead(context.ip || 'unknown', now)) return json({ error: 'rate-limited' }, 429);
   } else {
     const t = req.headers.get('x-group-write');
     if (!validToken(t)) return json({ error: 'forbidden' }, 403);
     token = t;
+    const o = req.headers.get('x-group-owner');
+    if (o !== null) {
+      if (!validToken(o)) return json({ error: 'forbidden' }, 403);
+      owner = o;
+    }
     if (!allowWrite(context.ip || 'unknown', now)) return json({ error: 'rate-limited' }, 429);
   }
 
@@ -57,7 +59,7 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
       return json(r.body, r.status);
     }
     if (method === 'DELETE') {
-      const r = await deleteGroup(store, id, token);
+      const r = await deleteGroup(store, id, token, owner);
       return json(r.body, r.status);
     }
     const declared = Number(req.headers.get('content-length') ?? '0');
@@ -72,12 +74,12 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
     const spend = async (): Promise<boolean | 'rate-limited'> => {
       if (!allowCreate(context.ip || 'unknown', now)) return 'rate-limited';
       try {
-        return await makeBudget(getStore({ name: 'groups-budget', consistency: 'strong' }), groupDailyCreates(process.env['GROUP_DAILY_CREATES']))(now);
+        return await makeBudget(getStore({ name: 'groups-budget', consistency: 'strong' }), dailyLimit(process.env['GROUP_DAILY_CREATES'], 50))(now);
       } catch {
         return false;
       }
     };
-    const r = await putGroup(store, id, token, body, now, spend);
+    const r = await putGroup(store, id, token, body, now, spend, owner);
     return json(r.body, r.status);
   } catch (e) {
     console.error('group failure:', e instanceof Error ? e.name : 'unknown');

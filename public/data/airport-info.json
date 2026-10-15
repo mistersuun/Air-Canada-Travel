@@ -1,0 +1,596 @@
+{
+ "version": 1,
+ "reviewed": "2026-10",
+ "note": "Hand-curated. Typical minutes, not a timetable. A field is left out when not certain.",
+ "airports": {
+  "YYZ": {
+   "terminals": [
+    "1"
+   ],
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 25,
+     "note": "UP Express to Union Station"
+    },
+    {
+     "mode": "taxi",
+     "min": 40,
+     "note": "Taxi or rideshare to downtown"
+    }
+   ],
+   "source": "Toronto Pearson and UP Express public pages",
+   "reviewed": "2026-10"
+  },
+  "YUL": {
+   "singleTerminal": true,
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "bus",
+     "min": 45,
+     "note": "STM 747 to downtown"
+    },
+    {
+     "mode": "taxi",
+     "min": 30,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Montréal-Trudeau and STM public pages",
+   "reviewed": "2026-10"
+  },
+  "YVR": {
+   "terminals": [
+    "Domestic",
+    "International"
+   ],
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 26,
+     "note": "Canada Line to Waterfront"
+    },
+    {
+     "mode": "taxi",
+     "min": 30,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Vancouver Airport Authority and TransLink public pages",
+   "reviewed": "2026-10"
+  },
+  "YYC": {
+   "singleTerminal": true,
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "bus",
+     "min": 40,
+     "note": "Route 300 to downtown"
+    },
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Calgary Airport Authority and Calgary Transit public pages",
+   "reviewed": "2026-10"
+  },
+  "YEG": {
+   "singleTerminal": true,
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 35,
+     "note": "Taxi to downtown"
+    },
+    {
+     "mode": "bus",
+     "min": 60,
+     "note": "Airport bus and LRT to downtown"
+    }
+   ],
+   "source": "Edmonton International Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "YWG": {
+   "singleTerminal": true,
+   "mapleLeafLounge": true,
+   "loungeNote": "By gate 9; not for transborder flights",
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 15,
+     "note": "Taxi to downtown"
+    },
+    {
+     "mode": "bus",
+     "min": 35,
+     "note": "City bus to downtown"
+    }
+   ],
+   "source": "Winnipeg Richardson International Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "YOW": {
+   "singleTerminal": true,
+   "mapleLeafLounge": true,
+   "loungeClosed": true,
+   "loungeNote": "for renovation, reopening planned Nov 2026",
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 57,
+     "note": "O-Train Line 4, then Lines 2 and 1 to Rideau"
+    },
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Ottawa Macdonald-Cartier International Airport and OC Transpo public pages",
+   "reviewed": "2026-10"
+  },
+  "YHZ": {
+   "singleTerminal": true,
+   "mapleLeafLounge": true,
+   "loungeClosed": true,
+   "loungeNote": "until early 2027",
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 40,
+     "note": "Taxi to downtown"
+    },
+    {
+     "mode": "bus",
+     "min": 45,
+     "note": "MetroX 320 to downtown"
+    }
+   ],
+   "source": "Halifax Stanfield International Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "YQB": {
+   "singleTerminal": true,
+   "mapleLeafLounge": false,
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown"
+    },
+    {
+     "mode": "bus",
+     "min": 45,
+     "note": "RTC bus to downtown"
+    }
+   ],
+   "source": "Québec City Jean Lesage International Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "YTZ": {
+   "singleTerminal": true,
+   "mapleLeafLounge": false,
+   "toCity": [
+    {
+     "mode": "bus",
+     "min": 15,
+     "note": "Free shuttle to Union Station area"
+    },
+    {
+     "mode": "taxi",
+     "min": 10,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Billy Bishop Toronto City Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "LGA": {
+   "terminals": [
+    "B"
+   ],
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 35,
+     "note": "Taxi to Midtown Manhattan"
+    },
+    {
+     "mode": "bus",
+     "min": 50,
+     "note": "M60 to Harlem, then subway"
+    }
+   ],
+   "source": "LaGuardia Airport and MTA public pages",
+   "reviewed": "2026-10"
+  },
+  "BOS": {
+   "toCity": [
+    {
+     "mode": "bus",
+     "min": 25,
+     "note": "SL1 bus (free) to South Station"
+    },
+    {
+     "mode": "taxi",
+     "min": 20,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Massport and MBTA public pages",
+   "reviewed": "2026-10"
+  },
+  "EWR": {
+   "terminals": [
+    "A"
+   ],
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 30,
+     "note": "AirTrain and NJ Transit to Penn Station"
+    },
+    {
+     "mode": "taxi",
+     "min": 40,
+     "note": "Taxi to Midtown Manhattan"
+    }
+   ],
+   "source": "Port Authority and NJ Transit public pages",
+   "reviewed": "2026-10"
+  },
+  "SFO": {
+   "terminals": [
+    "2"
+   ],
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 30,
+     "note": "BART to Powell Street"
+    },
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "San Francisco International Airport and BART public pages",
+   "reviewed": "2026-10"
+  },
+  "FLL": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 15,
+     "note": "Taxi to downtown Fort Lauderdale"
+    }
+   ],
+   "source": "Broward County Aviation Department public pages",
+   "reviewed": "2026-10"
+  },
+  "LHR": {
+   "terminals": [
+    "2"
+   ],
+   "mapleLeafLounge": true,
+   "loungeNote": "Terminal 2B",
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 15,
+     "note": "Heathrow Express to Paddington"
+    },
+    {
+     "mode": "train",
+     "min": 35,
+     "note": "Elizabeth line to central London"
+    },
+    {
+     "mode": "metro",
+     "min": 55,
+     "note": "Piccadilly line to central London"
+    }
+   ],
+   "source": "Heathrow Airport and Transport for London public pages",
+   "reviewed": "2026-10"
+  },
+  "LAX": {
+   "terminals": [
+    "6"
+   ],
+   "mapleLeafLounge": true,
+   "toCity": [
+    {
+     "mode": "bus",
+     "min": 50,
+     "note": "FlyAway bus to Union Station"
+    },
+    {
+     "mode": "taxi",
+     "min": 35,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Los Angeles World Airports public pages",
+   "reviewed": "2026-10"
+  },
+  "ORD": {
+   "toCity": [
+    {
+     "mode": "metro",
+     "min": 45,
+     "note": "Blue Line to the Loop"
+    },
+    {
+     "mode": "taxi",
+     "min": 35,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Chicago Department of Aviation and CTA public pages",
+   "reviewed": "2026-10"
+  },
+  "MCO": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown Orlando"
+    }
+   ],
+   "source": "Greater Orlando Aviation Authority public pages",
+   "reviewed": "2026-10"
+  },
+  "MIA": {
+   "toCity": [
+    {
+     "mode": "metro",
+     "min": 30,
+     "note": "MIA Mover and Metrorail to downtown"
+    },
+    {
+     "mode": "taxi",
+     "min": 20,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Miami-Dade Aviation Department and Metrorail public pages",
+   "reviewed": "2026-10"
+  },
+  "CUN": {
+   "toCity": [
+    {
+     "mode": "bus",
+     "min": 40,
+     "note": "Airport bus to the Hotel Zone"
+    },
+    {
+     "mode": "taxi",
+     "min": 35,
+     "note": "Taxi to the Hotel Zone"
+    }
+   ],
+   "source": "Cancún airport (ASUR) public pages",
+   "reviewed": "2026-10"
+  },
+  "ATL": {
+   "toCity": [
+    {
+     "mode": "metro",
+     "min": 20,
+     "note": "MARTA rail to downtown"
+    },
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Hartsfield-Jackson and MARTA public pages",
+   "reviewed": "2026-10"
+  },
+  "DCA": {
+   "toCity": [
+    {
+     "mode": "metro",
+     "min": 20,
+     "note": "Metro to downtown"
+    },
+    {
+     "mode": "taxi",
+     "min": 15,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Metropolitan Washington Airports Authority and WMATA public pages",
+   "reviewed": "2026-10"
+  },
+  "SEA": {
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 40,
+     "note": "Link light rail to Westlake"
+    },
+    {
+     "mode": "taxi",
+     "min": 30,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Port of Seattle and Sound Transit public pages",
+   "reviewed": "2026-10"
+  },
+  "RDU": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown Raleigh"
+    }
+   ],
+   "source": "Raleigh-Durham International Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "RSW": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to downtown Fort Myers"
+    }
+   ],
+   "source": "Lee County Port Authority public pages",
+   "reviewed": "2026-10"
+  },
+  "PUJ": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 40,
+     "note": "Taxi or shuttle to the resorts"
+    }
+   ],
+   "source": "Punta Cana International Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "LAS": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 15,
+     "note": "Taxi to the Strip"
+    }
+   ],
+   "source": "Harry Reid International Airport public pages",
+   "reviewed": "2026-10"
+  },
+  "FCO": {
+   "terminals": [
+    "3"
+   ],
+   "mapleLeafLounge": false,
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 32,
+     "note": "Leonardo Express to Roma Termini"
+    },
+    {
+     "mode": "taxi",
+     "min": 45,
+     "note": "Taxi to the centre"
+    }
+   ],
+   "source": "Aeroporti di Roma and Trenitalia public pages",
+   "reviewed": "2026-10"
+  },
+  "FRA": {
+   "terminals": [
+    "1"
+   ],
+   "mapleLeafLounge": true,
+   "loungeNote": "Terminal 1, Concourse B",
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 15,
+     "note": "S-Bahn to Frankfurt Hauptbahnhof"
+    },
+    {
+     "mode": "taxi",
+     "min": 25,
+     "note": "Taxi to the centre"
+    }
+   ],
+   "source": "Fraport and Deutsche Bahn public pages",
+   "reviewed": "2026-10"
+  },
+  "DEN": {
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 37,
+     "note": "A-Line to Union Station"
+    },
+    {
+     "mode": "taxi",
+     "min": 40,
+     "note": "Taxi to downtown"
+    }
+   ],
+   "source": "Denver International Airport and RTD public pages",
+   "reviewed": "2026-10"
+  },
+  "IAH": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 35,
+     "note": "Taxi to downtown Houston"
+    }
+   ],
+   "source": "Houston Airports public pages",
+   "reviewed": "2026-10"
+  },
+  "PHL": {
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 25,
+     "note": "SEPTA Airport Line to Center City"
+    },
+    {
+     "mode": "taxi",
+     "min": 20,
+     "note": "Taxi to Center City"
+    }
+   ],
+   "source": "Philadelphia International Airport and SEPTA public pages",
+   "reviewed": "2026-10"
+  },
+  "BNA": {
+   "toCity": [
+    {
+     "mode": "taxi",
+     "min": 20,
+     "note": "Taxi to downtown Nashville"
+    }
+   ],
+   "source": "Metropolitan Nashville Airport Authority public pages",
+   "reviewed": "2026-10"
+  },
+  "MXP": {
+   "terminals": [
+    "1"
+   ],
+   "mapleLeafLounge": false,
+   "toCity": [
+    {
+     "mode": "train",
+     "min": 50,
+     "note": "Malpensa Express to Milano Centrale"
+    },
+    {
+     "mode": "taxi",
+     "min": 50,
+     "note": "Taxi to the centre"
+    }
+   ],
+   "source": "SEA Milan Airports and Trenord public pages",
+   "reviewed": "2026-10"
+  }
+ }
+}

@@ -2,6 +2,8 @@ import { DOCUMENT, Injectable, InjectionToken, computed, effect, inject, signal 
 import { DESTINATIONS, HUBS, REGIONS } from '../data/destinations';
 import { STARRED_REGION } from '../utils/routes';
 import type { ConnectOptions } from '../utils/connections';
+import { DEFAULT_LISTING_HOURS, LISTING_HOURS_OPTIONS } from '../trips/engine/listing';
+import { LANGUAGE_PREFS, type LanguagePref } from '../i18n/locale';
 
 /**
  * User preferences, persisted as JSON in localStorage['ac.prefs.v1'].
@@ -22,12 +24,16 @@ export interface Prefs {
   region: string;
   showConnections: boolean;
   theme: ThemePref;
+  /** UI language: 'auto' follows the device (navigator.languages). */
+  language: LanguagePref;
   timeFormat: TimeFormat;
   /** Minimum connection time, minutes. */
   minConnect: number;
   /** Maximum same-day layover, minutes. */
   maxLayover: number;
   allowOvernight: boolean;
+  /** Hours before departure the listing reminder opens (chip, notification, calendar file). */
+  listingHours: number;
   /** Starred destination codes, in the order they were starred. */
   favourites: string[];
   /** When trips were last exported (ISO), or null. Drives the backup reminder. */
@@ -46,10 +52,12 @@ export const DEFAULT_PREFS: Readonly<Prefs> = Object.freeze({
   region: 'All',
   showConnections: true,
   theme: 'auto',
+  language: 'auto',
   timeFormat: '24h',
   minConnect: 60,
   maxLayover: 360,
   allowOvernight: false,
+  listingHours: DEFAULT_LISTING_HOURS,
   favourites: [] as string[],
   lastBackupAt: null,
 }) as Readonly<Prefs>;
@@ -91,10 +99,12 @@ export function sanitizePrefs(raw: unknown): Prefs {
     region: isRegion(r['region']) ? r['region'] : d.region,
     showConnections: typeof r['showConnections'] === 'boolean' ? r['showConnections'] : d.showConnections,
     theme: THEMES.includes(r['theme'] as ThemePref) ? (r['theme'] as ThemePref) : d.theme,
+    language: LANGUAGE_PREFS.includes(r['language'] as LanguagePref) ? (r['language'] as LanguagePref) : d.language,
     timeFormat: r['timeFormat'] === '12h' || r['timeFormat'] === '24h' ? r['timeFormat'] : d.timeFormat,
     minConnect: MIN_CONNECT_OPTIONS.includes(r['minConnect'] as number) ? (r['minConnect'] as number) : d.minConnect,
     maxLayover: MAX_LAYOVER_OPTIONS.includes(r['maxLayover'] as number) ? (r['maxLayover'] as number) : d.maxLayover,
     allowOvernight: typeof r['allowOvernight'] === 'boolean' ? r['allowOvernight'] : d.allowOvernight,
+    listingHours: LISTING_HOURS_OPTIONS.includes(r['listingHours'] as number) ? (r['listingHours'] as number) : d.listingHours,
     favourites: favs,
     lastBackupAt: typeof r['lastBackupAt'] === 'string' && !Number.isNaN(Date.parse(r['lastBackupAt']))
       ? new Date(r['lastBackupAt']).toISOString() : d.lastBackupAt,
@@ -142,7 +152,9 @@ export class PrefsService {
   readonly region = computed(() => this.state().region);
   readonly showConnections = computed(() => this.state().showConnections);
   readonly theme = computed(() => this.state().theme);
+  readonly language = computed(() => this.state().language);
   readonly timeFormat = computed(() => this.state().timeFormat);
+  readonly listingHours = computed(() => this.state().listingHours);
   readonly favourites = computed(() => this.state().favourites, {
     equal: (a, b) => a.length === b.length && a.every((c, i) => c === b[i]),
   });
@@ -203,9 +215,14 @@ export class PrefsService {
     this.update({ favourites: favs.includes(code) ? favs.filter(c => c !== code) : [...favs, code] });
   }
 
-  /** Reset every setting to its default. Favourites and the last backup time are kept: they are data, not settings. */
+  /**
+   * Reset every setting to its default. Favourites and the last backup time
+   * are kept (data, not settings), and so is the language: a reset must not
+   * switch the sheet the user is reading into another language.
+   */
   reset(): void {
-    this.update({ ...DEFAULT_PREFS, favourites: this.state().favourites, lastBackupAt: this.state().lastBackupAt });
+    const { favourites, lastBackupAt, language } = this.state();
+    this.update({ ...DEFAULT_PREFS, favourites, lastBackupAt, language });
   }
 
   private load(): Prefs {

@@ -16,6 +16,7 @@ import { HomePage } from './home.page';
 import { CITIES_FETCH } from '../../places/city-index.service';
 import { FIXTURE_CITIES_FILE } from '../../places/testing/cities-fixture';
 import { SEVILLE_META, SEVILLE_ROUTES } from '../../trips/testing/seville-fixture';
+import { setLocale } from '../../i18n/locale';
 
 let citiesFetches = 0;
 
@@ -64,6 +65,22 @@ describe('HomePage', () => {
   afterEach(() => {
     resetScheduleSource();
     vi.restoreAllMocks();
+  });
+
+  it('shows the week-strip legend until it is dismissed, and remembers that', async () => {
+    configure();
+    localStorage.removeItem('ac.legend.strip.v1');
+    const a = await render();
+    expect(a.el.querySelector('[data-legend]')?.textContent).toContain('A dot under a day');
+    a.el.querySelector<HTMLButtonElement>('.legend__x')!.click();
+    await a.stable();
+    expect(a.el.querySelector('[data-legend]')).toBeNull();
+    expect(localStorage.getItem('ac.legend.strip.v1')).toBe('1');
+    TestBed.resetTestingModule();
+    configure();
+    const b = await render();
+    expect(b.el.querySelector('[data-legend]')).toBeNull();
+    localStorage.removeItem('ac.legend.strip.v1');
   });
 
   it('curated mode: greeting, title, picks, nonstop rows and dots for the week strip', async () => {
@@ -413,7 +430,7 @@ describe('HomePage · Places (cities AC does not fly to)', () => {
     expect(citiesFetches).toBe(1);
     const rows = [...el.querySelectorAll('.prow')];
     expect(rows[0].querySelector('.pnm')!.textContent).toBe('Seville');
-    expect(rows[0].querySelector('.psub')!.textContent).toBe("Spain · Not in our schedule data");
+    expect(rows[0].querySelector('.psub')!.textContent).toBe("Andalusia, Spain · Find ways to get there");
     expect(rows[0].getAttribute('href')).toMatch(/^\/reach\/gn-2510911\?.*dep=2026-10-14/);
     expect(el.querySelector('#rl-places')!.textContent).toBe('Places');
     expect(el.textContent).not.toContain('No destinations match');
@@ -435,5 +452,44 @@ describe('HomePage · Places (cities AC does not fly to)', () => {
     await settle(stable);
     expect(el.querySelector('#rl-places')).toBeNull();
     expect(el.textContent).toContain('No destinations match');
+  });
+});
+
+describe('HomePage in French', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    setLocale('en');
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the hero, sections and dates in Canadian French', async () => {
+    configure();
+    setLocale('fr');
+    const { el, text } = await render();
+    expect(el.querySelector('h1')!.textContent).toContain('Au départ de');
+    expect(text()).toContain('Sans escale cette semaine');
+    expect(text()).toContain('Fins de semaine ›');
+    expect(el.querySelector<HTMLInputElement>('[data-search-input]')!.placeholder).toMatch(/^Rechercher parmi \d+ destinations/);
+    expect(el.querySelector('.f')!.getAttribute('aria-label')).toBe('Filtrer et trier');
+    expect([...el.querySelector('#h-nonstop')!.parentElement!.querySelectorAll('.dow i')].map(i => i.textContent).join('')).toBe('LMMJVSD');
+    // The hub picker and week strip (ui/) are French too.
+    expect(el.querySelector('app-hub-picker .picker')!.getAttribute('aria-label')).toMatch(/^Aéroport d'attache\s*: .*\. Modifier$/);
+    expect(el.querySelector('app-week-strip .ws')!.getAttribute('aria-label')).toMatch(/^Semaine du /);
+    expect(el.querySelector('app-week-strip .cap__label')!.getAttribute('aria-label')).toMatch(/Choisir une date$/);
+    expect(text()).not.toMatch(/Nonstop this week|Editor's pick|Show all|Seasonal|This week|Home airport/);
+  });
+
+  it('switches language live, without a reload', async () => {
+    configure();
+    const { el, state, stable, text } = await render();
+    expect(text()).toContain('Nonstop this week');
+    setLocale('fr');
+    await stable();
+    expect(text()).toContain('Sans escale cette semaine');
+    state.setQuery('zzzzqq');
+    await stable();
+    expect(el.textContent).toContain('Aucune destination ne correspond');
+    expect(el.textContent).toContain('Effacer les filtres');
   });
 });

@@ -8,6 +8,7 @@ import { AppStateService } from '../../state/app-state.service';
 import type { Trip } from '../../trips/model';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
 import { filesErrorText, scopeFromKey, scopeKey, scopeOptions } from './files-model';
+import { t } from '../../i18n/t';
 
 type Mode = 'menu' | 'note' | 'address';
 
@@ -22,10 +23,10 @@ type Mode = 'menu' | 'note' | 'address';
   imports: [GlassSheetComponent, IconComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet #sheet [title]="mode() === 'note' ? 'Add a note' : mode() === 'address' ? 'Add an address' : 'Add to this trip'"
+    <app-glass-sheet #sheet [title]="mode() === 'note' ? t('files.addNote') : mode() === 'address' ? t('files.addAddress') : t('files.addToTrip')"
                      [open]="true" (closed)="closed.emit()">
       <label class="as__to">
-        <span class="ui-label">Add to</span>
+        <span class="ui-label">{{ t('files.addTo') }}</span>
         <span class="as__sel">
           <select data-target [value]="target()" (change)="setTarget($event)">
             @for (o of options(); track o.key) {
@@ -38,47 +39,47 @@ type Mode = 'menu' | 'note' | 'address';
 
       @switch (mode()) {
         @case ('menu') {
-          <div class="as__list" role="group" aria-label="What to add">
+          <div class="as__list" role="group" [attr.aria-label]="t('files.whatToAdd')">
             <label class="as__row" [class.is-off]="busy()">
               <span class="fic fic--pdf"><app-icon name="paperclip" [size]="19" /></span>
-              <span class="as__tx"><b>Photo or file</b><span>PDF, screenshot, ticket or confirmation</span></span>
+              <span class="as__tx"><b>{{ t('files.photoOrFile') }}</b><span>{{ t('files.photoOrFile.hint') }}</span></span>
               <input type="file" multiple class="ui-visually-hidden" data-add-file [disabled]="busy()" (change)="pickFiles($event, sheet)">
             </label>
             <label class="as__row" [class.is-off]="busy()">
               <span class="fic fic--photo"><app-icon name="camera" [size]="19" /></span>
-              <span class="as__tx"><b>Take a photo</b><span>A receipt, a sign, a parking spot</span></span>
+              <span class="as__tx"><b>{{ t('files.takePhoto') }}</b><span>{{ t('files.takePhoto.hint') }}</span></span>
               <input type="file" accept="image/*" capture="environment" class="ui-visually-hidden" data-add-camera
                      [disabled]="busy()" (change)="pickFiles($event, sheet)">
             </label>
             <button type="button" class="as__row" data-add-note (click)="mode.set('note')">
               <span class="fic fic--note"><app-icon name="note" [size]="19" /></span>
-              <span class="as__tx"><b>Note</b><span>Door codes, a check-in time</span></span>
+              <span class="as__tx"><b>{{ t('files.note') }}</b><span>{{ t('files.note.hint') }}</span></span>
             </button>
             <button type="button" class="as__row" data-add-address (click)="mode.set('address')">
               <span class="fic fic--note"><app-icon name="pin" [size]="19" /></span>
-              <span class="as__tx"><b>Address</b><span>Opens in your maps app</span></span>
+              <span class="as__tx"><b>{{ t('files.address') }}</b><span>{{ t('files.address.hint') }}</span></span>
             </button>
             <a class="as__row" data-add-pass [routerLink]="passPath()" [queryParams]="passQuery()" (click)="sheet.close()">
               <span class="fic fic--pass"><app-icon name="barcode" [size]="19" /></span>
-              <span class="as__tx"><b>Boarding pass</b><span>Scan it or pick a screenshot or PDF</span></span>
+              <span class="as__tx"><b>{{ t('files.boardingPass') }}</b><span>{{ t('files.boardingPass.hint') }}</span></span>
             </a>
           </div>
-          @if (busy()) { <p class="as__note" role="status">Saving…</p> }
-          <p class="as__note">Kept on this phone and opened offline. Not in share links.</p>
+          @if (busy()) { <p class="as__note" role="status">{{ t('files.saving') }}</p> }
+          <p class="as__note">{{ t('files.keptHere') }}</p>
         }
         @default {
           @let address = mode() === 'address';
           <form class="as__form" (submit)="$event.preventDefault(); saveText(titleIn.value, bodyIn.value, sheet)">
-            <label class="as__lbl" for="as-title">Title</label>
+            <label class="as__lbl" for="as-title">{{ t('files.titleField') }}</label>
             <input #titleIn id="as-title" class="as__in" maxlength="120" autocomplete="off" data-title
-                   [placeholder]="address ? 'Apartment address' : 'Note'">
-            <label class="as__lbl" for="as-body">{{ address ? 'Address' : 'Note' }}</label>
+                   [placeholder]="address ? t('files.titlePlaceholder.address') : t('files.note')">
+            <label class="as__lbl" for="as-body">{{ address ? t('files.address') : t('files.note') }}</label>
             <textarea #bodyIn id="as-body" class="as__in as__ta" rows="4" maxlength="4000" data-body required
-                      [placeholder]="address ? 'Street, city' : 'Alcázar tickets: 10:30 slot'"
+                      [placeholder]="address ? t('files.bodyPlaceholder.address') : t('files.bodyPlaceholder.note')"
                       [attr.autocomplete]="address ? 'street-address' : 'off'"></textarea>
             <div class="as__acts">
-              <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu'); error.set(null)">Back</button>
-              <button type="submit" class="ui-btn ui-btn--dark" data-save [disabled]="busy()">Save</button>
+              <button type="button" class="ui-btn ui-btn--ghost" (click)="mode.set('menu'); error.set(null)">{{ t('files.back') }}</button>
+              <button type="submit" class="ui-btn ui-btn--dark" data-save [disabled]="busy()">{{ t('files.save') }}</button>
             </div>
           </form>
         }
@@ -127,6 +128,7 @@ type Mode = 'menu' | 'note' | 'address';
   `],
 })
 export class AddFileSheetComponent {
+  protected readonly t = t;
   private readonly files = inject(FilesService);
   private readonly state = inject(AppStateService);
 
@@ -169,7 +171,7 @@ export class AddFileSheetComponent {
     for (const f of list) {
       const r = await this.files.addFile(this.trip().id, scope, f);
       if ('error' in r) {
-        this.error.set(list.length > 1 ? `${f.name}: ${filesErrorText(r.error, f.size)}` : filesErrorText(r.error, f.size));
+        this.error.set(list.length > 1 ? t('files.namedError', { name: f.name, error: filesErrorText(r.error, f.size) }) : filesErrorText(r.error, f.size));
         break;
       }
       done.push(r);
@@ -184,7 +186,7 @@ export class AddFileSheetComponent {
 
   protected async saveText(title: string, body: string, sheet: GlassSheetComponent): Promise<void> {
     if (!body.trim()) {
-      this.error.set(this.mode() === 'address' ? 'Type the address first.' : 'Type the note first.');
+      this.error.set(t(this.mode() === 'address' ? 'files.typeAddress' : 'files.typeNote'));
       return;
     }
     this.busy.set(true);
@@ -204,9 +206,9 @@ export class AddFileSheetComponent {
   }
 
   private flashAdded(n: number): void {
-    const where = this.options().find(o => o.key === this.target())?.label ?? 'this trip';
+    const where = this.options().find(o => o.key === this.target())?.label ?? '';
     const short = where.includes(' · ') ? where.split(' · ')[0] : where;
-    this.state.flash(`${n === 1 ? 'Saved' : `${n} files saved`} to ${short === 'Whole trip' ? 'the trip' : short}`);
+    this.state.flash(t('files.savedTo', { n, where: this.target() === 'trip' || !short ? t('files.theTrip') : short }));
   }
 }
 

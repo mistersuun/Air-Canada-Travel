@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { t } from '../../i18n/t';
 import { profilePath } from '../../extras/links';
 import { AppStateService } from '../../state/app-state.service';
 import { profileSummary } from '../profile';
@@ -17,9 +18,9 @@ import { ProfileService } from '../profile.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="grp">
-      <p class="ui-label">Suggestions</p>
+      <p class="ui-label">{{ t('recs.settings.group') }}</p>
       <button type="button" class="row" data-profile-row (click)="open()">
-        <span class="row__tx"><span class="nm">Travel profile</span><span class="hint" data-summary>{{ summary() }}</span></span>
+        <span class="row__tx"><span class="nm">{{ t('recs.profile.title') }}</span><span class="hint" data-summary>{{ summary() }}</span></span>
         <span class="chev" aria-hidden="true">›</span>
       </button>
     </section>
@@ -35,6 +36,7 @@ import { ProfileService } from '../profile.service';
   `],
 })
 export class SettingsProfileBodyComponent {
+  protected readonly t = t;
   private readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly profile = inject(ProfileService);

@@ -3,25 +3,26 @@ import { RouterLink } from '@angular/router';
 import { AppStateService } from '../state/app-state.service';
 import { IconComponent, IconName } from '../components/shared/icons.component';
 import { NavSection, isDetailPath, navSection } from './nav-model';
+import { MsgKey, t } from '../i18n/t';
 
 interface Tab {
   section: NavSection;
-  label: string;
+  label: MsgKey;
   path: string;
   icon: IconName;
 }
 
 export const TABS: readonly Tab[] = [
-  { section: 'explore', label: 'Explore', path: '/', icon: 'compass' },
-  { section: 'map', label: 'Map', path: '/map', icon: 'map' },
-  { section: 'trips', label: 'Trips', path: '/trips', icon: 'suitcase' },
+  { section: 'explore', label: 'shell.nav.explore', path: '/', icon: 'compass' },
+  { section: 'map', label: 'shell.nav.map', path: '/map', icon: 'map' },
+  { section: 'trips', label: 'shell.nav.trips', path: '/trips', icon: 'suitcase' },
 ];
 
 /**
  * Mobile floating tab bar (< 720px): a glass pill 26px above the bottom.
  * The active tab is an ink pill with its label; the others are icons.
  * Settings opens the sheet. Hidden on detail pages (/to, /flight, /calendar,
- * /trips/:id, /today, /reach), which show back buttons instead.
+ * /trips/:id, /today, /reach, /saved, /weekend, /g/:id), which show back buttons instead.
  */
 @Component({
   selector: 'app-tab-bar',
@@ -30,16 +31,16 @@ export const TABS: readonly Tab[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[class.is-hidden]': 'hidden()' },
   template: `
-    <nav class="tb ui-glass" aria-label="Main">
-      @for (t of tabs; track t.section) {
-        <a class="tb__i" [class.on]="t.section === section()" [routerLink]="t.path" [queryParams]="state.globalParams()"
-           [attr.aria-current]="t.section === section() ? 'page' : null"
-           [attr.aria-label]="t.section === section() ? null : t.label">
-          <app-icon [name]="t.icon" [size]="20" [strokeWidth]="2" />
-          @if (t.section === section()) { <span>{{ t.label }}</span> }
+    <nav class="tb ui-glass" [attr.aria-label]="t('shell.nav.main')">
+      @for (tab of tabs; track tab.section) {
+        <a class="tb__i" [class.on]="tab.section === section()" [routerLink]="tab.path" [queryParams]="state.globalParams()"
+           [attr.aria-current]="tab.section === section() ? 'page' : null"
+           [attr.aria-label]="tab.section === section() ? null : t(tab.label)">
+          <app-icon [name]="tab.icon" [size]="20" [strokeWidth]="2" />
+          @if (tab.section === section()) { <span>{{ t(tab.label) }}</span> }
         </a>
       }
-      <button type="button" class="tb__i" (click)="state.openSettings()" aria-label="Settings" aria-haspopup="dialog">
+      <button type="button" class="tb__i" (click)="state.openSettings()" [attr.aria-label]="t('shell.nav.settings')" aria-haspopup="dialog">
         <app-icon name="gear" [size]="20" [strokeWidth]="2" />
       </button>
     </nav>
@@ -68,6 +69,7 @@ export const TABS: readonly Tab[] = [
 export class TabBarComponent {
   protected readonly state = inject(AppStateService);
   protected readonly tabs = TABS;
+  protected readonly t = t;
   protected readonly section = computed(() => navSection(this.state.path()));
   protected readonly hidden = computed(() => isDetailPath(this.state.path()));
 }

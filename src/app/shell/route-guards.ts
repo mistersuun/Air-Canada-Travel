@@ -4,6 +4,8 @@ import { findDestination } from '../utils/airports';
 import { isDateKey, formatKey } from '../utils/time';
 import { currentDestinationCode, isDestinationCode } from '../state/prefs.service';
 import { TripsService } from '../trips/trips.service';
+import { AppStateService } from '../state/app-state.service';
+import { t } from '../i18n/t';
 
 /** Rebuild the current URL with `code` swapped for its canonical form. */
 function withCode(router: Router, route: ActivatedRouteSnapshot, code: string): RedirectCommand {
@@ -55,7 +57,7 @@ export const legacyDestRedirect: CanActivateFn = route => {
 /** 'Lisbon · Routes'. */
 export const destTitle: ResolveFn<string> = route => {
   const d = findDestination((route.paramMap.get('code') ?? '').toUpperCase());
-  return d ? `${d.city} · Routes` : 'Routes';
+  return d ? t('shell.title.page', { page: d.city }) : t('shell.title.home');
 };
 
 /** 'Lisbon · Thu, Oct 1 · Routes'. */
@@ -63,7 +65,16 @@ export const flightTitle: ResolveFn<string> = route => {
   const d = findDestination((route.paramMap.get('code') ?? '').toUpperCase());
   const date = route.paramMap.get('date');
   const day = isDateKey(date) ? formatKey(date, { weekday: 'short', month: 'short', day: 'numeric' }) : '';
-  return [d?.city ?? 'Flight', day, 'Routes'].filter(Boolean).join(' · ');
+  return t('shell.title.page', { page: [d?.city ?? t('shell.title.flight'), day].filter(Boolean).join(' · ') });
+};
+
+/**
+ * Unknown URLs: say so, then go Home. (Old shared links with ?dest= are
+ * handled on the Home route itself, so they never reach here.)
+ */
+export const unknownPage: CanActivateFn = route => {
+  if (!route.queryParams['dest']) inject(AppStateService).flash(t('shell.notFound'));
+  return new RedirectCommand(inject(Router).createUrlTree(['/'], { queryParams: route.queryParams }), { replaceUrl: true });
 };
 
 /** `:id` must be a trip on this device; otherwise go to the Trips list. */
@@ -75,6 +86,6 @@ export const knownTrip: CanActivateFn = route => {
 
 /** 'Seville trip · Routes'. */
 export const tripTitle: ResolveFn<string> = route => {
-  const t = inject(TripsService).trip(route.paramMap.get('id') ?? '');
-  return t ? `${t.name} · Routes` : 'Trips · Routes';
+  const trip = inject(TripsService).trip(route.paramMap.get('id') ?? '');
+  return trip ? t('shell.title.page', { page: trip.name }) : t('shell.title.trips');
 };

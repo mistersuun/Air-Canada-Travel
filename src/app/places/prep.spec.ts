@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t } from '../i18n/t';
 import type { FlightLeg, Trip } from '../trips/model';
 import { SEVILLE_IDS, sevilleTrip } from '../trips/testing/seville-fixture';
 import { toUtcMs } from '../utils/time';
@@ -23,10 +24,10 @@ describe('prep rules table', () => {
     for (const r of ENTRY_RULES) {
       expect(r.reviewed).toBe('2026-10');
       expect(r.url).toMatch(/^https:\/\/(travel\.gc\.ca|travel-europe\.europa\.eu|www\.gov\.uk)\//);
-      expect(r.title).not.toMatch(/\beTA\b/);
-      expect(`${r.title} ${r.detail}`).not.toMatch(/\bapply\b/i);
+      expect(t(r.title)).not.toMatch(/\beTA\b/);
+      expect(`${t(r.title)} ${t(r.detail)}`).not.toMatch(/\bapply\b/i);
     }
-    expect(ENTRY_RULES.find(r => r.id === 'etias')!.title).toBe('Check ETIAS status');
+    expect(t(ENTRY_RULES.find(r => r.id === 'etias')!.title)).toBe('Check ETIAS status');
   });
 });
 

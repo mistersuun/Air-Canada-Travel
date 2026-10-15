@@ -5,6 +5,8 @@
  * labels it "Forecast".
  */
 
+import { MsgKey, t } from '../i18n/t';
+
 /** How many days ahead the API serves (today counts as day 0). */
 export const FORECAST_DAYS = 16;
 
@@ -52,28 +54,27 @@ export function withinForecast(dateKey: string, todayKey: string): boolean {
   return d >= 0 && d < FORECAST_DAYS;
 }
 
-/** WMO weather interpretation codes to a short phrase; `wet` is set for precipitation. */
-function kind(code: number): { text: string; wet?: boolean } {
-  if (code === 0) return { text: 'clear' };
-  if (code === 1) return { text: 'mostly clear' };
-  if (code === 2) return { text: 'partly cloudy' };
-  if (code === 3) return { text: 'overcast' };
-  if (code === 45 || code === 48) return { text: 'fog' };
-  if (code >= 51 && code <= 57) return { text: 'drizzle', wet: true };
-  if (code === 66 || code === 67) return { text: 'freezing rain', wet: true };
-  if (code >= 61 && code <= 65) return { text: 'rain', wet: true };
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return { text: 'snow', wet: true };
-  if (code >= 80 && code <= 82) return { text: 'showers', wet: true };
-  if (code >= 95 && code <= 99) return { text: 'thunderstorms', wet: true };
-  return { text: 'mixed' };
+/** WMO weather interpretation codes to a phrase (catalogue key base); `wet` is set for precipitation. */
+function kind(code: number): { key: 'clear' | 'mostlyClear' | 'partlyCloudy' | 'overcast' | 'fog' | 'drizzle' | 'freezingRain' | 'rain' | 'snow' | 'showers' | 'thunderstorms' | 'mixed'; wet?: boolean } {
+  if (code === 0) return { key: 'clear' };
+  if (code === 1) return { key: 'mostlyClear' };
+  if (code === 2) return { key: 'partlyCloudy' };
+  if (code === 3) return { key: 'overcast' };
+  if (code === 45 || code === 48) return { key: 'fog' };
+  if (code >= 51 && code <= 57) return { key: 'drizzle', wet: true };
+  if (code === 66 || code === 67) return { key: 'freezingRain', wet: true };
+  if (code >= 61 && code <= 65) return { key: 'rain', wet: true };
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return { key: 'snow', wet: true };
+  if (code >= 80 && code <= 82) return { key: 'showers', wet: true };
+  if (code >= 95 && code <= 99) return { key: 'thunderstorms', wet: true };
+  return { key: 'mixed' };
 }
 
 /** 'rain likely' (chance 60%+), 'rain possible' (below), plain 'rain' with no chance given; 'clear', 'partly cloudy'. */
 export function weatherText(code: number, precipPct: number | null = null): string {
   const k = kind(code);
-  if (!k.wet) return k.text;
-  if (precipPct === null) return k.text;
-  return `${k.text} ${precipPct < 60 ? 'possible' : 'likely'}`;
+  if (!k.wet || precipPct === null) return t(`recs.wx.${k.key}` as MsgKey);
+  return t(`recs.wx.${k.key}.${precipPct < 60 ? 'possible' : 'likely'}` as MsgKey);
 }
 
 /** '24° / 17° · rain likely'. */

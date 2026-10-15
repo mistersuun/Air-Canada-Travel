@@ -20,6 +20,7 @@ import {
 import { compressPhoto } from './photo';
 import { StorageInfo, checkRoom, estimate, storageInfo } from './quota';
 import { THUMB_MAKER, wantsThumb } from './thumbs';
+import { t } from '../i18n/t';
 
 /** localStorage for FilesPrefs; null when site data is blocked (prefs then live in memory). */
 export const FILES_PREFS_STORAGE = new InjectionToken<Storage | null>('FILES_PREFS_STORAGE', {
@@ -213,7 +214,7 @@ export class FilesService {
     this.list.update(l => l.filter(a => a.id !== id));
     this.dropThumbUrl(id);
     // Undo brings the file back; its preview is made again.
-    this.db.flash('File deleted', { label: 'Undo', run: () => void this.restore({ ...rec, thumbBlobId: null }, content) });
+    this.db.flash(t('files.deleted'), { label: t('common.undo'), run: () => void this.restore({ ...rec, thumbBlobId: null }, content) });
   }
 
   /**
@@ -323,7 +324,7 @@ export class FilesService {
     try {
       parsed = JSON.parse(text);
     } catch {
-      return { error: "This file isn't a Routes backup." };
+      return { error: t('files.notBackup') };
     }
     const entries = readBackupFiles(parsed);
     const store = await this.storeOrNull();

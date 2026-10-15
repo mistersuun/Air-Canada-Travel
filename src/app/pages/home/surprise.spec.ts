@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RouteEntry } from '../../utils/routes';
-import { flickSequence, surprisePick, surpriseCandidates } from './surprise';
+import type { WeekendOption } from '../weekend/weekend-model';
+import { FLICK_COUNT, dareText, flickSequence, surprisePick, surpriseCandidates, weekendEntries } from './surprise';
 
 function entry(code: string, n: number, type = 'City', dep = 1000): RouteEntry {
   return {
@@ -93,5 +94,28 @@ describe('flickSequence', () => {
     expect(new Set(seq).size).toBe(seq.length);
     expect(seq).not.toContain('D');
     expect(surpriseCandidates(list)).toHaveLength(4);
+  });
+});
+
+describe('spin length', () => {
+  it('sweeps 4 to 6 candidates', () => {
+    expect(FLICK_COUNT).toBeGreaterThanOrEqual(4);
+    expect(FLICK_COUNT).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('this weekend', () => {
+  const opt = (code: string, tries: number, hoursThere = 40) =>
+    ({ code, tries: new Array(tries).fill(null), hoursThere, out: [], retKey: '', directTries: tries }) as unknown as WeekendOption;
+  const list = [entry('LIS', 3), entry('CUN', 3), entry('NRT', 3)];
+
+  it('keeps only the destinations the weekend finder found', () => {
+    expect(weekendEntries(list, [opt('LIS', 6), opt('NRT', 1)]).map(e => e.destination.code)).toEqual(['LIS', 'NRT']);
+    expect(weekendEntries(list, [])).toEqual([]);
+  });
+  it('words the dare as facts', () => {
+    expect(dareText(list[0], 0, '24h', opt('LIS', 6))).toBe(`Dare you: ${list[0].destination.city} this weekend? ~40h there, 6 tries home`);
+    expect(dareText(list[0], 0, '24h', opt('LIS', 1))).toContain('1 try home');
+    expect(dareText(entry('LIS', 0), 0, '24h', null)).toBe('Dare you: LIS?');
   });
 });

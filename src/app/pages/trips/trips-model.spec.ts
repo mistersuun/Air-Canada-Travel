@@ -34,13 +34,23 @@ describe('trips-model', () => {
 
   it('counts down to the outbound: days, tomorrow, today, under way, done', () => {
     const t = sevilleTrip();
-    expect(countdown(t, NOW)).toEqual({ text: '7 sleeps', tone: 'blue' });
+    expect(countdown(t, NOW)).toEqual({ text: '7 sleeps', tone: 'blue', sleeps: true });
     expect(countdown(t, yul('2026-10-05', '12:00')).text).toBe('3 sleeps');
     expect(countdown(t, yul('2026-09-30', '12:00')).text).toBe('In 8 days');
     expect(countdown(t, yul('2026-10-07', '12:00')).text).toBe('Tomorrow');
     expect(countdown(t, yul('2026-10-08', '09:00')).text).toBe('Today');
     expect(countdown(t, yul('2026-10-08', '18:00')).text).toBe('Under way');
     expect(countdown(t, yul('2026-10-13', '22:01')).text).toBe('Done');
+  });
+
+  it('adds a listing chip to a planned flight whose window is open', () => {
+    const t = sevilleTrip();
+    (t.legs[0] as FlightLeg).status = 'planned';
+    const out = (r: ReturnType<typeof legRows>) => r.map(x => x.listing?.label ?? null);
+    expect(out(legRows(t))).toEqual([null, null, null, null]);
+    const rows = legRows(t, '24h', { nowMs: yul('2026-10-07', '12:00'), hours: 48 });
+    expect(rows[0].listing).toEqual({ label: 'Listing open', open: true });
+    expect(legRows(t, '24h', { nowMs: yul('2026-10-07', '12:00'), hours: 24 })[0].listing?.open).toBe(false);
   });
 
   it('builds the g2 timeline rows with status and provenance', () => {

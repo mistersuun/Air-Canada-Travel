@@ -8,11 +8,13 @@
  * no odds, "not found in our schedule data" rather than "no flights", and
  * listing is always the traveller's own step.
  */
+import { currentStop, stopForLeg } from '../../trips/stops';
 import { type ConnectOptions, type Itinerary } from '../../utils/connections';
 import { airportTz } from '../../utils/airports';
 import { networkNoteFor } from '../../data/route-network';
-import { MINUTE_MS, WEEKDAY_LONG, WEEKDAY_SHORT, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex } from '../../utils/time';
-import { MISS_GAP_MIN, departuresHome } from '../../trips/engine/homeby';
+import { MINUTE_MS, addDays, diffDays, formatClock, formatKey, utcToLocal, weekdayIndex, weekdayLong, weekdayShort } from '../../utils/time';
+import { type MsgKey, t } from '../../i18n/t';
+import { MISS_GAP_MIN, deadlineUtc, departuresHome } from '../../trips/engine/homeby';
 import { hm, supOffset } from '../../ui/format';
 import type { TimeFormat } from '../../state/prefs.service';
 import { airportEnd, arrivalAtGoal, groundEstimate, placeEnd, type GroundEstimate } from '../../places/ground';
@@ -20,12 +22,17 @@ import { tonightCheckIn } from '../../places/stay-links';
 import { legPrepItems, type PrepItem } from '../../places/prep';
 import { partOfDay } from '../reach/reach-model';
 import { shortAircraftName } from '../../trips/engine/facts';
-import { legStartUtc, refArrUtc, refDepUtc } from '../../trips/engine/legs';
+import { groundRide } from '../trips/trips-model';
+import { endTz, legStartUtc, legWindow, refArrUtc, refDepUtc, sortLegs } from '../../trips/engine/legs';
+import { DEFAULT_LISTING_HOURS, listingChip } from '../../trips/engine/listing';
+import { findDestination, findHub } from '../../utils/airports';
+import { getDestinationCodes } from '../../data/schedule-index';
+import { dailyFact } from '../destination/fun-facts';
 import { type ReachableOption, legDepartureKey, leavesGoalArea, missOneOutbound, stillReachable } from '../../trips/engine/recover';
 import { activeTravelDay, placeName } from '../../trips/engine/today';
 import {
-  type FlightLeg, type FlightRef, type LegEnd, type LegStatus, type LoadNote, type Outcome, type Trip, type TripLeg,
-  LEG_STATUS_LABEL, instanceKey, isFinalStatus,
+  type FlightLeg, type FlightRef, type GroundLeg, type LegEnd, type LegStatus, type LoadNote, type Outcome, type Provenance, type Trip, type TripLeg,
+  instanceKey, isFinalStatus,
 } from '../../trips/model';
 
 // ── Shared formatting ─────────────────────────────────────────────────────────
@@ -44,16 +51,28 @@ export function leavesLabel(depUtc: number, nowMs: number, tz?: string): string 
   const min = Math.round((depUtc - nowMs) / 60_000);
   if (min >= 48 * 60) {
     const days = tz ? diffDays(utcToLocal(nowMs, tz).dateKey, utcToLocal(depUtc, tz).dateKey) : Math.floor(min / (24 * 60));
-    return `leaves in ${days} days`;
+    return t('today.leaves.days', { n: days });
   }
-  if (min > 0) return `leaves in ${hm(min)}`;
-  if (min === 0) return 'leaves now';
-  return `left ${hm(-min)} ago`;
+  if (min > 0) return t('today.leaves.in', { dur: hm(min) });
+  if (min === 0) return t('today.leaves.now');
+  return t('today.leaves.ago', { dur: hm(-min) });
+}
+
+/** The leg status in the UI language ('Not boarded'); the status itself stays the English id. */
+export function legStatusLabel(s: LegStatus): string {
+  return t(`today.status.${s}` as MsgKey);
+}
+
+const GROUND_MODES = ['train', 'bus', 'car', 'ferry', 'flight'];
+
+/** The ground mode in the UI language ('Train'); any other mode reads as 'Ground'. */
+export function groundModeLabel(mode: string): string {
+  return t(`today.mode.${GROUND_MODES.includes(mode) ? mode : 'other'}` as MsgKey);
 }
 
 /** 'AC834' or 'AC489 + AC824'. */
 export function flightsLabel(it: Itinerary): string {
-  return it.legs.map(l => l.flightNumber ?? 'an estimated leg').join(' + ');
+  return it.legs.map(l => l.flightNumber ?? t('today.estimatedLeg')).join(' + ');
 }
 
 /** '16:20' (or '4:20 PM') for an ISO instant, local at `tz`. */
@@ -64,7 +83,7 @@ export function clockAt(iso: string, tz: string, fmt: TimeFormat): string {
 
 /** 'YUL time': labels a clock time as local at that airport. */
 export function zoneLabel(code: string): string {
-  return `${code} time`;
+  return t('today.zone', { code });
 }
 
 /**
@@ -73,14 +92,14 @@ export function zoneLabel(code: string): string {
  */
 export function dayWord(depKey: string, nowMs: number, origin: string): string {
   const d = diffDays(utcToLocal(nowMs, airportTz(origin)).dateKey, depKey);
-  return d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : d === -1 ? 'Yesterday' : '';
+  return d === 0 ? t('format.today') : d === 1 ? t('format.tomorrow') : d === -1 ? t('today.yesterday') : '';
 }
 
 /** The text of a load note: '14 open, 9 listed, Gate 52' (only the parts written). */
 export function noteText(n: LoadNote): string {
   const parts: string[] = [];
-  if (n.open !== null) parts.push(`${n.open} open`);
-  if (n.listed !== null) parts.push(`${n.listed} listed`);
+  if (n.open !== null) parts.push(t('today.note.open', { n: n.open }));
+  if (n.listed !== null) parts.push(t('today.note.listed', { n: n.listed }));
   if (n.text.trim()) parts.push(n.text.trim());
   return parts.join(', ');
 }
@@ -121,6 +140,242 @@ export function currentSegment(trip: Trip, leg: FlightLeg, outcomes: readonly Ou
   return i < 0 ? Math.max(0, leg.refs.length - 1) : i;
 }
 
+// ── Ground legs and the days between flights ────────────────────────────────
+
+/** The goal's time zone: its own, else its AC airport's, else the home airport's. */
+function goalTz(trip: Trip): string {
+  return trip.goal.tz || airportTz(trip.goal.acCode ?? trip.homeAirport);
+}
+
+/** The calendar a ground leg is read against: local at its start place (else the goal). */
+function groundDayKey(leg: GroundLeg, trip: Trip, nowMs: number): { today: string; day: string } {
+  const tz = endTz(leg.from) ?? goalTz(trip);
+  return { today: utcToLocal(nowMs, tz).dateKey, day: leg.userTimes?.depDateKey ?? utcToLocal(legStartUtc(leg, trip.legs), tz).dateKey };
+}
+
+/**
+ * The ground leg /today shows when no flight is up: an explicit ?trip=&leg=
+ * naming a ground leg, else a train, bus, car or ferry leg planned for today
+ * (local at its start). Open legs come before ones already marked done;
+ * dropped legs never show.
+ */
+export function resolveGroundToday(trips: Trip[], nowMs: number, tripId?: string | null, legId?: string | null): TodayTarget | null {
+  if (tripId && legId) {
+    const leg = trips.find(t => t.id === tripId)?.legs.find(l => l.id === legId);
+    return leg && leg.kind === 'ground' ? { tripId, legId } : null;
+  }
+  const found: { target: TodayTarget; open: boolean; depUtc: number }[] = [];
+  for (const trip of trips) {
+    if (trip.archived || (tripId && trip.id !== tripId)) continue;
+    for (const leg of trip.legs) {
+      if (leg.kind !== 'ground' || leg.status === 'abandoned') continue;
+      const k = groundDayKey(leg, trip, nowMs);
+      if (k.day !== k.today) continue;
+      found.push({ target: { tripId: trip.id, legId: leg.id }, open: !isFinalStatus(leg.status), depUtc: legStartUtc(leg, trip.legs) });
+    }
+  }
+  found.sort((a, b) => Number(b.open) - Number(a.open) || a.depUtc - b.depUtc);
+  return found[0]?.target ?? null;
+}
+
+export interface GroundTodayView {
+  tripId: string;
+  legId: string;
+  eyebrow: string;          // 'Today · Wed Oct 14 · Madrid'
+  title: string;            // 'Madrid → Seville'
+  mode: GroundLeg['mode'];
+  modeLabel: string;        // 'Train'
+  /** The saved departure ('09:00'), or null while only estimated. */
+  time: string | null;
+  zone: string;             // 'Madrid time'
+  provenance: Provenance;
+  status: LegStatus;
+  final: boolean;
+  sub: string;              // 'Train 2h39' or 'Train · arrives 14:45'
+  /** Timetable facts for the corridor: 'trains roughly hourly · usual last one 21:30'. */
+  info: string | null;
+  note: string;
+}
+
+export function groundTodayView(input: { trip: Trip; legId: string; nowMs: number; fmt: TimeFormat }): GroundTodayView | null {
+  const { trip, nowMs, fmt } = input;
+  const leg = trip.legs.find(l => l.id === input.legId);
+  if (!leg || leg.kind !== 'ground') return null;
+  const ut = leg.userTimes;
+  const ride = groundRide(leg);
+  const from = leg.from.code ? airportEnd(leg.from.code) ?? leg.from : leg.from;
+  const g = groundEstimate(from, leg.to, { dateKey: leg.dateKey });
+  const sub = ut
+    ? t(ut.arrDateKey !== ut.depDateKey ? 'today.ground.arrivesNext' : 'today.ground.arrives', { mode: groundModeLabel(leg.mode), time: formatClock(ut.arrLocal, fmt) })
+    : ride.label;
+  const info = leg.mode === g.mode
+    ? [g.frequency, g.lastDepLocal ? t('today.ground.lastOne', { time: formatClock(g.lastDepLocal, fmt) }) : null].filter(Boolean).join(' · ') || null
+    : null;
+  const k = groundDayKey(leg, trip, nowMs);
+  const d = diffDays(k.today, k.day);
+  return {
+    tripId: trip.id,
+    legId: leg.id,
+    eyebrow: [d === 0 ? t('format.today') : d === 1 ? t('format.tomorrow') : '', dayLabel(k.day), leg.from.name].filter(Boolean).join(' · '),
+    title: `${leg.from.name} → ${leg.to.name}`,
+    mode: leg.mode,
+    modeLabel: groundModeLabel(leg.mode),
+    time: ut ? formatClock(ut.depLocal, fmt) : null,
+    zone: zoneLabel(leg.from.name),
+    provenance: ride.provenance,
+    status: leg.status,
+    final: isFinalStatus(leg.status),
+    sub,
+    info,
+    note: leg.note.trim(),
+  };
+}
+
+/**
+ * The trip is under way: its first leg has started and the home-by time has not
+ * passed. It ends earlier once the traveller is home: every live leg is done
+ * and the last has landed, or the return flight is boarded and has landed.
+ */
+export function tripUnderWay(trip: Trip, nowMs: number): boolean {
+  if (trip.archived) return false;
+  const live = sortLegs(trip.legs.filter(l => l.status !== 'abandoned'));
+  const first = live[0];
+  const w = first ? legWindow(first, trip.legs) : null;
+  if (!w || nowMs < w.depUtc || nowMs > deadlineUtc(trip.homeBy, trip.homeAirport)) return false;
+  const landed = (l: TripLeg) => {
+    const win = legWindow(l, trip.legs);
+    return !!win && nowMs >= win.arrUtc;
+  };
+  if (live.every(l => isFinalStatus(l.status)) && landed(live[live.length - 1])) return false;
+  const home = live.find(l => l.kind === 'flight' && l.role === 'return' && l.status === 'boarded' && l.refs.length > 0 && landed(l));
+  return !home;
+}
+
+export interface MidTripView {
+  tripId: string;
+  eyebrow: string;          // 'Seville trip · Wed Oct 14'
+  title: string;            // 'Day 2 in Seville' | 'On your way to Seville'
+  /** The next open leg, with where it stands. */
+  next: { title: string; detail: string; listing?: { label: string; open: boolean } | null } | null;
+  /** 'Home by Mon Oct 19, 22:00' and '5 days to go'. */
+  homeBy: { label: string; countdown: string };
+  /** 'Nothing else today.' when a leg started today, else 'Nothing is scheduled today.' */
+  quiet: string;
+  fact: string | null;
+}
+
+/** 'today', 'tomorrow', 'in 5 days' against the calendar at the home airport. */
+function homeByCountdown(trip: Trip, nowMs: number): string {
+  const d = diffDays(utcToLocal(nowMs, airportTz(trip.homeAirport)).dateKey, trip.homeBy.dateKey);
+  return d <= 0 ? t('today.homeBy.today') : d === 1 ? t('today.homeBy.tomorrow') : t('today.homeBy.days', { n: d });
+}
+
+/** The outbound flight actually flown (the latest live one) and when it lands, as a date at the goal. */
+function arrival(trip: Trip, tz: string): { dateKey: string; utc: number | null } {
+  const dead = new Set<string>(['abandoned', 'notBoarded', 'didntTry']);
+  const outs = sortLegs(trip.legs).filter((l): l is FlightLeg => l.kind === 'flight' && l.role !== 'return' && l.refs.length > 0 && !dead.has(l.status));
+  const out = outs[outs.length - 1];
+  if (!out) return { dateKey: trip.outboundDate, utc: null };
+  const utc = refArrUtc(out.refs[out.refs.length - 1]);
+  return { dateKey: utcToLocal(utc, tz).dateKey, utc };
+}
+
+function nextLeg(trip: Trip, nowMs: number, fmt: TimeFormat, listingHours: number): MidTripView['next'] {
+  const leg = sortLegs(trip.legs).find(l => !isFinalStatus(l.status) && (l.kind === 'ground' || l.refs.length > 0) && legStartUtc(l, trip.legs) > nowMs);
+  if (!leg) return null;
+  if (leg.kind === 'flight') {
+    const ref = leg.refs[0];
+    const when = `${dayLabel(ref.dateKey)} ${formatClock(ref.depLocal, fmt)} ${zoneLabel(ref.origin)}`;
+    const state = leg.status === 'planned' ? t('today.notListedYet') : legStatusLabel(leg.status);
+    return {
+      title: t(leg.role === 'return' ? 'today.next.flightHome' : 'today.next.flight', { flight: ref.flightNumber, when }),
+      detail: `${state} · ${leavesLabel(refDepUtc(ref), nowMs, airportTz(ref.origin))}`,
+      listing: listingChip(leg, nowMs, listingHours, fmt),
+    };
+  }
+  const day = leg.userTimes?.depDateKey ?? leg.dateKey;
+  const time = leg.userTimes ? ` ${formatClock(leg.userTimes.depLocal, fmt)}` : '';
+  return {
+    title: t('today.next.ground', { mode: groundModeLabel(leg.mode), from: leg.from.name, to: leg.to.name, when: `${dayLabel(day)}${time}` }),
+    detail: groundRide(leg).label,
+  };
+}
+
+function goalFact(trip: Trip, nowMs: number): string | null {
+  const dest = findDestination(trip.goal.acCode) ?? findHub(trip.goal.acCode);
+  const hub = findHub(trip.fromHub);
+  if (!dest || !hub) return null;
+  const nonstops = getDestinationCodes(hub.code).map(c => findHub(c) ?? findDestination(c)).filter((x): x is NonNullable<typeof x> => !!x);
+  return dailyFact(dest, hub, nonstops, nowMs);
+}
+
+/**
+ * A day of a trip that is under way with nothing scheduled: which day it is at
+ * the goal, the next leg, the home-by countdown and (when one applies) a fact
+ * about the destination. The trip with the nearest home-by time wins.
+ */
+export function midTripView(trips: Trip[], nowMs: number, fmt: TimeFormat, tripId?: string | null, listingHours = DEFAULT_LISTING_HOURS): MidTripView | null {
+  const trip = trips
+    .filter(t => (!tripId || t.id === tripId) && tripUnderWay(t, nowMs))
+    .sort((a, b) => deadlineUtc(a.homeBy, a.homeAirport) - deadlineUtc(b.homeBy, b.homeAirport))[0];
+  if (!trip) return null;
+  const tz = goalTz(trip);
+  const todayKey = utcToLocal(nowMs, tz).dateKey;
+  const arr = arrival(trip, tz);
+  const n = arr.utc !== null && arr.utc > nowMs ? 0 : diffDays(arr.dateKey, todayKey) + 1;
+  const homeToday = utcToLocal(nowMs, airportTz(trip.homeAirport)).dateKey;
+  const zone = homeToday !== todayKey ? zoneLabel(trip.homeAirport) : '';
+  const startedToday = trip.legs.some(l => {
+    if (l.status === 'abandoned') return false;
+    const w = legWindow(l, trip.legs);
+    return !!w && w.depUtc <= nowMs && utcToLocal(w.depUtc, tz).dateKey === todayKey;
+  });
+  return {
+    tripId: trip.id,
+    eyebrow: `${trip.name} · ${dayLabel(todayKey)}`,
+    title: stopTitle(trip, todayKey, n),
+    next: nextLeg(trip, nowMs, fmt, listingHours),
+    homeBy: {
+      label: t(zone ? 'today.homeBy.labelZone' : 'today.homeBy.label', { day: dayLabel(trip.homeBy.dateKey), time: formatClock(trip.homeBy.hhmm, fmt), zone }),
+      countdown: homeByCountdown(trip, nowMs),
+    },
+    quiet: t(startedToday ? 'today.quiet.else' : 'today.quiet.none'),
+    fact: goalFact(trip, nowMs),
+  };
+}
+
+/** 'Day 3 in Lisbon': counts from arriving at the stop you are in (the goal until a later stop begins). */
+function stopTitle(trip: Trip, todayKey: string, goalDay: number): string {
+  const stop = currentStop(trip, todayKey);
+  if (stop.id !== 'goal') return t('today.day', { n: diffDays(stop.arriveDate, todayKey) + 1, place: stop.place.name });
+  return goalDay >= 1 ? t('today.day', { n: goalDay, place: trip.goal.name }) : t('today.onYourWay', { place: trip.goal.name });
+}
+
+export interface UpcomingTripView { tripId: string; title: string; detail: string; listing?: { label: string; open: boolean } | null }
+
+/** The nearest trip that has not started: 'Next trip in 5 days' with its name and first date (the first leg's own start day). */
+export function upcomingTripView(trips: Trip[], nowMs: number, tripId?: string | null, fmt: TimeFormat = '24h', listingHours = DEFAULT_LISTING_HOURS): UpcomingTripView | null {
+  let best: { trip: Trip; start: number; tz: string; first: TripLeg | undefined } | null = null;
+  for (const trip of trips) {
+    if (trip.archived || (tripId && trip.id !== tripId)) continue;
+    const first = sortLegs(trip.legs.filter(l => l.status !== 'abandoned'))[0];
+    const w = first ? legWindow(first, trip.legs) : null;
+    const tz = first ? (first.kind === 'flight' ? airportTz(first.refs[0]?.origin ?? trip.fromHub) : endTz(first.from) ?? airportTz(trip.fromHub)) : airportTz(trip.fromHub);
+    const start = w ? w.depUtc : deadlineUtc({ dateKey: trip.outboundDate, hhmm: '00:00' }, trip.fromHub);
+    if (start <= nowMs || (best && best.start <= start)) continue;
+    best = { trip, start, tz: w ? tz : airportTz(trip.fromHub), first };
+  }
+  if (!best) return null;
+  const startKey = utcToLocal(best.start, best.tz).dateKey;
+  const d = diffDays(utcToLocal(nowMs, best.tz).dateKey, startKey);
+  return {
+    tripId: best.trip.id,
+    title: d <= 0 ? t('today.upcoming.later') : d === 1 ? t('today.upcoming.tomorrow') : t('today.upcoming.days', { n: d }),
+    detail: `${best.trip.name} · ${dayLabel(startKey)}`,
+    listing: best.first?.kind === 'flight' ? listingChip(best.first, nowMs, listingHours, fmt) : null,
+  };
+}
+
 // ── Explore banner ────────────────────────────────────────────────────────────
 
 /** 'Today · Montréal → Madrid · AC834 17:55 · Listed', or null when nothing departs today. */
@@ -132,8 +387,8 @@ export function bannerText(trips: Trip[], nowMs: number, fmt: TimeFormat): { tit
   if (!trip || !leg || leg.kind !== 'flight' || !leg.refs.length) return null;
   const ref = leg.refs[0];
   return {
-    title: `Today · ${day.title}`,
-    detail: `${ref.flightNumber} ${formatClock(ref.depLocal, fmt)} ${zoneLabel(ref.origin)} · ${LEG_STATUS_LABEL[leg.status]}`,
+    title: t('today.banner.title', { title: day.title }),
+    detail: `${ref.flightNumber} ${formatClock(ref.depLocal, fmt)} ${zoneLabel(ref.origin)} · ${legStatusLabel(leg.status)}`,
   };
 }
 
@@ -176,10 +431,10 @@ export function returnBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions
     const day = addDays(ref.dateKey, i);
     const it = departuresHome(ref.origin, home, day, connect).find(x => x.departUtc >= after);
     if (!it) continue;
-    const when = day === ref.dateKey ? 'later today' : WEEKDAY_SHORT[weekdayIndex(day)];
+    const p = { flights: flightsLabel(it), place: placeName(it.dest), time: formatClock(it.legs[0].depLocal, fmt) };
     return {
-      title: `Backup ${when}: ${flightsLabel(it)} to ${placeName(it.dest)} ${formatClock(it.legs[0].depLocal, fmt)}`,
-      detail: `Still possible if you don't clear ${ref.flightNumber}`,
+      title: day === ref.dateKey ? t('today.backup.later', p) : t('today.backup.day', { ...p, day: weekdayShort(weekdayIndex(day)) }),
+      detail: t('today.backup.still', { flight: ref.flightNumber }),
     };
   }
   return null;
@@ -189,21 +444,21 @@ export function returnBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions
 export function todayBackup(trip: Trip, leg: FlightLeg, connect: ConnectOptions, fmt: TimeFormat): TodayBackup | null {
   // Recovery searches toward the goal: for a return leg the backup is the next way home.
   if (leg.role === 'return') return returnBackup(trip, leg, connect, fmt);
-  const r = missOneOutbound(trip, leg.id, connect);
+  const r = missOneOutbound(trip, leg.id, connect);   // heads for the leg's own stop (stopForLeg)
   const missed = leg.refs[0].flightNumber;
   const tonight = r.tonight.find(o => o.status === 'usable');
   if (tonight) {
     return {
-      title: `Backup tonight: ${flightsLabel(tonight.itinerary)} to ${placeName(tonight.gateway)} ${formatClock(tonight.itinerary.legs[0].depLocal, fmt)}`,
-      detail: `Still possible if you don't clear ${missed}`,
+      title: t('today.backup.tonight', { flights: flightsLabel(tonight.itinerary), place: placeName(tonight.gateway), time: formatClock(tonight.itinerary.legs[0].depLocal, fmt) }),
+      detail: t('today.backup.still', { flight: missed }),
     };
   }
   const tomorrow = r.tomorrow.find(o => o.status === 'usable');
   if (tomorrow) {
     const it = tomorrow.itinerary;
     return {
-      title: `Backup tomorrow: ${flightsLabel(it)} to ${placeName(tomorrow.gateway)} ${WEEKDAY_SHORT[weekdayIndex(it.dateKey)]} ${formatClock(it.legs[0].depLocal, fmt)}`,
-      detail: `Nothing else found tonight in our schedule data`,
+      title: t('today.backup.tomorrow', { flights: flightsLabel(it), place: placeName(tomorrow.gateway), day: weekdayShort(weekdayIndex(it.dateKey)), time: formatClock(it.legs[0].depLocal, fmt) }),
+      detail: t('today.backup.nothingTonight'),
     };
   }
   return null;
@@ -239,7 +494,7 @@ export function todayView(input: {
   return {
     tripId: trip.id,
     legId: leg.id,
-    eyebrow: [word, dayLabel(ref.dateKey), `at ${ref.origin}`].filter(Boolean).join(' · '),
+    eyebrow: [word, dayLabel(ref.dateKey), t('today.atAirport', { code: ref.origin })].filter(Boolean).join(' · '),
     title: `${placeName(ref.origin)} → ${placeName(last.dest)}`,
     time: formatClock(ref.depLocal, fmt),
     zone: zoneLabel(ref.origin),
@@ -320,23 +575,33 @@ export function recoverLeg(trip: Trip, at: string | null, legId: string | null):
 
 /** 'then bus about 6h45 · Seville Fri evening'. */
 export function onwardLine(o: ReachableOption, goal: Trip['goal']): string {
-  if (o.ground.mode === 'unknown') return `then onward travel unknown`;
-  const label = o.ground.label.charAt(0).toLowerCase() + o.ground.label.slice(1);
-  if (o.arriveGoalUtc === null) return `then ${label}`;
-  const local = utcToLocal(o.arriveGoalUtc, goal.tz || airportTz(o.gateway));
-  const when = `${goal.name} ${WEEKDAY_SHORT[weekdayIndex(local.dateKey)]} ${partOfDay(local.hhmm)}`;
+  if (o.ground.mode === 'unknown') return t('today.onward.unknown');
+  const label = onwardLabel(o);
+  if (o.arriveGoalUtc === null) return t('today.onward.then', { label });
+  return t('today.onward.thenWhen', { label, when: onwardWhen(o, goal) });
+}
+
+/** The ground ride's own label, lower-cased to follow 'then': 'bus about 6h45'. */
+function onwardLabel(o: ReachableOption): string {
+  return o.ground.label.charAt(0).toLowerCase() + o.ground.label.slice(1);
+}
+
+/** 'Seville Fri evening', or with the late-timetable note: 'last one likely gone, Seville Fri evening'. */
+function onwardWhen(o: ReachableOption, goal: Trip['goal']): string {
+  const local = utcToLocal(o.arriveGoalUtc!, goal.tz || airportTz(o.gateway));
+  const when = `${goal.name} ${weekdayShort(weekdayIndex(local.dateKey))} ${partOfDay(local.hhmm)}`;
   const late = arrivalAtGoal(o.itinerary.arriveUtc, o.ground, airportTz(o.gateway)).lastDepMissed;
-  return late ? `then ${label} · last one likely gone, ${when}` : `then ${label} · ${when}`;
+  return late ? t('today.onward.late', { when }) : when;
 }
 
 function flightLine(it: Itinerary, fmt: TimeFormat, withDay: boolean): string {
-  const day = withDay ? `${WEEKDAY_SHORT[weekdayIndex(it.dateKey)]} ` : '';
+  const day = withDay ? `${weekdayShort(weekdayIndex(it.dateKey))} ` : '';
   const first = it.legs[0];
   if (it.legs.length === 1) {
     return `${day}${first.flightNumber ?? ''} ${formatClock(first.depLocal, fmt)} → ${formatClock(it.legs[0].arrLocal, fmt)}${supOffset(it.arrDayOffset)}`;
   }
   const last = it.legs[it.legs.length - 1];
-  return `${day}${flightsLabel(it)} · ${formatClock(first.depLocal, fmt)} → ${formatClock(last.arrLocal, fmt)}${supOffset(it.arrDayOffset)} · ${it.legs.length} standby legs`;
+  return `${day}${flightsLabel(it)} · ${formatClock(first.depLocal, fmt)} → ${formatClock(last.arrLocal, fmt)}${supOffset(it.arrDayOffset)} · ${t('today.standbyLegs', { n: it.legs.length })}`;
 }
 
 function row(o: ReachableOption, trip: Trip, currentGw: string | null, fmt: TimeFormat): RecoverRow {
@@ -346,34 +611,38 @@ function row(o: ReachableOption, trip: Trip, currentGw: string | null, fmt: Time
     const hub = it.hubs[0] ?? it.legs[0].dest;
     return {
       key, gateway: o.gateway, thumb: { kind: 'code', code: hub },
-      name: `via ${placeName(hub)}`, code: `to ${o.gateway}`,
+      name: t('format.via', { hubs: placeName(hub) }), code: t('today.toCode', { code: o.gateway }),
       line: o.reason ?? '', onward: null, usable: false, option: o,
     };
   }
-  const again = o.day === 'tomorrow' && o.gateway === currentGw ? ' again' : '';
-  const via = it.legs.length > 1 ? ` via ${placeName(it.hubs[0])}` : '';
+  const again = o.day === 'tomorrow' && o.gateway === currentGw;
+  /** 'Madrid', 'Madrid again', 'Madrid via Toronto'. */
+  const named = (place: string, withAgain: boolean) => {
+    const base = withAgain && again ? t('today.again', { place }) : place;
+    return it.legs.length > 1 ? `${base} ${t('format.via', { hubs: placeName(it.hubs[0]) })}` : base;
+  };
   if (o.status === 'closed') {
     return {
       key, gateway: o.gateway, thumb: { kind: 'code', code: o.gateway },
-      name: `${placeName(o.gateway)}${via}`, code: o.gateway,
-      line: `${flightsLabel(it)} ${formatClock(it.legs[0].depLocal, fmt)} · ${o.reason ?? 'boarding has likely closed'}`,
+      name: named(placeName(o.gateway), false), code: o.gateway,
+      line: `${flightsLabel(it)} ${formatClock(it.legs[0].depLocal, fmt)} · ${o.reason ?? t('today.boardingClosed')}`,
       onward: null, usable: false, option: o,
     };
   }
   if (o.day === 'tomorrow') {
     return {
       key, gateway: o.gateway, thumb: { kind: 'photo', code: o.gateway },
-      name: `${placeName(o.gateway)}${again}${via}`, code: o.gateway,
-      line: `${WEEKDAY_SHORT[weekdayIndex(it.dateKey)]} ${flightsLabel(it)} ${formatClock(it.legs[0].depLocal, fmt)}`
-        + (it.legs.length > 1 ? ` · ${it.legs.length} standby legs` : '')
-        + ` · ${onwardLine(o, trip.goal).replace(/^then [^·]*· /, '')}`,
+      name: named(placeName(o.gateway), true), code: o.gateway,
+      line: `${weekdayShort(weekdayIndex(it.dateKey))} ${flightsLabel(it)} ${formatClock(it.legs[0].depLocal, fmt)}`
+        + (it.legs.length > 1 ? ` · ${t('today.standbyLegs', { n: it.legs.length })}` : '')
+        + ` · ${o.ground.mode === 'unknown' ? t('today.onward.unknown') : o.arriveGoalUtc === null ? t('today.onward.then', { label: onwardLabel(o) }) : onwardWhen(o, trip.goal)}`,
       onward: null,
       usable: true, option: o,
     };
   }
   return {
     key, gateway: o.gateway, thumb: { kind: 'photo', code: o.gateway },
-    name: `${placeName(o.gateway)}${via}`, code: o.gateway,
+    name: named(placeName(o.gateway), false), code: o.gateway,
     line: flightLine(it, fmt, false), onward: onwardLine(o, trip.goal), usable: true, option: o,
   };
 }
@@ -392,7 +661,7 @@ export function plannedNights(trip: Trip, leg: FlightLeg): number | null {
 }
 
 function nightsWord(n: number): string {
-  return n === 1 ? '1 night' : `${n} nights`;
+  return t('today.nights', { n });
 }
 
 /**
@@ -410,36 +679,36 @@ export function recoverNote(trip: Trip, leg: FlightLeg | null, tonight: Reachabl
   let returnBroken = false;
 
   if (ret) {
-    const long = WEEKDAY_LONG[weekdayIndex(ret.refs[0].dateKey)];
-    const short = WEEKDAY_SHORT[weekdayIndex(ret.refs[0].dateKey)];
+    const long = weekdayLong(weekdayIndex(ret.refs[0].dateKey));
+    const short = weekdayShort(weekdayIndex(ret.refs[0].dateKey));
     const works = picks.map(o => o.returnStillWorks);
     if (works.every(w => w === true)) {
-      parts.push(picks.length > 1 ? `Your ${long} return still works either way.` : `Your ${long} return still works.`);
+      parts.push(t(picks.length > 1 ? 'today.note.returnBoth' : 'today.note.returnOne', { day: long }));
     } else if (works.every(w => w === false)) {
       returnBroken = true;
-      parts.push(`Your ${short} return no longer fits: open Return.`);
+      parts.push(t('today.note.returnBroken', { day: short }));
     } else if (works.some(w => w === false)) {
       returnBroken = true;
       const bad = picks.find(o => o.returnStillWorks === false)!;
-      parts.push(`Your ${short} return no longer fits ${placeName(bad.gateway)} ${bad.day}: open Return.`);
+      parts.push(t('today.note.returnBrokenFor', { day: short, place: placeName(bad.gateway), when: bad.day }));
     }
   }
 
   const planned = leg ? plannedNights(trip, leg) : null;
   const goal = trip.goal.name;
-  const say = (o: ReachableOption, lead: string) => {
+  const say = (o: ReachableOption) => {
     const n = o.nightsAtGoal!;
-    return planned !== null && n >= planned ? `${lead} keeps all ${nightsWord(n)} in ${goal}` : `${lead} leaves ${nightsWord(n)} in ${goal}`;
+    const keeps = planned !== null && n >= planned;
+    return t(keeps ? 'today.note.keeps' : 'today.note.leaves', { place: placeName(o.gateway), when: o.day, nights: nightsWord(n), goal });
   };
   if (tonight && tonight.nightsAtGoal !== null && tomorrow && tomorrow.nightsAtGoal !== null) {
-    const a = say(tonight, `${placeName(tonight.gateway)} tonight`);
     const b = tomorrow.nightsAtGoal === tonight.nightsAtGoal
-      ? `${placeName(tomorrow.gateway)} tomorrow too`
-      : `waiting for ${placeName(tomorrow.gateway)} tomorrow leaves ${tomorrow.nightsAtGoal}`;
-    parts.push(`${a}; ${b}.`);
+      ? t('today.note.tooTomorrow', { place: placeName(tomorrow.gateway) })
+      : t('today.note.waiting', { place: placeName(tomorrow.gateway), n: tomorrow.nightsAtGoal });
+    parts.push(`${say(tonight)}; ${b}.`);
   } else {
     const one = picks.find(o => o.nightsAtGoal !== null);
-    if (one) parts.push(`${say(one, `${placeName(one.gateway)} ${one.day}`)}.`);
+    if (one) parts.push(`${say(one)}.`);
   }
   if (!parts.length) return null;
   const text = parts.join(' ');
@@ -449,8 +718,10 @@ export function recoverNote(trip: Trip, leg: FlightLeg | null, tonight: Reachabl
 export function recoverView(input: {
   trip: Trip; at: string | null; legId: string | null; nowMs: number; connect: ConnectOptions; fmt: TimeFormat;
 }): RecoverView {
-  const { trip, nowMs, fmt } = input;
-  const leg = recoverLeg(trip, input.at, input.legId);
+  const { nowMs, fmt } = input;
+  const leg = recoverLeg(input.trip, input.at, input.legId);
+  // Recovery heads for the place this leg is going to (an onward leg: its stop, not the first one).
+  const trip: Trip = leg ? { ...input.trip, goal: stopForLeg(input.trip, leg) } : input.trip;
   const at = input.at || leg?.refs[0].origin || trip.fromHub;
   const r = stillReachable({ trip, at, nowMs, connect: input.connect });
   // Never offer the very flight being recovered from.
@@ -479,10 +750,10 @@ export function recoverView(input: {
     tripId: trip.id,
     legId: leg?.id ?? null,
     at,
-    subtitle: `From ${at} · now ${formatClock(utcToLocal(nowMs, airportTz(at)).hhmm, fmt)}`,
+    subtitle: t('today.recover.subtitle', { at, time: formatClock(utcToLocal(nowMs, airportTz(at)).hhmm, fmt) }),
     goal: trip.goal.name,
-    homeBy: `${WEEKDAY_SHORT[weekdayIndex(hb.dateKey)]} ${formatClock(hb.hhmm, fmt)}`,
-    legNote: leg ? `${leg.refs[0].flightNumber} ${isFinalStatus(leg.status) ? 'marked ' : ''}${LEG_STATUS_LABEL[leg.status]}` : null,
+    homeBy: `${weekdayShort(weekdayIndex(hb.dateKey))} ${formatClock(hb.hhmm, fmt)}`,
+    legNote: leg ? (isFinalStatus(leg.status) ? t('today.legNote.marked', { flight: leg.refs[0].flightNumber, status: legStatusLabel(leg.status) }) : `${leg.refs[0].flightNumber} ${legStatusLabel(leg.status)}`) : null,
     tonight,
     tomorrow,
     tomorrowMore,

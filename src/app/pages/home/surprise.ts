@@ -5,15 +5,17 @@
 import type { TripStyle, TravelProfile } from '../../recs/model';
 import type { RouteEntry } from '../../utils/routes';
 import type { FlightInstance } from '../../utils/week';
-import { WEEKDAY_SHORT, formatClock, weekdayIndex } from '../../utils/time';
+import { formatClock, weekdayIndex, weekdayShort } from '../../utils/time';
+import { t } from '../../i18n/t';
 import type { TimeFormat } from '../../state/prefs.service';
+import type { WeekendOption } from '../weekend/weekend-model';
 
 /** How many recent picks are skipped. */
 export const SURPRISE_RECENT = 5;
 /** Weight multiplier for a destination of a style the traveller likes. */
 export const STYLE_NUDGE = 1.5;
 /** Candidate arcs flicked through before settling (including the pick). */
-export const FLICK_COUNT = 7;
+export const FLICK_COUNT = 5;
 
 const STORAGE_KEY = 'ac.surprise.recent.v1';
 
@@ -92,13 +94,33 @@ export function nextDeparture(e: RouteEntry, nowMs: number): FlightInstance | nu
 /** 'nonstop Thu 21:40' (empty when there is no flight). */
 export function surpriseMeta(e: RouteEntry, nowMs: number, fmt: TimeFormat = '24h'): string {
   const f = nextDeparture(e, nowMs);
-  return f ? `nonstop ${WEEKDAY_SHORT[weekdayIndex(f.dateKey)]} ${formatClock(f.depLocal, fmt)}` : '';
+  return f ? t('home.surprise.meta', { weekday: weekdayShort(weekdayIndex(f.dateKey)), time: formatClock(f.depLocal, fmt) }) : '';
 }
 
 /** 'Porto · nonstop Thu 21:40'. */
 export function surpriseLine(e: RouteEntry, nowMs: number, fmt: TimeFormat = '24h'): string {
   const m = surpriseMeta(e, nowMs, fmt);
   return m ? `${e.destination.city} · ${m}` : e.destination.city;
+}
+
+/**
+ * Entries restricted to the destinations the Weekend finder says work for the
+ * window (an outbound and a way home by the deadline). Same logic, not a copy:
+ * `options` come from weekendOptions().
+ */
+export function weekendEntries(entries: readonly RouteEntry[], options: readonly Pick<WeekendOption, 'code'>[]): RouteEntry[] {
+  const ok = new Set(options.map(o => o.code));
+  return entries.filter(e => ok.has(code(e)));
+}
+
+/** 'Dare you: Lisbon this weekend? ~40h there, 6 tries home' (facts; falls back to the nonstop time without a weekend option). */
+export function dareText(e: RouteEntry, nowMs: number, fmt: TimeFormat, weekend: WeekendOption | null): string {
+  const city = e.destination.city;
+  if (weekend) {
+    return t('home.surprise.dareWeekend', { city, hours: weekend.hoursThere, n: weekend.tries.length });
+  }
+  const m = surpriseMeta(e, nowMs, fmt);
+  return m ? t('home.surprise.dareMeta', { city, meta: m }) : t('home.surprise.dareCity', { city });
 }
 
 // ── Recent picks (sessionStorage; every access guarded) ──────────────────────

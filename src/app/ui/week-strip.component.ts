@@ -3,9 +3,10 @@ import {
   ChangeDetectionStrategy, booleanAttribute, Component, DOCUMENT, ElementRef, computed, inject, input, output, viewChild,
 } from '@angular/core';
 import type { Coverage } from '../data/schedule-index';
+import { t } from '../i18n/t';
 import { formatWeekLabel } from '../utils/week';
 import {
-  WEEKDAY_LONG, WEEKDAY_SHORT, addDays, dateKey, formatKey, isDateKey, weekKeys, weekStartKey as mondayOf,
+  addDays, dateKey, formatKey, isDateKey, weekKeys, weekStartKey as mondayOf, weekdayShort,
 } from '../utils/time';
 import { IconComponent } from '../components/shared/icons.component';
 import { shortcutAllowed } from '../shell/keyboard';
@@ -18,6 +19,8 @@ export interface StripDay {
   label: string;
   today: boolean;
   outside: boolean;
+  /** Before today: shown dimmed, like the calendar's past days. */
+  past: boolean;
 }
 
 /** Horizontal swipe distance (px) that changes the week on touch. */
@@ -42,9 +45,9 @@ export const SWIPE_PX = 50;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'onKey($event)' },
   template: `
-    <div class="ws" role="group" [attr.aria-label]="'Week of ' + fullLabel()">
+    <div class="ws" role="group" [attr.aria-label]="t('ui.week.aria', { week: fullLabel() })">
       <button type="button" class="nav nav--prev ui-circ ui-circ--glass" (click)="prev.emit()" [disabled]="prevDisabled()"
-              [attr.aria-label]="'Previous week, ' + weekRange(-7)">
+              [attr.aria-label]="t('ui.week.prev', { range: weekRange(-7) })">
         <app-icon name="chevron-left" [size]="18" [strokeWidth]="2" />
       </button>
       <div class="wk" [class.ui-glass]="glass()" (pointerdown)="swipeStart($event)" (pointerup)="swipeEnd($event)"
@@ -53,7 +56,7 @@ export const SWIPE_PX = 50;
               [style.left]="'calc(5px + ' + max0(activeIndex()) + ' * (100% - 10px) / 7)'"></span>
         @for (d of days(); track d.key) {
           <button type="button" class="d" [class.on]="selectedDateKey() === d.key" [class.is-today]="d.today"
-                  [class.is-out]="d.outside" [attr.aria-pressed]="selectedDateKey() === d.key"
+                  [class.is-out]="d.outside" [class.is-past]="d.past" [attr.aria-pressed]="selectedDateKey() === d.key"
                   [attr.aria-label]="d.label" [attr.title]="d.outside ? outsideTitle() : null"
                   (click)="onDay(d.key)">
             <span class="dow">{{ d.dow }}</span>
@@ -63,30 +66,30 @@ export const SWIPE_PX = 50;
         }
       </div>
       <button type="button" class="nav nav--next ui-circ ui-circ--glass" (click)="next.emit()" [disabled]="nextDisabled()"
-              [attr.aria-label]="'Next week, ' + weekRange(7)">
+              [attr.aria-label]="t('ui.week.next', { range: weekRange(7) })">
         <app-icon name="chevron-right" [size]="18" [strokeWidth]="2" />
       </button>
     </div>
     <div class="cap" [class.is-current]="isCurrentWeek()">
       <button type="button" class="cap__label" (click)="openPicker()"
-              [attr.aria-label]="'Week of ' + fullLabel() + '. Choose a date'">
+              [attr.aria-label]="t('ui.week.choose', { week: fullLabel() })">
         <app-icon name="calendar" [size]="15" /><span class="tn">{{ rangeLabel() }}</span>
       </button>
       <span class="cap__end">
         @if (!isCurrentWeek()) {
-          <button type="button" class="ui-link cap__today" (click)="jumpTo.emit(todayKey())">This week</button>
+          <button type="button" class="ui-link cap__today" (click)="jumpTo.emit(todayKey())">{{ t('ui.week.thisWeek') }}</button>
         }
         <button type="button" class="cap__nav" (click)="prev.emit()" [disabled]="prevDisabled()"
-                [attr.aria-label]="'Previous week, ' + weekRange(-7)">
+                [attr.aria-label]="t('ui.week.prev', { range: weekRange(-7) })">
           <app-icon name="chevron-left" [size]="16" [strokeWidth]="2" />
         </button>
         <button type="button" class="cap__nav" (click)="next.emit()" [disabled]="nextDisabled()"
-                [attr.aria-label]="'Next week, ' + weekRange(7)">
+                [attr.aria-label]="t('ui.week.next', { range: weekRange(7) })">
           <app-icon name="chevron-right" [size]="16" [strokeWidth]="2" />
         </button>
       </span>
     </div>
-    <input #picker type="date" class="picker" tabindex="-1" aria-label="Jump to date"
+    <input #picker type="date" class="picker" tabindex="-1" [attr.aria-label]="t('ui.week.jump')"
            [min]="coverage()?.from ?? ''" [max]="coverage()?.to ?? ''"
            [value]="selectedDateKey() ?? weekStartKey()" (change)="onPick($event)">
   `,
@@ -112,24 +115,26 @@ export const SWIPE_PX = 50;
     .d b { font-size: 18px; font-weight: 650; }
     .dt { display: block; width: 4px; height: 4px; border-radius: 50%; margin: 3px auto 0; background: transparent; }
     .dt.is-on { background: var(--teal); }
-    .d.is-out b { color: var(--ink-3); }
+    .d.is-out b, .d.is-past:not(.on) b { color: var(--ink-3); }
+    .d.is-past:not(.on) .dt.is-on { opacity: .45; }
     .d.on { color: #FFFFFF; }
     .d.on .dow { color: #FFFFFF; }
     .d.on .dt.is-on { background: #FFFFFF; }
-    .nav { width: 32px; height: 32px; display: none; }
+    .nav { width: 44px; height: 44px; display: none; }
     .cap { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 13px; }
     .cap__label {
-      display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 4px; margin-left: -4px;
+      display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; margin-left: -4px;
       color: var(--ink-2); font-weight: 600;
     }
     .cap__label app-icon { color: var(--blue); }
     .cap__end { display: inline-flex; align-items: center; gap: 4px; }
-    .cap__today { padding: 6px 8px; margin-right: 2px; }
+    .cap__today { padding: 12px 8px; margin-right: 2px; }
     /* Below desktop the chevrons live here, so every pointer, keyboard and AT user can change week. */
     .cap__nav {
-      display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+      position: relative; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
       color: var(--ink-2); background: var(--fill);
     }
+    .cap__nav::after { content: ''; position: absolute; inset: -6px -2px; }
     .cap__nav:disabled { opacity: .4; cursor: default; }
     .cap__nav:hover:not(:disabled) { color: var(--ink); }
     .picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; }
@@ -141,6 +146,7 @@ export const SWIPE_PX = 50;
   `],
 })
 export class WeekStripComponent {
+  protected readonly t = t;
   private readonly doc = inject(DOCUMENT);
 
   readonly weekStartKey = input.required<string>();
@@ -166,10 +172,10 @@ export class WeekStripComponent {
     const cov = this.coverage();
     return weekKeys(this.weekStartKey()).map((key, i) => {
       const outside = !!cov && (isOutside(key, cov) || (!cov.from && !cov.to));
-      let label = `${WEEKDAY_LONG[i]}, ${formatKey(key, { month: 'long', day: 'numeric', year: 'numeric' })}`;
-      if (key === today) label += ', today';
-      if (outside) label += ', outside published schedules';
-      return { key, dow: WEEKDAY_SHORT[i], date: +key.slice(8), label, today: key === today, outside };
+      let label = formatKey(key, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      if (key === today) label = t('ui.week.today', { label });
+      if (outside) label = t('ui.week.outsideSuffix', { label });
+      return { key, dow: weekdayShort(i), date: +key.slice(8), label, today: key === today, outside, past: key < today };
     });
   });
 
@@ -196,8 +202,8 @@ export class WeekStripComponent {
   readonly outsideTitle = computed(() => {
     const to = this.coverage()?.to;
     return to
-      ? `Outside published schedules (through ${formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' })})`
-      : 'Outside published schedules';
+      ? t('ui.week.outsideThrough', { date: formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' }) })
+      : t('ui.week.outside');
   });
 
   protected max0(n: number): number {

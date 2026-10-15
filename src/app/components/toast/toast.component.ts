@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { IconComponent } from '../shared/icons.component';
+import { t } from '../../i18n/t';
 
 /**
  * Floating ink pill: a message, an optional action chip and a dismiss button.
- * Used for "New schedules available · Reload", "Link copied" and undo notices.
+ * Used for "A new version is available · Reload", "Link copied" and undo notices.
  * Sits above the mobile tab bar, 24px from the bottom on desktop.
  */
 @Component({
@@ -18,7 +19,7 @@ import { IconComponent } from '../shared/icons.component';
         <button type="button" class="toast__action" (click)="action.emit()">{{ actionLabel() }}</button>
       }
       @if (dismissible()) {
-        <button type="button" class="toast__close" (click)="dismiss.emit()" aria-label="Dismiss">
+        <button type="button" class="toast__close" (click)="dismiss.emit()" [attr.aria-label]="t('common.dismiss')">
           <app-icon name="close" [size]="15" [strokeWidth]="2" />
         </button>
       }
@@ -48,6 +49,7 @@ import { IconComponent } from '../shared/icons.component';
   `],
 })
 export class ToastComponent {
+  protected readonly t = t;
   readonly message = input.required<string>();
   readonly actionLabel = input<string | null | undefined>(null);
   readonly dismissible = input(true);

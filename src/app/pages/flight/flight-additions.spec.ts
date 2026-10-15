@@ -47,7 +47,7 @@ describe('flight page model (g6)', () => {
   it('says "None in our schedule data" for a day without departures and has no tiles outside coverage', () => {
     // AC866 does not fly Thursdays, AC864 does: Oct 8 has 1; a route with no row has none.
     expect(factsView(scheduleFacts('YUL', 'LHR', '2026-10-08'), null).tiles[0].value).toBe('1 · 22:10');
-    expect(factsView(scheduleFacts('YUL', 'OPO', '2026-10-08'), null).tiles[0].value).toBe('None in our schedule data');
+    expect(factsView(scheduleFacts('YUL', 'OPO', '2026-10-08'), null)).toMatchObject({ covered: true, empty: true, tiles: [] });
     const out = factsView(scheduleFacts('YUL', 'LHR', '2028-01-10'), null);
     expect(out.covered).toBe(false);
     expect(out.tiles).toEqual([]);

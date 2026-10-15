@@ -1,0 +1,41 @@
+import type { Translation } from '../catalogue';
+import type { format as en } from '../en/format';
+
+// '\u00a0' (no-break space) keeps '6 h 35' and '45 min' on one line.
+export const format: Translation<typeof en> = {
+  'format.daily': 'Tous les jours',
+  'format.nonstop': 'Sans escale',
+  'format.stops': '{n, plural, one {# escale} other {# escales}} · {hubs}',
+  'format.via': 'via {hubs}',
+  'format.today': 'Aujourd\'hui',
+  'format.tomorrow': 'Demain',
+  'format.todayLower': 'aujourd\'hui',
+  'format.yesterdayLower': 'hier',
+  'format.daysAgo': 'il y a {n, plural, one {# jour} other {# jours}}',
+  'format.greeting.morning': 'Bonjour',
+  'format.greeting.afternoon': 'Bon après-midi',
+  'format.greeting.evening': 'Bonsoir',
+  'format.now': 'maintenant',
+  'format.in': 'dans {dur}',
+  'format.todayAt': 'Aujourd\'hui · {x}',
+  'format.tomorrowAt': 'Demain · {x}',
+  'format.inDays': '{n, plural, one {Dans # jour} other {Dans # jours}} · {weekday}',
+  'format.perWeek': '{n}×/sem.',
+  'format.range.sameMonth': '{startDay}–{end}',
+  'format.range.twoMonths': '{start} – {end}',
+  'format.hm.hm': '{h}\u00a0h\u00a0{mm}',
+  'format.hm.h': '{h}\u00a0h',
+  'format.hm.m': '{m}\u00a0min',
+  'format.dur.dh': '{d}\u00a0j\u00a0{h}\u00a0h',
+  'format.dur.d': '{d}\u00a0j',
+  'format.dur.hm': '{h}\u00a0h\u00a0{m}\u00a0min',
+  'format.dur.h': '{h}\u00a0h',
+  'format.dur.m': '{m}\u00a0min',
+  'format.dur.hmm': '{h}\u00a0h\u00a0{mm}',
+  'format.clock.am': '{h}:{mm}\u00a0a.m.',
+  'format.clock.pm': '{h}:{mm}\u00a0p.m.',
+  /** Time-zone difference from the hub (tzDiffLabel) */
+  'format.tz.zero': '0\u00a0h',
+  'format.tz.h': '{sign}{h}\u00a0h',
+  'format.tz.hm': '{sign}{h}\u00a0h\u00a0{mm}',
+};

@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { stageDeepLink } from './deep-link';
 import { hasSkywash, hidesTopNav, isDetailPath, isPassView, navSection } from './nav-model';
 import { SHORTCUTS } from './shortcuts-sheet.component';
+import { t } from '../i18n/t';
 
 describe('nav-model', () => {
   it('isPassView matches pass views and the add flow only', () => {
@@ -25,8 +26,8 @@ describe('nav-model', () => {
     expect(navSection('/calendar/CUN')).toBe('calendar');
     expect(['/to/LIS', '/flight/LIS/2026-10-01/AC812', '/calendar', '/calendar/CUN'].every(isDetailPath)).toBe(true);
     expect(['/trips/abc', '/trips/abc/recover', '/trips/import', '/today', '/reach/gn-1', '/reach/gn-1/MAD'].every(isDetailPath)).toBe(true);
-    expect(['/profile', '/trips/abc/files', '/trips/abc/passes/add', '/trips/abc/pass/p1', '/trips/abc/share', '/trips/abc/recap', '/logbook'].every(isDetailPath)).toBe(true);
-    expect(['/', '/map', '/saved', '/trips'].some(isDetailPath)).toBe(false);
+    expect(['/profile', '/trips/abc/files', '/trips/abc/passes/add', '/trips/abc/pass/p1', '/trips/abc/share', '/trips/abc/recap', '/logbook', '/saved', '/weekend', '/g/abc'].every(isDetailPath)).toBe(true);
+    expect(['/', '/map', '/trips'].some(isDetailPath)).toBe(false);
     expect(hidesTopNav('/to/LIS')).toBe(true);
     expect(hidesTopNav('/flight/LIS/2026-10-01')).toBe(false);
     expect(['/', '/saved', '/flight/LIS/2026-10-01'].every(hasSkywash)).toBe(true);
@@ -35,7 +36,7 @@ describe('nav-model', () => {
   });
 
   it('lists Esc in the shortcuts', () => {
-    expect(SHORTCUTS.some(s => s.keys.includes('Esc') && s.label === 'Back / close')).toBe(true);
+    expect(SHORTCUTS.some(s => s.keys.includes('Esc') && t(s.label) === 'Back / close')).toBe(true);
   });
 });
 

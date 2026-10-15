@@ -1,0 +1,32 @@
+import type { Messages } from '../catalogue';
+
+/** Calendar (pages/calendar). Chunk C in docs/i18n.md; keys start with 'calendar.'. */
+export const calendar = {
+  'calendar.cancel': 'Cancel',
+  'calendar.datesSr': ', {city} dates',
+  'calendar.depart': 'Depart',
+  'calendar.return': 'Return',
+  'calendar.legendMore': 'more departures',
+  'calendar.legendOne': 'one departure',
+  'calendar.legendConn': 'connection only',
+  'calendar.title': 'Calendar',
+  'calendar.sub': 'Pick a destination to see which days it flies',
+  'calendar.search': 'Search destinations',
+  'calendar.saved': 'Saved',
+  'calendar.all': 'All nonstop destinations',
+  'calendar.az': 'Jump to a letter',
+  'calendar.noMatch': 'No destinations match “{query}”.',
+  'calendar.addDate': 'Add date',
+  'calendar.oneWay': 'One way',
+  'calendar.hint.dep': 'Pick a departure day. Bars show nonstops from {hub}.',
+  'calendar.hint.ret': 'Pick a return day. Bars show nonstops from {city}.',
+  'calendar.select.none': 'Select a departure date',
+  'calendar.select.oneWay': 'Select {date} · one way',
+  'calendar.select.range': 'Select {range} · {nights}',
+  'calendar.aria.past': 'past',
+  'calendar.aria.dep': '{n, plural, one {# departure} other {# departures}}',
+  'calendar.aria.ret': '{n, plural, one {# return departure} other {# return departures}}',
+  'calendar.aria.none': 'no nonstop',
+  'calendar.meta.next': '{country} · next {date}',
+  'calendar.meta.none': '{country} · no nonstop published',
+} satisfies Messages;

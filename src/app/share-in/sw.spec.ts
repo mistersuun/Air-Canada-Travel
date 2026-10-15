@@ -6,12 +6,13 @@ import { describe, expect, it, vi } from 'vitest';
 type Handler = (e: Record<string, unknown>) => void;
 
 /** Runs public/sw.js against a fake worker scope; returns its listeners and fakes. */
-function boot(opts: { schedules?: unknown } = {}) {
+function boot(opts: { schedules?: unknown; meta?: unknown; failCaches?: boolean } = {}) {
   const src = readFileSync(resolve(process.cwd(), 'public/sw.js'), 'utf8');
   const handlers: Record<string, Handler[]> = {};
   const stores = new Map<string, Map<string, Response>>();
   const caches = {
     open: async (name: string) => {
+      if (opts.failCaches && name === 'ac-sched-check') throw new Error('storage');
       const m = stores.get(name) ?? new Map<string, Response>();
       stores.set(name, m);
       return {
@@ -32,10 +33,15 @@ function boot(opts: { schedules?: unknown } = {}) {
     registration: { showNotification: async (title: string, o: { data: unknown }) => void shown.push({ title, opts: o }) },
     clients: { matchAll: async () => windows, openWindow: vi.fn() },
   };
-  const fetchFake = async () => new Response(JSON.stringify(opts.schedules ?? { meta: { generatedAt: 'B' } }));
-  runInNewContext(src, { self, caches, importScripts, Response, URL, Date, Math, JSON, fetch: fetchFake, Promise });
+  const fetched: string[] = [];
+  const fetchFake = async (u: string) => {
+    fetched.push(u);
+    if (u.endsWith('schedules-meta.json')) return opts.meta === undefined ? new Response('nope', { status: 404 }) : new Response(JSON.stringify(opts.meta));
+    return new Response(JSON.stringify(opts.schedules ?? { meta: { generatedAt: 'B' } }));
+  };
+  runInNewContext(src, { self, caches, importScripts, Response, URL, Date, Math, JSON, Number, parseInt, isFinite, fetch: fetchFake, Promise });
   return {
-    handlers, importScripts, shown, posted, stores,
+    fetched, handlers, importScripts, shown, posted, stores,
     setWindows: (n: number) => { windows = Array.from({ length: n }, () => ({ postMessage: (m: unknown) => void posted.push(m) })); },
     async fire(type: string, e: Record<string, unknown>) {
       const waits: Promise<unknown>[] = [];
@@ -123,6 +129,15 @@ describe('public/sw.js', () => {
     expect(sw.shown[0].opts.data).toEqual({ url: '/trips' });
   });
 
+  it('shows the wording the page last posted, English until then', async () => {
+    const sw = boot();
+    await sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'A' } });
+    await sw.fire('message', { data: { type: 'ac:notify-text', title: 'Horaires mis à jour', body: 'Ouvrez pour vérifier vos voyages.' } });
+    await sw.fire('periodicsync', { tag: 'schedule-check' });
+    expect(sw.shown[0].title).toBe('Horaires mis à jour');
+    expect(sw.shown[0].opts.body).toBe('Ouvrez pour vérifier vos voyages.');
+  });
+
   it('tells an open window instead of notifying', async () => {
     const sw = boot();
     sw.setWindows(1);
@@ -137,5 +152,58 @@ describe('public/sw.js', () => {
     await sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'A' } });
     await sw.fire('periodicsync', { tag: 'other' });
     expect(sw.shown).toHaveLength(0);
+  });
+
+  it('checks the tiny meta file, not the 2 MB schedules, when it exists', async () => {
+    const sw = boot({ meta: { generatedAt: 'B' } });
+    await sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'A' } });
+    await sw.fire('periodicsync', { tag: 'schedule-check' });
+    expect(sw.fetched).toEqual(['/data/schedules-meta.json']);
+    expect(sw.shown).toHaveLength(1);
+  });
+
+  it('falls back to schedules.json when the meta file is missing or has no generatedAt', async () => {
+    for (const meta of [undefined, { nothing: 1 }]) {
+      const sw = boot({ meta });
+      await sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'A' } });
+      await sw.fire('periodicsync', { tag: 'schedule-check' });
+      expect(sw.fetched).toContain('/data/schedules.json');
+      expect(sw.shown).toHaveLength(1);
+    }
+  });
+
+  it('refuses a share whose Content-Length is over 25 MB without reading the body', async () => {
+    const sw = boot();
+    const formData = vi.fn(async () => new FormData());
+    const { results } = await sw.fire('fetch', { request: { method: 'POST', mode: 'navigate', referrer: '', url: 'https://app.test/share-in', headers: new Headers({ 'content-length': String(26 * 1024 * 1024) }), formData } });
+    expect((results[0] as Response).headers.get('location')).toBe('https://app.test/share-in?id=too-large');
+    expect(formData).not.toHaveBeenCalled();
+  });
+
+  it('reads the body when Content-Length is absent or small', async () => {
+    const sw = boot();
+    const formData = vi.fn(async () => { const f = new FormData(); f.append('text', 'hi'); return f; });
+    const { results } = await sw.fire('fetch', { request: { method: 'POST', mode: 'navigate', referrer: '', url: 'https://app.test/share-in', headers: new Headers({ 'content-length': '1200' }), formData } });
+    expect(formData).toHaveBeenCalled();
+    expect((results[0] as Response).headers.get('location')).toMatch(/\/share-in\?id=[a-z0-9]+$/);
+  });
+
+  it('purges files left without a meta.json once they are 5 minutes old, and keeps fresh ones', async () => {
+    const sw = boot();
+    const old = (Date.now() - 10 * 60_000).toString(36) + 'abcdef';
+    const fresh = Date.now().toString(36) + 'ghijkl';
+    const cache = new Map<string, Response>();
+    sw.stores.set('ac-share-in', cache);
+    for (const id of [old, fresh]) cache.set(`/__share/${id}/0`, new Response('x'));
+    const form = new FormData();
+    form.append('text', 'hi');
+    await sw.fire('fetch', { request: { method: 'POST', mode: 'navigate', referrer: '', url: 'https://app.test/share-in', formData: async () => form } });
+    expect(cache.has(`/__share/${old}/0`)).toBe(false);
+    expect(cache.has(`/__share/${fresh}/0`)).toBe(true);
+  });
+
+  it('a failing storage write in the message handler does not reject', async () => {
+    const sw = boot({ failCaches: true });
+    await expect(sw.fire('message', { data: { type: 'ac:schedules-seen', generatedAt: 'A' } })).resolves.toBeTruthy();
   });
 });

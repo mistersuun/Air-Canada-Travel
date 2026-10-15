@@ -3,6 +3,7 @@ import { AppStateService } from '../../state/app-state.service';
 import { PrefsService } from '../../state/prefs.service';
 import { TripsService } from '../../trips/trips.service';
 import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
+import { t } from '../../i18n/t';
 import { markPast, travelTimeline } from './timeline-model';
 
 /**
@@ -18,7 +19,7 @@ import { markPast, travelTimeline } from './timeline-model';
   template: `
     @if (rows().length) {
       <section class="ui-card tl" aria-labelledby="tl-h" data-timeline>
-        <h2 class="ui-label" id="tl-h">Your day</h2>
+        <h2 class="ui-label" id="tl-h">{{ t('today.yourDay') }}</h2>
         <ol class="tl__list">
           @for (r of rows(); track r.id) {
             <li class="tl__row" [class.tl__row--past]="r.past" [class.tl__row--alert]="r.alert" [attr.data-kind]="r.kind" [attr.data-past]="r.past ? '' : null">
@@ -28,7 +29,7 @@ import { markPast, travelTimeline } from './timeline-model';
                 <b>{{ r.title }}</b>
                 @if (r.detail) { <small class="tn">{{ r.detail }}</small> }
                 @if (r.forecast; as f) { <small><app-forecast-line [code]="f.code" [dateKey]="f.dateKey" /></small> }
-                @if (r.past) { <span class="ui-visually-hidden">Done</span> }
+                @if (r.past) { <span class="ui-visually-hidden">{{ t('common.done') }}</span> }
               </span>
             </li>
           }
@@ -61,6 +62,7 @@ export class TodayTimelineComponent {
   private readonly state = inject(AppStateService);
   private readonly prefs = inject(PrefsService);
 
+  protected readonly t = t;
   readonly tripId = input.required<string>();
   readonly legId = input.required<string>();
 

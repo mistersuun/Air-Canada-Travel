@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, DOCUMENT, computed, inject, input, 
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { HUBS } from '../../data/destinations';
+import { t } from '../../i18n/t';
 import { GroundTimetableService } from '../../places/ground-timetable.service';
 import { reachGateways } from '../../places/reach';
 import { AppStateService } from '../../state/app-state.service';
@@ -15,11 +16,7 @@ import { airportTz } from '../../utils/airports';
 import { todayKey } from '../../utils/time';
 import { GatewayRow, ReachParams, dayLabel, formatHome, gatewayRow, parseHome, readReachParams, reachQueryParams } from './reach-model';
 import { reachPlace } from './reach-place';
-
-const SORT_OPTIONS: SegOption[] = [
-  { value: 'onward', label: 'Shorter onward trip' },
-  { value: 'flights', label: 'More flights' },
-];
+import { reachTitle } from './reach-title';
 
 type Editing = 'dep' | 'home' | 'hub';
 
@@ -38,66 +35,66 @@ type Editing = 'dep' | 'home' | 'hub';
     <div class="ui-page ui-page--bare reach">
       <div class="col">
         <div class="top">
-          <button type="button" class="ui-circ ui-circ--glass back" aria-label="Back" (click)="back()">
+          <button type="button" class="ui-circ ui-circ--glass back" [attr.aria-label]="t('places.reach.back')" (click)="back()">
             <app-icon name="arrow-left" [size]="18" />
           </button>
           <label class="ui-search ui-glass search">
             <app-icon name="search" [size]="18" [strokeWidth]="2" />
-            <span class="ui-visually-hidden">Search another place</span>
-            <input type="search" autocomplete="off" enterkeyhint="search" placeholder="Search a city"
+            <span class="ui-visually-hidden">{{ t('places.reach.searchAnother') }}</span>
+            <input type="search" autocomplete="off" enterkeyhint="search" [attr.placeholder]="t('places.reach.searchCity')"
                    [value]="placeName()" (input)="toExplore($event)">
           </label>
         </div>
 
         @switch (placeState().kind) {
           @case ('loading') {
-            <p class="ui-sub status" role="status">Loading places…</p>
+            <p class="ui-sub status" role="status">{{ t('places.reach.loading') }}</p>
           }
           @case ('error') {
             <section class="ui-card empty" role="status">
-              <h1 class="ui-h3">City search isn't available right now</h1>
-              <p class="ui-sub">The list of places couldn't be loaded. It needs the internet the first time.</p>
-              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="retry()">Try again</button>
+              <h1 class="ui-h3">{{ t('places.reach.cityUnavailable') }}</h1>
+              <p class="ui-sub">{{ t('places.reach.loadError') }}</p>
+              <button type="button" class="ui-btn ui-btn--dark ui-btn--sm" (click)="retry()">{{ t('places.reach.tryAgain') }}</button>
             </section>
           }
           @case ('unknown') {
             <section class="ui-card empty" role="status">
-              <h1 class="ui-h3">Place not found</h1>
-              <p class="ui-sub">This link doesn't match a place in our city list. Search again from Explore.</p>
-              <a class="ui-btn ui-btn--dark ui-btn--sm" routerLink="/" [queryParams]="state.globalParams()">Back to Explore</a>
+              <h1 class="ui-h3">{{ t('places.reach.notFoundTitle') }}</h1>
+              <p class="ui-sub">{{ t('places.reach.unknownLink') }} {{ t('places.reach.searchAgain') }}</p>
+              <a class="ui-btn ui-btn--dark ui-btn--sm" routerLink="/" [queryParams]="state.globalParams()">{{ t('home.backToExplore') }}</a>
             </section>
           }
           @case ('ready') {
             @if (served(); as code) {
               <section class="ui-card empty" role="status">
-                <h1 class="ui-h3">Air Canada flies to {{ placeName() }}</h1>
-                <p class="ui-sub">No need to go through another airport.</p>
-                <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="dest(code)" [queryParams]="state.globalParams()">Open {{ placeName() }}</a>
+                <h1 class="ui-h3">{{ t('places.reach.flies', { place: placeName() }) }}</h1>
+                <p class="ui-sub">{{ t('places.reach.noNeed') }}</p>
+                <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="dest(code)" [queryParams]="state.globalParams()">{{ t('places.reach.open', { place: placeName() }) }}</a>
               </section>
             } @else {
-              <div class="ui-card chips" role="group" aria-label="This search">
-                <button type="button" class="ui-tag ui-tag--neutral chip tn" (click)="edit('dep')" aria-haspopup="dialog">Leave {{ depLabel() }}</button>
-                <button type="button" class="ui-tag ui-tag--neutral chip tn" (click)="edit('home')" aria-haspopup="dialog">Home by {{ homeLabel() }}</button>
-                <button type="button" class="ui-tag ui-tag--neutral chip" (click)="edit('hub')" aria-haspopup="dialog">From {{ p().hub }}</button>
+              <div class="ui-card chips" role="group" [attr.aria-label]="t('places.reach.thisSearch')">
+                <button type="button" class="ui-tag ui-tag--neutral chip tn" (click)="edit('dep')" aria-haspopup="dialog">{{ t('places.reach.leave', { date: depLabel() }) }}</button>
+                <button type="button" class="ui-tag ui-tag--neutral chip tn" (click)="edit('home')" aria-haspopup="dialog">{{ t('places.reach.homeBy', { date: homeLabel() }) }}</button>
+                <button type="button" class="ui-tag ui-tag--neutral chip" (click)="edit('hub')" aria-haspopup="dialog">{{ t('places.reach.from', { hub: p().hub }) }}</button>
               </div>
 
-              <app-seg class="sort" stretch glass ariaLabel="Sort gateways" [options]="sortOptions"
+              <app-seg class="sort" stretch glass [ariaLabel]="t('places.reach.sortAria')" [options]="sortOptions()"
                        [value]="p().sort" (valueChange)="set({ sort: $event === 'flights' ? 'flights' : 'onward' })" />
 
               <div class="head">
-                <h1 class="ui-h3 h">Ways to reach {{ placeName() }}</h1>
-                <span class="ui-sub nn">Not in our schedule data</span>
+                <h1 class="ui-h3 h">{{ t('places.reach.ways', { place: placeName() }) }}</h1>
+                <span class="ui-sub nn">{{ t('places.reach.notInData') }}</span>
               </div>
-              <p class="ui-sub cov" data-coverage>Air Canada may still fly there on routes this app doesn't cover, such as some domestic or regional flights.</p>
+              <p class="ui-sub cov" data-coverage>{{ t('places.reach.coverage') }}</p>
 
               @if (!rows().length) {
                 <section class="ui-card empty" role="status">
                   @if (unknownRows().length) {
-                    <h2 class="ui-h3">No AC airport near {{ placeName() }} with a known onward trip</h2>
-                    <p class="ui-sub">Airports nearby have flights, but we can't estimate the trip from them.</p>
+                    <h2 class="ui-h3">{{ t('places.reach.noKnownTitle', { place: placeName() }) }}</h2>
+                    <p class="ui-sub">{{ t('places.reach.noKnownText') }}</p>
                   } @else {
-                    <h2 class="ui-h3">No AC airport found near {{ placeName() }}</h2>
-                    <p class="ui-sub">Nothing within about 900 km in our schedule data.</p>
+                    <h2 class="ui-h3">{{ t('places.reach.noneTitle', { place: placeName() }) }}</h2>
+                    <p class="ui-sub">{{ t('places.reach.noneText') }}</p>
                   }
                 </section>
               }
@@ -109,11 +106,11 @@ type Editing = 'dep' | 'home' | 'hub';
                       <a class="row" [routerLink]="gw(r.code)" [queryParams]="linkParams()">
                         <app-dest-photo class="th" [code]="r.code" size="thumb" />
                         <div class="rt">
-                          <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                          <div class="nm"><b>{{ t('format.via', { hubs: r.city }) }}</b><span class="c">{{ r.code }}</span></div>
                           <span class="m tn">{{ r.flight }}</span>
                           @if (r.standby) { <span class="m tn">{{ r.standby }}</span> }
                           <span class="m g">{{ r.ground }} <app-provenance-tag [value]="r.provenance" />
-                            @if (r.night) { <span class="ui-tag ui-tag--amber">Night on the way likely</span> }</span>
+                            @if (r.night) { <span class="ui-tag ui-tag--amber">{{ t('places.reach.night') }}</span> }</span>
                         </div>
                         <app-icon class="chev" name="chevron-right" [size]="16" />
                       </a>
@@ -121,7 +118,7 @@ type Editing = 'dep' | 'home' | 'hub';
                       <a class="row idle" [routerLink]="gw(r.code)" [queryParams]="paramsOn(r.nextDateKey)">
                         <app-dest-photo class="th" [code]="r.code" size="thumb" />
                         <div class="rt">
-                          <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                          <div class="nm"><b>{{ t('format.via', { hubs: r.city }) }}</b><span class="c">{{ r.code }}</span></div>
                           <span class="m tn">{{ r.idle }}</span>
                         </div>
                         <app-icon class="chev" name="chevron-right" [size]="16" />
@@ -130,7 +127,7 @@ type Editing = 'dep' | 'home' | 'hub';
                       <div class="row idle">
                         <app-dest-photo class="th" [code]="r.code" size="thumb" />
                         <div class="rt">
-                          <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                          <div class="nm"><b>{{ t('format.via', { hubs: r.city }) }}</b><span class="c">{{ r.code }}</span></div>
                           <span class="m tn">{{ r.idle }}</span>
                         </div>
                       </div>
@@ -142,9 +139,9 @@ type Editing = 'dep' | 'home' | 'hub';
                         <a class="row idle" [routerLink]="gw(r.code)" [queryParams]="r.flight ? linkParams() : paramsOn(r.nextDateKey!)">
                           <app-dest-photo class="th" [code]="r.code" size="thumb" />
                           <div class="rt">
-                            <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                            <div class="nm"><b>{{ t('format.via', { hubs: r.city }) }}</b><span class="c">{{ r.code }}</span></div>
                             @if (r.flight) { <span class="m tn">{{ r.flight }}</span> } @else { <span class="m tn">{{ r.idle }}</span> }
-                            <span class="m g">Onward travel unknown <app-provenance-tag value="unknown" /></span>
+                            <span class="m g">{{ t('places.ground.unknown') }} <app-provenance-tag value="unknown" /></span>
                           </div>
                           <app-icon class="chev" name="chevron-right" [size]="16" />
                         </a>
@@ -152,9 +149,9 @@ type Editing = 'dep' | 'home' | 'hub';
                         <div class="row idle">
                           <app-dest-photo class="th" [code]="r.code" size="thumb" />
                           <div class="rt">
-                            <div class="nm"><b>via {{ r.city }}</b><span class="c">{{ r.code }}</span></div>
+                            <div class="nm"><b>{{ t('format.via', { hubs: r.city }) }}</b><span class="c">{{ r.code }}</span></div>
                             <span class="m tn">{{ r.idle }}</span>
-                            <span class="m g">Onward travel unknown <app-provenance-tag value="unknown" /></span>
+                            <span class="m g">{{ t('places.ground.unknown') }} <app-provenance-tag value="unknown" /></span>
                           </div>
                         </div>
                       }
@@ -165,12 +162,12 @@ type Editing = 'dep' | 'home' | 'hub';
 
               @if (unknownRows().length) {
                 <button type="button" class="ui-link more" (click)="showUnknown.set(!showUnknown())" [attr.aria-expanded]="showUnknown()">
-                  {{ showUnknown() ? 'Hide airports with unknown onward travel' : unknownLabel() }}</button>
+                  {{ showUnknown() ? t('places.reach.hideUnknown') : unknownLabel() }}</button>
               }
 
               <label class="inc">
                 <input type="checkbox" [checked]="p().hubs" (change)="set({ hubs: $any($event.target).checked })">
-                Include trips via other Canadian hubs
+                {{ t('places.reach.includeHubs') }}
               </label>
             }
           }
@@ -181,18 +178,18 @@ type Editing = 'dep' | 'home' | 'hub';
     <app-glass-sheet [title]="sheetTitle()" [(open)]="sheetOpen">
       @switch (editing()) {
         @case ('dep') {
-          <label class="fld"><span class="ui-label">Leave on</span>
+          <label class="fld"><span class="ui-label">{{ t('places.reach.leaveOn') }}</span>
             <input type="date" [value]="p().dep" [min]="today()" (change)="setDep($event)"></label>
-          <button type="button" class="ui-btn ui-btn--dark ui-btn--block done" (click)="sheetOpen.set(false)">Done</button>
+          <button type="button" class="ui-btn ui-btn--dark ui-btn--block done" (click)="sheetOpen.set(false)">{{ t('common.done') }}</button>
         }
         @case ('home') {
-          <label class="fld"><span class="ui-label">Home by</span>
+          <label class="fld"><span class="ui-label">{{ t('places.reach.homeByLabel') }}</span>
             <input type="datetime-local" [value]="homeValue()" [min]="p().dep + 'T00:00'" (change)="setHome($event)"></label>
-          <p class="ui-sub hint">Time at {{ hubName(p().hub) }}.</p>
-          <button type="button" class="ui-btn ui-btn--dark ui-btn--block done" (click)="sheetOpen.set(false)">Done</button>
+          <p class="ui-sub hint">{{ t('places.reach.timeAt', { hub: hubName(p().hub) }) }}</p>
+          <button type="button" class="ui-btn ui-btn--dark ui-btn--block done" (click)="sheetOpen.set(false)">{{ t('common.done') }}</button>
         }
         @case ('hub') {
-          <p class="ui-sub hint">Only for this search. Your Explore hub stays {{ state.hub() }}.</p>
+          <p class="ui-sub hint">{{ t('places.reach.onlyThisSearch', { hub: state.hub() }) }}</p>
           <ul class="hubs" role="list">
             @for (h of hubList; track h.code) {
               <li><button type="button" class="hub" [class.on]="h.code === p().hub" [attr.aria-current]="h.code === p().hub ? 'true' : null"
@@ -218,9 +215,9 @@ type Editing = 'dep' | 'home' | 'hub';
     .chip::after { content: ''; position: absolute; inset: -9px -4px; }
     .chip:hover { color: var(--ink); }
     .sort { margin-top: 12px; }
-    .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 2px 10px; }
+    .head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin: 22px 2px 10px; }
     .h { font-size: 19px; margin: 0; }
-    .nn { font-size: 13px; text-align: right; }
+    .nn { font-size: 13px; text-align: right; white-space: nowrap; }
     .list { padding: 4px 14px; }
     .row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--hair); min-width: 0; color: var(--ink); }
     .row:last-child { border-bottom: 0; }
@@ -272,6 +269,7 @@ export class ReachPage {
 
   constructor() {
     void inject(GroundTimetableService).ensureLoaded();
+    reachTitle(this.placeName);
   }
 
   /** Route param ('gn-2510911') and query keys (withComponentInputBinding). */
@@ -282,7 +280,11 @@ export class ReachPage {
   readonly hubs = input<string | undefined>(undefined);
   readonly hub = input<string | undefined>(undefined);
 
-  protected readonly sortOptions = SORT_OPTIONS;
+  protected readonly t = t;
+  protected readonly sortOptions = computed<SegOption[]>(() => [
+    { value: 'onward', label: t('places.reach.sortOnward') },
+    { value: 'flights', label: t('places.reach.sortFlights') },
+  ]);
   protected readonly hubList = HUBS;
   protected readonly showUnknown = signal(false);
   protected readonly editing = signal<Editing>('dep');
@@ -317,7 +319,7 @@ export class ReachPage {
   readonly unknownRows = computed<GatewayRow[]>(() => this.result().unknownOnward.map(g => gatewayRow(g, this.p().dep)));
   protected readonly unknownLabel = computed(() => {
     const n = this.unknownRows().length;
-    return `${n} more airport${n === 1 ? '' : 's'}, onward travel unknown`;
+    return t('places.reach.moreUnknown', { n });
   });
 
   protected readonly depLabel = computed(() => dayLabel(this.p().dep));
@@ -325,7 +327,7 @@ export class ReachPage {
   protected readonly homeValue = computed(() => formatHome(this.p().home));
   protected readonly linkParams = computed(() => ({ ...this.state.globalParams(), ...reachQueryParams(this.p()) }));
   protected readonly sheetTitle = computed(() =>
-    this.editing() === 'dep' ? 'Leave' : this.editing() === 'home' ? 'Home by' : 'Flying from');
+    t(this.editing() === 'dep' ? 'places.reach.leaveTitle' : this.editing() === 'home' ? 'places.reach.homeByLabel' : 'home.flyingFrom'));
 
   protected hubName(code: string): string {
     return hubDisplayName(code);

@@ -3,13 +3,15 @@ import {
   untracked, viewChild,
 } from '@angular/core';
 import { Router, RouterLink, type Params } from '@angular/router';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { ShareService } from '../../state/share.service';
-import { findDestination } from '../../utils/airports';
+import { airportTz, findDestination } from '../../utils/airports';
 import { allItineraries, findAlternatives, type Itinerary } from '../../utils/connections';
 import { buildIcs, downloadIcs, icsFilename } from '../../utils/ics';
-import { addDays, diffDays, isDateKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
+import { addDays, diffDays, formatKey, isDateKey, todayKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
+import { seasonEvent } from '../home/home-model';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
 import { WeekStripComponent } from '../../ui/week-strip.component';
@@ -27,6 +29,7 @@ import {
 } from './flight-model';
 import { historyFor, recordLine } from '../../trips/engine/track-record';
 import { LiveStatusComponent } from '../../live/live-status.component';
+import { FunFactCardComponent } from './fun-fact-card.component';
 import { FactsCardComponent } from './facts-card.component';
 import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
@@ -64,7 +67,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
-    FactsCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
+    FactsCardComponent, FunFactCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -72,11 +75,11 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
       <div class="grid">
         <div #left class="left" [class.is-sticky]="leftFits()">
           <div class="top">
-            <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()">
+            <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('ui.back')" (click)="back()">
               <app-icon name="arrow-left" [size]="18" />
             </button>
-            <h1 class="ui-h3">Flight details</h1>
-            <button type="button" class="ui-circ ui-circ--glass" aria-label="Share this flight" (click)="share()">
+            <h1 class="ui-h3">{{ t('flight.title') }}</h1>
+            <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('flight.shareAria')" (click)="share()">
               <app-icon name="share" [size]="18" />
             </button>
           </div>
@@ -87,17 +90,18 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
                           (selectDay)="goDate($event)" (prev)="goDate(shift(-7))" (next)="goDate(shift(7))"
                           (jumpTo)="goDate($event)" />
 
-          <app-seg class="pk" [stretch]="true" ariaLabel="Choose a flight" [options]="pickOptions()"
+          <app-seg class="pk" [stretch]="true" [ariaLabel]="t('flight.pickAria')" [options]="pickOptions()"
                    [value]="chosen().pick ?? ''" (valueChange)="setPick($event)" />
+          @if (nonstopWhy(); as why) { <p class="pk-why ui-sub" id="pk-why">{{ why }}</p> }
 
           @if (outside()) {
             <div class="ui-card state">
-              <h2 class="ui-h3">Schedules for {{ dayLabel() }} aren't published yet</h2>
-              <p class="ui-sub">Air Canada publishes schedules a few months ahead. Times will appear here when they do.</p>
-              <button type="button" class="ui-btn ui-btn--sm" (click)="toCoverage()">Go to last published week</button>
+              <h2 class="ui-h3">{{ t('flight.outsideTitle', { day: dayLabel() }) }}</h2>
+              <p class="ui-sub">{{ t('flight.outsideBody') }}</p>
+              <button type="button" class="ui-btn ui-btn--sm" (click)="toCoverage()">{{ t('dest.lastPublished') }}</button>
             </div>
-          } @else if (ticket(); as t) {
-            <app-ticket [model]="t" [label]="ticketLabel()" />
+          } @else if (ticket(); as tk) {
+            <app-ticket [model]="tk" [label]="ticketLabel()" />
             @if (liveLeg(); as l) {
               <app-live-status [flightNumber]="l.flightNumber" [origin]="l.origin" [depUtc]="l.depUtc" [leadMs]="sixHours" />
             }
@@ -106,14 +110,14 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             }
             <div class="acts">
               <button type="button" class="ui-btn ui-btn--dark" (click)="exportIcs(false)">
-                <app-icon name="calendar" [size]="17" /> Add to calendar
+                <app-icon name="calendar" [size]="17" /> {{ t('flight.addCal') }}
               </button>
               @if (returnPick()) {
                 <button type="button" class="ui-btn ui-btn--ghost" (click)="exportIcs(true)">
-                  <app-icon name="download" [size]="17" /> Round trip .ics
+                  <app-icon name="download" [size]="17" /> {{ t('flight.roundIcs') }}
                 </button>
               }
-              <a class="ui-btn ui-btn--ghost" [routerLink]="calendarLink()" [queryParams]="calendarParams()">Change dates</a>
+              <a class="ui-btn ui-btn--ghost" [routerLink]="calendarLink()" [queryParams]="calendarParams()">{{ t('flight.changeDates') }}</a>
               @if (tripAction(); as a) {
                 <button type="button" class="ui-btn ui-btn--ghost" data-add-trip [disabled]="a.disabled" (click)="addToTrip()">
                   <app-icon name="suitcase" [size]="17" /> {{ a.label }}
@@ -122,15 +126,15 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             </div>
           } @else {
             <div class="ui-card state">
-              <h2 class="ui-h3">No flights on {{ dayLabel() }}</h2>
+              <h2 class="ui-h3">{{ t('flight.noFlightsOn', { day: dayLabel() }) }}</h2>
               @if (nextDate(); as n) {
-                <p class="ui-sub">The next nonstop to {{ destCity() }} leaves {{ n.label }}.</p>
-                <a class="ui-btn ui-btn--sm" [routerLink]="n.link" [queryParams]="keepParams()" [replaceUrl]="true">See {{ n.label }}</a>
+                <p class="ui-sub">{{ t('flight.nextNonstopTo', { city: destCity(), date: n.label }) }}</p>
+                <a class="ui-btn ui-btn--sm" [routerLink]="n.link" [queryParams]="keepParams()" [replaceUrl]="true">{{ t('flight.see', { date: n.label }) }}</a>
               } @else {
-                <p class="ui-sub">No published nonstop from {{ hub() }} after this date.</p>
+                <p class="ui-sub">{{ t('flight.noNonstopAfter', { hub: hub() }) }}</p>
               }
               @if (hiddenConnections()) {
-                <button type="button" class="ui-link conn" (click)="state.setShowConnections(true)">Show connections for this day</button>
+                <button type="button" class="ui-link conn" (click)="state.setShowConnections(true)">{{ t('flight.showConnDay') }}</button>
               }
             </div>
           }
@@ -142,6 +146,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             }
             @for (p of prompts(); track p.key) { <app-outcome-prompt [prompt]="p" /> }
           </div>
+          @if (ticket() && !departed()) { <app-fun-fact-card class="ff" [code]="dest()" [hub]="hub()" [nowMs]="state.nowMs()" [city]="destCity()" /> }
         </div>
 
         <div class="right">
@@ -149,8 +154,8 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             @if (others().length) {
               <section class="sec" aria-labelledby="fl-others">
                 <div class="ui-sec-h">
-                  <h2 class="ui-h3" id="fl-others">Other options</h2>
-                  <span class="ui-tag ui-tag--amber">{{ others().length }} more</span>
+                  <h2 class="ui-h3" id="fl-others">{{ t('flight.others') }}</h2>
+                  <span class="ui-tag ui-tag--amber">{{ t('flight.moreCount', { n: others().length }) }}</span>
                 </div>
                 <div class="ui-card list">
                   @for (r of visibleOthers(); track r.key) {
@@ -158,15 +163,15 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
                   }
                 </div>
                 @if (others().length > visibleOthers().length) {
-                  <button type="button" class="ui-link more" (click)="allOthers.set(true)">Show all {{ others().length }}</button>
+                  <button type="button" class="ui-link more" (click)="allOthers.set(true)">{{ t('flight.showAll', { n: others().length }) }}</button>
                 }
               </section>
             }
 
             <section class="sec" aria-labelledby="fl-miss">
               <div class="ui-sec-h">
-                <h2 class="ui-h3" id="fl-miss">If you miss this</h2>
-                <span class="ui-sub small">Schedules, not seats</span>
+                <h2 class="ui-h3" id="fl-miss">{{ t('flight.ifMiss') }}</h2>
+                <span class="ui-sub small">{{ t('flight.schedulesNotSeats') }}</span>
               </div>
               <div class="ui-card list">
                 @for (g of backups(); track g.id) {
@@ -175,15 +180,15 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
                     <app-option-row [row]="r" [link]="linkFor(r.it)" [queryParams]="keepParams()" [replaceUrl]="true" />
                   }
                 } @empty {
-                  <p class="none">No later option today or tomorrow in the published schedules.</p>
+                  <p class="none">{{ t('flight.noLater') }}</p>
                 }
               </div>
             </section>
 
             <section class="sec" aria-labelledby="fl-ret">
               <div class="ui-sec-h">
-                <h2 class="ui-h3" id="fl-ret">Return</h2>
-                @if (returnPick()) { <span class="ui-tag ui-tag--teal">Round trip ready</span> }
+                <h2 class="ui-h3" id="fl-ret">{{ t('flight.return') }}</h2>
+                @if (returnPick()) { <span class="ui-tag ui-tag--teal">{{ t('flight.roundReady') }}</span> }
               </div>
               <div class="ui-card ret">
                 <app-return-panel [outbound]="it" [hub]="hub()" [code]="dest()" [nights]="nightCount()" [ret]="ret() ?? null"
@@ -194,15 +199,15 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
             </section>
           }
           @if (pickerOpen()) {
-            <app-glass-sheet title="Add to which trip?" [open]="true" (closed)="pickerOpen.set(false)">
+            <app-glass-sheet [title]="t('flight.addToWhich')" [open]="true" (closed)="pickerOpen.set(false)">
               <div class="pick">
-                @for (t of connectedTrips(); track t.id) {
-                  <button type="button" class="ui-btn ui-btn--ghost ui-btn--block" data-pick-trip (click)="addTo(t)">{{ t.name }}</button>
+                @for (ct of connectedTrips(); track ct.id) {
+                  <button type="button" class="ui-btn ui-btn--ghost ui-btn--block" data-pick-trip (click)="addTo(ct)">{{ ct.name }}</button>
                 }
               </div>
             </app-glass-sheet>
           }
-          <p class="foot ui-sub">Published schedules only, times local at each airport. Not seat availability: verify on aircanada.com.</p>
+          <p class="foot ui-sub">{{ t('flight.footer') }}</p>
         </div>
       </div>
     </div>
@@ -215,6 +220,8 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
     .ctx { text-align: center; margin: 0 0 12px; font-size: 12.5px; }
     .strip { display: block; margin-bottom: 12px; }
     .pk { margin-bottom: 14px; }
+    .pk:has(+ .pk-why) { margin-bottom: 6px; }
+    .pk-why { margin: 0 0 14px; font-size: 12.5px; }
     .state { padding: 22px; display: grid; gap: 8px; justify-items: start; }
     .state h2, .state p { margin: 0; }
     .state .ui-btn { margin-top: 6px; }
@@ -234,6 +241,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
     .more { margin-top: 10px; font-size: 13px; }
     .ret { padding: 16px; }
     .adds { display: grid; gap: 14px; margin-top: 18px; }
+    .ff { margin-top: 14px; }
     .pick { display: grid; gap: 8px; }
     .foot { margin: 22px 0 0; font-size: 12px; text-align: center; }
 
@@ -254,6 +262,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
   `],
 })
 export class FlightPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly sharer = inject(ShareService);
@@ -300,12 +309,27 @@ export class FlightPage {
 
   readonly chosen = computed(() => choose(this.itineraries(), this.flight(), this.pick()));
   readonly current = computed(() => this.chosen().it);
+  /** The shown flight has already left (the fun fact is for waiting, not for looking back). */
+  protected readonly departed = computed(() => { const it = this.current(); return !!it && it.departUtc <= this.state.nowMs(); });
 
   protected readonly pickOptions = computed<SegOption[]>(() => [
-    { value: 'earliest', label: 'EARLIEST', disabled: !this.itineraries().length },
-    { value: 'nonstop', label: 'NONSTOP', disabled: !pickOf(this.itineraries(), 'nonstop') },
-    { value: 'fastest', label: 'FASTEST', disabled: !this.itineraries().length },
+    { value: 'earliest', label: t('flight.pick.earliest'), disabled: !this.itineraries().length },
+    { value: 'nonstop', label: t('flight.pick.nonstop'), disabled: !pickOf(this.itineraries(), 'nonstop'), describedBy: this.nonstopWhy() ? 'pk-why' : undefined },
+    { value: 'fastest', label: t('flight.pick.fastest'), disabled: !this.itineraries().length },
   ]);
+
+  /** Why NONSTOP is greyed out: 'No nonstop on Sat · last one Oct 23', or null when it is pickable (or nothing flies). */
+  protected readonly nonstopWhy = computed(() => {
+    if (this.outside() || !this.itineraries().length || pickOf(this.itineraries(), 'nonstop')) return null;
+    const day = formatKey(this.dateKey(), { weekday: 'short' });
+    // Hub-local today, the same clock as Home's "Seasonal & ending soon", so the dates agree.
+    const ev = seasonEvent(this.hub(), this.dest(), todayKey(airportTz(this.hub()), this.state.nowMs()));
+    if (ev?.kind === 'ends' && this.dateKey() > ev.dateKey) {
+      return t('flight.noNonstopLast', { day, date: formatKey(ev.dateKey, { month: 'short', day: 'numeric' }) });
+    }
+    const next = nextFlightDate(this.hub(), this.dest(), this.dateKey(), false);
+    return next ? t('flight.noNonstopNext', { day, date: shortDay(next) }) : t('flight.noNonstopDay');
+  });
 
   protected readonly ticket = computed(() => {
     const it = this.current();
@@ -321,8 +345,13 @@ export class FlightPage {
   });
 
   protected readonly ticketLabel = computed(() => {
-    const t = this.ticket();
-    return t ? `${t.origin} ${t.dep} to ${t.dest} ${t.arr}, ${t.depDate}, ${t.nonstop ? 'nonstop' : t.tag.toLowerCase()}` : '';
+    const tk = this.ticket();
+    return tk
+      ? t('flight.ticketAria', {
+        origin: tk.origin, dep: tk.dep, dest: tk.dest, arr: tk.arr, date: tk.depDate,
+        kind: tk.nonstop ? t('format.nonstop').toLowerCase() : tk.tag.toLowerCase(),
+      })
+      : '';
   });
 
   /** Countdown line: 'Departs today · in 2h 10m', 'In the air · lands in 3h', 'Departed Thu, Oct 1'. */
@@ -332,10 +361,11 @@ export class FlightPage {
     const now = this.state.nowMs();
     if (now < it.departUtc) {
       const day = relativeDay(it.dateKey, this.state.todayKey());
-      return { text: `Departs ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day} · ${countdown(it.departUtc - now)}`, live: it.departUtc - now < 86_400_000 };
+      const when = day === t('format.today') || day === t('format.tomorrow') ? day.toLowerCase() : day;
+      return { text: t('flight.departs', { when, cd: countdown(it.departUtc - now) }), live: it.departUtc - now < 86_400_000 };
     }
-    if (now < it.arriveUtc) return { text: `In the air · lands ${countdown(it.arriveUtc - now)}`, live: true };
-    return { text: `Departed ${shortDay(it.dateKey)}`, live: false };
+    if (now < it.arriveUtc) return { text: t('flight.inAir', { cd: countdown(it.arriveUtc - now) }), live: true };
+    return { text: t('flight.departed', { date: shortDay(it.dateKey) }), live: false };
   });
 
   protected readonly stripDots = computed(() =>
@@ -416,7 +446,7 @@ export class FlightPage {
   /** Party size for the notes' open-seat check: the trip holding one of these flights, else a trip covering the day, else 1. */
   protected readonly partySize = computed(() => {
     const keys = new Set(this.noteFlights().map(f => f.key));
-    const holding = this.trips.activeTrips().find(t => t.legs.some(l => l.kind === 'flight' && l.refs.some(r => keys.has(instanceKey(r)))));
+    const holding = this.trips.activeTrips().find(tr => tr.legs.some(l => l.kind === 'flight' && l.refs.some(r => keys.has(instanceKey(r)))));
     return (holding ?? this.coveringTrips()[0])?.party.count ?? 1;
   });
   /** Pending "How did it go?" prompts for this page's flights. */
@@ -436,12 +466,12 @@ export class FlightPage {
     const it = this.current();
     if (!it || it.estimated) return null;
     const list = this.connectedTrips();
-    if (!list.length) return { label: 'Start a trip', disabled: this.trips.readOnly() };
-    if (list.length > 1) return { label: 'Add to trip', disabled: this.trips.readOnly() };
-    const t = list[0];
-    return tripTarget(t, it).kind === 'already'
-      ? { label: `In ${t.name}`, disabled: true }
-      : { label: `Add to ${t.name}`, disabled: this.trips.readOnly() };
+    if (!list.length) return { label: t('flight.startTrip'), disabled: this.trips.readOnly() };
+    if (list.length > 1) return { label: t('flight.addToTrip'), disabled: this.trips.readOnly() };
+    const tr = list[0];
+    return tripTarget(tr, it).kind === 'already'
+      ? { label: t('flight.inTrip', { name: tr.name }), disabled: true }
+      : { label: t('dest.trip.add', { name: tr.name }), disabled: this.trips.readOnly() };
   });
 
   protected readonly calendarLink = computed(() => calendarPath(this.dest()));
@@ -575,20 +605,20 @@ export class FlightPage {
     if (!it) return;
     const target = tripTarget(trip, it);
     const flights = it.legs.map(l => l.flightNumber).join(' + ');
-    const open = { label: 'Open', run: () => void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() }) };
+    const open = { label: t('common.open'), run: () => void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() }) };
     if (target.kind === 'already') {
-      this.state.flash(`${flights} is already in ${trip.name}`, open);
+      this.state.flash(t('flight.already', { flights, name: trip.name }), open);
     } else if (target.kind === 'alternate') {
       this.trips.addAlternate(trip.id, target.legId, it);
-      this.state.flash(`Added ${flights} to ${trip.name} as a backup for ${target.flight}`, open);
+      this.state.flash(t('flight.addedBackup', { flights, name: trip.name, backup: target.flight }), open);
     } else {
       const first = target.role === 'outbound';
       const empty = !trip.legs.some(l => l.kind === 'flight');
       if (first && empty && trip.outboundDate !== it.dateKey) {
         // A trip started without a flight takes the chosen flight's day; its home-by moves by the same offset.
         const shift = diffDays(trip.outboundDate, it.dateKey);
-        this.trips.update(trip.id, t => ({
-          ...t, outboundDate: it.dateKey, homeBy: { ...t.homeBy, dateKey: addDays(t.homeBy.dateKey, shift) },
+        this.trips.update(trip.id, tr => ({
+          ...tr, outboundDate: it.dateKey, homeBy: { ...tr.homeBy, dateKey: addDays(tr.homeBy.dateKey, shift) },
         }));
       }
       this.trips.addFlightLeg(trip.id, it, target.role);
@@ -596,9 +626,9 @@ export class FlightPage {
       const hasReturn = trip.legs.some(l => l.kind === 'flight' && l.role === 'return' && l.status !== 'abandoned');
       if (first && pick && !hasReturn) {
         this.trips.addFlightLeg(trip.id, pick, 'return');
-        this.trips.update(trip.id, t => ({ ...t, homeBy: homeByFor(pick) }));
+        this.trips.update(trip.id, tr => ({ ...tr, homeBy: homeByFor(pick) }));
       }
-      this.state.flash(`Added ${flights} to ${trip.name}`, open);
+      this.state.flash(t('flight.added', { flights, name: trip.name }), open);
     }
   }
 

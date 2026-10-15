@@ -14,18 +14,20 @@ export const SCHENGEN: readonly string[] = [
   'LV', 'MT', 'NL', 'NO', 'PL', 'PT', 'SE', 'SI', 'SK', 'BG', 'RO',
 ];
 
+import type { MsgKey } from '../i18n/t';
+
 export type EntryRuleId = 'schengen-validity' | 'etias' | 'ees' | 'uk-eta' | 'us-entry' | 'mx-entry' | 'country-advice';
 
 export interface EntryRule {
   id: EntryRuleId;
   /** Which countries on the route trigger it ('other' = any country no other rule covers, except Canada). */
   appliesTo: 'schengen' | 'GB' | 'US' | 'MX' | 'other';
-  /** {countries} = the matching countries ('Spain and Portugal'); {country} = one country. */
-  title: string;
-  detail: string;
+  /** Catalogue keys; {countries} = the matching countries ('Spain and Portugal'); {country} = one country. */
+  title: MsgKey;
+  detail: MsgKey;
   /** {slug} = travel.gc.ca slug of the (first) matching country. */
   url: string;
-  linkLabel: string;
+  linkLabel: MsgKey;
   /** Travel-critical (shown first); info rows are not. */
   critical: boolean;
   reviewed: string;
@@ -36,38 +38,38 @@ const R = '2026-10';
 export const ENTRY_RULES: readonly EntryRule[] = [
   {
     id: 'schengen-validity', appliesTo: 'schengen', critical: true, reviewed: R,
-    title: 'Passports valid 3+ months after you leave', detail: 'Schengen rule · {countries}',
-    url: 'https://travel.gc.ca/destinations/{slug}', linkLabel: 'Government of Canada advice',
+    title: 'places.entry.schengen.title', detail: 'places.entry.schengen.detail',
+    url: 'https://travel.gc.ca/destinations/{slug}', linkLabel: 'places.entry.gcAdvice',
   },
   {
     id: 'etias', appliesTo: 'schengen', critical: true, reviewed: R,
-    title: 'Check ETIAS status', detail: 'Official EU page · not required until it starts',
-    url: 'https://travel-europe.europa.eu/etias_en', linkLabel: 'ETIAS (official EU page)',
+    title: 'places.entry.etias.title', detail: 'places.entry.etias.detail',
+    url: 'https://travel-europe.europa.eu/etias_en', linkLabel: 'places.entry.etias.link',
   },
   {
     id: 'ees', appliesTo: 'schengen', critical: false, reviewed: R,
-    title: 'Fingerprints and photo at the border (EES)', detail: 'First entry to the Schengen area',
-    url: 'https://travel-europe.europa.eu/ees_en', linkLabel: 'EES (official EU page)',
+    title: 'places.entry.ees.title', detail: 'places.entry.ees.detail',
+    url: 'https://travel-europe.europa.eu/ees_en', linkLabel: 'places.entry.ees.link',
   },
   {
     id: 'uk-eta', appliesTo: 'GB', critical: true, reviewed: R,
-    title: 'Check UK ETA', detail: 'Needed for Canadians visiting or connecting landside',
-    url: 'https://www.gov.uk/eta', linkLabel: 'UK ETA (GOV.UK)',
+    title: 'places.entry.ukEta.title', detail: 'places.entry.ukEta.detail',
+    url: 'https://www.gov.uk/eta', linkLabel: 'places.entry.ukEta.link',
   },
   {
     id: 'us-entry', appliesTo: 'US', critical: true, reviewed: R,
-    title: 'No ESTA for Canadian citizens', detail: 'Bring your passport; check entry rules',
-    url: 'https://travel.gc.ca/destinations/united-states', linkLabel: 'Government of Canada advice',
+    title: 'places.entry.usEntry.title', detail: 'places.entry.usEntry.detail',
+    url: 'https://travel.gc.ca/destinations/united-states', linkLabel: 'places.entry.gcAdvice',
   },
   {
     id: 'mx-entry', appliesTo: 'MX', critical: true, reviewed: R,
-    title: 'Check Mexico entry rules', detail: 'Visa / electronic authorization rules changed in 2024 · check before you go',
-    url: 'https://travel.gc.ca/destinations/mexico', linkLabel: 'Government of Canada advice',
+    title: 'places.entry.mxEntry.title', detail: 'places.entry.mxEntry.detail',
+    url: 'https://travel.gc.ca/destinations/mexico', linkLabel: 'places.entry.gcAdvice',
   },
   {
     id: 'country-advice', appliesTo: 'other', critical: true, reviewed: R,
-    title: 'Check entry rules for {country}', detail: 'Government of Canada travel advice',
-    url: 'https://travel.gc.ca/destinations/{slug}', linkLabel: 'Government of Canada advice',
+    title: 'places.entry.countryAdvice.title', detail: 'places.entry.countryAdvice.detail',
+    url: 'https://travel.gc.ca/destinations/{slug}', linkLabel: 'places.entry.gcAdvice',
   },
 ];
 

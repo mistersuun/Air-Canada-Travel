@@ -4,6 +4,8 @@
  * download. Every browser API comes in through `env`, so specs stub it.
  */
 
+import { InjectionToken } from '@angular/core';
+
 export type TextResult = 'shared' | 'copied' | 'cancelled' | 'failed';
 export type ImageResult = 'shared' | 'downloaded' | 'cancelled' | 'failed';
 
@@ -18,6 +20,12 @@ function defaultEnv(): ShareEnv {
     document: typeof document === 'undefined' ? null : document,
   };
 }
+
+/** The browser APIs used to send (navigator.share, clipboard, document for downloads). */
+export const SHARE_ENV = new InjectionToken<() => ShareEnv>('SHARE_ENV', {
+  providedIn: 'root',
+  factory: () => defaultEnv,
+});
 
 const isAbort = (e: unknown) => (e as { name?: string } | null)?.name === 'AbortError';
 

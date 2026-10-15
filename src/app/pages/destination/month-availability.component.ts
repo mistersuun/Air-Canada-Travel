@@ -1,11 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output } from '@angular/core';
 import type { Coverage } from '../../data/schedule-index';
 import { NO_OPTS, type ConnectOptions } from '../../utils/connections';
-import { addMonths } from '../../utils/time';
+import { t } from '../../i18n/t';
+import { addMonths, weekdayLetters } from '../../utils/time';
 import { IconComponent } from '../../components/shared/icons.component';
 import { availMonth, monthRange, type AvailMonth } from './dest-model';
-
-const WEEK_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
 
 /**
  * Month availability for hub → destination (the old modal's Calendar tab,
@@ -21,11 +20,11 @@ const WEEK_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-sec-h head">
-      <h2 class="ui-h3">Availability</h2>
+      <h2 class="ui-h3">{{ t('dest.avail.title') }}</h2>
       <div class="nav">
-        <button type="button" class="ui-circ ui-circ--glass sm" aria-label="Previous month" [disabled]="!canPrev()"
+        <button type="button" class="ui-circ ui-circ--glass sm" [attr.aria-label]="t('dest.avail.prev')" [disabled]="!canPrev()"
                 (click)="start.set(prev())"><app-icon name="chevron-left" [size]="16" /></button>
-        <button type="button" class="ui-circ ui-circ--glass sm" aria-label="Next month" [disabled]="!canNext()"
+        <button type="button" class="ui-circ ui-circ--glass sm" [attr.aria-label]="t('dest.avail.next')" [disabled]="!canNext()"
                 (click)="start.set(next())"><app-icon name="chevron-right" [size]="16" /></button>
       </div>
     </div>
@@ -34,10 +33,10 @@ const WEEK_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
         <div class="month" role="group" [attr.aria-label]="m.title">
           <div class="mh">
             <span class="mt" [class.dim]="m.unpublished">{{ m.title }}</span>
-            @if (m.unpublished) { <span class="ui-sub small">Not yet published</span> }
+            @if (m.unpublished) { <span class="ui-sub small">{{ t('dest.avail.notYet') }}</span> }
           </div>
           <div class="grid" aria-hidden="true">
-            @for (w of weekdays; track $index) { <span class="wd">{{ w }}</span> }
+            @for (w of weekdays(); track $index) { <span class="wd">{{ w }}</span> }
           </div>
           <div class="grid">
             @for (b of blanks(m); track $index) { <span></span> }
@@ -57,9 +56,9 @@ const WEEK_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
       }
     </div>
     <ul class="legend">
-      <li><span class="sw"><i style="width: 100%"></i></span>More nonstop departures</li>
-      <li><span class="sw"><i style="width: 34%"></i></span>One</li>
-      @if (showConnections()) { <li><span class="sw sw--c"></span>Connection only</li> }
+      <li><span class="sw"><i style="width: 100%"></i></span>{{ t('dest.avail.legendMore') }}</li>
+      <li><span class="sw"><i style="width: 34%"></i></span>{{ t('dest.avail.legendOne') }}</li>
+      @if (showConnections()) { <li><span class="sw sw--c"></span>{{ t('dest.avail.legendConn') }}</li> }
     </ul>
   `,
   styles: [`
@@ -97,6 +96,7 @@ const WEEK_INITIALS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'] as const;
   `],
 })
 export class MonthAvailabilityComponent {
+  protected readonly t = t;
   readonly hub = input.required<string>();
   readonly dest = input.required<string>();
   readonly todayKey = input.required<string>();
@@ -109,7 +109,7 @@ export class MonthAvailabilityComponent {
 
   readonly pick = output<string>();
 
-  protected readonly weekdays = WEEK_INITIALS;
+  protected readonly weekdays = computed(() => weekdayLetters());
   private readonly range = computed(() => monthRange(this.todayKey(), this.coverage()));
 
   /** First month shown: the selected day's month when in range, else today's. */

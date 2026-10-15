@@ -8,6 +8,7 @@ import { MemoryStorage } from '../../state/testing';
 import { FLIGHTLOG_KEY, TRIPS_KEY, type FlightLeg, type Trip } from '../../trips/model';
 import { TRIPS_STORAGE } from '../../trips/storage';
 import { sevilleTrip } from '../../trips/testing/seville-fixture';
+import { setLocale } from '../../i18n/locale';
 import { LogbookPage } from './logbook.page';
 
 const clean = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
@@ -91,5 +92,18 @@ describe('LogbookPage', () => {
     const svg = li.querySelector('svg') as SVGElement;
     expect(svg.style.transform).toMatch(/^rotate\(-?[0-5]deg\)$/);
     expect(svg.querySelector('rect')?.getAttribute('stroke-dasharray')).toBeTruthy();
+  });
+});
+
+describe('LogbookPage in French', () => {
+  afterEach(() => setLocale('en'));
+
+  it('reads in French', async () => {
+    setLocale('fr');
+    const el = await render({ trip: boardedTrip() });
+    expect(clean(el.querySelector('h1')?.textContent)).toBe('Carnet de vols');
+    expect(clean(el.querySelector('[data-flights]')?.textContent)).toMatch(/^\d+ vols?$/);
+    expect(clean(el.querySelector('.lb__foot')?.textContent)).toContain('Compté à partir des vols');
+    expect(clean(el.textContent)).not.toMatch(/Stamps|Milestones|Longest flight/);
   });
 });

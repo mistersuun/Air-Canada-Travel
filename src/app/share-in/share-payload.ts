@@ -3,6 +3,7 @@
  * The stash layout mirrors public/sw.js: Cache Storage 'ac-share-in',
  * /__share/<id>/meta.json and /__share/<id>/<n> per file.
  */
+import { t } from '../i18n/t';
 
 export type SharedKind = 'image' | 'pdf' | 'calendar' | 'text' | 'other';
 
@@ -65,7 +66,7 @@ export function noteTextFrom(m: Pick<SharedMeta, 'text' | 'url'>, fileText = '')
 }
 
 export function noteTitleFrom(m: Pick<SharedMeta, 'title'>, fallbackName = ''): string {
-  return m.title.trim() || fallbackName.replace(/\.[^.]+$/, '').trim() || 'Shared note';
+  return m.title.trim() || fallbackName.replace(/\.[^.]+$/, '').trim() || t('shareIn.sharedNote');
 }
 
 export interface BackgroundChecksSupport { supported: boolean; reason: 'ok' | 'no-sw' | 'no-notifications' | 'no-periodic-sync' }
@@ -86,5 +87,9 @@ export const SCHEDULE_CHECK_MIN_INTERVAL_MS = 12 * 60 * 60 * 1000;
 /** Limits the service worker applies to one share (keep in sync with public/sw.js). */
 export const SHARE_MAX_FILES = 5;
 export const SHARE_MAX_BYTES = 25 * 1024 * 1024;
-export const SHARE_TOO_LARGE_TEXT = 'That share is too big to receive. Share up to 5 files, 25 MB in all.';
-export const SHARE_FAILED_TEXT = "Couldn't receive that share. Try again.";
+export function shareTooLargeText(): string {
+  return t('shareIn.tooLarge');
+}
+export function shareFailedText(): string {
+  return t('shareIn.failed');
+}

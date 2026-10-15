@@ -108,7 +108,7 @@ describe('TripsService', () => {
 
   it('never overwrites data from a newer app version', () => {
     const s = new MemoryStorage();
-    s.setItem(TRIPS_KEY, JSON.stringify({ ...SEVILLE_TRIPS_FILE, schema: 2 }));
+    s.setItem(TRIPS_KEY, JSON.stringify({ ...SEVILLE_TRIPS_FILE, schema: 3 }));
     const spy = vi.spyOn(s, 'setItem');
     const svc = make(s);
     expect(svc.readOnly()).toBe(true);

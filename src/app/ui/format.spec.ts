@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { Itinerary } from '../utils/connections';
 import {
-  countdown, daysLabel, formatStay, freshnessAge, greeting, hm, hubDisplayName, isOutside, itinKey, longDay,
-  operatesLabel, prettyFlight, relativeCountdown, relativeDay, shortDay, stopsLabel, supOffset, timeRange,
+  countdown, daysLabel, formatStay, greeting, hm, hubDisplayName, isOutside, itinKey,
+  operatesLabel, prettyFlight, relativeCountdown, relativeDay, shortDay, supOffset, timeRange,
   tzAbbr, tzDiffLabel, weekRangeLabel,
 } from './format';
 
@@ -77,6 +77,13 @@ describe('ui/format', () => {
     expect(tzAbbr('Not/AZone', now)).toBe('');
   });
 
+  it('names a zone by its overridden offset once the override applies (BC stays on UTC-7)', () => {
+    expect(tzAbbr('America/Vancouver', Date.parse('2026-10-01T12:00:00Z'))).toBe('PDT');
+    expect(tzAbbr('America/Vancouver', Date.parse('2026-12-01T12:00:00Z'))).toBe('GMT-7');
+    expect(tzAbbr('America/Edmonton', Date.parse('2026-12-01T12:00:00Z'))).toBe('GMT-6');
+    expect(tzAbbr('Africa/Casablanca', Date.parse('2026-12-01T12:00:00Z'))).toBe('GMT');
+  });
+
   it('days and hubs', () => {
     expect(daysLabel(7)).toBe('Daily');
     expect(daysLabel(6)).toBe('6× wk');
@@ -90,16 +97,12 @@ describe('ui/format', () => {
     expect(prettyFlight('AC812')).toBe('AC812');
     expect(prettyFlight(null)).toBe('');
     expect(shortDay('2026-10-07')).toBe('Wed, Oct 7');
-    expect(longDay('2026-10-07')).toBe('Wednesday, October 7');
     expect(formatStay(((3 * 24 + 22) * 60) * 60000)).toBe('3d 22h');
     expect(formatStay(2 * 86400000)).toBe('2d');
     expect(formatStay(22 * 3600000)).toBe('22h');
     expect(formatStay(45 * 60000)).toBe('45m');
     expect(operatesLabel(['2026-10-05', '2026-10-07', '2026-10-09', '2026-10-12'])).toBe('Mon Wed Fri');
     expect(operatesLabel(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'])).toBe('Daily');
-    expect(stopsLabel(it1)).toBe('1 stop · YYZ');
-    expect(stopsLabel({ ...it1, hubs: [] })).toBe('Nonstop');
-    expect(stopsLabel({ ...it1, hubs: ['YYZ', 'YVR'] })).toBe('2 stops · YYZ YVR');
     expect(itinKey(it1)).toBe('AC300YULYYZ1_ESTYYZNRT2');
     const cov = { from: '2026-09-01', to: '2027-03-31', generatedAt: null, hub: 'YUL' };
     expect(isOutside('2027-04-01', cov)).toBe(true);
@@ -108,13 +111,9 @@ describe('ui/format', () => {
     expect(isOutside('2026-10-01', null)).toBe(false);
   });
 
-  it('week labels and freshness', () => {
+  it('week labels', () => {
     expect(weekRangeLabel('2026-10-05')).toBe('Oct 5 – 11');
     expect(weekRangeLabel('2026-09-28')).toBe('Sep 28 – Oct 4');
     expect(weekRangeLabel('2026-12-28')).toBe('Dec 28, 2026 – Jan 3, 2027');
-    expect(freshnessAge('2026-09-30T08:00:00Z', '2026-09-30')?.text).toBe('today');
-    expect(freshnessAge('2026-09-29T12:00:00Z', '2026-09-30')?.text).toBe('yesterday');
-    expect(freshnessAge('2026-09-27T12:00:00Z', '2026-09-30')).toEqual({ days: 3, text: '3 days ago' });
-    expect(freshnessAge('not a date', '2026-09-30')).toBeNull();
   });
 });

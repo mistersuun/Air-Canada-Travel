@@ -20,7 +20,7 @@ export interface WorkerLike {
 
 export class WorkerUnavailable extends Error {
   constructor(reason: string) {
-    super(`Decode worker unavailable: ${reason}`);
+    super(`Decode worker unavailable: ${reason}`); // i18n-ignore
     this.name = 'WorkerUnavailable';
   }
 }
@@ -53,7 +53,7 @@ export class DecodeWorkerClient {
       failReady = rej;
     });
     this.ready.catch(() => undefined);
-    const timer = setTimeout(() => this.fail('did not start'), readyTimeoutMs);
+    const timer = setTimeout(() => this.fail('did not start'), readyTimeoutMs); // i18n-ignore
     this.onFail = reason => {
       clearTimeout(timer);
       failReady(new WorkerUnavailable(reason));
@@ -75,8 +75,8 @@ export class DecodeWorkerClient {
         this.fail(msg.error);
       }
     });
-    worker.addEventListener('error', () => this.fail('worker error'));
-    worker.addEventListener('messageerror', () => this.fail('message error'));
+    worker.addEventListener('error', () => this.fail('worker error')); // i18n-ignore
+    worker.addEventListener('messageerror', () => this.fail('message error')); // i18n-ignore
   }
 
   /** True once the worker failed: callers decode on the main thread. */
@@ -108,7 +108,7 @@ export class DecodeWorkerClient {
         this.worker.postMessage({ ...req, id, wasmUrl: this.wasmUrl }, transfer);
       } catch (e) {
         this.pending.delete(id);
-        reject(new WorkerUnavailable(e instanceof Error ? e.message : 'postMessage failed'));
+        reject(new WorkerUnavailable(e instanceof Error ? e.message : 'postMessage failed')); // i18n-ignore
       }
     });
   }

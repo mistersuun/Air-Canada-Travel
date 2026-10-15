@@ -53,7 +53,10 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
     if (done) break;
     chunks.push(value);
     total += value.length;
-    if (total > MAX_JSON) throw new Error('too large');
+    if (total > MAX_JSON) {
+      await reader.cancel().catch(() => undefined);
+      throw new Error('too large');
+    }
   }
   await written;
   const out = new Uint8Array(total);
@@ -68,7 +71,7 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 /** Thrown when even the trimmed trip does not fit in a share link. */
 export class ShareTooLargeError extends Error {
   constructor() {
-    super('This trip is too large to share as a link.');
+    super('This trip is too large to share as a link.'); // i18n-ignore
   }
 }
 

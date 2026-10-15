@@ -7,6 +7,7 @@ import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { ShareService } from '../../state/share.service';
 import { MemoryStorage } from '../../state/testing';
+import { setLocale } from '../../i18n/locale';
 import { FlightPage } from './flight.page';
 
 /** Wed Oct 7 2026, 08:00 in Montréal. */
@@ -77,7 +78,7 @@ describe('FlightPage', () => {
     expect(text('.tk .hd .ui-tag')).toBe('NON-STOP');
     expect(text('.tk .times')).toContain('22:10');
     expect(text('.tk .times')).toContain('Thu, Oct 8 · local');
-    expect(cells(el)).toMatchObject({ Date: 'Oct 7', Flight: 'AC864', Aircraft: 'A330-300', Frequency: 'Daily' });
+    expect(cells(el)).toMatchObject({ Date: 'Oct 7', Flight: 'AC864', Aircraft: 'A330-300 · about 297 seats', Frequency: 'Daily' });
     expect(text('.cd')).toBe('Departs today · in 14h 10m');
     // The seg lights EARLIEST; NONSTOP is enabled since a nonstop exists.
     const seg = [...el.querySelectorAll<HTMLButtonElement>('app-seg button')];
@@ -169,8 +170,14 @@ describe('FlightPage', () => {
     expect(chips.find(c => c.getAttribute('aria-pressed') === 'true')!.textContent!.trim()).toBe('7 nights');
     chips[0].click();
     expect(a.nav).toHaveBeenCalledWith([], { queryParams: { nights: 2, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
+    expect(a.el.querySelector('app-return-panel .stepper')).toBeNull();   // a preset covers 7 nights
+    a.el.querySelector<HTMLButtonElement>('app-return-panel [data-other]')!.click();
+    a.fixture.detectChanges();
     a.el.querySelector<HTMLButtonElement>('button[aria-label="One night more"]')!.click();
     expect(a.nav).toHaveBeenLastCalledWith([], { queryParams: { nights: 8, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
+    a.fixture.componentRef.setInput('nights', '8');
+    a.fixture.detectChanges();
+    expect(a.el.querySelector('app-return-panel .stepper')).not.toBeNull();   // stays open after stepping
 
     TestBed.resetTestingModule();
     configure();
@@ -228,5 +235,28 @@ describe('FlightPage', () => {
     configure({ showConnections: false });
     const a = await render();
     expect(a.cmp.itineraries().every(i => !i.hubs.length)).toBe(true);
+  });
+});
+
+describe('FlightPage in French', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    setLocale('en');
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  it('renders the ticket, countdown and sections in Canadian French', async () => {
+    configure({ showConnections: false });
+    setLocale('fr');
+    const { el, text } = await render();
+    expect(text('h1')).toBe('Détails du vol');
+    expect(text('.tk .hd .ui-tag')).toBe('SANS ESCALE');
+    expect(Object.keys(cells(el))).toEqual(['Date', 'Vol', 'Appareil', 'Durée', 'Fréquence', 'Décalage']);
+    expect(text('.cd')).toMatch(/^Départ aujourd'hui · dans \d/);
+    expect(el.querySelector('[aria-label="Partager ce vol"]')).not.toBeNull();
+    expect(text()).toContain('Si vous manquez ce vol');
+    expect(text()).toContain('Horaires publiés seulement');
+    expect(text()).not.toMatch(/Flight details|Departs|If you miss|Round trip|Other options|Schedules, not seats|Show all/);
   });
 });

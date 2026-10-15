@@ -4,10 +4,10 @@
  * destinations: PUJ said 'Oct – Apr' but flies all year).
  */
 import { getCoverage, getSchedulesForRoute, scheduleVersion } from '../data/schedule-index';
-import { addDays, diffDays, weekdayIndex } from './time';
+import { addDays, diffDays, monthShort, weekdayIndex } from './time';
+import { locale } from '../i18n/locale';
 import { parseDayMask } from './week';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
 let cacheVersion = -1;
 const cache = new Map<string, string | null>();
@@ -26,9 +26,9 @@ function operatesBetween(mask: number, from: string, to: string): boolean {
   return false;
 }
 
-/** 'Nov – Apr', 'Dec', or several runs joined: 'Dec – Jan, Jun – Aug'. */
+/** 'Nov – Apr', 'Dec', or several runs joined: 'Dec – Jan, Jun – Aug' ('nov. – avr.' in French). */
 function label(runs: [number, number][]): string {
-  return runs.map(([a, b]) => (a === b ? MONTHS[a] : `${MONTHS[a]} – ${MONTHS[b]}`)).join(', ');
+  return runs.map(([a, b]) => (a === b ? monthShort(a) : `${monthShort(a)} – ${monthShort(b)}`)).join(', ');
 }
 
 /**
@@ -42,7 +42,8 @@ export function routeSeason(origin: string, dest: string): string | null {
     cache.clear();
     cacheVersion = scheduleVersion();
   }
-  const key = `${origin}-${dest}`;
+  // The label is display text: cached per UI language.
+  const key = `${locale()}:${origin}-${dest}`;
   if (cache.has(key)) return cache.get(key)!;
 
   const { from, to } = getCoverage();

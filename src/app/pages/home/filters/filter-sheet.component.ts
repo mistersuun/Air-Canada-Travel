@@ -10,15 +10,18 @@ import { minToHhmm } from '../../../utils/time';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import type { SegOption } from '../../../ui/seg.component';
 import { hubDisplayName } from '../../../ui/format';
+import { MsgKey, t } from '../../../i18n/t';
+import { departWindowLabel, regionLabel, typeLabel } from '../../../i18n/labels';
 
 const DEFAULT_MAX_HOURS = 6;
 
-export const SORT_OPTIONS: readonly { key: SortKey; label: string; short: string }[] = [
-  { key: 'az', label: 'A–Z', short: 'A–Z' },
-  { key: 'departure', label: 'Departure time', short: 'Departure' },
-  { key: 'duration', label: 'Duration', short: 'Duration' },
-  { key: 'days', label: 'Days flying', short: 'Days' },
-  { key: 'newest', label: 'Newest', short: 'New' },
+/** Sort choices; `label` is a message key. */
+export const SORT_OPTIONS: readonly { key: SortKey; label: MsgKey }[] = [
+  { key: 'az', label: 'home.filter.sort.az' },
+  { key: 'departure', label: 'home.filter.sort.departure' },
+  { key: 'duration', label: 'home.filter.sort.duration' },
+  { key: 'days', label: 'home.filter.sort.days' },
+  { key: 'newest', label: 'home.filter.sort.newest' },
 ];
 
 /** 'All', 'Starred', then the geographic regions. */
@@ -40,27 +43,27 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
   imports: [GlassSheetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet title="Filter & sort" [(open)]="open">
+    <app-glass-sheet [title]="t('home.filter.title')" [(open)]="open">
       <div class="fs">
         <section class="grp">
-          <span class="nm" id="fs-sort">Sort by</span>
+          <span class="nm" id="fs-sort">{{ t('home.filter.sortBy') }}</span>
           <div class="chips" role="group" aria-labelledby="fs-sort" data-filter="sort">
             @for (o of sortOptions(); track o.value) {
               <button type="button" class="chip" [attr.aria-pressed]="state.sort() === o.value" [disabled]="o.disabled"
                       (click)="setSort(o.value)">{{ o.label }}</button>
             }
           </div>
-          @if (!state.selectedDateKey()) { <span class="hint">Pick a day to sort by departure time.</span> }
+          @if (!state.selectedDateKey()) { <span class="hint">{{ t('home.filter.sortHint') }}</span> }
         </section>
 
         <section class="grp">
           <label class="row" for="fs-conn">
-            <span class="row__tx"><span class="nm">Show connections</span><span class="hint">One-stop trips through a hub</span></span>
+            <span class="row__tx"><span class="nm">{{ t('home.filter.showConnections') }}</span><span class="hint">{{ t('home.filter.showConnectionsHint') }}</span></span>
             <input id="fs-conn" type="checkbox" role="switch" class="switch"
                    [checked]="state.showConnections()" (change)="state.setShowConnections(checked($event))">
           </label>
           <fieldset class="field" [disabled]="!state.showConnections()">
-            <legend class="nm">Connect via</legend>
+            <legend class="nm">{{ t('home.filter.connectVia') }}</legend>
             <div class="chips">
               @for (h of viaHubs(); track h.code) {
                 <button type="button" class="chip" [attr.aria-pressed]="f().viaHubs.includes(h.code)"
@@ -73,62 +76,62 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
         </section>
 
         <section class="grp">
-          <span class="nm" id="fs-region">Region</span>
+          <span class="nm" id="fs-region">{{ t('home.filter.region') }}</span>
           <div class="chips" role="group" aria-labelledby="fs-region">
             @for (r of regions; track r) {
               <button type="button" class="chip" [attr.aria-pressed]="state.region() === r" (click)="setRegion(r)">
                 @if (dot(r); as c) { <i class="dot" [style.background]="c"></i> }
-                {{ r === 'All' ? 'All regions' : r === starred ? '★ Starred' : r }}
+                {{ regionLabel(r) }}
               </button>
             }
           </div>
-          <span class="nm" id="fs-type">Trip type</span>
+          <span class="nm" id="fs-type">{{ t('home.filter.tripType') }}</span>
           <div class="chips" role="group" aria-labelledby="fs-type">
-            @for (t of types; track t) {
-              <button type="button" class="chip" [attr.aria-pressed]="f().types.includes(t)" (click)="toggleType(t)">{{ t }}</button>
+            @for (ty of types; track ty) {
+              <button type="button" class="chip" [attr.aria-pressed]="f().types.includes(ty)" (click)="toggleType(ty)">{{ typeLabel(ty) }}</button>
             }
           </div>
         </section>
 
         <section class="grp">
-          <span class="nm" id="fs-win">Departs {{ state.hub() }}</span>
+          <span class="nm" id="fs-win">{{ t('home.filter.departs', { hub: state.hub() }) }}</span>
           <div class="chips" role="group" aria-labelledby="fs-win">
             @for (w of windows; track w.key) {
               <button type="button" class="chip" [attr.aria-pressed]="f().departWindows.includes(w.key)" (click)="toggleWindow(w.key)">
-                {{ w.label }}<span class="rng tn">{{ w.range }}</span>
+                {{ windowLabel(w.key) }}<span class="rng tn">{{ w.range }}</span>
               </button>
             }
           </div>
           <label class="row" for="fs-same">
-            <span class="row__tx"><span class="nm">Arrives same day</span><span class="hint">No overnight or +1 arrivals</span></span>
+            <span class="row__tx"><span class="nm">{{ t('home.filter.sameDay') }}</span><span class="hint">{{ t('home.filter.sameDayHint') }}</span></span>
             <input id="fs-same" type="checkbox" role="switch" class="switch"
                    [checked]="f().sameDayArrival" (change)="patch({ sameDayArrival: checked($event) })">
           </label>
           <label class="row" for="fs-max">
-            <span class="row__tx"><span class="nm">Max flight time</span>
-              <span class="hint" data-max-hint>{{ f().maxHours ? 'Up to ' + f().maxHours + 'h, door to door for one-stops' : 'Any length' }}</span></span>
+            <span class="row__tx"><span class="nm">{{ t('home.filter.maxTime') }}</span>
+              <span class="hint" data-max-hint>{{ f().maxHours ? t('home.filter.maxHint', { h: f().maxHours! }) : t('home.filter.anyLength') }}</span></span>
             <input id="fs-max" type="checkbox" role="switch" class="switch" data-max-switch
                    [checked]="!!f().maxHours" (change)="setMax(checked($event) ? maxDefault() : null)">
           </label>
           @if (f().maxHours; as h) {
-            <input type="range" class="range" min="1" max="12" step="1" data-max-range aria-label="Longest flight in hours"
-                   [value]="h" [attr.aria-valuetext]="'Up to ' + h + ' hours'" (input)="setMax(num($event))">
+            <input type="range" class="range" min="1" max="12" step="1" data-max-range [attr.aria-label]="t('home.filter.maxLabel')"
+                   [value]="h" [attr.aria-valuetext]="t('home.filter.maxValue', { h })" (input)="setMax(num($event))">
           }
           <label class="row" for="fs-wide">
-            <span class="row__tx"><span class="nm">Widebody only</span><span class="hint">{{ widebodyHint() }}</span></span>
+            <span class="row__tx"><span class="nm">{{ t('home.filter.widebody') }}</span><span class="hint">{{ widebodyHint() }}</span></span>
             <input id="fs-wide" type="checkbox" role="switch" class="switch"
                    [checked]="f().widebodyOnly" (change)="patch({ widebodyOnly: checked($event) })">
           </label>
           <label class="row" for="fs-star">
-            <span class="row__tx"><span class="nm">Starred only</span><span class="hint">Destinations you saved</span></span>
+            <span class="row__tx"><span class="nm">{{ t('home.filter.starred') }}</span><span class="hint">{{ t('home.filter.starredHint') }}</span></span>
             <input id="fs-star" type="checkbox" role="switch" class="switch"
                    [checked]="f().starredOnly" (change)="patch({ starredOnly: checked($event) })">
           </label>
         </section>
       </div>
       <footer class="foot">
-        <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">Reset</button>
-        <button type="button" class="ui-btn" (click)="open.set(false)">Show {{ count() }} {{ count() === 1 ? 'destination' : 'destinations' }}</button>
+        <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">{{ t('common.reset') }}</button>
+        <button type="button" class="ui-btn" (click)="open.set(false)">{{ t('home.filter.show', { n: count() }) }}</button>
       </footer>
     </app-glass-sheet>
   `,
@@ -143,11 +146,13 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
     .nm { font-size: 15px; font-weight: 600; }
     .hint { font-size: 13px; color: var(--ink-2); }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chips { row-gap: 14px; }
     .chip {
-      display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+      position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
       background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap;
       box-shadow: inset 0 0 0 1px var(--hair);
     }
+    .chip::after { content: ''; position: absolute; inset: -7px -2px; }
     .chip[aria-pressed='true'] { background: var(--ink); color: var(--bg); box-shadow: none; }
     .chip:disabled { opacity: .45; cursor: default; }
     .chip b { font-size: 11px; font-weight: 700; letter-spacing: .04em; opacity: .7; }
@@ -181,14 +186,17 @@ export class FilterSheetComponent {
   protected readonly f = this.state.filters;
   protected readonly regions = REGION_CHIPS;
   protected readonly types = TYPE_CHIPS;
-  protected readonly starred = STARRED_REGION;
   protected readonly windows = (Object.keys(DEPART_WINDOWS) as DepartWindow[]).map(key => {
     const w = DEPART_WINDOWS[key];
-    return { key, label: w.label, range: `${minToHhmm(w.start).slice(0, 2)}–${minToHhmm(w.end).slice(0, 2)}` };
+    return { key, range: `${minToHhmm(w.start).slice(0, 2)}–${minToHhmm(w.end).slice(0, 2)}` };
   });
+  protected readonly t = t;
+  protected readonly regionLabel = regionLabel;
+  protected readonly typeLabel = typeLabel;
+  protected readonly windowLabel = departWindowLabel;
 
   protected readonly sortOptions = computed<SegOption[]>(() =>
-    SORT_OPTIONS.map(o => ({ value: o.key, label: o.label, disabled: o.key === 'departure' && !this.state.selectedDateKey() })),
+    SORT_OPTIONS.map(o => ({ value: o.key, label: t(o.label), disabled: o.key === 'departure' && !this.state.selectedDateKey() })),
   );
   protected readonly viaHubs = computed(() =>
     HUBS.filter(h => h.code !== this.state.hub()).map(h => ({ code: h.code, name: hubDisplayName(h.code) })),
@@ -196,7 +204,7 @@ export class FilterSheetComponent {
   /** The widebody list comes from the schedule data, not a hard-coded list. */
   protected readonly widebodyHint = computed(() => {
     const names = widebodyCodes().map(c => aircraftName(c).replace(/^(Boeing|Airbus) /, ''));
-    return names.length ? names.join(', ') : 'Twin-aisle aircraft';
+    return names.length ? names.join(', ') : t('home.filter.widebodyFallback');
   });
   protected readonly count = computed(() => this.state.routes().length);
 

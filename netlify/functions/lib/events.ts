@@ -1,5 +1,6 @@
 // Pure helpers for netlify/functions/events.mts (Ticketmaster Discovery API v2). No network here.
 import places from './places.json';
+import { isRec, type Rec } from './http.ts';
 
 export const MAX_EVENTS = 10;
 export const MAX_WINDOW_DAYS = 7;
@@ -65,8 +66,7 @@ export function buildUrl(code: string, w: { from: string; to: string }, apikey: 
   return `https://app.ticketmaster.com/discovery/v2/events.json?${q.toString()}`;
 }
 
-type Rec = Record<string, unknown>;
-const rec = (v: unknown): Rec | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Rec) : null);
+const rec = (v: unknown): Rec | null => (isRec(v) ? v : null);
 const str = (v: unknown, max = 200): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
 /** Ticketmaster's own sites. Mirrored in src/app/events/events.ts. */
@@ -120,10 +120,4 @@ export function normalizeEvents(body: unknown, w: { from: string; to: string }, 
   const top = out.slice(0, MAX_EVENTS);
   top.sort((a, b) => (a.date + (a.time ?? '99')).localeCompare(b.date + (b.time ?? '99')));
   return { events: top, source: 'Ticketmaster', fetchedAt: new Date(nowMs).toISOString() };
-}
-
-/** TICKETMASTER_DAILY_LIMIT, default 500; junk falls back to the default. */
-export function eventsDailyLimit(raw: string | undefined): number {
-  const n = Number(raw);
-  return raw !== undefined && raw.trim() !== '' && Number.isInteger(n) && n >= 0 ? n : 500;
 }

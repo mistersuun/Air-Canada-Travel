@@ -9,6 +9,7 @@
  */
 import { DOCUMENT, Injectable, Injector, Signal, computed, inject, signal } from '@angular/core';
 import { getSchedulesMeta } from '../data/schedule-index';
+import { t, type MsgKey } from '../i18n/t';
 import { findDestination, findHub } from '../utils/airports';
 import type { Itinerary } from '../utils/connections';
 import { requestPersist } from '../files/quota';
@@ -22,13 +23,15 @@ import { ESTIMATED_FLIGHT, refsFromItinerary, sameRefs, sortLegs } from './engin
 import { OutcomePrompt, pendingOutcomePrompts } from './engine/today';
 import { backupFilename, exportBackup, mergeBackup, parseBackup } from './export';
 import { newId } from './ids';
+import { addDays, diffDays } from '../utils/time';
 import {
-  Alternate, FlightLeg, FlightLog, GroundLeg, GroundMode, GroundTimes, LegEnd, LegStatus, LoadNote, NewTrip,
-  FLIGHTLOG_KEY, Outcome, TRIPS_SCHEMA, calendarKey, OutcomeKind, SharedTripPreview, TRIPS_KEY, Trip, TripLeg, TripsFile, defaultTripName, instanceKey,
+  Alternate, FlightLeg, FlightLog, Place, Stop, GroundLeg, GroundMode, GroundTimes, LegEnd, LegStatus, LoadNote, NewTrip,
+  FLIGHTLOG_KEY, Outcome, TRIPS_SCHEMA, FLIGHTLOG_SCHEMA, schemaFor, calendarKey, OutcomeKind, SharedTripPreview, TRIPS_KEY, Trip, TripLeg, TripsFile, defaultTripName, instanceKey,
   isFinalStatus,
 } from './model';
+import { MAX_STOPS, withStop, withoutStop } from './stops';
 import { decodeTripShare, encodeTripShare, shareUrl } from './share-codec';
-import { TRIPS_STORAGE, clearCorrupt, loadCorrupt, loadFlightLog, loadTrips, saveFlightLog, saveTrips, sanitizeLeg } from './storage';
+import { TRIPS_STORAGE, clearCorrupt, loadCorrupt, loadFlightLog, loadTrips, storedTripsSchema, saveFlightLog, saveTrips, sanitizeLeg } from './storage';
 
 /** What swapLeg needs from a ground estimate (places/ground GroundEstimate fits). */
 export interface GroundEstimateLike {
@@ -40,9 +43,10 @@ export interface GroundEstimateLike {
 /** How long a download's object URL lives (iOS Safari reads it late). */
 const DOWNLOAD_REVOKE_MS = 10_000;
 
-export const UNSAVED_NOTICE = "Couldn't save on this phone. Export a backup now.";
+/** Messages are kept as keys, so a notice that stays on screen follows a language switch. */
+export const UNSAVED_NOTICE: MsgKey = 'trips.service.unsaved';
 
-export const BAD_DATA_NOTICE = 'The latest schedules look incomplete. Your plans are unchanged.';
+export const BAD_DATA_NOTICE: MsgKey = 'trips.service.badData';
 
 /** Leg status an outcome implies for the traveller's own leg. */
 export const OUTCOME_STATUS: Record<OutcomeKind, LegStatus> = {
@@ -58,8 +62,8 @@ export class TripsService {
   private readonly prefs = inject(PrefsService);
   private readonly profile = inject(ProfileService);
 
-  private readonly file = signal<TripsFile>({ schema: TRIPS_SCHEMA, trips: [] });
-  private readonly log = signal<FlightLog>({ schema: TRIPS_SCHEMA, notes: [], outcomes: [], dismissed: [] });
+  private readonly file = signal<TripsFile>({ schema: 1, trips: [] });
+  private readonly log = signal<FlightLog>({ schema: FLIGHTLOG_SCHEMA, notes: [], outcomes: [], dismissed: [] });
   private readonly readOnlyState = signal(false);
   /** Epoch ms of the last check (refreshes the time-based lists). */
   private readonly tick = signal(0);
@@ -88,17 +92,17 @@ export class TripsService {
   readonly pendingOutcomes: Signal<OutcomePrompt[]> = computed(() =>
     pendingOutcomePrompts(this.file().trips, this.log(), this.tick()));
   /** Set while the latest schedules look incomplete (see looksLikeBadData). */
-  readonly scheduleNotice = signal<string | null>(null);
+  readonly scheduleNotice = signal<MsgKey | null>(null);
   /** True while the latest change could not be written to this phone (storage full or blocked); the next change retries. */
   readonly unsaved: Signal<boolean> = computed(() => this.tripsUnsaved() || this.logUnsaved());
   /** The quiet "export a backup" reminder, or null (see backupNudge). */
   readonly backupReminder: Signal<string | null> = computed(() =>
     backupNudge(this.file().trips, this.log(), this.prefs.prefs().lastBackupAt, Math.max(this.tick(), this.now())));
   /** Which damaged copies a failed load kept (ac.trips.corrupt, ac.flightlog.corrupt), or null. */
-  readonly damaged: Signal<'trips' | 'flight log' | 'trips and flight log' | null> = computed(() => {
+  readonly damaged: Signal<'trips' | 'flight log' | 'trips and flight log' | null> = computed(() => { // i18n-ignore
     const c = this.corruptState();
-    if (c.trips !== null && c.log !== null) return 'trips and flight log';
-    return c.trips !== null ? 'trips' : c.log !== null ? 'flight log' : null;
+    if (c.trips !== null && c.log !== null) return 'trips and flight log'; // i18n-ignore
+    return c.trips !== null ? 'trips' : c.log !== null ? 'flight log' : null; // i18n-ignore
   });
 
   constructor() {
@@ -192,14 +196,90 @@ export class TripsService {
     if (idx < 0) return;
     const removed = trips[idx];
     this.setTrips(trips.filter(t => t.id !== id));
-    this.flash('Trip deleted', {
-      label: 'Undo',
+    this.flash(t('trips.service.tripDeleted'), {
+      label: t('trips.undo'),
       run: () => {
         if (this.trip(id)) return;
         const list = [...this.file().trips];
         list.splice(Math.min(idx, list.length), 0, removed);
         this.setTrips(list);
       },
+    });
+  }
+
+  // ── Editing ───────────────────────────────────────────────────────────────
+
+  rename(id: string, name: string): void {
+    const clean = name.trim().slice(0, 120);
+    if (!clean) return;
+    this.update(id, t => (t.name === clean ? t : { ...t, name: clean }));
+  }
+
+  /**
+   * Moves the outbound date. With `it` (the outbound flight found for the new
+   * day) the current outbound leg is swapped to it (old one Dropped, backups
+   * kept, ground legs from the gateway re-dated; the swap's Undo puts the old
+   * date back too); with null the legs stay as they are. The home-by date is
+   * pushed out only when it would fall before the new outbound date.
+   */
+  setOutboundDate(id: string, dateKey: string, it: Itinerary | null): void {
+    const before = this.trip(id);
+    if (!before || before.outboundDate === dateKey) return;
+    const leg = before.legs.find((l): l is FlightLeg => l.kind === 'flight' && l.role === 'outbound' && !isFinalStatus(l.status));
+    const firstStop = before.stops?.[0];
+    if (firstStop && dateKey >= firstStop.arriveDate) {
+      this.flash(t('trips.service.nextStopFirst', { place: firstStop.place.name, date: firstStop.arriveDate }));
+      return;
+    }
+    const stay = diffDays(before.outboundDate, before.homeBy.dateKey);
+    const move = (t: Trip): Trip => ({
+      ...t, outboundDate: dateKey,
+      homeBy: t.homeBy.dateKey < dateKey ? { ...t.homeBy, dateKey: addDays(dateKey, Math.max(0, stay)) } : t.homeBy,
+    });
+    if (it && leg) {
+      this.swapLeg(id, leg.id, it, null, { onUndo: () => this.update(id, t => ({ ...t, outboundDate: before.outboundDate, homeBy: before.homeBy })) });
+      this.update(id, move);
+      return;
+    }
+    this.update(id, move);
+    this.flash(t(leg ? 'trips.service.dateChangedNoFlight' : 'trips.service.dateChanged'));
+  }
+
+  /** Removes a leg (and the schedule changes waiting on it), with Undo. */
+  removeLeg(id: string, legId: string): void {
+    const trip = this.trip(id);
+    const leg = trip?.legs.find(l => l.id === legId);
+    if (!trip || !leg) return;
+    const dropped = trip.changes.filter(c => c.legId === legId);
+    this.update(id, t => ({ ...t, legs: t.legs.filter(l => l.id !== legId), changes: t.changes.filter(c => c.legId !== legId) }));
+    this.flash(t('trips.service.legRemoved'), {
+      label: t('trips.undo'),
+      run: () => this.update(id, t => t.legs.some(l => l.id === legId) ? t
+        : { ...t, legs: sortLegs([...t.legs, leg]), changes: [...t.changes, ...dropped] }),
+    });
+  }
+
+  /** Adds a stop after the goal (kept in arrival order). Returns its id ('' when the trip is unknown). */
+  addStop(id: string, place: Place, arriveDate: string): string {
+    const trip = this.trip(id);
+    if (!trip) return '';
+    if ((trip.stops?.length ?? 0) >= MAX_STOPS) {
+      this.flash(t('trips.service.maxStops', { n: MAX_STOPS }));
+      return '';
+    }
+    const stop: Stop = { id: newId(), place, arriveDate };
+    this.update(id, t => withStop(t, stop));
+    return stop.id;
+  }
+
+  /** Removes a later stop with Undo. Its legs stay: remove them on their own. */
+  removeStop(id: string, stopId: string): void {
+    const stop = this.trip(id)?.stops?.find(s => s.id === stopId);
+    if (!stop) return;
+    this.update(id, t => withoutStop(t, stopId));
+    this.flash(t('trips.service.stopRemoved', { place: stop.place.name }), {
+      label: t('trips.undo'),
+      run: () => this.update(id, t => t.stops?.some(s => s.id === stopId) ? t : withStop(t, stop)),
     });
   }
 
@@ -294,9 +374,9 @@ export class TripsService {
       return { ...t, legs: sortLegs([...legs, fresh]), changes: t.changes.filter(c => c.legId !== legId || c.state !== 'open') };
     });
 
-    const label = it.legs.map(l => l.flightNumber ?? 'an estimated leg').join(' + ');
-    this.flash(`Swapped to ${label} · Listing is still your step`, {
-      label: 'Undo',
+    const label = it.legs.map(l => l.flightNumber ?? t('trips.service.estimatedLeg')).join(' + ');
+    this.flash(t('trips.service.swapped', { label }), {
+      label: t('trips.undo'),
       run: () => {
         this.setTrips(this.file().trips.map(t => (t.id === id ? before : t)));
         opts.onUndo?.();
@@ -371,7 +451,7 @@ export class TripsService {
       this.scheduleNotice.set(BAD_DATA_NOTICE);
       if (this.badDataNoticeFor !== generatedAt) {
         this.badDataNoticeFor = generatedAt;
-        this.flash(BAD_DATA_NOTICE);
+        this.flash(t(BAD_DATA_NOTICE));
       }
       return;
     }
@@ -508,7 +588,7 @@ export class TripsService {
   }
 
   importBackup(text: string): { added: number; updated: number } | { error: string } {
-    if (this.readOnlyState()) return { error: 'Your trips were saved by a newer version of the app, so they cannot be changed here.' };
+    if (this.readOnlyState()) return { error: t('trips.service.newerVersion') };
     const parsed = parseBackup(text);
     if ('error' in parsed) return parsed;
     const merged = mergeBackup({ trips: this.file().trips, log: this.log() }, parsed);
@@ -596,7 +676,7 @@ export class TripsService {
   }
 
   private setTrips(trips: Trip[]): void {
-    const file: TripsFile = { schema: TRIPS_SCHEMA, trips };
+    const file: TripsFile = { schema: schemaFor(trips), trips };
     this.file.set(file);
     if (this.readOnlyState()) return;
     if (!this.persistAsked) {
@@ -614,10 +694,13 @@ export class TripsService {
   /** Writes what changed (plus whichever file failed last time); a failure raises `unsaved` (once, with a toast) and the next change tries again. */
   private persist(changed: 'trips' | 'log'): void {
     const was = this.unsaved();
-    if (changed === 'trips' || this.tripsUnsaved()) this.tripsUnsaved.set(!saveTrips(this.storage, this.file()));
+    // Another tab or a newer app may have written a newer schema since we loaded: never overwrite it.
+    if ((storedTripsSchema(this.storage) ?? 0) > TRIPS_SCHEMA) {
+      this.readOnlyState.set(true);
+    } else if (changed === 'trips' || this.tripsUnsaved()) this.tripsUnsaved.set(!saveTrips(this.storage, this.file()));
     if (changed === 'log' || this.logUnsaved()) this.logUnsaved.set(!saveFlightLog(this.storage, this.log()));
     if (this.unsaved() && !was) {
-      this.flash(UNSAVED_NOTICE, { label: 'Export', run: () => void this.downloadBackup() });
+      this.flash(t(UNSAVED_NOTICE), { label: t('trips.export'), run: () => void this.downloadBackup() });
     }
   }
 

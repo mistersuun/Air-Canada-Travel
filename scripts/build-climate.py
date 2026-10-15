@@ -317,6 +317,8 @@ def main(argv: list[str] | None = None) -> int:
     size = write_file(args.out, build_file(codes, total))
     print(f"wrote {args.out} ({size} bytes): {len(codes)}/{total} locations"
           + (" (partial: API limit reached)" if stopped else ""))
+    if stopped:
+        print(f"::warning::climate build stopped on the API limit with {len(codes)}/{total} locations; the cache keeps the rest for the next run")
     return 0
 
 

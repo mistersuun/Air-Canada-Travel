@@ -65,6 +65,14 @@ describe('polling', () => {
     await svc.refresh('AC834', 'YUL', DEP, 2 * 60_000);
     expect(calls.length).toBe(1);
   });
+  it('asks with upper-case ident and origin, so the CDN holds one entry per flight', async () => {
+    sessionStorage.clear();
+    const calls: string[] = [];
+    TestBed.configureTestingModule({ providers: [{ provide: STATUS_FETCH, useValue: async (u: string) => { calls.push(u); return { status: 200, body: status }; } }] });
+    await TestBed.inject(FlightStatusService).refresh(' ac834', 'yul', DEP);
+    expect(new URL(calls[0], 'http://x').searchParams.get('ident')).toBe('AC834');
+    expect(new URL(calls[0], 'http://x').searchParams.get('origin')).toBe('YUL');
+  });
 });
 
 describe('freshness and recover target', () => {

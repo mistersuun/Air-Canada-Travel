@@ -4,6 +4,7 @@
  * log changed since the last export, and then only when the last export is
  * old or a flight leaves soon.
  */
+import { t } from '../i18n/t';
 import { legWindow } from './engine/legs';
 import { FlightLog, Trip, isFinalStatus } from './model';
 
@@ -52,14 +53,14 @@ export function backupNudge(
   const changed = trips.filter(t => since(ms(t.updatedAt)));
   const departing = changed.some(t => !t.archived
     && upcomingDepartures(t).some(d => d >= nowMs && d - nowMs <= BACKUP_SOON_HOURS * HOUR_MS));
-  if (departing) return 'A flight leaves within 3 days and has changed since your last backup.';
+  if (departing) return t('trips.nudge.soon');
   const logTime = latestLog(log);
   const logChanged = logTime !== null && since(logTime);
   // Never backed up: only live trips (or a flight log with entries) are worth a reminder.
   const anyChange = last === null ? changed.some(t => live(t, nowMs)) || logChanged : changed.length > 0 || logChanged;
   if (!anyChange) return null;
-  if (last === null) return 'No backup yet. A copy outside this phone keeps your trips safe.';
+  if (last === null) return t('trips.nudge.none');
   const days = Math.floor((nowMs - last) / DAY_MS);
-  if (days > BACKUP_STALE_DAYS) return `Changes since your last backup, ${days} days ago.`;
+  if (days > BACKUP_STALE_DAYS) return t('trips.nudge.stale', { n: days });
   return null;
 }

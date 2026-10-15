@@ -12,6 +12,8 @@ const rnd = (n: number): Uint8Array => globalThis.crypto.getRandomValues(new Uin
 export const newGroupId = (): string => toBase64Url(rnd(16));
 /** 256-bit write token, base64url (43 chars). The server keeps only its sha256. */
 export const newWriteToken = (): string => toBase64Url(rnd(32));
+/** Proves who created the group (delete, longer expiry). Kept on the creator's device only, never put in a link. */
+export const newOwnerToken = (): string => toBase64Url(rnd(32));
 /** A short random member id, base64url (12 chars). */
 export const newMemberId = (): string => toBase64Url(rnd(9));
 
@@ -58,9 +60,6 @@ export interface GroupLink { id: string; key: string; write: string | null }
 export function buildGroupLink(origin: string, link: GroupLink): string {
   return `${origin.replace(/\/+$/, '')}/g/${link.id}#k=${link.key}${link.write ? `&w=${link.write}` : ''}`;
 }
-
-/** The read-only version of a link (drops the write token). */
-export const viewOnlyLink = (link: GroupLink): GroupLink => ({ ...link, write: null });
 
 /** Reads the key (and write token) from a fragment ('k=..&w=..' or '#k=..'); null when malformed. */
 export function parseGroupFragment(id: string, fragment: string | null | undefined): GroupLink | null {

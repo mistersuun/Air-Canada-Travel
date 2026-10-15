@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { t } from '../../i18n/t';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
 import { tripPath } from '../../ui/links';
@@ -8,8 +9,8 @@ import { comingUp } from '../engine/coming-up';
 import { emptyFlightLog } from '../model';
 
 /**
- * One line for the next trip leaving within a week: "Seville in 4 days · List
- * AC834 · 1 schedule change", linking to the trip. Nothing when none.
+ * One line for the next trip leaving within a week: "Seville in 4 days" over
+ * "Next: List AC834 · 1 schedule change", linking to the trip. Nothing when none.
  *
  *   <app-coming-up-banner />
  */
@@ -21,8 +22,11 @@ import { emptyFlightLog } from '../model';
   host: { '[class.is-on]': '!!item()' },
   template: `
     @if (item(); as c) {
-      <a class="cu ui-glass" [routerLink]="path(c.tripId)" data-coming-up [attr.aria-label]="'Coming up: ' + c.text">
-        <span class="cu__txt tn">{{ c.text }}</span>
+      <a class="cu ui-glass" [routerLink]="path(c.tripId)" data-coming-up [attr.aria-label]="t('trips.banner.aria', { text: c.text })">
+        <span class="cu__txt tn">
+          <span class="cu__h">{{ c.head }}</span>
+          @if (c.actions.length) { <span class="cu__a">{{ t('trips.banner.next', { actions: c.actions.join(' · ') }) }}</span> }
+        </span>
         <app-icon class="cu__chev" name="chevron-right" [size]="18" />
       </a>
     }
@@ -35,11 +39,14 @@ import { emptyFlightLog } from '../model';
       border-radius: var(--radius-card); color: var(--ink); box-shadow: var(--shadow);
     }
     .cu:active { transform: scale(.99); }
-    .cu__txt { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; }
+    .cu__txt { flex: 1; min-width: 0; display: grid; gap: 1px; }
+    .cu__h { font-size: 14px; font-weight: 600; }
+    .cu__a { font-size: 12.5px; font-weight: 500; color: var(--ink-2); overflow-wrap: anywhere; }
     .cu__chev { flex: none; color: var(--ink-3); }
   `],
 })
 export class ComingUpBannerComponent {
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
 

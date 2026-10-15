@@ -6,6 +6,7 @@ import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtur
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
+import { setLocale } from '../../i18n/locale';
 import { CalendarPage } from './calendar.page';
 
 /** Wed Oct 7 2026, 08:00 in Montréal. */
@@ -53,6 +54,8 @@ describe('CalendarPage', () => {
     expect([...lists[0].querySelectorAll('app-dest-row')].map(r => r.querySelector('small')?.textContent)).toEqual(['LHR']);
     expect(lists[0].querySelector('a')?.getAttribute('href')).toContain('/calendar/LHR');
     expect([...lists[1].querySelectorAll('small')].map(s => s.textContent)).toEqual(['ATH']);
+    expect([...lists[1].querySelectorAll('.az__h')].map(h => h.textContent)).toEqual(['A']);   // grouped by letter
+    expect(el.querySelector('[data-az]')).toBeNull();                                          // jump row only on the long list
     cmp.query.set('zzz');
     await stable();
     expect(el.querySelector('.ch__none')?.textContent).toContain('zzz');
@@ -178,5 +181,36 @@ describe('CalendarPage', () => {
     expect(el.querySelector('.lg__b--c')).not.toBeNull();
     expect(day('2026-10-08').querySelector('.bar i.cn')).not.toBeNull();
     expect(day('2026-10-08').getAttribute('aria-label')).toContain('connection only');
+  });
+});
+
+describe('CalendarPage in French', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    setLocale('en');
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  it('shows the chooser in French', async () => {
+    configure({ hub: 'YUL', favourites: ['LHR'] });
+    setLocale('fr');
+    const { el, text } = await render();
+    expect(el.querySelector('h1')?.textContent).toBe('Calendrier');
+    expect(el.querySelector<HTMLInputElement>('[data-search-input]')!.placeholder).toBe('Rechercher des destinations');
+    expect(text('.ch__s')).toContain('Choisissez une destination');
+    expect(text('.ch__l')).toMatch(/prochain/);
+    expect(text('.ch__l')).not.toMatch(/\bnext\b/);
+  });
+
+  it('labels the picker in French: fields, day cells and the select button', async () => {
+    configure();
+    setLocale('fr');
+    const { el, text } = await render({ code: 'LHR', dep: '2026-10-08', ret: '2026-10-15' });
+    expect(text('.fld:nth-child(1) .fld__l')).toBe('Départ');
+    expect(text('.fld:nth-child(2) .fld__l')).toBe('Retour');
+    expect(text('.ft .ui-btn')).toMatch(/^Choisir .*7 nuits$/);
+    expect(el.querySelector('[data-key="2026-10-08"]')!.getAttribute('aria-label')).toMatch(/^jeudi 8 octobre, \d+ vols? de retour$/);
+    expect(text('.lg')).toContain('plus de départs');
   });
 });

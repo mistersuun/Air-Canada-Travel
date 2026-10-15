@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, InjectionToken, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { t } from '../i18n/t';
 import { HUBS } from '../data/destinations';
 import { AppStateService } from '../state/app-state.service';
 import { formatKm, nearestTo } from '../utils/geo';
@@ -30,13 +31,13 @@ export const LOCATE_MAX_AGE_MS = 10 * 60_000;
   host: { '[class.is-lg]': "size() === 'lg'" },
   template: `
     <button type="button" class="picker ui-glass" (click)="open.set(true)" aria-haspopup="dialog"
-            [attr.aria-label]="'Home airport: ' + name() + ' (' + hub() + '). Change'">
+            [attr.aria-label]="t('ui.hub.aria', { name: name(), code: hub() })">
       <span class="code">{{ hub() }}</span>{{ name() }}@if (size() === 'lg') {<span class="caret" aria-hidden="true">▾</span>}
     </button>
-    <app-glass-sheet title="Flying from" [(open)]="open">
+    <app-glass-sheet [title]="t('ui.hub.flyingFrom')" [(open)]="open">
       @if (canLocate) {
         <button type="button" class="near" data-nearest [disabled]="locating()" (click)="locate()">
-          {{ locating() ? 'Finding nearest hub…' : 'Nearest to me' }}
+          {{ locating() ? t('ui.hub.finding') : t('ui.hub.nearest') }}
         </button>
         <p class="near__msg ui-sub" role="status" data-nearest-msg>{{ message() }}</p>
       }
@@ -87,6 +88,7 @@ export const LOCATE_MAX_AGE_MS = 10 * 60_000;
   `],
 })
 export class HubPickerComponent {
+  protected readonly t = t;
   readonly hub = input.required<string>();
   readonly size = input<'lg' | 'sm'>('sm');
   readonly hubChange = output<string>();
@@ -136,14 +138,14 @@ export class HubPickerComponent {
         if (!near) return;
         this.open.set(false);
         if (near.place.code !== this.hub()) this.hubChange.emit(near.place.code);
-        this.state.flash(`Nearest hub: ${near.place.code} · ${formatKm(near.km)}`);
+        this.state.flash(t('ui.hub.nearestToast', { code: near.place.code, km: formatKm(near.km) }));
       },
       err => {
         if (mine !== this.request) return;
         this.locating.set(false);
-        this.message.set(err.code === 1 ? 'Location is off for this site, so pick a hub from the list.'
-          : err.code === 3 ? 'Location took too long. Pick a hub from the list.'
-          : 'Location is not available right now. Pick a hub from the list.');
+        this.message.set(err.code === 1 ? t('ui.hub.locOff')
+          : err.code === 3 ? t('ui.hub.locTimeout')
+          : t('ui.hub.locUnavailable'));
       },
       { enableHighAccuracy: false, timeout: LOCATE_TIMEOUT_MS, maximumAge: LOCATE_MAX_AGE_MS },
     );

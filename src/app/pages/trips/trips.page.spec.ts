@@ -10,6 +10,7 @@ import { MemoryStorage } from '../../state/testing';
 import { TRIPS_KEY, TripsFile } from '../../trips/model';
 import { TRIPS_STORAGE } from '../../trips/storage';
 import { SEVILLE_META, SEVILLE_ROUTES, SEVILLE_TRIPS_FILE, sevilleTrip } from '../../trips/testing/seville-fixture';
+import { setLocale } from '../../i18n/locale';
 import { toUtcMs } from '../../utils/time';
 import { TripsPage } from './trips.page';
 
@@ -38,7 +39,22 @@ async function render(file: TripsFile | null, favourites: string[] = ['MAD', 'LI
 
 describe('TripsPage', () => {
   beforeEach(() => setScheduleSource(SEVILLE_ROUTES, SEVILLE_META));
-  afterEach(() => resetScheduleSource());
+  afterEach(() => {
+    resetScheduleSource();
+    setLocale('en');
+  });
+
+  it('is in French when the UI is French', async () => {
+    setLocale('fr');
+    const { el, text, all } = await render(SEVILLE_TRIPS_FILE);
+    expect(text('h1')).toBe('Voyages');
+    expect(text('[data-new-trip]')).toBe('+ Nouveau voyage');
+    expect(text('[data-countdown]')).toBe('Dans 7 jours');
+    expect(all('.tc__chip')[0]).toContain('2 voyageurs');
+    expect(all('.tl__top app-leg-status-tag, .tl__top app-provenance-tag').slice(0, 2)).toEqual(['Inscrit', 'Estimé']);
+    expect(text('[data-return-warning]')).toContain('Segment de retour pas encore inscrit');
+    expect(el.textContent).not.toMatch(/Return leg|Starred|Past trips/);
+  });
 
   it('shows the Seville trip as the g2 timeline card', async () => {
     const { el, text, all } = await render(SEVILLE_TRIPS_FILE);

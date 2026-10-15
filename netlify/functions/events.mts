@@ -7,20 +7,16 @@
 // on code|from|to), each IP gets ~10 cache misses per 10 minutes, and a global daily budget
 // (TICKETMASTER_DAILY_LIMIT, default 500) is counted in Netlify Blobs with conditional writes.
 import { getStore } from '@netlify/blobs';
-import { buildUrl, eventsDailyLimit, normalizeEvents, validateCode, validateWindow } from './lib/events.ts';
-import { makeBudget, makeLimiter } from './lib/flight-status.ts';
+import { buildUrl, normalizeEvents, validateCode, validateWindow } from './lib/events.ts';
+import { json as jsonResponse } from './lib/http.ts';
+import { dailyLimit, makeBudget, makeLimiter } from './lib/limits.ts';
 
 const allow = makeLimiter(10, 10 * 60_000);
 const NO_STORE = 'no-store';
 const VARY = 'query=code|from|to';
 
 function json(body: unknown, status: number, cdn: string | null, browser = NO_STORE): Response {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': browser };
-  if (cdn) {
-    headers['Netlify-CDN-Cache-Control'] = cdn;
-    headers['Netlify-Vary'] = VARY;
-  }
-  return new Response(JSON.stringify(body), { status, headers });
+  return jsonResponse(body, status, { 'Cache-Control': browser, ...(cdn ? { 'Netlify-CDN-Cache-Control': cdn, 'Netlify-Vary': VARY } : {}) });
 }
 
 export default async (req: Request, context: { ip?: string }): Promise<Response> => {
@@ -40,7 +36,7 @@ export default async (req: Request, context: { ip?: string }): Promise<Response>
 
   let spend: (nowMs: number, calls?: number) => Promise<boolean>;
   try {
-    spend = makeBudget(getStore({ name: 'ticketmaster-budget', consistency: 'strong' }), eventsDailyLimit(process.env['TICKETMASTER_DAILY_LIMIT']));
+    spend = makeBudget(getStore({ name: 'ticketmaster-budget', consistency: 'strong' }), dailyLimit(process.env['TICKETMASTER_DAILY_LIMIT'], 500));
   } catch {
     return json({ error: 'budget' }, 503, null);
   }

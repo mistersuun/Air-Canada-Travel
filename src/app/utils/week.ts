@@ -7,6 +7,7 @@
  * airport's IANA zone, and arrDayOffset (−1..+2) is inferred from them when
  * the data has none (critique 5, 15).
  */
+import { t } from '../i18n/t';
 import {
   ScheduleRecord,
   getCoverage,
@@ -17,7 +18,6 @@ import {
 import { airportTz, isHub } from './airports';
 import {
   MINUTE_MS,
-  WEEKDAY_SHORT,
   addDays,
   diffDays,
   formatKey,
@@ -315,21 +315,6 @@ export function getFlightsForWeek(origin: string, dest: string, weekStart: strin
   return weekKeys(toKey(weekStart)).map(k => toDayFlight(origin, dest, k));
 }
 
-/** The DayFlight for one date (all flights that day). */
-export function getFlightForDay(origin: string, dest: string, date: string | Date): DayFlight {
-  return toDayFlight(origin, dest, toKey(date));
-}
-
-export function routeHasFlightsInWeek(origin: string, dest: string, weekStart: string | Date): boolean {
-  const start = toKey(weekStart);
-  for (let i = 0; i < 7; i++) if (flightsOn(origin, dest, addDays(start, i)).length) return true;
-  return false;
-}
-
-export function routeHasFlightOnDay(origin: string, dest: string, date: string | Date): boolean {
-  return flightsOn(origin, dest, toKey(date)).length > 0;
-}
-
 /**
  * First date ≥ `fromKey` (> when inclusive is false) with a direct flight,
  * bounded by the published coverage. Null when none is published.
@@ -364,19 +349,26 @@ export function countFlyingDays(origin: string, dest: string, fromKey: string, t
 
 // ── Legacy Date helpers and labels ──────────────────────────────────────────
 
-/** Returns the Monday (local midnight) of the week containing `date`. Does not mutate input. */
-export function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const jsDay = d.getDay();
-  d.setDate(d.getDate() - (jsDay === 0 ? 6 : jsDay - 1));
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 /**
  * 'Jun 8 – 14, 2026', 'Sep 28 – Oct 4, 2026' across months, and
  * 'Dec 28, 2026 – Jan 3, 2027' across years.
  */
+/**
+ * 'Oct 1 – 7' / '1–7 oct.' within a month, 'Sep 28 – Oct 4' / '28 sept. – 4 oct.'
+ * across months; the week must not span two years.
+ */
+export function weekRangeInYear(weekStart: string): string {
+  const end = addDays(weekStart, 6);
+  const md = { month: 'short', day: 'numeric' } as const;
+  const parts = {
+    start: formatKey(weekStart, md),
+    end: formatKey(end, md),
+    startDay: formatKey(weekStart, { day: 'numeric' }),
+    endDay: formatKey(end, { day: 'numeric' }),
+  };
+  return t(weekStart.slice(5, 7) === end.slice(5, 7) ? 'format.range.sameMonth' : 'format.range.twoMonths', parts);
+}
+
 export function formatWeekLabel(weekStart: string | Date): string {
   const start = toKey(weekStart);
   const end = addDays(start, 6);
@@ -385,24 +377,6 @@ export function formatWeekLabel(weekStart: string | Date): string {
   if (sy !== ey) {
     return `${formatKey(start, { month: 'short', day: 'numeric', year: 'numeric' })} – ${formatKey(end, { month: 'short', day: 'numeric', year: 'numeric' })}`;
   }
-  const startStr = formatKey(start, { month: 'short', day: 'numeric' });
-  const endStr = start.slice(5, 7) === end.slice(5, 7)
-    ? formatKey(end, { day: 'numeric' })
-    : formatKey(end, { month: 'short', day: 'numeric' });
-  return `${startStr} – ${endStr}, ${ey}`;
+  return t('ui.weekLabel', { range: weekRangeInYear(start), year: ey });
 }
 
-/** 'Jun 8' — week strip prev/next arrows. */
-export function formatWeekNavLabel(weekStart: string | Date): string {
-  return formatKey(toKey(weekStart), { month: 'short', day: 'numeric' });
-}
-
-/** 'Tue, Jun 9' — flight rows. */
-export function formatDayLabel(date: string | Date): string {
-  return formatKey(toKey(date), { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-/** Short weekday name for a date key ('Mon'). */
-export function weekdayShort(key: string): string {
-  return WEEKDAY_SHORT[weekdayIndex(key)];
-}

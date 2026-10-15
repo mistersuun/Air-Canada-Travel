@@ -2,12 +2,13 @@ import { Injectable, InjectionToken, inject, signal } from '@angular/core';
 import type { Place } from '../trips/model';
 import { CITIES_URL, CityHit, CityIndex, cityHit, decodeCities, searchCities } from './city-index';
 import { parsePlaceId, placeFromDestination, placeFromHit } from './place';
+import { FETCH_TIMEOUT_BIG_MS, fetchWithTimeout } from '../utils/fetch-timeout';
 
 /** Fetches cities.json; specs replace it. */
 export const CITIES_FETCH = new InjectionToken<() => Promise<unknown>>('CITIES_FETCH', {
   providedIn: 'root',
   factory: () => async () => {
-    const res = await fetch(CITIES_URL);
+    const res = await fetchWithTimeout(CITIES_URL, {}, FETCH_TIMEOUT_BIG_MS);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   },

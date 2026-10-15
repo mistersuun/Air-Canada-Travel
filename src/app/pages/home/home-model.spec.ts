@@ -6,9 +6,10 @@ import type { RouteEntry } from '../../utils/routes';
 import { toUtcMs } from '../../utils/time';
 import {
   coverageStatus, departsToday, editorsPicks, entryHasFlight, flightNumberQuery, focusDayIndex, nonstopByFrequency,
-  placeRows, reachDep, rowMeta, seasonEnd, seasonEvents, seasonMeta, withFlightMatches,
+  placeRows, reachDep, rowMeta, seasonEnd, seasonEvent, seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
 import type { CityHit } from '../../places/city-index';
+import { setLocale } from '../../i18n/locale';
 import { SEVILLE_PLACE } from '../../trips/testing/seville-fixture';
 
 const WEEK = '2026-10-05';
@@ -152,6 +153,11 @@ describe('home-model', () => {
       expect(seasonEvents('YUL', '2026-10-01')).toEqual([]);
     });
 
+    it('seasonEvent gives the event of one route, or null', () => {
+      expect(seasonEvent('YUL', 'KEF', '2026-10-01')?.label).toBe('Ends Oct 22');
+      expect(seasonEvent('YUL', 'CUN', '2026-10-01')).toBeNull();
+    });
+
     it('seasonMeta shows the next departure', () => {
       const kef = seasonEvents('YUL', '2026-10-01').find(e => e.code === 'KEF')!;
       expect(seasonMeta(kef)).toBe('22:55 → 07:55⁺¹ · 5h · AC912');
@@ -164,6 +170,18 @@ describe('home-model', () => {
     expect(seasonEnd('Mar – Nov')).toBe('Nov');
     expect(seasonEnd('Nov – Apr, Jul')).toBe('Jul');
     expect(seasonEnd(null)).toBeNull();
+    expect(seasonEnd('mars – nov.')).toBe('nov.');
+    expect(seasonEnd('déc. – janv., juin – août')).toBe('août');
+  });
+
+  it('builds its text in French when the UI is French', () => {
+    setLocale('fr');
+    try {
+      const hit = { place: { id: 'gn-1', name: 'Séville', admin1: 'Andalousie', country: 'Espagne' } } as unknown as CityHit;
+      expect(placeRows([hit], 'Sév')[0].sub).toBe("Andalousie, Espagne · Trouver comment s'y rendre");
+    } finally {
+      setLocale('en');
+    }
   });
 
   it('coverageStatus', () => {
@@ -191,15 +209,15 @@ describe('placeRows / reachDep', () => {
 
   it('drops cities AC serves and labels the rest "Not on AC\'s network"', () => {
     const rows = placeRows([hit({}), hit({ id: 'gn-2267057', name: 'Lisbon', country: 'Portugal' }, 'LIS')], 'sev');
-    expect(rows).toEqual([{ id: 'gn-2510911', name: 'Seville', sub: "Spain · Not in our schedule data" }]);
+    expect(rows).toEqual([{ id: 'gn-2510911', name: 'Seville', sub: "Andalusia, Spain · Find ways to get there" }]);
   });
 
-  it('adds the region when two places share a name, and needs 3 characters', () => {
+  it('always adds the region, and needs 3 characters', () => {
     const rows = placeRows([
       hit({ id: 'gn-1', name: 'Roseville', country: 'United States', admin1: 'California' }),
       hit({ id: 'gn-2', name: 'Roseville', country: 'United States', admin1: 'Michigan' }),
     ], 'rose');
-    expect(rows.map(r => r.sub)).toEqual(["California, United States · Not in our schedule data", "Michigan, United States · Not in our schedule data"]);
+    expect(rows.map(r => r.sub)).toEqual(["California, United States · Find ways to get there", "Michigan, United States · Find ways to get there"]);
     expect(placeRows([hit({})], 'se')).toEqual([]);
   });
 

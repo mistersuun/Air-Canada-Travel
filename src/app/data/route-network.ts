@@ -17,6 +17,9 @@
  * app still starts), and setRouteNetworkSource()/resetRouteNetworkSource()
  * for specs.
  */
+import { FETCH_TIMEOUT_BIG_MS, fetchWithTimeout } from '../utils/fetch-timeout';
+import { t } from '../i18n/t';
+import { formatKey } from '../utils/time';
 import { registerExtraAirports } from '../utils/airports';
 import { getSchedulesForRoute } from './schedule-index';
 
@@ -154,7 +157,7 @@ export function installRouteNetwork(file: RouteNetworkFile): void {
  */
 export async function loadRouteNetwork(
   url: string = ROUTE_NETWORK_URL,
-  fetchFn: typeof fetch = (...a) => fetch(...a),
+  fetchFn: typeof fetch = (u, init) => fetchWithTimeout(u, init, FETCH_TIMEOUT_BIG_MS),
 ): Promise<boolean> {
   try {
     const res = await fetchFn(url);
@@ -162,7 +165,7 @@ export async function loadRouteNetwork(
     installRouteNetwork((await res.json()) as RouteNetworkFile);
     return true;
   } catch (err) {
-    console.error(`[route-network] could not load ${url}:`, err);
+    console.error(`[route-network] could not load ${url}:`, err); // i18n-ignore
     return false;
   }
 }
@@ -182,21 +185,6 @@ export function isRouteOnly(a: string | null | undefined, b: string | null | und
   return getSchedulesForRoute(a!, b!).length === 0 && getSchedulesForRoute(b!, a!).length === 0;
 }
 
-/** Airports the network links to `origin`, sorted. */
-export function networkDestinations(origin: string): string[] {
-  const out: string[] = [];
-  for (const key of current.routes.keys()) {
-    const [a, b] = key.split('-');
-    if (a === origin) out.push(b);
-    else if (b === origin) out.push(a);
-  }
-  return out.sort();
-}
-
-export function routeNetworkMeta(): RouteNetworkMeta | null {
-  return current.meta;
-}
-
 /** Licence and attribution of the loaded file (empty strings when none is loaded). */
 export function routeNetworkCredit(): { license: string; attribution: string; builtAt: string | null } {
   return { license: current.license, attribution: current.attribution, builtAt: current.meta?.builtAt ?? null };
@@ -207,26 +195,30 @@ export function routeNetworkLoaded(): boolean {
   return current.routes.size > 0;
 }
 
-/** The sentence the UI shows for a route-only pair. */
-export const ROUTE_ONLY_TEXT = 'Flies this route · times not in our data';
-/** The same, mid-sentence ('USA · flies this route · times not in our data'). */
-export const ROUTE_ONLY_NOTE = 'flies this route · times not in our data';
+/** The English sentence for a route-only pair (an identity, not for display: use routeOnlyText()). */
+export const ROUTE_ONLY_TEXT = 'Flies this route · times not in our data'; // i18n-ignore
+/** The same, mid-sentence (an identity: networkNoteFor compares against it; display with routeOnlyNote()). */
+export const ROUTE_ONLY_NOTE = 'flies this route · times not in our data'; // i18n-ignore
 
-/** True when the network lists every segment (origin → dest) of a flight. */
-export function networkListsAll(segments: readonly { origin: string; dest: string }[]): boolean {
-  return segments.length > 0 && segments.every(s => !!routeFact(s.origin, s.dest));
+/** The sentence the UI shows for a route-only pair, in the UI language. */
+export function routeOnlyText(): string {
+  return t('dest.routeOnly');
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** The same, mid-sentence ('USA · flies this route · times not in our data'), in the UI language. */
+export function routeOnlyNote(): string {
+  return t('dest.routeOnlyNote');
+}
 
+/** 'Jun 16' / '16 juin'. */
 function shortDate(iso: string): string {
-  const [, m, d] = iso.split('-').map(Number);
-  return `${MONTHS[m - 1]} ${d}`;
+  return formatKey(iso, { month: 'short', day: 'numeric' });
 }
 
-/** 'Jun 16', or 'Jun 16, 2027' when the year differs from `on`'s. */
+/** 'Jun 16' / '16 juin', or 'Jun 16, 2027' when the year differs from `on`'s. */
 function dateFrom(iso: string, on: string): string {
-  return iso.slice(0, 4) === on.slice(0, 4) ? shortDate(iso) : `${shortDate(iso)}, ${iso.slice(0, 4)}`;
+  const md = { month: 'short', day: 'numeric' } as const;
+  return iso.slice(0, 4) === on.slice(0, 4) ? formatKey(iso, md) : formatKey(iso, { ...md, year: 'numeric' });
 }
 
 /**
@@ -238,9 +230,9 @@ function dateFrom(iso: string, on: string): string {
  */
 export function routeFactNoteOn(fact: RouteFact, on: string): string | null {
   if (fact.ends && on > fact.ends) return null;
-  if (fact.begins && on < fact.begins) return `route starts ${dateFrom(fact.begins, on)}`;
-  if (fact.resumes && on < fact.resumes) return `paused until ${dateFrom(fact.resumes, on)}`;
-  return ROUTE_ONLY_NOTE;
+  if (fact.begins && on < fact.begins) return t('dest.routeStarts', { date: dateFrom(fact.begins, on) });
+  if (fact.resumes && on < fact.resumes) return t('dest.routePaused', { date: dateFrom(fact.resumes, on) });
+  return routeOnlyNote();
 }
 
 /**
@@ -260,13 +252,14 @@ export function routeOnlyNoteOn(a: string | null | undefined, b: string | null |
  */
 export function networkNoteFor(segments: readonly { origin: string; dest: string; dateKey: string }[]): string | null {
   if (!segments.length) return null;
-  let note: string = ROUTE_ONLY_NOTE;
+  let note = routeOnlyNote();
+  const flying = note;
   for (const s of segments) {
     const fact = routeFact(s.origin, s.dest);
     if (!fact) return null;
     const n = routeFactNoteOn(fact, s.dateKey);
     if (n === null) return null;
-    if (note === ROUTE_ONLY_NOTE && n !== ROUTE_ONLY_NOTE) note = n;
+    if (note === flying && n !== flying) note = n;
   }
   return note;
 }
@@ -286,9 +279,9 @@ export function routeFactDetail(fact: RouteFact | null): string {
   if (fact.brands.length === 1) {
     parts.push({ mainline: 'Air Canada', express: 'Air Canada Express', rouge: 'Air Canada Rouge' }[fact.brands[0]]);
   }
-  if (fact.seasonal) parts.push('Seasonal');
-  if (fact.begins) parts.push(`Starts ${shortDate(fact.begins)}`);
-  else if (fact.resumes) parts.push(`Resumes ${shortDate(fact.resumes)}`);
-  if (fact.ends) parts.push(`Ends ${shortDate(fact.ends)}`);
+  if (fact.seasonal) parts.push(t('dest.detail.seasonal'));
+  if (fact.begins) parts.push(t('dest.detail.starts', { date: shortDate(fact.begins) }));
+  else if (fact.resumes) parts.push(t('dest.detail.resumes', { date: shortDate(fact.resumes) }));
+  if (fact.ends) parts.push(t('dest.detail.ends', { date: shortDate(fact.ends) }));
   return parts.join(' · ');
 }

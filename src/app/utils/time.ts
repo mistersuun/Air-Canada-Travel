@@ -10,12 +10,18 @@
  * - Instants are epoch milliseconds (UTC).
  *
  * No date library: zone offsets come from Intl.DateTimeFormat and are memoised.
+ * Display formats follow the UI language (i18n/locale.ts, docs/i18n.md).
  */
+import { intlLocale, locale } from '../i18n/locale';
+import { t } from '../i18n/t';
 
 export const MINUTE_MS = 60_000;
 export const DAY_MINUTES = 1440;
 
-/** Monday-first weekday names, index 0 = Monday. */
+/**
+ * Monday-first English weekday names, index 0 = Monday. For display use
+ * weekdayShort(i) / weekdayLong(i), which follow the UI language.
+ */
 export const WEEKDAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 export const WEEKDAY_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 
@@ -203,6 +209,19 @@ export const TZ_OVERRIDES: Readonly<Record<string, { fromUtc: number; offsetMin:
   'Africa/Casablanca': { fromUtc: Date.UTC(2026, 8, 20, 1), offsetMin: 0 },
 };
 
+/**
+ * Zone label for a zone whose rules TZ_OVERRIDES replaces at `at` ('GMT-7', 'GMT'), else null.
+ * Intl, with older zone data, would still say 'PST' or 'CST' there.
+ */
+export function overriddenZoneLabel(tz: string, at: number): string | null {
+  const fixed = TZ_OVERRIDES[tz];
+  if (!fixed || at < fixed.fromUtc) return null;
+  const abs = Math.abs(fixed.offsetMin);
+  if (!abs) return 'GMT';
+  const m = abs % 60;
+  return `GMT${fixed.offsetMin < 0 ? '-' : '+'}${Math.floor(abs / 60)}${m ? ':' + String(m).padStart(2, '0') : ''}`;
+}
+
 function rawOffsetAt(tz: string, at: number): number {
   const fixed = TZ_OVERRIDES[tz];
   if (fixed && at >= fixed.fromUtc) return fixed.offsetMin;
@@ -271,14 +290,14 @@ export function todayKey(tz?: string, now: number = Date.now()): string {
 
 // ── Formatting ──────────────────────────────────────────────────────────────
 
-/** '7h 05m', '45m', '12h'. */
+/** '7h 05m', '45m', '12h' (French '7 h 05', '45 min', '12 h'). */
 export function formatDuration(minutes: number): string {
   const total = Math.max(0, Math.round(minutes));
   const h = Math.floor(total / 60);
   const m = total % 60;
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${pad2(m)}m`;
+  if (h === 0) return t('format.dur.m', { m });
+  if (m === 0) return t('format.dur.h', { h });
+  return t('format.dur.hmm', { h, mm: pad2(m) });
 }
 
 /** '+1', '−1' or '' for an arrival day offset. */
@@ -287,19 +306,74 @@ export function formatDayOffset(offset: number): string {
   return offset > 0 ? `+${offset}` : `−${-offset}`;
 }
 
-/** 'HH:MM' → '9:05 PM' when `format` is '12h', unchanged for '24h'. */
+/**
+ * 'HH:MM' → '9:05 PM' ('9:05 p.m.' in French) when `format` is '12h',
+ * unchanged for '24h'. French keeps the colon too: '21:05' is the schedule
+ * and boarding-pass form, accepted in tables and timetables (docs/i18n.md).
+ */
 export function formatClock(hhmm: string, format: '12h' | '24h' = '24h'): string {
   if (format === '24h') return hhmm;
   const min = hhmmToMin(hhmm);
   if (Number.isNaN(min)) return hhmm;
   const h = Math.floor(min / 60);
-  const suffix = h < 12 ? 'AM' : 'PM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${pad2(min % 60)} ${suffix}`;
+  return t(h < 12 ? 'format.clock.am' : 'format.clock.pm', { h: h12, mm: pad2(min % 60) });
 }
 
-/** Formats a date key with Intl (calendar date, no zone shift). */
-export function formatKey(key: string, opts: Intl.DateTimeFormatOptions, locale = 'en-US'): string {
+/** Intl.DateTimeFormat instances by language tag and options (building one is the costly part). */
+const DATE_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+/** Formats a date key with Intl (calendar date, no zone shift), in the UI language unless an Intl `tag` is given. */
+export function formatKey(key: string, opts: Intl.DateTimeFormatOptions, tag = intlLocale()): string {
   const [y, m, d] = key.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString(locale, { ...opts, timeZone: 'UTC' });
+  const id = `${tag}|${JSON.stringify(opts)}`;
+  let fmt = DATE_FORMATS.get(id);
+  if (!fmt) DATE_FORMATS.set(id, fmt = new Intl.DateTimeFormat(tag, { ...opts, timeZone: 'UTC' }));
+  return fmt.format(new Date(Date.UTC(y, m - 1, d, 12)));
+}
+
+/** A known Monday, for weekday names. */
+const A_MONDAY = '2024-01-01';
+const weekdayNames = new Map<string, readonly string[]>();
+
+function weekdayName(i: number, width: 'short' | 'long'): string {
+  const l = locale();
+  if (l === 'en') return (width === 'short' ? WEEKDAY_SHORT : WEEKDAY_LONG)[i];
+  const id = `${l}:${width}`;
+  let names = weekdayNames.get(id);
+  if (!names) {
+    names = Array.from({ length: 7 }, (_, d) => formatKey(addDays(A_MONDAY, d), { weekday: width }));
+    weekdayNames.set(id, names);
+  }
+  return names[i];
+}
+
+/** 'Mon' / 'lun.' for a Monday-first index (0 = Monday), in the UI language. */
+export function weekdayShort(i: number): string {
+  return weekdayName(i, 'short');
+}
+
+/** 'Monday' / 'lundi' for a Monday-first index, in the UI language. */
+export function weekdayLong(i: number): string {
+  return weekdayName(i, 'long');
+}
+
+const MONTH_SHORT_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+const monthNames = new Map<string, readonly string[]>();
+
+/** 'Nov' / 'nov.' for a month index (0 = January), in the UI language. */
+export function monthShort(i: number): string {
+  const l = locale();
+  if (l === 'en') return MONTH_SHORT_EN[i];
+  let names = monthNames.get(l);
+  if (!names) {
+    names = Array.from({ length: 12 }, (_, m) => formatKey(`2024-${pad2(m + 1)}-15`, { month: 'short' }));
+    monthNames.set(l, names);
+  }
+  return names[i];
+}
+
+/** ['M', 'T', 'W', 'T', 'F', 'S', 'S'] / ['L', 'M', 'M', 'J', 'V', 'S', 'D'], Monday first. */
+export function weekdayLetters(): string[] {
+  return [...t('data.weekdayLetters')];
 }

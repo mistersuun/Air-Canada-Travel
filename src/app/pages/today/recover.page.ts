@@ -12,6 +12,7 @@ import { DestPhotoComponent } from '../../ui/dest-photo.component';
 import { findDestination } from '../../utils/airports';
 import { regionVar } from '../../utils/region-color';
 import { tripPath, tripQuery, tripUrl, tripsPath } from '../../ui/links';
+import { t } from '../../i18n/t';
 import { type RecoverRow, recoverView } from './today-model';
 
 /**
@@ -31,21 +32,21 @@ import { type RecoverRow, recoverView } from './today-model';
     <div class="ui-page ui-page--bare rc">
       @if (view(); as v) {
         <header class="rc__head">
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('today.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
           <div class="rc__title">
-            <h1 class="ui-h3">Still reachable</h1>
+            <h1 class="ui-h3">{{ t('today.recover.title') }}</h1>
             <p class="rc__sub tn">{{ v.subtitle }}</p>
           </div>
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Settings (connection times)" (click)="state.openSettings()">
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('today.recover.settings')" (click)="state.openSettings()">
             <app-icon name="gear" [size]="18" />
           </button>
         </header>
 
         <div class="ui-card rc__goal" data-goal>
-          Goal <b>{{ v.goal }}</b> · home by <b class="tn">{{ v.homeBy }}</b>@if (v.legNote) { · {{ v.legNote }}}
+          {{ goalParts().before }}<b>{{ v.goal }}</b>{{ goalParts().middle }}<b class="tn">{{ v.homeBy }}</b>{{ goalParts().after }}@if (v.legNote) { · {{ v.legNote }}}
         </div>
 
-        <h2 class="ui-h3 rc__h">Tonight</h2>
+        <h2 class="ui-h3 rc__h">{{ t('today.recover.tonight') }}</h2>
         @if (v.tonight.length) {
           <div class="ui-card rc__list" data-group="tonight">
             @for (r of v.tonight; track r.key) {
@@ -53,14 +54,14 @@ import { type RecoverRow, recoverView } from './today-model';
             }
           </div>
         } @else {
-          <p class="ui-card rc__none">Nothing else found tonight from {{ v.at }} in our schedule data.</p>
+          <p class="ui-card rc__none">{{ t('today.recover.noneTonight', { at: v.at }) }}</p>
         }
 
         @if (v.stuckTonight && v.stay; as s) {
           <app-stuck-tonight [code]="s.code" [airportName]="s.airportName" [checkIn]="s.checkIn" />
         }
 
-        <h2 class="ui-h3 rc__h">Tomorrow</h2>
+        <h2 class="ui-h3 rc__h">{{ t('today.recover.tomorrow') }}</h2>
         @if (v.tomorrow.length) {
           <div class="ui-card rc__list" data-group="tomorrow">
             @for (r of v.tomorrow; track r.key) {
@@ -72,26 +73,26 @@ import { type RecoverRow, recoverView } from './today-model';
               }
             } @else if (v.tomorrowMore.length) {
               <button type="button" class="rc__more ui-link" data-more (click)="showMore.set(true)">
-                {{ v.tomorrowMore.length }} more tomorrow
+                {{ t('today.recover.moreTomorrow', { n: v.tomorrowMore.length }) }}
               </button>
             }
           </div>
         } @else {
-          <p class="ui-card rc__none">Nothing found tomorrow from {{ v.at }} in our schedule data.</p>
+          <p class="ui-card rc__none">{{ t('today.recover.noneTomorrow', { at: v.at }) }}</p>
         }
 
         @if (v.note; as n) {
           <div class="rc__note" [class.is-warn]="n.returnBroken" data-note>
             <app-icon name="info" [size]="16" [strokeWidth]="2" />
             <span>{{ n.text }}
-              @if (n.returnBroken) { <a class="ui-link" [routerLink]="tripLink(v.tripId)" [queryParams]="returnQuery">Open Return</a> }
+              @if (n.returnBroken) { <a class="ui-link" [routerLink]="tripLink(v.tripId)" [queryParams]="returnQuery">{{ t('today.recover.openReturn') }}</a> }
             </span>
           </div>
         }
         @if (v.ways; as w) {
           <app-other-ways [from]="w.from" [to]="w.to" [dateKey]="w.dateKey" [land]="w.land" [toAirport]="w.toAirport" />
         }
-        <p class="rc__foot">Times are Scheduled; onward trips are Estimated. Listing stays your own step.</p>
+        <p class="rc__foot">{{ t('today.recover.foot') }}</p>
 
         <ng-template #rowT let-r>
           <div class="rc__row" [class.is-off]="!r.usable" [attr.data-gateway]="r.gateway" [attr.data-status]="r.option.status">
@@ -106,14 +107,14 @@ import { type RecoverRow, recoverView } from './today-model';
               @if (r.onward) { <p class="rc__m">{{ r.onward }}</p> }
             </div>
             @if (r.usable && v.legId) {
-              <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm rc__use" [attr.aria-label]="'Use ' + r.line" (click)="use(r)">Use</button>
+              <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm rc__use" [attr.aria-label]="t('today.recover.useLine', { line: r.line })" (click)="use(r)">{{ t('today.recover.use') }}</button>
             }
           </div>
         </ng-template>
       } @else {
         <div class="rc__empty">
-          <h1 class="ui-h2">Trip not found</h1>
-          <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">Open Trips</a>
+          <h1 class="ui-h2">{{ t('today.recover.notFound') }}</h1>
+          <a class="ui-btn ui-btn--dark" [routerLink]="tripsLink">{{ t('today.openTrips') }}</a>
         </div>
       }
     </div>
@@ -176,6 +177,12 @@ export class RecoverPage {
   /** ?leg=<legId>: the outbound leg being replaced. */
   readonly leg = input<string | undefined>(undefined);
 
+  protected readonly t = t;
+  /** 'Goal ' + goal + ' · home by ' + time: the two values are styled, so the message is split at them. */
+  protected readonly goalParts = computed(() => {
+    const [before, middle, after] = t('today.recover.goal', { goal: '\u0000', homeBy: '\u0001' }).split(/[\u0000\u0001]/);
+    return { before, middle, after };
+  });
   protected readonly tripsLink = tripsPath();
   protected readonly returnQuery = tripQuery('return');
   protected readonly showMore = signal(false);

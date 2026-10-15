@@ -8,14 +8,14 @@
 
 export class IdbBlockedError extends Error {
   constructor() {
-    super('IndexedDB open is blocked by another tab');
+    super('IndexedDB open is blocked by another tab'); // i18n-ignore
     this.name = 'IdbBlockedError';
   }
 }
 
 export class IdbUnavailableError extends Error {
   constructor(cause?: unknown) {
-    super('IndexedDB is not available');
+    super('IndexedDB is not available'); // i18n-ignore
     this.name = 'IdbUnavailableError';
     (this as { cause?: unknown }).cause = cause;
   }
@@ -115,7 +115,7 @@ export function txDone(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error('transaction failed'));
-    tx.onabort = () => reject(tx.error ?? new DOMException('transaction aborted', 'AbortError'));
+    tx.onabort = () => reject(tx.error ?? new DOMException('transaction aborted', 'AbortError')); // i18n-ignore
   });
 }
 

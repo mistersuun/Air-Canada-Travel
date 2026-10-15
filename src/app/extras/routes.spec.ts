@@ -5,15 +5,15 @@ import { knownTrip } from '../shell/route-guards';
 import { isDetailPath } from '../shell/nav-model';
 
 const EXTRAS: [string, string, boolean][] = [
-  ['trips/:id/files', 'Files · Routes', true],
-  ['trips/:id/passes/add', 'Add boarding pass · Routes', true],
-  ['trips/:id/pass/:passId', 'Boarding pass · Routes', true],
-  ['trips/:id/share', 'Share trip · Routes', true],
-  ['profile', 'Travel profile · Routes', false],
+  ['trips/:id/files', 'shell.title.files', true],
+  ['trips/:id/passes/add', 'shell.title.addPass', true],
+  ['trips/:id/pass/:passId', 'shell.title.pass', true],
+  ['trips/:id/share', 'shell.title.share', true],
+  ['profile', 'shell.title.profile', false],
 ];
 
 describe('extras routes', () => {
-  it('registers the five extras routes before the catch-all, lazily, with titles and guards', async () => {
+  it('registers the five extras routes before the catch-all, lazily, with title keys and guards', async () => {
     const paths = routes.map(r => r.path);
     for (const [path, title, guarded] of EXTRAS) {
       const i = paths.indexOf(path);

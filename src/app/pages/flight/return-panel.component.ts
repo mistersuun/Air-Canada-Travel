@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { t } from '../../i18n/t';
 import { allItineraries, NO_OPTS, type ConnectOptions, type Itinerary } from '../../utils/connections';
 import type { Coverage } from '../../data/schedule-index';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -31,41 +32,45 @@ interface Nearby {
   imports: [OptionRowComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="nights" role="group" aria-label="Nights at destination">
+    <div class="nights" role="group" [attr.aria-label]="t('flight.nights.aria')">
       @for (n of presets; track n) {
-        <button type="button" class="chip" [attr.aria-pressed]="shownNights() === n" (click)="nightsChange.emit(n)">{{ n }} nights</button>
+        <button type="button" class="chip" [attr.aria-pressed]="shownNights() === n" (click)="otherOpen.set(false); nightsChange.emit(n)">{{ t('flight.nights', { n }) }}</button>
       }
+      <button type="button" class="chip" data-other [attr.aria-pressed]="isCustom()" [attr.aria-expanded]="showStepper()"
+              (click)="otherOpen.set(!otherOpen())">{{ t('flight.nights.other') }}</button>
+      @if (showStepper()) {
       <div class="stepper" [class.is-on]="isCustom()">
-        <button type="button" aria-label="One night fewer" [disabled]="shownNights() <= 1" (click)="nightsChange.emit(shownNights() - 1)">−</button>
-        <output class="tn" aria-live="polite">{{ shownNights() }}<span> night{{ shownNights() === 1 ? '' : 's' }}</span></output>
-        <button type="button" aria-label="One night more" [disabled]="shownNights() >= maxNights" (click)="nightsChange.emit(shownNights() + 1)">+</button>
+        <button type="button" [attr.aria-label]="t('flight.nights.fewer')" [disabled]="shownNights() <= 1" (click)="nightsChange.emit(shownNights() - 1)">−</button>
+        <output class="tn" aria-live="polite">{{ shownNights() }}<span> {{ t('flight.nightsUnit', { n: shownNights() }) }}</span></output>
+        <button type="button" [attr.aria-label]="t('flight.nights.more')" [disabled]="shownNights() >= maxNights" (click)="nightsChange.emit(shownNights() + 1)">+</button>
       </div>
+      }
     </div>
 
     <div class="when">
       <div>
         <div class="date tn" [attr.data-return]="retDate()">{{ shortDay(retDate()) }}</div>
-        <div class="ui-sub tn">{{ shownNights() }} night{{ shownNights() === 1 ? '' : 's' }}@if (stay()) { · {{ stay() }} at destination}@if (fromCalendar()) { · from the calendar}</div>
+        <div class="ui-sub tn">{{ t('flight.nights', { n: shownNights() }) }}@if (stay()) { · {{ t('flight.atDest', { stay: stay() }) }}}@if (fromCalendar()) { · {{ t('flight.fromCal') }}}</div>
       </div>
       <span class="ui-tag ui-tag--blue tn">{{ code() }} → {{ hub() }}</span>
     </div>
 
     @if (outside()) {
-      <p class="empty">Schedules for {{ shortDay(retDate()) }} aren't published yet.</p>
+      <p class="empty">{{ t('dest.outside', { week: shortDay(retDate()) }) }}</p>
     } @else {
       <div class="list">
         @for (r of visible(); track r.key) {
           <app-option-row [row]="r" [selectable]="true" [selected]="selectedKey() === r.key" (pick)="toggle(r)" />
         } @empty {
-          <p class="empty">No published {{ showConnections() ? '' : 'nonstop ' }}return on {{ shortDay(retDate()) }}.</p>
+          <p class="empty">{{ t(showConnections() ? 'flight.noReturn.any' : 'flight.noReturn.nonstop', { day: shortDay(retDate()) }) }}</p>
         }
       </div>
       @if (rows().length > visible().length) {
-        <button type="button" class="more ui-link" (click)="expand.emit()">Show {{ rows().length - visible().length }} more</button>
+        <button type="button" class="more ui-link" (click)="expand.emit()">{{ t('flight.showMore', { n: rows().length - visible().length }) }}</button>
       }
       @if (!rows().length && nearby().length) {
         <p class="near">
-          Nearby:
+          {{ t('flight.nearby') }}
           @for (n of nearby(); track n.dateKey) {
             <button type="button" class="ui-link" (click)="nightsChange.emit(n.nights)">{{ n.label }} ({{ n.count }})</button>
           }
@@ -75,15 +80,18 @@ interface Nearby {
   `,
   styles: [`
     :host { display: grid; gap: 12px; }
-    .nights { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    /* Row gap leaves room for each chip's 44px tap area (see .chip::after). */
+    .nights { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 8px; }
     .chip {
-      padding: 7px 12px; border-radius: 999px; background: var(--fill); color: var(--ink-2);
+      position: relative; padding: 7px 12px; border-radius: 999px; background: var(--fill); color: var(--ink-2);
       font-size: 13px; font-weight: 600; white-space: nowrap;
     }
+    .chip::after { content: ''; position: absolute; inset: -7px -2px; }
     .chip[aria-pressed='true'] { background: var(--ink); color: var(--bg); }
     .stepper { display: inline-flex; align-items: center; border-radius: 999px; background: var(--fill); padding: 2px; }
     .stepper.is-on { background: var(--ink); color: var(--bg); }
-    .stepper button { width: 30px; height: 30px; border-radius: 50%; font-size: 16px; font-weight: 600; color: inherit; }
+    .stepper button { position: relative; width: 30px; height: 30px; border-radius: 50%; font-size: 16px; font-weight: 600; color: inherit; }
+    .stepper button::after { content: ''; position: absolute; inset: -7px -3px; }
     .stepper button:disabled { opacity: .35; cursor: default; }
     .stepper output { min-width: 62px; text-align: center; font-size: 13px; font-weight: 650; }
     .stepper output span { font-weight: 500; opacity: .7; }
@@ -98,6 +106,7 @@ interface Nearby {
   `],
 })
 export class ReturnPanelComponent {
+  protected readonly t = t;
   readonly outbound = input.required<Itinerary>();
   readonly hub = input.required<string>();
   readonly code = input.required<string>();
@@ -126,6 +135,11 @@ export class ReturnPanelComponent {
 
   readonly retDate = computed(() =>
     this.fromCalendar() ? this.ret()! : addDays(this.outbound().arrDateKey, this.nights()));
+
+  /** The stepper hides behind "Other" while a preset chip covers the stay. */
+  /** Opened by the Other chip, closed by a preset chip; stepping nights leaves it alone. */
+  protected readonly otherOpen = signal(false);
+  protected readonly showStepper = computed(() => this.isCustom() || this.otherOpen());
 
   protected readonly shownNights = computed(() => diffDays(this.outbound().arrDateKey, this.retDate()));
   protected readonly isCustom = computed(() => !(NIGHT_PRESETS as readonly number[]).includes(this.shownNights()));

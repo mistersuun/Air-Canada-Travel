@@ -2,7 +2,8 @@
  * Backup export / import (spec §1.2): one JSON file with the trips and the
  * flight log. Import merges by id; the newer updatedAt wins.
  */
-import { FlightLog, Outcome, Trip, TripsFile, TRIPS_SCHEMA, instanceKey } from './model';
+import { t } from '../i18n/t';
+import { FlightLog, Outcome, Trip, TripsFile, TRIPS_SCHEMA, FLIGHTLOG_SCHEMA, schemaFor, instanceKey } from './model';
 import { migrateFlightLog, sanitizeTrip } from './storage';
 
 export const BACKUP_KIND = 'routes-backup';
@@ -10,7 +11,7 @@ export const BACKUP_KIND = 'routes-backup';
 export function exportBackup(trips: TripsFile, log: FlightLog, now: number): string {
   return JSON.stringify({
     kind: BACKUP_KIND,
-    schema: 1,
+    schema: schemaFor(trips.trips),
     exportedAt: new Date(now).toISOString(),
     trips: trips.trips,
     flightlog: log,
@@ -27,14 +28,14 @@ export function parseBackup(text: string): { trips: Trip[]; log: FlightLog } | {
   try {
     raw = JSON.parse(text);
   } catch {
-    return { error: "This file isn't a Routes backup." };
+    return { error: t('trips.backup.notBackup') };
   }
   const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
   if (!r || r['kind'] !== BACKUP_KIND || !Array.isArray(r['trips'])) {
-    return { error: "This file isn't a Routes backup." };
+    return { error: t('trips.backup.notBackup') };
   }
   if (typeof r['schema'] === 'number' && r['schema'] > TRIPS_SCHEMA) {
-    return { error: 'This backup was made by a newer version of the app. Update the app, then try again.' };
+    return { error: t('trips.backup.newer') };
   }
   const trips = (r['trips'] as unknown[]).map(sanitizeTrip).filter((t): t is Trip => !!t);
   const log = migrateFlightLog(r['flightlog'] ?? null).file;
@@ -80,7 +81,7 @@ export function mergeBackup(
   return {
     trips: [...byId.values()],
     log: {
-      schema: 1,
+      schema: FLIGHTLOG_SCHEMA,
       notes: mergeById(current.log.notes, incoming.log.notes),
       outcomes: mergeOutcomes(current.log.outcomes, incoming.log.outcomes),
       dismissed: [...new Set([...current.log.dismissed, ...incoming.log.dismissed])],

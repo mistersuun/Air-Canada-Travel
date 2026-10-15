@@ -7,6 +7,7 @@
  *   Hostelworld   https://www.hostelworld.com/   (home page only: its search URL needs internal ids; the label names the airport)
  *   Google Maps   https://www.google.com/maps/search/?api=1&query=hotels+near+<airport>
  */
+import { t } from '../i18n/t';
 import { addDays } from '../utils/time';
 
 export interface StayLink { id: 'booking' | 'hostelworld' | 'maps'; label: string; href: string }
@@ -23,16 +24,16 @@ export function stayLinks(input: { airportName: string; code: string; checkIn: s
   const out = addDays(input.checkIn, 1);
   return [
     {
-      id: 'booking', label: 'Search hotels on Booking.com ↗',
+      id: 'booking', label: t('places.stay.booking'),
       href: `https://www.booking.com/searchresults.html?ss=${q(place)}&checkin=${input.checkIn}&checkout=${out}&group_adults=1&no_rooms=1`,
     },
     {
-      id: 'hostelworld', label: `Search hostels near ${input.code} on Hostelworld \u2197`,
+      id: 'hostelworld', label: t('places.stay.hostelworld', { code: input.code }),
       href: 'https://www.hostelworld.com/',
     },
     {
-      id: 'maps', label: 'Hotels near the airport on Google Maps ↗',
-      href: `https://www.google.com/maps/search/?api=1&query=${q(`hotels near ${place}`)}`,
+      id: 'maps', label: t('places.stay.maps'),
+      href: `https://www.google.com/maps/search/?api=1&query=${q(`hotels near ${place}`)}`,   // i18n-ignore
     },
   ];
 }

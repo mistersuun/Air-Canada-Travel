@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, untracked } from '@angular/core';
+import { t } from '../../i18n/t';
 import { FORECAST_SOURCE_URL } from '../../recs/ui/forecast-line.component';
 import { NOW } from '../../state/app-state.service';
 import { airportTz } from '../../utils/airports';
@@ -21,8 +22,8 @@ export const STRIP_DAYS = 5;
   template: `
     @if (days(); as ds) {
       <div class="fc" data-forecast-strip>
-        <p class="fc__t"><b>Forecast</b> · next {{ ds.length }} days from {{ label(ds[0]) }}</p>
-        <ol class="fc__s" aria-label="Forecast, daily high and low">
+        <p class="fc__t"><b>{{ t('dest.fc.label') }}</b> · {{ t('dest.fc.next', { n: ds.length, date: label(ds[0]) }) }}</p>
+        <ol class="fc__s" [attr.aria-label]="t('dest.fc.aria')">
           @for (d of ds; track d.dateKey) {
             <li class="d">
               <span class="d__n">{{ label(d) }}</span>
@@ -32,7 +33,7 @@ export const STRIP_DAYS = 5;
             </li>
           }
         </ol>
-        <p class="fc__c ui-sub">Forecast · <a [href]="source" target="_blank" rel="noopener">Open-Meteo.com</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">CC BY 4.0</a>. A forecast for these dates, not typical weather.</p>
+        <p class="fc__c ui-sub">{{ t('dest.fc.label') }} · <a [href]="source" target="_blank" rel="noopener">{{ sourceName }}</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener license">{{ licenceName }}</a>. {{ t('dest.fc.note') }}</p>
       </div>
     }
   `,
@@ -52,6 +53,7 @@ export const STRIP_DAYS = 5;
   `],
 })
 export class DestForecastComponent {
+  protected readonly t = t;
   private readonly forecast = inject(ForecastService);
   private readonly now = inject(NOW);
 
@@ -59,6 +61,8 @@ export class DestForecastComponent {
   /** The day the strip starts at (a date key). */
   readonly dateKey = input.required<string>();
   protected readonly source = FORECAST_SOURCE_URL;
+  protected readonly sourceName = 'Open-Meteo.com';
+  protected readonly licenceName = 'CC BY 4.0';
 
   private readonly inRange = computed(() => withinForecast(this.dateKey(), todayKey(airportTz(this.code()), this.now())));
 

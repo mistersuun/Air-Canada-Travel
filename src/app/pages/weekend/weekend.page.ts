@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { t } from '../../i18n/t';
 import { EventsCardComponent } from '../../events/events-card.component';
 import { IconComponent } from '../../components/shared/icons.component';
 import { AppStateService } from '../../state/app-state.service';
@@ -27,62 +28,62 @@ import {
     <div class="ui-page wk">
       <header class="hd">
         <div class="top">
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
-          <h1 class="ui-h1 ttl">Weekend finder</h1>
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('ui.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <h1 class="ui-h1 ttl">{{ t('weekend.title') }}</h1>
         </div>
-        <p class="ui-sub">Where can you go from {{ state.hub() }} and still be home on time?</p>
+        <p class="ui-sub">{{ t('weekend.sub', { hub: state.hub() }) }}</p>
       </header>
 
-      <div class="chips ui-snap-row" role="group" aria-label="Weekend">
+      <div class="chips ui-snap-row" role="group" [attr.aria-label]="t('weekend.groupAria')">
         @for (p of presets; track p.value) {
-          <button type="button" class="chip" [attr.aria-pressed]="preset() === p.value" (click)="choose(p.value)">{{ p.label }}</button>
+          <button type="button" class="chip" [attr.aria-pressed]="preset() === p.value" (click)="choose(p.value)">{{ t(p.label) }}</button>
         }
       </div>
 
       @if (preset() === 'custom') {
         <div class="ui-card custom">
           <fieldset>
-            <legend>Leave after ({{ state.hub() }} time)</legend>
+            <legend>{{ t('weekend.leaveAfter', { hub: state.hub() }) }}</legend>
             <span class="pair">
-              <input type="date" aria-label="Leave after date" [min]="minKey()" [max]="maxKey()" [value]="window().leaveKey"
+              <input type="date" [attr.aria-label]="t('weekend.leaveDateAria')" [min]="minKey()" [max]="maxKey()" [value]="window().leaveKey"
                      (change)="edit('leaveKey', $any($event.target).value)">
-              <input type="time" aria-label="Leave after time" [value]="window().leaveHhmm"
+              <input type="time" [attr.aria-label]="t('weekend.leaveTimeAria')" [value]="window().leaveHhmm"
                      (change)="edit('leaveHhmm', $any($event.target).value)">
             </span>
           </fieldset>
           <fieldset>
-            <legend>Home by ({{ state.hub() }} time)</legend>
+            <legend>{{ t('weekend.homeBy', { hub: state.hub() }) }}</legend>
             <span class="pair">
-              <input type="date" aria-label="Home by date" [min]="minKey()" [max]="maxKey()" [value]="window().homeKey"
+              <input type="date" [attr.aria-label]="t('weekend.homeDateAria')" [min]="minKey()" [max]="maxKey()" [value]="window().homeKey"
                      (change)="edit('homeKey', $any($event.target).value)">
-              <input type="time" aria-label="Home by time" [value]="window().homeHhmm"
+              <input type="time" [attr.aria-label]="t('weekend.homeTimeAria')" [value]="window().homeHhmm"
                      (change)="edit('homeHhmm', $any($event.target).value)">
             </span>
           </fieldset>
         </div>
       }
 
-      <p class="sum tn">Leave after {{ stamp(window().leaveKey, window().leaveHhmm) }} · home by {{ stamp(window().homeKey, window().homeHhmm) }} · {{ state.hub() }} time</p>
+      <p class="sum tn">{{ t('weekend.summary', { a: stamp(window().leaveKey, window().leaveHhmm), b: stamp(window().homeKey, window().homeHhmm), hub: state.hub() }) }}</p>
 
       @if (problem(); as why) {
         <p class="ui-card note" role="status">{{ why }}</p>
       } @else if (!rows().length) {
         <p class="ui-card note" role="status">
-          No destination has an outbound flight in this window with a return that gets you home on time.
-          Try leaving earlier or coming home later.
+          {{ t('weekend.none1') }}
+          {{ t('weekend.none2') }}
         </p>
       } @else {
         <div class="ui-card list">
           @for (r of shown(); track r.o.code) {
             <app-dest-row [code]="r.o.code" [small]="r.o.code" [meta]="r.meta" wrapMeta [link]="r.link" [queryParams]="r.query">
               <span trailing class="wx">
-                @if (r.weather) { <span class="ui-tag ui-tag--neutral tn"><span class="ui-visually-hidden">Typical weather: </span>{{ r.weather }}</span> }
+                @if (r.weather) { <span class="ui-tag ui-tag--neutral tn"><span class="ui-visually-hidden">{{ t('weekend.typical') }} </span>{{ r.weather }}</span> }
               </span>
             </app-dest-row>
             <div class="evt">
               <app-forecast-line class="evt__f" [code]="r.o.code" [dateKey]="r.arrKey" [plain]="true" />
               <button type="button" class="evt__b" [attr.aria-expanded]="events() === r.o.code" [attr.aria-controls]="'evt-' + r.o.code"
-                      attr.aria-label="What's on in {{ cityOf(r.o.code) }}" (click)="toggleEvents(r.o.code)">What's on
+                      [attr.aria-label]="t('weekend.whatsOnAria', { city: cityOf(r.o.code) })" (click)="toggleEvents(r.o.code)">{{ t('weekend.whatsOn') }}
                 <app-icon class="evt__c" [class.open]="events() === r.o.code" name="chevron-down" [size]="14" /></button>
               <div [id]="'evt-' + r.o.code">
                 @if (events() === r.o.code) { <app-events-card verbose [code]="r.o.code" [from]="r.arrKey" [to]="r.o.retKey" /> }
@@ -91,9 +92,9 @@ import {
           }
         </div>
         @if (rows().length > shown().length) {
-          <button type="button" class="ui-link more" (click)="all.set(true)">Show all {{ rows().length }}</button>
+          <button type="button" class="ui-link more" (click)="all.set(true)">{{ t('flight.showAll', { n: rows().length }) }}</button>
         }
-        <p class="ui-sub foot">A try home is a published flight that lands by your deadline, counted from the schedules. You would fly standby, so none of them is guaranteed.</p>
+        <p class="ui-sub foot">{{ t('weekend.footer') }}</p>
       }
     </div>
   `,
@@ -142,6 +143,7 @@ import {
   `],
 })
 export class WeekendPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly climate = inject(ClimateService);
 

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, linkedSignal, output, signal } from '@angular/core';
+import { t } from '../../i18n/t';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
 import { TripsService } from '../../trips/trips.service';
 import type { NoteFlight } from './flight-model';
@@ -9,9 +10,9 @@ export const MAX_NOTE_TEXT = 140;
 
 /** '14' → 14; '' or junk → null; clamped to 0..999. */
 export function parseCount(v: string): number | null {
-  const t = v.trim();
-  if (!/^\d+$/.test(t)) return null;
-  return Math.min(MAX_NOTE_COUNT, Number(t));
+  const s = v.trim();
+  if (!/^\d+$/.test(s)) return null;
+  return Math.min(MAX_NOTE_COUNT, Number(s));
 }
 
 /**
@@ -29,11 +30,11 @@ export function parseCount(v: string): number | null {
   imports: [GlassSheetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet title="Add a load note" [open]="true" (closed)="closed.emit()">
+    <app-glass-sheet [title]="t('flight.sheet.title')" [open]="true" (closed)="closed.emit()">
       <form class="ns" (submit)="save($event)">
         @if (flights().length > 1) {
           <label class="ns__f">
-            <span class="ns__l">Flight</span>
+            <span class="ns__l">{{ t('flight.cell.flight') }}</span>
             <select class="ns__in" data-flight [value]="key()" (change)="key.set(value($event))">
               @for (f of flights(); track f.key) { <option [value]="f.key" [selected]="f.key === key()">{{ f.label }}</option> }
             </select>
@@ -43,23 +44,23 @@ export function parseCount(v: string): number | null {
         }
         <div class="ns__row">
           <label class="ns__f">
-            <span class="ns__l">Seats open</span>
+            <span class="ns__l">{{ t('flight.sheet.seats') }}</span>
             <input class="ns__in tn" data-open type="number" inputmode="numeric" min="0" [max]="max" placeholder="—"
                    [value]="open()" (input)="open.set(value($event))">
           </label>
           <label class="ns__f">
-            <span class="ns__l">People listed</span>
+            <span class="ns__l">{{ t('flight.sheet.listed') }}</span>
             <input class="ns__in tn" data-listed type="number" inputmode="numeric" min="0" [max]="max" placeholder="—"
                    [value]="listed()" (input)="listed.set(value($event))">
           </label>
         </div>
         <label class="ns__f">
-          <span class="ns__l">Note</span>
-          <input class="ns__in" data-text type="text" [maxLength]="maxText" autocomplete="off" placeholder="Gate 52, list moving"
+          <span class="ns__l">{{ t('flight.sheet.note') }}</span>
+          <input class="ns__in" data-text type="text" [maxLength]="maxText" autocomplete="off" [placeholder]="t('flight.sheet.placeholder')"
                  [value]="text()" (input)="text.set(value($event))">
         </label>
-        <p class="ns__hint">As you read it in your load tool. Notes stay on this device, with the time you wrote them.</p>
-        <button type="submit" class="ui-btn ui-btn--dark ui-btn--block" data-save [disabled]="!canSave()">Save note</button>
+        <p class="ns__hint">{{ t('flight.sheet.hint') }}</p>
+        <button type="submit" class="ui-btn ui-btn--dark ui-btn--block" data-save [disabled]="!canSave()">{{ t('flight.sheet.save') }}</button>
       </form>
     </app-glass-sheet>
   `,
@@ -78,6 +79,7 @@ export function parseCount(v: string): number | null {
   `],
 })
 export class NoteSheetComponent {
+  protected readonly t = t;
   private readonly trips = inject(TripsService);
 
   readonly flights = input.required<NoteFlight[]>();

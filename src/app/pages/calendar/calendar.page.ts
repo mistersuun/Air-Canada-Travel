@@ -4,12 +4,13 @@ import {
 import { Router } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { getCoverage } from '../../data/schedule-index';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { shortDay } from '../../ui/format';
 import { calendarPath, destPath, flightPath } from '../../ui/links';
 import { findDestination } from '../../utils/airports';
-import { monthKeys } from '../../utils/time';
+import { monthKeys, weekdayLetters } from '../../utils/time';
 import { coverageHubFor } from '../../utils/week';
 import {
   chooserRows, clampKey, monthRange, moveKey, nextSelection, pickable, selectLabel, type CalField, type ChooserRow,
@@ -41,38 +42,38 @@ const EAGER_MONTHS = 3;
       <div class="pk">
         <div class="pk__in">
           <header class="tb">
-            <button type="button" class="lnk" (click)="cancel()">Cancel</button>
-            <h1 class="ui-h3 tb__t tn">{{ state.hub() }} → {{ d.code }}<span class="ui-sr-only">, {{ d.city }} dates</span></h1>
-            <button type="button" class="lnk lnk--b" [disabled]="!sel().dep" (click)="done()">Done</button>
+            <button type="button" class="lnk" (click)="cancel()">{{ t('calendar.cancel') }}</button>
+            <h1 class="ui-h3 tb__t tn">{{ state.hub() }} → {{ d.code }}<span class="ui-sr-only">{{ t('calendar.datesSr', { city: d.city }) }}</span></h1>
+            <button type="button" class="lnk lnk--b" [disabled]="!sel().dep" (click)="done()">{{ t('common.done') }}</button>
           </header>
 
           <div class="flds">
             <button type="button" class="fld" [class.on]="sel().active === 'dep'" [attr.aria-pressed]="sel().active === 'dep'"
                     (click)="setField('dep')">
-              <span class="fld__l">Depart</span>
+              <span class="fld__l">{{ t('calendar.depart') }}</span>
               <b class="tn">{{ depLabel() }}</b>
             </button>
             <button type="button" class="fld" [class.on]="sel().active === 'ret'" [attr.aria-pressed]="sel().active === 'ret'"
                     [disabled]="!sel().dep" (click)="setField('ret')">
-              <span class="fld__l">Return</span>
+              <span class="fld__l">{{ t('calendar.return') }}</span>
               <b class="tn" [class.ph]="!sel().ret">{{ retLabel() }}</b>
             </button>
           </div>
           <p class="ui-sr-only" aria-live="polite">{{ hint() }}</p>
 
           <div class="wkh" aria-hidden="true">
-            @for (w of weekdays; track $index) { <span>{{ w }}</span> }
+            @for (w of weekdays(); track $index) { <span>{{ w }}</span> }
           </div>
 
           <div class="months" (keydown)="onKey($event)">
             @for (m of months(); track m; let i = $index) {
-              @if (i < eager) {
+              @if (eager > i) {
                 <app-cal-month class="mo" [ym]="m" [from]="dir().from" [to]="dir().to" [today]="state.todayKey()"
                                [coverage]="coverage()" [withConnections]="state.showConnections()" [connect]="state.connect()"
                                [dep]="sel().dep" [ret]="sel().ret" [field]="sel().active" [focusKey]="focusKey()"
                                (pick)="pick($event)" />
               } @else {
-                @defer (on viewport; when i <= renderUpTo()) {
+                @defer (on viewport; when renderUpTo() >= i) {
                   <app-cal-month class="mo" [ym]="m" [from]="dir().from" [to]="dir().to" [today]="state.todayKey()"
                                  [coverage]="coverage()" [withConnections]="state.showConnections()" [connect]="state.connect()"
                                  [dep]="sel().dep" [ret]="sel().ret" [field]="sel().active" [focusKey]="focusKey()"
@@ -86,9 +87,9 @@ const EAGER_MONTHS = 3;
 
           <footer class="ft">
             <div class="lg">
-              <span><i class="lg__b"></i> more departures</span>
-              <span><i class="lg__b lg__b--1"></i> one departure</span>
-              @if (state.showConnections()) { <span><i class="lg__b lg__b--c"></i> connection only</span> }
+              <span><i class="lg__b"></i> {{ t('calendar.legendMore') }}</span>
+              <span><i class="lg__b lg__b--1"></i> {{ t('calendar.legendOne') }}</span>
+              @if (state.showConnections()) { <span><i class="lg__b lg__b--c"></i> {{ t('calendar.legendConn') }}</span> }
             </div>
             <button type="button" class="ui-btn ui-btn--block" [disabled]="!sel().dep" (click)="done()">{{ select() }}</button>
           </footer>
@@ -97,19 +98,19 @@ const EAGER_MONTHS = 3;
     } @else {
       <div class="ui-page ui-page--bare ch">
         <div class="ch__top">
-          <button type="button" class="ui-circ ui-circ--glass back" aria-label="Back" (click)="state.goBack(['/'])">
+          <button type="button" class="ui-circ ui-circ--glass back" [attr.aria-label]="t('ui.back')" (click)="state.goBack(['/'])">
             <app-icon name="arrow-left" [size]="20" />
           </button>
         </div>
-        <h1 class="ui-h1">Calendar</h1>
-        <p class="ui-sub ch__s">Pick a destination to see which days it flies</p>
+        <h1 class="ui-h1">{{ t('calendar.title') }}</h1>
+        <p class="ui-sub ch__s">{{ t('calendar.sub') }}</p>
         <label class="ui-search ui-glass ch__q">
           <app-icon name="search" [size]="18" />
-          <input type="search" data-search-input placeholder="Search destinations" aria-label="Search destinations"
+          <input type="search" data-search-input [placeholder]="t('calendar.search')" [attr.aria-label]="t('calendar.search')"
                  [value]="query()" (input)="query.set($any($event.target).value)" />
         </label>
         @if (chooser().saved.length) {
-          <h2 class="ui-sec-h ch__h"><span class="ui-h3">Saved</span></h2>
+          <h2 class="ui-sec-h ch__h"><span class="ui-h3">{{ t('calendar.saved') }}</span></h2>
           <div class="ui-card ch__l">
             @for (r of chooser().saved; track r.code) {
               <app-dest-row [code]="r.code" [small]="r.code" [meta]="r.meta" [link]="calendarPath(r.code)" />
@@ -117,9 +118,9 @@ const EAGER_MONTHS = 3;
           </div>
         }
         @if (chooser().all.length) {
-          <h2 class="ui-sec-h ch__h"><span class="ui-h3">All nonstop destinations</span></h2>
+          <h2 class="ui-sec-h ch__h"><span class="ui-h3">{{ t('calendar.all') }}</span></h2>
           @if (showIndex()) {
-            <nav class="az" aria-label="Jump to a letter" data-az>
+            <nav class="az" [attr.aria-label]="t('calendar.az')" data-az>
               @for (g of groups(); track g.letter) {
                 <button type="button" class="az__b" (click)="jumpTo(g.letter)">{{ g.letter }}</button>
               }
@@ -135,7 +136,7 @@ const EAGER_MONTHS = 3;
           </div>
         }
         @if (!chooser().saved.length && !chooser().all.length) {
-          <p class="ui-sub ch__none">No destinations match “{{ query() }}”.</p>
+          <p class="ui-sub ch__none">{{ t('calendar.noMatch', { query: query() }) }}</p>
         }
       </div>
     }
@@ -236,6 +237,7 @@ const EAGER_MONTHS = 3;
   `],
 })
 export class CalendarPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -247,7 +249,7 @@ export class CalendarPage {
   readonly dep = input<string>();
   readonly ret = input<string>();
 
-  protected readonly weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  protected readonly weekdays = computed(() => weekdayLetters());
   protected readonly eager = EAGER_MONTHS;
   protected readonly calendarPath = calendarPath;
 
@@ -314,13 +316,13 @@ export class CalendarPage {
   });
 
   readonly select = computed(() => selectLabel(this.sel().dep, this.sel().ret));
-  readonly depLabel = computed(() => (this.sel().dep ? shortDay(this.sel().dep!) : 'Add date'));
-  readonly retLabel = computed(() => (this.sel().ret ? shortDay(this.sel().ret!) : this.sel().dep ? 'One way' : 'Add date'));
+  readonly depLabel = computed(() => (this.sel().dep ? shortDay(this.sel().dep!) : t('calendar.addDate')));
+  readonly retLabel = computed(() => (this.sel().ret ? shortDay(this.sel().ret!) : this.sel().dep ? t('calendar.oneWay') : t('calendar.addDate')));
   readonly hint = computed(() => {
     const s = this.sel();
     const city = this.dest()?.city ?? '';
-    if (s.active === 'dep' || !s.dep) return `Pick a departure day. Bars show nonstops from ${this.state.hub()}.`;
-    return `Pick a return day. Bars show nonstops from ${city}.`;
+    if (s.active === 'dep' || !s.dep) return t('calendar.hint.dep', { hub: this.state.hub() });
+    return t('calendar.hint.ret', { city });
   });
 
   private firstPickable(): string {

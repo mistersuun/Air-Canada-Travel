@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { entryDots, type DotDay } from '../../ui/dot-row.component';
@@ -18,10 +19,10 @@ import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component'
 
 export type SavedTab = 'upcoming' | 'watching';
 
-const TABS: readonly SegOption[] = [
-  { value: 'upcoming', label: 'Upcoming' },
-  { value: 'watching', label: 'Watching' },
-];
+const TABS = [
+  { value: 'upcoming', label: 'saved.tab.upcoming' },
+  { value: 'watching', label: 'saved.tab.watching' },
+] as const;
 
 /**
  * Saved (/saved): the favourites. Upcoming shows the next nonstop departures
@@ -38,20 +39,20 @@ const TABS: readonly SegOption[] = [
     <div class="ui-page sv">
       <header class="hd">
         <div class="top">
-          <button type="button" class="ui-circ ui-circ--glass" aria-label="Back" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
-          <h1 class="ui-h1 ttl">Saved @if (count()) {<span class="ct tn" aria-label="{{ count() }} saved">{{ count() }}</span>}</h1>
+          <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('ui.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
+          <h1 class="ui-h1 ttl">{{ t('saved.title') }} @if (count()) {<span class="ct tn" [attr.aria-label]="t('saved.countAria', { n: count() })">{{ count() }}</span>}</h1>
         </div>
         @if (count()) {
-          <app-seg class="seg" stretch [options]="tabs" [value]="view()" (valueChange)="setTab($event)" ariaLabel="Saved view" />
+          <app-seg class="seg" stretch [options]="tabs()" [value]="view()" (valueChange)="setTab($event)" [ariaLabel]="t('saved.viewAria')" />
         }
       </header>
 
       @if (!count()) {
         <div class="ui-card empty">
           <span class="empty__ic"><app-icon name="star" [size]="26" /></span>
-          <h2 class="ui-h3">Nothing saved yet</h2>
-          <p class="ui-sub">Tap ★ on a destination to keep it here.</p>
-          <a class="ui-btn" routerLink="/" [queryParams]="state.globalParams()">Explore destinations</a>
+          <h2 class="ui-h3">{{ t('saved.empty.title') }}</h2>
+          <p class="ui-sub">{{ t('saved.empty.text') }}</p>
+          <a class="ui-btn" routerLink="/" [queryParams]="state.globalParams()">{{ t('saved.empty.cta') }}</a>
         </div>
       } @else if (view() === 'upcoming') {
         @if (cards().length) {
@@ -62,7 +63,7 @@ const TABS: readonly SegOption[] = [
                               [meta]="first ? heroMeta(u) : cardMeta(u)" [link]="flightLink(u)">
                 @if (first) {
                   <div footer class="ft">
-                    <span><app-icon name="plane" [size]="13" [filled]="true" /> Nonstop</span>
+                    <span><app-icon name="plane" [size]="13" [filled]="true" /> {{ t('format.nonstop') }}</span>
                     <span><app-icon name="clock" [size]="13" /> {{ footerDays(u) }}</span>
                     <span><app-icon name="sun" [size]="13" /> {{ u.season }}</span>
                   </div>
@@ -80,11 +81,11 @@ const TABS: readonly SegOption[] = [
               <app-dest-row [code]="n.code" [small]="n.code" [meta]="n.routeNote ? n.country + ' · ' + n.routeNote : n.country"
                             [link]="destPath(n.code)">
                 @if (n.via) {
-                  <span trailing class="ui-tag ui-tag--amber">Via {{ n.via }}</span>
+                  <span trailing class="ui-tag ui-tag--amber">{{ t('flight.viaPlace', { place: n.via }) }}</span>
                 } @else if (n.routeOnly) {
                   <app-provenance-tag trailing value="unknown" />
                 } @else {
-                  <span trailing class="ui-tag ui-tag--neutral">No flights published</span>
+                  <span trailing class="ui-tag ui-tag--neutral">{{ t('saved.noFlights') }}</span>
                 }
               </app-dest-row>
             }
@@ -94,14 +95,14 @@ const TABS: readonly SegOption[] = [
         <div class="ui-card list list--watch">
           @for (w of watching(); track w.code) {
             <app-dest-row [code]="w.code" [small]="w.code" [meta]="w.meta" [dots]="w.dots" [link]="destPath(w.code)" [chevron]="false">
-              <button trailing type="button" class="unstar" [attr.aria-label]="'Remove ' + w.city + ' from saved'"
+              <button trailing type="button" class="unstar" [attr.aria-label]="t('saved.remove', { city: w.city })"
                       (click)="unstar($event, w.code, w.city)">
                 <app-icon name="star" [size]="20" [filled]="true" />
               </button>
             </app-dest-row>
           }
         </div>
-        <p class="ui-sub foot">Showing {{ weekLabel() }} · <a [routerLink]="calendarPath()" [queryParams]="state.globalParams()">Plan dates</a></p>
+        <p class="ui-sub foot">{{ t('saved.showing', { week: weekLabel() }) }} · <a [routerLink]="calendarPath()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a></p>
       }
     </div>
   `,
@@ -153,6 +154,7 @@ const TABS: readonly SegOption[] = [
   `],
 })
 export class SavedPage {
+  protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
 
@@ -164,7 +166,7 @@ export class SavedPage {
   /** ?tab= (bound by the router): 'watching', else Upcoming. */
   readonly tab = input<string>();
 
-  protected readonly tabs = TABS;
+  protected readonly tabs = computed<SegOption[]>(() => TABS.map(o => ({ value: o.value, label: t(o.label) })));
   protected readonly destPath = destPath;
   protected readonly calendarPath = calendarPath;
   protected readonly heroMeta = heroMeta;
@@ -230,8 +232,8 @@ export class SavedPage {
     e.preventDefault();
     e.stopPropagation();
     this.state.toggleFavourite(code);
-    this.state.flash(`Removed ${city}`, {
-      label: 'Undo',
+    this.state.flash(t('dest.removed', { city }), {
+      label: t('ui.undo'),
       run: () => {
         if (!this.state.favouriteSet().has(code)) this.state.toggleFavourite(code);
       },

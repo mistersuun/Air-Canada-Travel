@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, inject, input, viewChild,
 } from '@angular/core';
+import { t } from '../../i18n/t';
 import type { TicketModel } from './flight-model';
 
 /**
@@ -18,19 +19,19 @@ import type { TicketModel } from './flight-model';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @let t = model();
-    <article #tk class="tk" [attr.aria-label]="label()">
+    @let m = model();
+    <article #tk class="tk" [attr.aria-label]="label() || t('flight.ticketLabel')">
       <div class="hd">
         <span class="logo">
           <i aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg></i>
-          Air Canada
+          {{ brand }}
         </span>
-        <span class="ui-tag" [class.ui-tag--teal]="t.nonstop" [class.ui-tag--amber]="!t.nonstop">{{ t.tag }}</span>
+        <span class="ui-tag" [class.ui-tag--teal]="m.nonstop" [class.ui-tag--amber]="!m.nonstop">{{ m.tag }}</span>
       </div>
       <div class="pair">
         <div class="end">
-          <div class="io">{{ t.origin }}</div>
-          <div class="ct">{{ t.originCity }}</div>
+          <div class="io">{{ m.origin }}</div>
+          <div class="ct">{{ m.originCity }}</div>
         </div>
         <div class="mid" aria-hidden="true">
           <svg viewBox="0 0 120 34">
@@ -40,31 +41,31 @@ import type { TicketModel } from './flight-model';
               <path d="M-7 1h14M2-4l5 5-5 5" stroke="var(--red)" stroke-width="2" fill="none" stroke-linecap="round" />
             </g>
           </svg>
-          <span class="tn">{{ t.duration }}</span>
+          <span class="tn">{{ m.duration }}</span>
         </div>
         <div class="end end--r">
-          <div class="io">{{ t.dest }}</div>
-          <div class="ct">{{ t.destCity }}</div>
+          <div class="io">{{ m.dest }}</div>
+          <div class="ct">{{ m.destCity }}</div>
         </div>
       </div>
       <div class="times tn">
-        <div><b>{{ t.dep }}</b><span>{{ t.depDate }}</span></div>
-        <div class="r"><b>{{ t.arr }}</b><span>{{ t.arrDate }}</span></div>
+        <div><b>{{ m.dep }}</b><span>{{ m.depDate }}</span></div>
+        <div class="r"><b>{{ m.arr }}</b><span>{{ m.arrDate }}</span></div>
       </div>
       <div #cut class="cut"></div>
-      @for (leg of t.legs; track $index; let i = $index) {
-        @if (t.legs.length > 1) {
+      @for (leg of m.legs; track $index; let i = $index) {
+        @if (m.legs.length > 1) {
           <div class="leg tn" [class.leg--first]="i === 0">{{ leg.route }}</div>
         }
-        <dl class="cells tn" [class.cells--tight]="t.legs.length > 1">
+        <dl class="cells tn" [class.cells--tight]="m.legs.length > 1">
           @for (c of leg.cells; track c.label) {
             <div [attr.title]="c.title || null"><dt>{{ c.label }}</dt><dd>{{ c.value }}</dd></div>
           }
         </dl>
         @if (leg.estimated) {
-          <p class="est">Estimated · verify on aircanada.com</p>
+          <p class="est">{{ t('flight.ticket.estimated') }}</p>
         }
-        @if (t.layovers[i]; as l) {
+        @if (m.layovers[i]; as l) {
           <div class="lay" [class.lay--alert]="l.alert">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
             <span>{{ l.text }}@if (l.reason) { · {{ l.reason }}}</span>
@@ -123,8 +124,10 @@ import type { TicketModel } from './flight-model';
   `],
 })
 export class TicketComponent {
+  protected readonly brand = 'Air Canada';
+  protected readonly t = t;
   readonly model = input.required<TicketModel>();
-  readonly label = input('Flight ticket');
+  readonly label = input('');
 
   private readonly tk = viewChild.required<ElementRef<HTMLElement>>('tk');
   private readonly cut = viewChild.required<ElementRef<HTMLElement>>('cut');

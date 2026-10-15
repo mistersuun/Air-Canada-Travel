@@ -5,6 +5,7 @@
  * with the home-by engine, then destinations are ranked by tries home and by
  * time on the ground. Facts only: counts and times, never odds.
  */
+import { t, type MsgKey } from '../../i18n/t';
 import { getCoverage, isCovered } from '../../data/schedule-index';
 import { DESTINATIONS } from '../../data/destinations';
 import { MIN_STAY_MIN, pairable } from '../../recs/engine';
@@ -19,12 +20,12 @@ export type WeekendPreset = 'this' | 'next' | 'fri-sun' | 'sat-mon' | 'custom';
 /** Hub-local wall-clock window: leave at or after leaveKey/leaveHhmm, be home by homeKey/homeHhmm. */
 export interface WeekendWindow { leaveKey: string; leaveHhmm: string; homeKey: string; homeHhmm: string }
 
-export const WEEKEND_PRESETS: readonly { value: WeekendPreset; label: string }[] = [
-  { value: 'this', label: 'This weekend' },
-  { value: 'next', label: 'Next weekend' },
-  { value: 'fri-sun', label: 'Fri eve → Sun' },
-  { value: 'sat-mon', label: 'Sat → Mon' },
-  { value: 'custom', label: 'Custom' },
+export const WEEKEND_PRESETS: readonly { value: WeekendPreset; label: MsgKey }[] = [
+  { value: 'this', label: 'weekend.preset.this' },
+  { value: 'next', label: 'weekend.preset.next' },
+  { value: 'fri-sun', label: 'weekend.preset.friSun' },
+  { value: 'sat-mon', label: 'weekend.preset.satMon' },
+  { value: 'custom', label: 'weekend.preset.custom' },
 ];
 
 /** Outbound flights leave on the leave day or at most this many days in all. */
@@ -166,24 +167,26 @@ export function weekendOptions(input: WeekendInput): WeekendOption[] {
  * home; with connections on and some tries needing one, '~40h there · 2 nonstop · 5 with connections · 3 out'.
  */
 export function weekendMeta(o: WeekendOption, showConnections = false): string {
-  const t = o.tries.length;
-  const head = `~${o.hoursThere}h there`;
+  const n = o.tries.length;
+  const head = t('weekend.there', { h: o.hoursThere });
   // Non-breaking spaces keep each fact whole when the line wraps.
   const nb = (s: string) => s.replace(/ /g, '\u00A0');
-  if (showConnections && o.directTries < t) return `${nb(head)} · ${nb(`${o.directTries} nonstop`)} · ${nb(`${t} with connections`)}`;
-  return `${nb(head)} · ${nb(`${t} ${t === 1 ? 'try' : 'tries'} home`)} · ${nb(`${o.out.length} out`)}`;
+  if (showConnections && o.directTries < n) {
+    return `${nb(head)} · ${nb(t('weekend.nonstopCount', { n: o.directTries }))} · ${nb(t('weekend.withConn', { n }))}`;
+  }
+  return `${nb(head)} · ${nb(t('weekend.tries', { n }))} · ${nb(t('weekend.out', { n: o.out.length }))}`;
 }
 
 /** Why a window cannot be searched, or null. Dates and times are hub-local. */
 export function windowProblem(w: WeekendWindow, hub: string, nowMs: number): string | null {
   const clock = (h: string) => /^\d\d:\d\d$/.test(h);
-  if (!isDateKey(w.leaveKey) || !isDateKey(w.homeKey) || !clock(w.leaveHhmm) || !clock(w.homeHhmm)) return 'Enter a date and time';
+  if (!isDateKey(w.leaveKey) || !isDateKey(w.homeKey) || !clock(w.leaveHhmm) || !clock(w.homeHhmm)) return t('weekend.p.date');
   const tz = airportTz(hub);
-  if (toUtcMs(w.homeKey, w.homeHhmm, tz) <= nowMs) return 'Home-by is in the past';
+  if (toUtcMs(w.homeKey, w.homeHhmm, tz) <= nowMs) return t('weekend.p.past');
   const to = getCoverage(hub).to;
   if (to && (w.leaveKey > to || w.homeKey > to)) {
-    return `Schedules only go to ${formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    return t('weekend.p.schedules', { date: formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' }) });
   }
-  if (!windowValid(w, hub)) return 'Home-by has to be after leave-after';
+  if (!windowValid(w, hub)) return t('weekend.p.order');
   return null;
 }

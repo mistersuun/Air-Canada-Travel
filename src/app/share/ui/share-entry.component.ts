@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
+import { t } from '../../i18n/t';
 import { tripSharePath } from '../../extras/links';
 import type { Trip } from '../../trips/model';
 
@@ -15,7 +16,7 @@ import type { Trip } from '../../trips/model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <a class="ui-btn ui-btn--sm ui-btn--ghost se" [routerLink]="path()" data-share-entry>
-      <app-icon name="share" [size]="16" /> Share as image or text
+      <app-icon name="share" [size]="16" /> {{ t('share.entry') }}
     </a>
   `,
   styles: [`
@@ -24,6 +25,7 @@ import type { Trip } from '../../trips/model';
   `],
 })
 export class ShareEntryComponent {
+  protected readonly t = t;
   readonly trip = input.required<Trip>();
   protected readonly path = computed(() => tripSharePath(this.trip().id));
 }

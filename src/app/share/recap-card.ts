@@ -9,6 +9,7 @@
  * recapLayout() is pure (positions only, tested); renderRecapCard() draws it
  * with the trip card's canvas helpers.
  */
+import { t } from '../i18n/t';
 import { geoInterpolate, geoNaturalEarth1, geoPath } from 'd3-geo';
 import { PHOTO_BASE } from '../state/photo.service';
 import { LAND_URL, type LandCollection, topologyToLand } from '../state/geo.service';
@@ -105,7 +106,7 @@ export function recapLayout(head: RecapHead): RecapLayout {
     blocks.push({ kind: 'photo', y: 0, h: RECAP_PHOTO_H });
     y = RECAP_PHOTO_H + 52;
   }
-  blocks.push({ kind: 'eyebrow', y, text: 'TRIP RECAP' });
+  blocks.push({ kind: 'eyebrow', y, text: t('share.card.recap') });
   y += 52;
   const size = fit(head.title, FONT.title, 112, 64, measure);
   blocks.push({ kind: 'title', y, text: ellipsizeText(head.title, FONT.title(size), INNER, measure), size });
@@ -132,7 +133,7 @@ export function recapLayout(head: RecapHead): RecapLayout {
     y += 56;
   }
   const height = Math.max(head.photo ? CARD_MIN_H : NO_PHOTO_MIN_H, y + 48 + FOOT_H + PAD);
-  blocks.push({ kind: 'footer', y: height - PAD - FOOT_H, mark: 'Routes', fine: 'Made on this phone' });
+  blocks.push({ kind: 'footer', y: height - PAD - FOOT_H, mark: 'Routes', fine: t('share.card.madeOn') });
   return { width: CARD_WIDTH, height, blocks };
 }
 
@@ -157,7 +158,7 @@ export function recapExtras(trip: Trip, opts: Pick<RecapOptions, 'outcomes' | 'a
   const mine = new Set([...tripBoardedFlights(trip), ...flights].map(f => f.key));
   const all = boardedFlights({ outcomes: [...(opts.outcomes ?? [])] }, opts.allTrips ?? [trip], scheduleDetail);
   const earned = milestones(all).filter(m => mine.has(m.flightKey)).map(m => m.label);
-  return { flags, flagCodes, badges: earned.length ? `New: ${earned.join(' · ')}` : '' };
+  return { flags, flagCodes, badges: earned.length ? t('share.card.new', { list: earned.join(' · ') }) : '' };
 }
 
 function lngLat(code: string): [number, number] | null {

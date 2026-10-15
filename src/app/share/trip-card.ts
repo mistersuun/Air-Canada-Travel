@@ -9,6 +9,7 @@
  * local · not a ticket". Built only from tripShareRows(): no booking codes,
  * passes or files can reach it.
  */
+import { t } from '../i18n/t';
 import { ICON_PATHS, type IconName } from '../components/shared/icons.component';
 import type { GroundMode, Trip } from '../trips/model';
 import { type ShareOptions, type ShareRow, shareSubtitle, splitNote, tripShareRows } from './trip-share-text';
@@ -141,7 +142,7 @@ export function cardLayout(rows: ShareRow[], head: CardHead): CardLayout {
   const measure = head.measure ?? approxMeasure;
   const blocks: CardBlock[] = [];
   let y = PAD;
-  blocks.push({ kind: 'eyebrow', y, text: 'TRIP PLAN' });
+  blocks.push({ kind: 'eyebrow', y, text: t('share.card.tripPlan') });
   y += 52;
   const size = titleSize(head.title, measure);
   blocks.push({ kind: 'title', y, text: head.title, size });
@@ -170,16 +171,16 @@ export function cardLayout(rows: ShareRow[], head: CardHead): CardLayout {
   }
   if (shown < rows.length) {
     const n = rows.length - shown;
-    blocks.push({ kind: 'more', y, h: MORE_H, text: `+${n} more ${n === 1 ? 'leg' : 'legs'} in the app` });
+    blocks.push({ kind: 'more', y, h: MORE_H, text: t('share.card.more', { n }) });
     y += MORE_H;
   }
   if (noteH) {
     y += 30;
-    blocks.push({ kind: 'note', y, h: noteH, label: 'IF WE SPLIT UP', lines: noteLines });
+    blocks.push({ kind: 'note', y, h: noteH, label: t('share.card.split'), lines: noteLines });
     y += noteH;
   }
   const height = Math.min(CARD_MAX_H, Math.max(CARD_MIN_H, y + 48 + FOOT_H + PAD));
-  blocks.push({ kind: 'footer', y: height - PAD - FOOT_H, mark: 'Routes', fine: 'Times local · not a ticket' });
+  blocks.push({ kind: 'footer', y: height - PAD - FOOT_H, mark: 'Routes', fine: t('share.card.fine') });
   return { width: CARD_WIDTH, height, blocks };
 }
 

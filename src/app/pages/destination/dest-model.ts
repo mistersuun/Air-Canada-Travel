@@ -2,6 +2,8 @@
  * Destination page model: pure functions over the schedule engine, so the
  * page template stays thin and every rule has a spec.
  */
+import { regionLabel } from '../../i18n/labels';
+import { t } from '../../i18n/t';
 import type { Coverage } from '../../data/schedule-index';
 import { isCovered } from '../../data/schedule-index';
 import { isRouteOnly, routeFact, routeFactDetail } from '../../data/route-network';
@@ -11,7 +13,7 @@ import {
 } from '../../utils/connections';
 import { routeSeason } from '../../utils/season';
 import {
-  WEEKDAY_SHORT, addDays, addMonths, diffDays, formatClock, formatKey, monthKeys, monthOf, overriddenZoneLabel, weekKeys, weekdayIndex,
+  addDays, addMonths, diffDays, formatClock, formatKey, monthKeys, monthOf, overriddenZoneLabel, weekKeys, weekdayIndex, weekdayShort,
 } from '../../utils/time';
 import { coverageHubFor, flightsOn, nextFlightDate } from '../../utils/week';
 import { monthAvailability } from '../../utils/routes';
@@ -118,13 +120,13 @@ export function nextConnectionDate(
 
 /** 'Today, Oct 1' / 'Fri, Oct 2' (the mockup's date line). */
 export function timelineDay(key: string, today: string): string {
-  const day = key === today ? 'Today' : WEEKDAY_SHORT[weekdayIndex(key)];
+  const day = key === today ? t('format.today') : weekdayShort(weekdayIndex(key));
   return `${day}, ${formatKey(key, { month: 'short', day: 'numeric' })}`;
 }
 
 /** Flight numbers of an itinerary: 'AC5', 'AC300 + AC1', 'Estimated + AC1'. */
 export function itinFlights(it: Itinerary): string {
-  return it.legs.map(l => prettyFlight(l.flightNumber) || 'Estimated').join(' + ');
+  return it.legs.map(l => prettyFlight(l.flightNumber) || t('dest.estimated')).join(' + ');
 }
 
 /**
@@ -144,13 +146,13 @@ export function timelineItems(
     const soon = countdownFirst && i === 0 && it.departUtc - nowMs < 24 * 3600_000;
     const offset = it.arrDayOffset ? ` ${it.arrDayOffset > 0 ? '+' : '−'}${Math.abs(it.arrDayOffset)}` : '';
     const sub = it.hubs.length
-      ? `1 stop · ${it.hubs.join(' ')} · ${hm(it.totalMin)}`
+      ? `${t('format.stops', { n: 1, hubs: it.hubs.join(' ') })} · ${hm(it.totalMin)}`
       : [aircraftCompact(first.aircraft), hm(it.totalMin)].filter(Boolean).join(' · ');
     return {
       it,
       dateLabel: timelineDay(it.dateKey, today) + (soon ? ` · ${countdown(it.departUtc - nowMs)}` : ''),
       time: formatClock(first.depLocal, fmt),
-      detail: `${itinFlights(it)} · arrives ${formatClock(last.arrLocal, fmt)}${offset}`,
+      detail: t('dest.arrives', { flights: itinFlights(it), time: formatClock(last.arrLocal, fmt), offset }),
       sub,
     };
   });
@@ -193,12 +195,12 @@ export function destSummary(hub: string, dest: string, weekStart: string, sample
   const weekFlights = flying.flatMap(d => d.flights);
   const directSample = sample.filter(it => !it.hubs.length).map(it => it.legs[0]);
   const flights = weekFlights.length ? weekFlights : directSample;
-  const season = routeSeason(hub, dest) ?? 'Year-round';
+  const season = routeSeason(hub, dest) ?? t('dest.yearRound');
   if (flights.length) {
     const minDur = Math.min(...flights.map(f => f.durationMin));
     const code = mostFrequent(flights.map(f => f.aircraft).filter((a): a is string => !!a));
     const operates = operatesLabel(flying.map(d => d.k));
-    const stops = `Nonstop · ${hm(minDur)}`;
+    const stops = `${t('format.nonstop')} · ${hm(minDur)}`;
     const days = flying.length;
     return {
       direct: true,
@@ -208,13 +210,13 @@ export function destSummary(hub: string, dest: string, weekStart: string, sample
       aircraft: aircraftName(code),
       aircraftShort: shortAircraft(code),
       season,
-      meta: [stops, days ? `${days}× this week` : '', shortAircraft(code)].filter(Boolean).join(' · '),
+      meta: [stops, days ? t('dest.timesWeek', { n: days }) : '', shortAircraft(code)].filter(Boolean).join(' · '),
     };
   }
   const conn = sample.find(it => it.hubs.length);
   if (conn) {
     const code = mostFrequent(conn.legs.map(l => l.aircraft).filter((a): a is string => !!a));
-    const stops = `1 stop · via ${conn.hubs[0]}`;
+    const stops = t('format.stops', { n: 1, hubs: t('format.via', { hubs: conn.hubs[0] }) });
     return {
       direct: false,
       stops,
@@ -235,7 +237,7 @@ export function destSummary(hub: string, dest: string, weekStart: string, sample
 
 /** 'Japan · Asia & Pacific'; just 'USA' when the region repeats the country. */
 export function placeLabel(country: string, region: string): string {
-  return country === region || !region ? country : `${country} · ${region}`;
+  return country === region || !region ? country : `${country} · ${regionLabel(region)}`;
 }
 
 export type DestState =
@@ -295,13 +297,13 @@ export interface NextDeparture {
 export function nextDeparture(it: Itinerary | null | undefined, today: string, fmt: TimeFormat = '24h'): NextDeparture | null {
   if (!it) return null;
   const d = diffDays(today, it.dateKey);
-  const day = d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : formatKey(it.dateKey, { weekday: 'short', month: 'short', day: 'numeric' });
+  const day = d === 0 ? t('format.today') : d === 1 ? t('format.tomorrow') : formatKey(it.dateKey, { weekday: 'short', month: 'short', day: 'numeric' });
   const last = it.legs[it.legs.length - 1];
-  const arrDay = WEEKDAY_SHORT[weekdayIndex(it.arrDateKey)];
+  const arrDay = weekdayShort(weekdayIndex(it.arrDateKey));
   return {
     it,
     when: `${day} · ${formatClock(it.legs[0].depLocal, fmt)}`,
-    detail: `${itinFlights(it)} · arrives ${arrDay} ${formatClock(last.arrLocal, fmt)} local`,
+    detail: t('dest.arrivesLocal', { flights: itinFlights(it), day: arrDay, time: formatClock(last.arrLocal, fmt) }),
   };
 }
 
@@ -352,10 +354,10 @@ export function availMonth(
     const off = a.dateKey < today || !a.covered;
     const connect = !a.direct && a.connect && !off;
     const day = formatKey(a.dateKey, { weekday: 'short', month: 'short', day: 'numeric' });
-    const what = !a.covered ? 'not yet published'
-      : a.direct ? `${a.direct} nonstop departure${a.direct > 1 ? 's' : ''}`
-      : connect ? 'connection only'
-      : 'no flights';
+    const what = !a.covered ? t('dest.avail.unpublished')
+      : a.direct ? t('dest.avail.nonstop', { n: a.direct })
+      : connect ? t('dest.avail.connOnly')
+      : t('dest.avail.none');
     return {
       dateKey: a.dateKey,
       day: Number(a.dateKey.slice(8)),
@@ -363,7 +365,7 @@ export function availMonth(
       connect,
       off,
       fill: off ? 0 : Math.min(100, Math.round((a.direct / 3) * 100)),
-      label: `${day}: ${what}`,
+      label: t('dest.avail.label', { day, what }),
     };
   });
   return {

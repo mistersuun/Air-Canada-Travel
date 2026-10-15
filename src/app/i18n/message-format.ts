@@ -2,7 +2,7 @@
  * A small ICU MessageFormat subset (docs/i18n.md), enough for UI text:
  *
  *   'Hello {name}'                                   argument
- *   '{n, plural, =0 {none} one {# try} other {# tries}}'   plural ('#' = the count)
+ *   '{n, plural, =0 {none} one {# try} other {# tries}}'   plural ('#' = the count, as a locale number)
  *   '{kind, select, starts {Starts} other {Ends}}'   select
  *   '{n, number}'                                     locale number ('1 234' in French)
  *
@@ -26,6 +26,8 @@ function parse(msg: string): Node[] {
   if (!out) {
     const p = { s: msg, i: 0 };
     out = parseNodes(p, false);
+    // parseNodes stops at a '}' it did not open: at the top level that is a stray brace.
+    if (p.i < msg.length) throw new Error(`Unbalanced '}' in message: ${msg}`);
     if (parsed.size > 2000) parsed.clear();
     parsed.set(msg, out);
   }
@@ -44,7 +46,7 @@ function parseNodes(p: { s: string; i: number }, inPlural: boolean): Node[] {
     if (c === '}') break;
     if (c === '{') {
       flush();
-      nodes.push(parseArg(p));
+      nodes.push(parseArg(p, inPlural));
       continue;
     }
     if (c === '#' && inPlural) {
@@ -60,7 +62,8 @@ function parseNodes(p: { s: string; i: number }, inPlural: boolean): Node[] {
   return nodes;
 }
 
-function parseArg(p: { s: string; i: number }): Node {
+/** `inPlural`: '#' in a select's cases is the count of the plural around it. */
+function parseArg(p: { s: string; i: number }, inPlural: boolean): Node {
   p.i++; // '{'
   const close = (): void => {
     if (p.s[p.i] !== '}') throw new Error(`Unclosed argument in message: ${p.s}`);
@@ -79,7 +82,7 @@ function parseArg(p: { s: string; i: number }): Node {
     const sel = /^\s*(=\d+|[\w-]+)\s*\{/.exec(p.s.slice(p.i));
     if (!sel) break;
     p.i += sel[0].length;
-    cases[sel[1]] = parseNodes(p, type === 'plural');
+    cases[sel[1]] = parseNodes(p, type === 'plural' || inPlural);
     close();
   }
   while (/\s/.test(p.s[p.i] ?? '')) p.i++;
@@ -108,11 +111,16 @@ function render(nodes: Node[], params: MsgParams, tag: string, count: number | n
   let out = '';
   for (const n of nodes) {
     if (typeof n === 'string') out += n;
-    else if (n.kind === 'hash') out += count === null ? '#' : String(count);
+    else if (n.kind === 'hash') out += count === null ? '#' : formatNumberIn(tag, count);
     else if (n.kind === 'arg') {
       const v = params[n.name];
       out += v === undefined ? `{${n.name}}` : n.number && typeof v === 'number' ? formatNumberIn(tag, v) : String(v);
     } else if (n.kind === 'plural') {
+      // A missing count shows the placeholder, like a missing argument (not 'NaN').
+      if (params[n.name] === undefined) {
+        out += `{${n.name}}`;
+        continue;
+      }
       const v = Number(params[n.name]);
       const exact = n.cases[`=${v}`];
       const branch = exact ?? n.cases[Number.isFinite(v) ? rules(tag).select(v) : 'other'] ?? n.cases['other'];

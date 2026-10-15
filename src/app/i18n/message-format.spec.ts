@@ -45,9 +45,36 @@ describe('formatMessage', () => {
     expect(formatNumberIn('fr-CA', 1234)).toMatch(/^1\s234$/u);
   });
 
+  it("formats '#' as a locale number", () => {
+    const en = '{n, plural, one {# flight} other {# flights}}';
+    expect(formatMessage(en, { n: 1234 }, 'en-US')).toBe('1,234 flights');
+    expect(formatMessage(en, { n: 1.5 }, 'en-US')).toBe('1.5 flights');
+    const fr = '{n, plural, one {# vol} other {# vols}}';
+    expect(formatMessage(fr, { n: 1234 }, 'fr-CA')).toMatch(/^1\s234 vols$/u);
+    expect(formatMessage(fr, { n: 1.5 }, 'fr-CA')).toBe('1,5 vol');
+  });
+
+  it("fills '#' inside a select nested in a plural", () => {
+    const msg = '{n, plural, one {{kind, select, bag {# bag} other {# item}}} other {{kind, select, bag {# bags} other {# items}}}}';
+    expect(formatMessage(msg, { n: 1, kind: 'bag' }, 'en-US')).toBe('1 bag');
+    expect(formatMessage(msg, { n: 3, kind: 'bag' }, 'en-US')).toBe('3 bags');
+    expect(formatMessage(msg, { n: 3, kind: 'box' }, 'en-US')).toBe('3 items');
+    // Outside any plural, '#' stays text.
+    expect(formatMessage('{kind, select, other {Gate #{gate}}}', { kind: 'x', gate: 4 }, 'en-US')).toBe('Gate #4');
+  });
+
+  it('shows a missing plural count as its placeholder, not NaN', () => {
+    expect(formatMessage('{n, plural, one {# try} other {# tries}}', {}, 'en-US')).toBe('{n}');
+    expect(formatMessage('{n, plural, one {# try} other {# tries}} left', undefined, 'en-US')).toBe('{n} left');
+  });
+
   it('rejects malformed messages', () => {
     expect(() => formatMessage('{n, plural, one {x}}', { n: 1 }, 'en-US')).toThrow(/other/);
     expect(() => formatMessage('{n', { n: 1 }, 'en-US')).toThrow();
+    // A stray top-level '}' (it used to silently cut the message short).
+    expect(() => formatMessage('Hello {name}} again', { name: 'x' }, 'en-US')).toThrow(/Unbalanced/);
+    expect(() => formatMessage('Oops }', {}, 'en-US')).toThrow(/Unbalanced/);
+    expect(() => messageArgs('{n, plural, other {#}}}')).toThrow(/Unbalanced/);
   });
 });
 

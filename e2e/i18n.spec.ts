@@ -27,6 +27,25 @@ test('Settings switches the app to Français, live and after a reload', async ({
   expect(problems).toEqual([]);
 });
 
+test('the tab title follows a language switch on /map without a reload', async ({ page }) => {
+  await seedOnboarded(page);
+  const problems = await watchErrors(page);
+  await page.goto('/map');
+  await expect(page).toHaveTitle('Map · Routes');
+  // A reload would lose this marker.
+  await page.evaluate(() => ((window as unknown as Record<string, unknown>)['__noReload'] = true));
+
+  await page.getByRole('button', { name: 'Settings' }).first().click();
+  await page.getByRole('dialog', { name: 'Settings' }).locator('app-seg[data-setting="language"] button', { hasText: 'Français' }).click();
+  await expect(page).toHaveTitle('Carte · Routes');
+
+  const sheet = page.getByRole('dialog', { name: 'Paramètres' });
+  await sheet.locator('app-seg[data-setting="language"] button', { hasText: 'English' }).click();
+  await expect(page).toHaveTitle('Map · Routes');
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>)['__noReload'])).toBe(true);
+  expect(problems).toEqual([]);
+});
+
 test.describe('on a French device', () => {
   test.use({ locale: 'fr-CA' });
 
@@ -35,5 +54,10 @@ test.describe('on a French device', () => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Sans escale cette semaine' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr-CA');
+
+    await page.getByRole('button', { name: 'Paramètres' }).first().click();
+    const seg = page.getByRole('dialog', { name: 'Paramètres' }).locator('app-seg[data-setting="language"]');
+    await expect(seg.getByRole('button', { name: 'Automatique' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(seg.getByRole('button', { name: 'Français' })).toHaveAttribute('aria-pressed', 'false');
   });
 });

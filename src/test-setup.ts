@@ -2,6 +2,8 @@
  * Vitest global setup (jsdom).
  *
  * - Installs public/data/schedules.json as the published schedule data.
+ * - Loads the French catalogue (lazy in the app) and resets the UI language
+ *   to English after every test.
  * - Initialises the Angular TestBed environment. The app bootstraps with
  *   Angular 21's default zoneless change detection (main.ts has no
  *   provideZoneChangeDetection), and TestBed is zoneless by default too, so no
@@ -18,12 +20,20 @@ import '@angular/compiler';
 import { readFileSync } from 'node:fs';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
+import { afterEach } from 'vitest';
 import { installSchedules } from './app/data/schedule-index';
+import { setLocale } from './app/i18n/locale';
+import { loadCatalogue } from './app/i18n/t';
 
 // The published schedules (the app fetches this file at startup). Specs that
 // need stable data inject fixtures with setScheduleSource; resetScheduleSource
 // comes back to this.
 installSchedules(JSON.parse(readFileSync(`${process.cwd()}/public/data/schedules.json`, 'utf8')));
+
+// The French catalogue is a lazy chunk in the app; load it up front so specs
+// can switch with a synchronous setLocale('fr'). Every spec ends in English.
+await loadCatalogue('fr');
+afterEach(() => setLocale('en'));
 
 const testBed = getTestBed();
 try {

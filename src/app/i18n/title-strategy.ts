@@ -1,4 +1,4 @@
-import { EnvironmentInjector, Injectable, effect, inject, runInInjectionContext } from '@angular/core';
+import { EnvironmentInjector, Injectable, effect, inject, runInInjectionContext, untracked } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRouteSnapshot, Resolve, ResolveFn, RouterStateSnapshot, TitleStrategy } from '@angular/router';
 import { locale } from './locale';
@@ -19,9 +19,13 @@ export class I18nTitleStrategy extends TitleStrategy {
 
   constructor() {
     super();
+    // Tracks the locale only: a title resolver that reads other signals must not
+    // re-run the effect (titles otherwise change on navigation).
     effect(() => {
       locale();
-      if (this.last) this.updateTitle(this.last);
+      untracked(() => {
+        if (this.last) this.updateTitle(this.last);
+      });
     });
   }
 

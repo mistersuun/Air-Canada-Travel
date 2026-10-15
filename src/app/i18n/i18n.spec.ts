@@ -18,6 +18,7 @@ const SAME_IN_FRENCH: ReadonlySet<string> = new Set<MsgKey>([
   'data.region.europe', 'data.hub.YUL',
   'format.via', 'format.range.twoMonths',
   'home.destinations', 'home.week.destinations', 'home.badge.at', 'home.filter.sort.az', 'home.chips.via',
+  'flight.cell.date', 'flight.viaPlace', 'map.sort.distance', 'map.count', 'share.mode.train', 'share.trip.tabImage',
 ]);
 
 afterEach(() => setLocale('en'));

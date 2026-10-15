@@ -17,7 +17,7 @@ import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component'
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { destPath } from '../../ui/links';
 import { findDestination } from '../../utils/airports';
-import { ROUTE_ONLY_NOTE } from '../../data/route-network';
+import { routeOnlyNote } from '../../data/route-network';
 import { rowMeta, upcoming } from '../saved/saved-model';
 import { TripCardComponent } from './plan/trip-card.component';
 import { returnNotListed } from './trips-model';
@@ -190,7 +190,7 @@ export class TripsPage {
       ...up.rest.map(n => ({
         code: n.code,
         meta: n.via ? `${n.country} · ${t('format.via', { hubs: n.via })}`
-          : n.routeOnly ? `${n.country} · ${ROUTE_ONLY_NOTE}`
+          : n.routeOnly ? `${n.country} · ${routeOnlyNote()}`
           : `${n.country} · ${t('trips.model.notFoundData')}`,
       })),
     ];

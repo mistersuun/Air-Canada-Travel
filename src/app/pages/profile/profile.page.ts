@@ -228,6 +228,7 @@ export const DEFAULT_MAX_HOURS = 7;
     }
     .stepper button:disabled { color: var(--ink-3); cursor: default; }
     .stepper b { min-width: 22px; text-align: center; font-weight: 650; }
+    app-seg[data-length] ::ng-deep .seg__b { white-space: normal; line-height: 1.15; text-align: center; min-height: 44px; }
     .onw { width: 128px; flex: none; }
     .onw ::ng-deep .seg__b { flex: 1; min-height: 38px; }
     .dow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }

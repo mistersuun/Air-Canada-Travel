@@ -209,7 +209,7 @@ import { reachTitle } from './reach-title';
     .also a { color: var(--blue); font-weight: 500; display: inline-block; padding: 6px 2px; }
     .also a:hover { text-decoration: underline; }
     .acts { display: flex; gap: 10px; align-items: center; padding: 14px; }
-    .acts .ui-btn { flex: 1; min-width: 0; padding-inline: 10px; }
+    .acts .ui-btn { flex: 1; min-width: 0; padding-inline: 10px; white-space: normal; text-align: center; line-height: 1.2; }
     .foot { margin: 12px 4px 0; font-size: 12.5px; }
 
     @media (min-width: 720px) {

@@ -46,7 +46,7 @@ describe('DestinationPage in French', () => {
     expect(tags[3]).toBe("Toute l'année");
     expect(text('.next__when')).toBe("Aujourd'hui · 22:10");
     expect(text()).toContain('Prochain départ');
-    expect(text()).toContain('Planifier les dates');
+    expect(text()).toContain('Choisir les dates');
     expect(text()).toContain('Fuseau horaire');
     expect(el.querySelector('[aria-label="Retour"]')).not.toBeNull();
     expect([...el.querySelectorAll('app-seg button')].map(b => b.textContent!.trim())).toContain('Départs');
@@ -56,7 +56,7 @@ describe('DestinationPage in French', () => {
   it('says a route is not served in French', async () => {
     setLocale('fr');
     const { text } = await render('NRT');
-    expect(text('.notice')).toMatch(/Non desservie|Non publié|Avec correspondance|Aucun vol sans escale/);
+    expect(text('.notice')).toMatch(/Non desservie|Non publié|Correspondances seulement|Aucun vol sans escale/);
     expect(text('.notice')).not.toMatch(/Not served|Not published|Connections only|No nonstop/);
   });
 });

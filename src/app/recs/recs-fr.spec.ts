@@ -37,11 +37,11 @@ describe('recommendations in French', () => {
     expect(nbsp(lw.name!)).toBe('Action de grâce : longue fin de semaine');
     expect(lw.when).toBe('dans 8 jours');
     expect(lw.aside).toBe('ven. 9 oct. → lun. 12 oct.');
-    expect(nbsp(lw.items[0].lines.map(l => l.text).join(' | '))).toBe("6 vols à l'aller ven. · 6 au retour lun. | Environ 1 h 30 par trajet");
+    expect(nbsp(lw.items[0].lines.map(l => l.text).join(' | '))).toBe("6 vols à l'aller ven. · 6 au retour lun. | Environ 1 h 30 dans chaque sens");
     expect(nbsp(whyText(lw.items[0]))).toContain('Lundi férié. Vous voyagez');
-    expect(groups.map(g => g.title)).toContain('Fin de saison bientôt');
+    expect(groups.map(g => g.title)).toContain('La saison se termine bientôt');
     const more = groups.find(g => g.id === 'more')!;
-    expect(more.title).toBe('Plus pour vous');
+    expect(more.title).toBe('Autres idées pour vous');
     expect(nbsp(more.items[0].lines[0].text)).toBe('AC870 21:35 la plupart des soirs · environ 6 h 45');
     expect(nbsp(whyText(more.items[0]))).toBe('Style correspondant : Ville, vol de moins de 7 h.');
   });

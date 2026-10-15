@@ -2,7 +2,7 @@ import type { Translation } from '../catalogue';
 import type { map as en } from '../en/map';
 
 export const map: Translation<typeof en> = {
-  'map.title': 'Carte des routes',
+  'map.title': 'Carte des liaisons',
   'map.search': 'Rechercher sur la carte',
   'map.clearSearch': 'Effacer la recherche',
   'map.recentre': 'Recentrer sur {hub}',
@@ -13,7 +13,7 @@ export const map: Translation<typeof en> = {
   'map.sortBy': 'Trier par',
   'map.sort.distance': 'Distance',
   'map.sort.time': 'Durée',
-  'map.connGroup': 'Avec correspondance seulement · {n}',
+  'map.connGroup': 'Correspondances seulement · {n}',
   'map.open': 'Ouvrir {city}',
   'map.noMatch': 'Aucune destination ne correspond à «\u00a0{query}\u00a0».',
   'map.notPublished': 'Les horaires de cette semaine ne sont pas encore publiés.',

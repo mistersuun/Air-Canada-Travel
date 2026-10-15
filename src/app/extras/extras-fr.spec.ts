@@ -24,7 +24,7 @@ describe('day of travel text in French', () => {
   afterEach(() => setLocale('en'));
 
   it('boarding passes', () => {
-    expect(swapOfferText('AC812')).toBe('Cette carte est pour AC812 (votre vol de secours). Remplacer ce segment par AC812?');
+    expect(swapOfferText('AC812')).toBe('Cette carte est pour AC812 (votre vol de rechange). Remplacer ce segment par AC812?');
     expect(noBarcodeText()).toBe('Aucun code-barres trouvé dans cette image.');
     expect(nb(removedAfterTripText(2))).toBe('2 cartes d\'embarquement supprimées après votre voyage');
     expect(removedAfterTripText(1)).toBe('1 carte d\'embarquement supprimée après votre voyage');

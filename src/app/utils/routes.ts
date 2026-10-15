@@ -27,11 +27,11 @@ export type SortKey = 'az' | 'departure' | 'duration' | 'days' | 'newest';
 export type DepartWindow = 'morning' | 'afternoon' | 'evening' | 'redeye';
 
 /** Local departure windows in minutes since midnight, [start, end). Red-eye wraps midnight. */
-export const DEPART_WINDOWS: Record<DepartWindow, { label: string; start: number; end: number }> = {
-  morning: { label: 'Morning', start: 5 * 60, end: 12 * 60 },
-  afternoon: { label: 'Afternoon', start: 12 * 60, end: 17 * 60 },
-  evening: { label: 'Evening', start: 17 * 60, end: 22 * 60 },
-  redeye: { label: 'Red-eye', start: 22 * 60, end: 5 * 60 },
+export const DEPART_WINDOWS: Record<DepartWindow, { start: number; end: number }> = {
+  morning: { start: 5 * 60, end: 12 * 60 },
+  afternoon: { start: 12 * 60, end: 17 * 60 },
+  evening: { start: 17 * 60, end: 22 * 60 },
+  redeye: { start: 22 * 60, end: 5 * 60 },
 };
 
 export interface Filters {

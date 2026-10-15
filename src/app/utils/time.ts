@@ -320,10 +320,16 @@ export function formatClock(hhmm: string, format: '12h' | '24h' = '24h'): string
   return t(h < 12 ? 'format.clock.am' : 'format.clock.pm', { h: h12, mm: pad2(min % 60) });
 }
 
+/** Intl.DateTimeFormat instances by language tag and options (building one is the costly part). */
+const DATE_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
 /** Formats a date key with Intl (calendar date, no zone shift), in the UI language unless an Intl `tag` is given. */
 export function formatKey(key: string, opts: Intl.DateTimeFormatOptions, tag = intlLocale()): string {
   const [y, m, d] = key.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString(tag, { ...opts, timeZone: 'UTC' });
+  const id = `${tag}|${JSON.stringify(opts)}`;
+  let fmt = DATE_FORMATS.get(id);
+  if (!fmt) DATE_FORMATS.set(id, fmt = new Intl.DateTimeFormat(tag, { ...opts, timeZone: 'UTC' }));
+  return fmt.format(new Date(Date.UTC(y, m - 1, d, 12)));
 }
 
 /** A known Monday, for weekday names. */

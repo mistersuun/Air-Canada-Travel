@@ -3,9 +3,10 @@ import {
   ChangeDetectionStrategy, booleanAttribute, Component, DOCUMENT, ElementRef, computed, inject, input, output, viewChild,
 } from '@angular/core';
 import type { Coverage } from '../data/schedule-index';
+import { t } from '../i18n/t';
 import { formatWeekLabel } from '../utils/week';
 import {
-  WEEKDAY_LONG, WEEKDAY_SHORT, addDays, dateKey, formatKey, isDateKey, weekKeys, weekStartKey as mondayOf,
+  addDays, dateKey, formatKey, isDateKey, weekKeys, weekStartKey as mondayOf, weekdayShort,
 } from '../utils/time';
 import { IconComponent } from '../components/shared/icons.component';
 import { shortcutAllowed } from '../shell/keyboard';
@@ -44,9 +45,9 @@ export const SWIPE_PX = 50;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown)': 'onKey($event)' },
   template: `
-    <div class="ws" role="group" [attr.aria-label]="'Week of ' + fullLabel()">
+    <div class="ws" role="group" [attr.aria-label]="t('ui.week.aria', { week: fullLabel() })">
       <button type="button" class="nav nav--prev ui-circ ui-circ--glass" (click)="prev.emit()" [disabled]="prevDisabled()"
-              [attr.aria-label]="'Previous week, ' + weekRange(-7)">
+              [attr.aria-label]="t('ui.week.prev', { range: weekRange(-7) })">
         <app-icon name="chevron-left" [size]="18" [strokeWidth]="2" />
       </button>
       <div class="wk" [class.ui-glass]="glass()" (pointerdown)="swipeStart($event)" (pointerup)="swipeEnd($event)"
@@ -65,30 +66,30 @@ export const SWIPE_PX = 50;
         }
       </div>
       <button type="button" class="nav nav--next ui-circ ui-circ--glass" (click)="next.emit()" [disabled]="nextDisabled()"
-              [attr.aria-label]="'Next week, ' + weekRange(7)">
+              [attr.aria-label]="t('ui.week.next', { range: weekRange(7) })">
         <app-icon name="chevron-right" [size]="18" [strokeWidth]="2" />
       </button>
     </div>
     <div class="cap" [class.is-current]="isCurrentWeek()">
       <button type="button" class="cap__label" (click)="openPicker()"
-              [attr.aria-label]="'Week of ' + fullLabel() + '. Choose a date'">
+              [attr.aria-label]="t('ui.week.choose', { week: fullLabel() })">
         <app-icon name="calendar" [size]="15" /><span class="tn">{{ rangeLabel() }}</span>
       </button>
       <span class="cap__end">
         @if (!isCurrentWeek()) {
-          <button type="button" class="ui-link cap__today" (click)="jumpTo.emit(todayKey())">This week</button>
+          <button type="button" class="ui-link cap__today" (click)="jumpTo.emit(todayKey())">{{ t('ui.week.thisWeek') }}</button>
         }
         <button type="button" class="cap__nav" (click)="prev.emit()" [disabled]="prevDisabled()"
-                [attr.aria-label]="'Previous week, ' + weekRange(-7)">
+                [attr.aria-label]="t('ui.week.prev', { range: weekRange(-7) })">
           <app-icon name="chevron-left" [size]="16" [strokeWidth]="2" />
         </button>
         <button type="button" class="cap__nav" (click)="next.emit()" [disabled]="nextDisabled()"
-                [attr.aria-label]="'Next week, ' + weekRange(7)">
+                [attr.aria-label]="t('ui.week.next', { range: weekRange(7) })">
           <app-icon name="chevron-right" [size]="16" [strokeWidth]="2" />
         </button>
       </span>
     </div>
-    <input #picker type="date" class="picker" tabindex="-1" aria-label="Jump to date"
+    <input #picker type="date" class="picker" tabindex="-1" [attr.aria-label]="t('ui.week.jump')"
            [min]="coverage()?.from ?? ''" [max]="coverage()?.to ?? ''"
            [value]="selectedDateKey() ?? weekStartKey()" (change)="onPick($event)">
   `,
@@ -145,6 +146,7 @@ export const SWIPE_PX = 50;
   `],
 })
 export class WeekStripComponent {
+  protected readonly t = t;
   private readonly doc = inject(DOCUMENT);
 
   readonly weekStartKey = input.required<string>();
@@ -170,10 +172,10 @@ export class WeekStripComponent {
     const cov = this.coverage();
     return weekKeys(this.weekStartKey()).map((key, i) => {
       const outside = !!cov && (isOutside(key, cov) || (!cov.from && !cov.to));
-      let label = `${WEEKDAY_LONG[i]}, ${formatKey(key, { month: 'long', day: 'numeric', year: 'numeric' })}`;
-      if (key === today) label += ', today';
-      if (outside) label += ', outside published schedules';
-      return { key, dow: WEEKDAY_SHORT[i], date: +key.slice(8), label, today: key === today, outside, past: key < today };
+      let label = formatKey(key, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      if (key === today) label = t('ui.week.today', { label });
+      if (outside) label = t('ui.week.outsideSuffix', { label });
+      return { key, dow: weekdayShort(i), date: +key.slice(8), label, today: key === today, outside, past: key < today };
     });
   });
 
@@ -200,8 +202,8 @@ export class WeekStripComponent {
   readonly outsideTitle = computed(() => {
     const to = this.coverage()?.to;
     return to
-      ? `Outside published schedules (through ${formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' })})`
-      : 'Outside published schedules';
+      ? t('ui.week.outsideThrough', { date: formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' }) })
+      : t('ui.week.outside');
   });
 
   protected max0(n: number): number {

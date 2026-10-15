@@ -1,3 +1,4 @@
+import { t } from '../i18n/t';
 import { getAircraftCodes } from '../data/schedule-index';
 
 /** IATA equipment families that are twin-aisle (A330/340/350/380, 747/767/777/787). */
@@ -67,7 +68,7 @@ export function aircraftSeats(code: string | null | undefined): number | null {
 /** 'about 298 seats' for a known type, else ''. */
 export function seatsLabel(code: string | null | undefined): string {
   const n = aircraftSeats(code);
-  return n ? `about ${n} seats` : '';
+  return n ? t('flight.seatsAbout', { n }) : '';
 }
 
 const MAKER_RE = /^(Airbus|Boeing|Bombardier|De Havilland|Embraer)\s+/;
@@ -85,7 +86,7 @@ export function aircraftWithSeats(code: string | null | undefined): string {
 /** 'A220-300 · 137 seats': the compact form for list rows. */
 export function aircraftCompact(code: string | null | undefined): string {
   const n = aircraftSeats(code);
-  return [shortAircraft(code), n ? `${n} seats` : ''].filter(Boolean).join(' · ');
+  return [shortAircraft(code), n ? t('flight.seats', { n }) : ''].filter(Boolean).join(' · ');
 }
 
 /** Human name for an IATA equipment code; the code itself when unknown. */

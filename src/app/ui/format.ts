@@ -13,7 +13,7 @@ import type { TimeFormat } from '../state/prefs.service';
 import {
   addDays, diffDays, formatClock, formatKey, overriddenZoneLabel, tzOffsetMin, utcToLocal, weekdayIndex, weekdayShort,
 } from '../utils/time';
-import { formatWeekLabel } from '../utils/week';
+import { formatWeekLabel, weekRangeInYear } from '../utils/week';
 import { t } from '../i18n/t';
 
 // ── From the flight modal ────────────────────────────────────────────────────
@@ -83,14 +83,7 @@ export const STALE_COVERAGE_DAYS = 21;
 export function weekRangeLabel(weekStart: string): string {
   const end = addDays(weekStart, 6);
   if (weekStart.slice(0, 4) !== end.slice(0, 4)) return formatWeekLabel(weekStart);
-  const md = { month: 'short', day: 'numeric' } as const;
-  const parts = {
-    start: formatKey(weekStart, md),
-    end: formatKey(end, md),
-    startDay: formatKey(weekStart, { day: 'numeric' }),
-    endDay: formatKey(end, { day: 'numeric' }),
-  };
-  return t(weekStart.slice(5, 7) === end.slice(5, 7) ? 'format.range.sameMonth' : 'format.range.twoMonths', parts);
+  return weekRangeInYear(weekStart);
 }
 
 // ── Clear Sky compact formats ────────────────────────────────────────────────
@@ -175,11 +168,12 @@ export function relativeCountdown(depUtc: number, now: number, key: string, toda
 /** '+13h', '−3h', '+5h30', '0h': the destination's clock relative to the hub's, at `now`. */
 export function tzDiffLabel(destTz: string, hubTz: string, now: number): string {
   const diff = tzOffsetMin(destTz, now) - tzOffsetMin(hubTz, now);
-  if (!diff) return '0h';
+  if (!diff) return t('format.tz.zero');
   const abs = Math.abs(diff);
   const h = Math.floor(abs / 60);
   const m = abs % 60;
-  return `${diff > 0 ? '+' : '−'}${h}h${m ? String(m).padStart(2, '0') : ''}`;
+  const sign = diff > 0 ? '+' : '−';
+  return m ? t('format.tz.hm', { sign, h, mm: String(m).padStart(2, '0') }) : t('format.tz.h', { sign, h });
 }
 
 /** Short zone name ('JST', 'GMT+1') for display; '' when Intl cannot tell. */

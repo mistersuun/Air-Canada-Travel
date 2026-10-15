@@ -65,7 +65,7 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Oranjestad', country: 'Aruba', code: 'AUA', iso2: 'AW', tz: 'America/Aruba', lat: 12.50, lng: -70.01, region: 'Caribbean', type: 'Sun', duration: '5h 05m', aircraft: 'A319', season: 'Year-round' },
   { city: 'Pointe-à-Pitre', country: 'Guadeloupe', code: 'PTP', iso2: 'GP', tz: 'America/Guadeloupe', lat: 16.27, lng: -61.53, region: 'Caribbean', type: 'Sun', duration: '4h 55m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'Hamilton', country: 'Bermuda', code: 'BDA', iso2: 'BM', tz: 'Atlantic/Bermuda', lat: 32.36, lng: -64.68, region: 'Caribbean', type: 'Sun', duration: '3h 50m', aircraft: 'A319', season: 'Year-round' },
-  { city: 'Port of Spain', country: 'Trinidad & Tobago', code: 'POS', iso2: 'TT', tz: 'America/Port_of_Spain', lat: 10.60, lng: -61.34, region: 'Caribbean', type: 'Sun', duration: '5h 45m', aircraft: '737 MAX 8', season: 'Year-round' },
+  { city: 'Port of Spain', country: 'Trinidad & Tobago', code: 'POS', iso2: 'TT', tz: 'America/Port_of_Spain', lat: 10.60, lng: -61.34, region: 'Caribbean', type: 'Sun', duration: '5h 45m', aircraft: '737 MAX 8', season: 'Year-round' }, // i18n-ignore
   { city: 'Antigua', country: 'Antigua & Barbuda', code: 'ANU', iso2: 'AG', tz: 'America/Antigua', lat: 17.13, lng: -61.79, region: 'Caribbean', type: 'Sun', duration: '4h 50m', aircraft: 'A321', season: 'Mar – Apr' },
   { city: 'Curaçao', country: 'Curaçao', code: 'CUR', iso2: 'CW', tz: 'America/Curacao', lat: 12.19, lng: -68.96, region: 'Caribbean', type: 'Sun', duration: '5h 10m', aircraft: '737 MAX 8', season: 'Year-round' },
   { city: 'George Town', country: 'Cayman Islands', code: 'GCM', iso2: 'KY', tz: 'America/Cayman', lat: 19.29, lng: -81.36, region: 'Caribbean', type: 'Sun', duration: '4h 10m', aircraft: '737 MAX 8', season: 'Year-round' },
@@ -171,7 +171,7 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Budapest', country: 'Hungary', code: 'BUD', iso2: 'HU', tz: 'Europe/Budapest', lat: 47.44, lng: 19.26, region: 'Europe', type: 'City', duration: '14h 40m', aircraft: '787-9', season: 'Jun – Oct', isNew: true },
   { city: 'Catania', country: 'Italy', code: 'CTA', iso2: 'IT', tz: 'Europe/Rome', lat: 37.47, lng: 15.07, region: 'Europe', type: 'City', duration: '14h 40m', aircraft: '787-8', season: 'Jun – Oct', isNew: true },
   { city: 'Azores', country: 'Portugal', code: 'PDL', iso2: 'PT', tz: 'Atlantic/Azores', lat: 37.74, lng: -25.70, region: 'Europe', type: 'Adventure', duration: '9h 45m', aircraft: '737 MAX 8', season: 'Jun – Sep', isNew: true },
-  { city: 'Palma de Mallorca', country: 'Spain', code: 'PMI', iso2: 'ES', tz: 'Europe/Madrid', lat: 39.55, lng: 2.74, region: 'Europe', type: 'Sun', duration: '13h 25m', aircraft: '787-8', season: 'Jun – Oct', isNew: true },
+  { city: 'Palma de Mallorca', country: 'Spain', code: 'PMI', iso2: 'ES', tz: 'Europe/Madrid', lat: 39.55, lng: 2.74, region: 'Europe', type: 'Sun', duration: '13h 25m', aircraft: '787-8', season: 'Jun – Oct', isNew: true }, // i18n-ignore
   { city: 'Berlin', country: 'Germany', code: 'BER', iso2: 'DE', tz: 'Europe/Berlin', lat: 52.37, lng: 13.52, region: 'Europe', type: 'City', duration: '13h 45m', aircraft: 'A321neo', season: 'Jul – Oct', isNew: true },
   { city: 'Nantes', country: 'France', code: 'NTE', iso2: 'FR', tz: 'Europe/Paris', lat: 47.16, lng: -1.61, region: 'Europe', type: 'City', duration: '7h 30m', aircraft: '737 MAX', season: 'Jun – Oct', isNew: true },
   { city: 'Stockholm', country: 'Sweden', code: 'ARN', iso2: 'SE', tz: 'Europe/Stockholm', lat: 59.65, lng: 17.93, region: 'Europe', type: 'City', duration: '8h 30m', aircraft: 'A330-300', season: 'Jun – Sep' },
@@ -214,7 +214,7 @@ export const DESTINATIONS: Destination[] = [
   { city: 'São Paulo', country: 'Brazil', code: 'GRU', iso2: 'BR', tz: 'America/Sao_Paulo', lat: -23.43, lng: -46.47, region: 'South America', type: 'City', duration: '11h 05m', aircraft: '787-9', season: 'Year-round' },
   { city: 'Lima', country: 'Peru', code: 'LIM', iso2: 'PE', tz: 'America/Lima', lat: -12.02, lng: -77.11, region: 'South America', type: 'City', duration: '7h 15m', aircraft: '787-8', season: 'Jan – Dec' },
   { city: 'Santiago', country: 'Chile', code: 'SCL', iso2: 'CL', tz: 'America/Santiago', lat: -33.39, lng: -70.79, region: 'South America', type: 'City', duration: '12h', aircraft: '787-9', season: 'Jan – Dec' },
-  { city: 'Rio de Janeiro', country: 'Brazil', code: 'GIG', iso2: 'BR', tz: 'America/Sao_Paulo', lat: -22.80, lng: -43.24, region: 'South America', type: 'City', duration: '10h 30m', aircraft: '787-9', season: 'Nov – Mar' },
+  { city: 'Rio de Janeiro', country: 'Brazil', code: 'GIG', iso2: 'BR', tz: 'America/Sao_Paulo', lat: -22.80, lng: -43.24, region: 'South America', type: 'City', duration: '10h 30m', aircraft: '787-9', season: 'Nov – Mar' }, // i18n-ignore
   { city: 'Quito', country: 'Ecuador', code: 'UIO', iso2: 'EC', tz: 'America/Guayaquil', lat: -0.13, lng: -78.49, region: 'South America', type: 'City', duration: '7h 15m', aircraft: '787-8', season: 'Dec – Mar' },
   // ─── CENTRAL AMERICA ───
   { city: 'Belize City', country: 'Belize', code: 'BZE', iso2: 'BZ', tz: 'America/Belize', lat: 17.54, lng: -88.31, region: 'Central America', type: 'Adventure', duration: '4h 30m', aircraft: 'A319', season: 'Mar – Apr' },

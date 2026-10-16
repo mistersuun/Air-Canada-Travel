@@ -69,6 +69,13 @@ class QuotaError(Exception):
     """HTTP 429 or a 'limit exceeded' answer: stop and write what is complete."""
 
 
+class NetworkError(QuotaError):
+    """The API stayed unreachable after retries: stop the same way, the cache keeps the rest."""
+
+
+RETRIES = 4  # attempts per request for timeouts, resets and 5xx answers
+
+
 # ── Destinations ────────────────────────────────────────────────────────────
 
 _ENTRY = re.compile(r"\{[^{}]*?code:\s*'([A-Z]{3})'[^{}]*?\}")
@@ -146,7 +153,7 @@ def cache_path(cache: pathlib.Path, code: str, year: int, month: int) -> pathlib
     return cache / f"{code}-{year}-{month:02d}.json"
 
 
-def http_get(url: str) -> dict:
+def http_get_once(url: str) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=60) as res:
@@ -160,6 +167,35 @@ def http_get(url: str) -> dict:
         if e.code == 429 or "limit" in body.lower():
             raise QuotaError(f"HTTP {e.code}: {body[:200]}") from e
         raise
+
+
+def is_transient(e: Exception) -> bool:
+    """Timeouts, TLS handshake stalls, resets and 5xx answers are worth another try."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500
+    return isinstance(e, (urllib.error.URLError, TimeoutError, ConnectionError))
+
+
+def with_retries(get: Callable[[str], dict], sleep: Callable[[float], None] = time.sleep,
+                 attempts: int = RETRIES) -> Callable[[str], dict]:
+    """Retries transient failures with backoff (5, 10, 20 s); NetworkError when they persist."""
+    def wrapped(url: str) -> dict:
+        for i in range(attempts):
+            try:
+                return get(url)
+            except QuotaError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                if not is_transient(e):
+                    raise
+                if i == attempts - 1:
+                    raise NetworkError(f"unreachable after {attempts} tries: {e}") from e
+                sleep(5 * 2 ** i)
+        raise AssertionError("unreachable")
+    return wrapped
+
+
+http_get = with_retries(http_get_once)
 
 
 def is_quota_answer(data: dict) -> bool:
@@ -284,7 +320,8 @@ def run(dests: list[dict], cache: pathlib.Path, get: Callable[[str], dict] = htt
                 stats = [window_stats(fetch_month(dest, y, month, cache, get, pause) or {}) for y in YEARS]
                 months.append(aggregate_month(stats, month))
         except QuotaError as e:
-            log(f"stopped on the API limit at {dest['code']} ({e}); rerun later to resume from the cache")
+            why = "the API was unreachable" if isinstance(e, NetworkError) else "the API limit"
+            log(f"stopped ({why}) at {dest['code']} ({e}); rerun later to resume from the cache")
             return codes, True
         normals = location_normals(months)
         if normals:
@@ -316,9 +353,9 @@ def main(argv: list[str] | None = None) -> int:
         codes = {**old, **codes}
     size = write_file(args.out, build_file(codes, total))
     print(f"wrote {args.out} ({size} bytes): {len(codes)}/{total} locations"
-          + (" (partial: API limit reached)" if stopped else ""))
+          + (" (partial: stopped early)" if stopped else ""))
     if stopped:
-        print(f"::warning::climate build stopped on the API limit with {len(codes)}/{total} locations; the cache keeps the rest for the next run")
+        print(f"::warning::climate build stopped early (API limit or unreachable) with {len(codes)}/{total} locations; the cache keeps the rest for the next run")
     return 0
 
 

@@ -2,6 +2,7 @@
 import io
 import json
 import urllib.error
+from datetime import datetime, timezone
 
 import pytest
 
@@ -297,8 +298,14 @@ def out(tmp_path, fs, monkeypatch):
     return p
 
 
+# The fixture PDFs cover October 2026; run on a fixed day inside them so the coverage
+# horizon gates (28 days overall, 14 per hub) do not start failing as real time passes.
+FIXTURE_NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+
+
 def _run(fs, out, argv=(), **kw):
-    args = dict(discover=lambda: ALL_URLS, fetch=_fetch_ok, extract=_extract, out_path=str(out), hubs=HUBS)
+    args = dict(discover=lambda: ALL_URLS, fetch=_fetch_ok, extract=_extract, out_path=str(out), hubs=HUBS,
+                now=lambda: FIXTURE_NOW)
     args.update(kw)
     return fs.run(list(argv), **args)
 

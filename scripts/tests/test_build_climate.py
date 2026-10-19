@@ -167,6 +167,40 @@ def test_a_quota_message_in_the_body_also_stops(tmp_path):
     assert stopped and codes == {}
 
 
+def test_transient_errors_are_retried_then_stop_like_the_limit(tmp_path):
+    import urllib.error
+    waits = []
+    n = {"calls": 0}
+
+    def flaky(url):
+        n["calls"] += 1
+        if n["calls"] % 3:  # two handshake timeouts, then an answer
+            raise urllib.error.URLError("_ssl.c:993: The handshake operation timed out")
+        return canned()
+
+    get = bc.with_retries(flaky, sleep=waits.append)
+    assert get("u") == canned() and waits == [5, 10]
+
+    def down(url):
+        raise urllib.error.URLError("timed out")
+
+    codes, stopped = bc.run([DEST], tmp_path, get=bc.with_retries(down, sleep=lambda s: None), log=lambda *_: None)
+    assert stopped and codes == {}
+
+
+def test_client_errors_are_not_retried():
+    import urllib.error
+    calls = []
+
+    def bad(url):
+        calls.append(url)
+        raise urllib.error.HTTPError(url, 400, "bad", {}, None)
+
+    with pytest.raises(urllib.error.HTTPError):
+        bc.with_retries(bad, sleep=lambda s: None)("u")
+    assert len(calls) == 1
+
+
 def test_build_file_shape():
     data = bc.build_file({"LIS": {"tmax": [1] * 12, "tmin": [0] * 12, "precip": [3] * 12, "wet": [1] * 12}}, 157)
     assert data["v"] == 1 and data["license"] == "CC BY 4.0"

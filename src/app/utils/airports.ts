@@ -8,7 +8,11 @@ import { isValidTimeZone } from './time';
  * when a schedule code is in none of HUBS, DESTINATIONS or this table.
  * (Toronto Billy Bishop, YTZ, used to live here; it is a hub now.)
  */
-export const EXTRA_AIRPORTS: Record<string, { name: string; tz: string; country: string }> = {};
+export const EXTRA_AIRPORTS: Record<string, { name: string; tz: string; country: string }> = {
+  // First seen in the 2026-10-19 schedules (no destination page yet).
+  SDF: { name: 'Louisville', tz: 'America/Kentucky/Louisville', country: 'USA' },
+  SVQ: { name: 'Seville', tz: 'Europe/Madrid', country: 'Spain' },
+};
 
 const DEST_BY_CODE = new Map<string, Destination>(DESTINATIONS.map(d => [d.code, d]));
 const HUB_BY_CODE = new Map<string, Hub>(HUBS.map(h => [h.code, h]));

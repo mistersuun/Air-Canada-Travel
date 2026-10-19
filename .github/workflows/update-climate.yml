@@ -2,8 +2,8 @@ name: Update Climate Normals
 
 # Rebuilds public/data/climate.json (typical monthly weather for every destination
 # and hub, Open-Meteo ERA5 archive, CC BY 4.0). The normals barely move, so yearly
-# is plenty. A run that hits the free daily quota writes what is complete and the
-# cache (restored below) lets the next dispatch resume where it stopped.
+# is plenty. A run that hits the free daily quota or its time budget writes what is
+# complete and the cache (restored below) lets the next dispatch resume where it stopped.
 
 on:
   schedule:
@@ -38,8 +38,8 @@ jobs:
           pip install pytest==9.1.1
           python -m pytest -q scripts/tests/test_build_climate.py
 
-      - name: Cache Open-Meteo responses
-        uses: actions/cache@v4
+      - name: Restore Open-Meteo responses
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/routes-climate
           key: routes-climate-${{ github.run_id }}
@@ -47,7 +47,17 @@ jobs:
 
       - name: Build climate.json
         # Stdlib only. Hubs first: the "Escape the cold" comparison needs them.
-        run: python3 scripts/build-climate.py --first YYZ,YUL,YVR,YYC,YOW,YHZ,YEG,YQB,YWG,YTZ
+        # ~170 locations x 60 calls don't fit one job: the budget stops requests
+        # well before timeout-minutes so the partial file and the cache are kept.
+        run: python3 -u scripts/build-climate.py --budget-min 290 --first YYZ,YUL,YVR,YYC,YOW,YHZ,YEG,YQB,YWG,YTZ
+
+      - name: Save Open-Meteo responses
+        # Even when a later step fails, so the next dispatch resumes from here.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/routes-climate
+          key: routes-climate-${{ github.run_id }}
 
       - name: Diff summary
         run: |

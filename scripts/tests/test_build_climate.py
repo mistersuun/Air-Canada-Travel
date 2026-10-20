@@ -179,7 +179,7 @@ def test_transient_errors_are_retried_then_stop_like_the_limit(tmp_path):
         return canned()
 
     get = bc.with_retries(flaky, sleep=waits.append)
-    assert get("u") == canned() and waits == [5, 10]
+    assert get("u") == canned() and waits == [2, 4]
 
     def down(url):
         raise urllib.error.URLError("timed out")

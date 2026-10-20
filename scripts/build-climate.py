@@ -79,7 +79,9 @@ class OutOfTime(QuotaError):
     """The run's time budget is spent: stop the same way so the job ends before its timeout."""
 
 
-RETRIES = 4  # attempts per request for timeouts, resets and 5xx answers
+RETRIES = 5  # attempts per request for timeouts, resets and 5xx answers
+# A good answer takes ~1 s; stalled connections are common, so give up on one early and retry.
+TIMEOUT_S = 15
 
 
 # ── Destinations ────────────────────────────────────────────────────────────
@@ -162,7 +164,7 @@ def cache_path(cache: pathlib.Path, code: str, year: int, month: int) -> pathlib
 def http_get_once(url: str) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=60) as res:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as res:
             return json.loads(res.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = ""
@@ -184,7 +186,7 @@ def is_transient(e: Exception) -> bool:
 
 def with_retries(get: Callable[[str], dict], sleep: Callable[[float], None] = time.sleep,
                  attempts: int = RETRIES) -> Callable[[str], dict]:
-    """Retries transient failures with backoff (5, 10, 20 s); NetworkError when they persist."""
+    """Retries transient failures with backoff (2, 4, 8, 16 s); NetworkError when they persist."""
     def wrapped(url: str) -> dict:
         for i in range(attempts):
             try:
@@ -196,7 +198,7 @@ def with_retries(get: Callable[[str], dict], sleep: Callable[[float], None] = ti
                     raise
                 if i == attempts - 1:
                     raise NetworkError(f"unreachable after {attempts} tries: {e}") from e
-                sleep(5 * 2 ** i)
+                sleep(2 * 2 ** i)
         raise AssertionError("unreachable")
     return wrapped
 

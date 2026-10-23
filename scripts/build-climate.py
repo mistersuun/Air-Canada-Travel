@@ -22,10 +22,12 @@ A location is written only when all 12 months have >= 3 years of data.
 
 Usage:
   python3 scripts/build-climate.py [--out PATH] [--cache DIR] [--limit N] [--sleep S]
-                                   [--first LIS,FLL] [--offline]
+                                   [--first LIS,FLL] [--budget-min M] [--offline]
 
---first fetches those codes before the rest; --offline makes no request and
-writes every location already complete in the cache (a partial file).
+--first fetches those codes before the rest; --budget-min stops requesting
+after M minutes and writes what is complete, like the quota; --offline makes
+no request and writes every location already complete in the cache (a
+partial file).
 
 Stdlib only. The pure functions (parse, aggregate, build) are unit-tested in
 scripts/tests/test_build_climate.py with canned responses.
@@ -73,7 +75,13 @@ class NetworkError(QuotaError):
     """The API stayed unreachable after retries: stop the same way, the cache keeps the rest."""
 
 
-RETRIES = 4  # attempts per request for timeouts, resets and 5xx answers
+class OutOfTime(QuotaError):
+    """The run's time budget is spent: stop the same way so the job ends before its timeout."""
+
+
+RETRIES = 5  # attempts per request for timeouts, resets and 5xx answers
+# A good answer takes ~1 s; stalled connections are common, so give up on one early and retry.
+TIMEOUT_S = 15
 
 
 # ── Destinations ────────────────────────────────────────────────────────────
@@ -156,7 +164,7 @@ def cache_path(cache: pathlib.Path, code: str, year: int, month: int) -> pathlib
 def http_get_once(url: str) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
-        with urllib.request.urlopen(req, timeout=60) as res:
+        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as res:
             return json.loads(res.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         body = ""
@@ -178,7 +186,7 @@ def is_transient(e: Exception) -> bool:
 
 def with_retries(get: Callable[[str], dict], sleep: Callable[[float], None] = time.sleep,
                  attempts: int = RETRIES) -> Callable[[str], dict]:
-    """Retries transient failures with backoff (5, 10, 20 s); NetworkError when they persist."""
+    """Retries transient failures with backoff (2, 4, 8, 16 s); NetworkError when they persist."""
     def wrapped(url: str) -> dict:
         for i in range(attempts):
             try:
@@ -190,12 +198,22 @@ def with_retries(get: Callable[[str], dict], sleep: Callable[[float], None] = ti
                     raise
                 if i == attempts - 1:
                     raise NetworkError(f"unreachable after {attempts} tries: {e}") from e
-                sleep(5 * 2 ** i)
+                sleep(2 * 2 ** i)
         raise AssertionError("unreachable")
     return wrapped
 
 
 http_get = with_retries(http_get_once)
+
+
+def with_deadline(get: Callable[[str], dict], deadline: float,
+                  clock: Callable[[], float] = time.monotonic) -> Callable[[str], dict]:
+    """OutOfTime instead of a request once clock() passes deadline (cache hits are unaffected)."""
+    def wrapped(url: str) -> dict:
+        if clock() >= deadline:
+            raise OutOfTime("time budget spent")
+        return get(url)
+    return wrapped
 
 
 def is_quota_answer(data: dict) -> bool:
@@ -320,7 +338,8 @@ def run(dests: list[dict], cache: pathlib.Path, get: Callable[[str], dict] = htt
                 stats = [window_stats(fetch_month(dest, y, month, cache, get, pause) or {}) for y in YEARS]
                 months.append(aggregate_month(stats, month))
         except QuotaError as e:
-            why = "the API was unreachable" if isinstance(e, NetworkError) else "the API limit"
+            why = ("the API was unreachable" if isinstance(e, NetworkError)
+                   else "the time budget" if isinstance(e, OutOfTime) else "the API limit")
             log(f"stopped ({why}) at {dest['code']} ({e}); rerun later to resume from the cache")
             return codes, True
         normals = location_normals(months)
@@ -337,6 +356,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--limit", type=int, default=0, help="only the first N destinations (testing)")
     ap.add_argument("--sleep", type=float, default=0.8, help="seconds between API calls")
     ap.add_argument("--first", default="", help="comma-separated codes to fetch first")
+    ap.add_argument("--budget-min", type=float, default=0,
+                    help="stop making requests after this many minutes and write what is complete")
     ap.add_argument("--offline", action="store_true", help="cache only: no requests, write what is complete")
     args = ap.parse_args(argv)
 
@@ -346,6 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit:
         dests = dests[: args.limit]
     get = offline_get if args.offline else http_get
+    if args.budget_min and not args.offline:
+        get = with_deadline(get, time.monotonic() + args.budget_min * 60)
     codes, stopped = run(dests, args.cache, get=get, pause=lambda: None if args.offline else time.sleep(args.sleep))
     if stopped or args.limit or args.offline:
         # A partial run never reduces coverage (codes no longer in the destination list are dropped).
@@ -355,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote {args.out} ({size} bytes): {len(codes)}/{total} locations"
           + (" (partial: stopped early)" if stopped else ""))
     if stopped:
-        print(f"::warning::climate build stopped early (API limit or unreachable) with {len(codes)}/{total} locations; the cache keeps the rest for the next run")
+        print(f"::warning::climate build stopped early (API limit, time budget or unreachable) with {len(codes)}/{total} locations; the cache keeps the rest for the next run")
     return 0
 
 

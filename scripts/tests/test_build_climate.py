@@ -179,13 +179,31 @@ def test_transient_errors_are_retried_then_stop_like_the_limit(tmp_path):
         return canned()
 
     get = bc.with_retries(flaky, sleep=waits.append)
-    assert get("u") == canned() and waits == [5, 10]
+    assert get("u") == canned() and waits == [2, 4]
 
     def down(url):
         raise urllib.error.URLError("timed out")
 
     codes, stopped = bc.run([DEST], tmp_path, get=bc.with_retries(down, sleep=lambda s: None), log=lambda *_: None)
     assert stopped and codes == {}
+
+
+def test_time_budget_stops_requests_but_not_cache_reads(tmp_path):
+    now = {"t": 0.0}
+    calls = []
+
+    def get(url):
+        calls.append(url)
+        now["t"] += 1  # each request costs one second
+        return canned()
+
+    budgeted = bc.with_deadline(get, deadline=30, clock=lambda: now["t"])
+    codes, stopped = bc.run([DEST], tmp_path, get=budgeted, log=lambda *_: None)
+    assert stopped and codes == {} and len(calls) == 30
+
+    # Cached windows are still read after the budget; only the missing 30 are refused.
+    codes, stopped = bc.run([DEST], tmp_path, get=budgeted, log=lambda *_: None)
+    assert stopped and len(calls) == 30
 
 
 def test_client_errors_are_not_retried():

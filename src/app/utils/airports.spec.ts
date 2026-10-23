@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../data/schedule-index';
 import { rec, route } from '../data/testing/schedule-fixtures';
+import { buildInstance } from './week';
 import { airportName, airportTz, findDestination, findHub, getOrigins, hasKnownTz, isHub } from './airports';
 
 afterEach(() => resetScheduleSource());
@@ -13,6 +14,14 @@ describe('airports', () => {
     expect(airportTz('ZZZ')).toBe('UTC');
     expect(hasKnownTz('YTZ')).toBe(true);
     expect(hasKnownTz('ZZZ')).toBe(false);
+  });
+
+  it('knows airports first seen in the schedules (Louisville, Seville)', () => {
+    expect(airportTz('SDF')).toBe('America/Kentucky/Louisville');
+    expect(airportTz('SVQ')).toBe('Europe/Madrid');
+    expect(airportName('SDF')).toBe('Louisville');
+    // YYZ 14:00 -> SDF 15:35, both Eastern: 1 h 35, not 21 h 35 from a UTC fallback.
+    expect(buildInstance(rec('AC8561', '14:00', '15:35', '2027-04-28', '2027-04-28'), 'YYZ', 'SDF', '2027-04-28').durationMin).toBe(95);
   });
 
   it('names airports', () => {

@@ -35,7 +35,7 @@ export class ProfileService {
 
   /** Back to the empty profile ("Not set up"). */
   reset(): void {
-    this.set({ ...EMPTY_PROFILE, styles: [], days: [], dismissed: [], usualItems: [] });
+    this.set({ ...EMPTY_PROFILE, styles: [], days: [], dismissed: [], usualItems: [], passports: [] });
   }
 
   /** Hide a recommendation ("Not for me"). Does not mark the profile as set up. */

@@ -12,6 +12,7 @@ export const TRIP_LENGTHS: readonly TripLength[] = ['day', 'weekend', 'week'];
 export const MAX_DISMISSED = 200;
 export const MAX_USUAL_ITEMS = 30;
 export const MAX_USUAL_ITEM_LEN = 80;
+export const MAX_PASSPORTS = 2;
 /** One-tap suggestions for "My usual items" (standby trips: the flight you want may be full). */
 const USUAL_SUGGESTION_KEYS: readonly MsgKey[] = [
   'recs.usual.clothes',
@@ -44,6 +45,18 @@ export function sanitizeUsualItems(raw: unknown): string[] {
   return out;
 }
 
+/** Upper-case ISO alpha-2 codes, de-duplicated, at most MAX_PASSPORTS. */
+export function sanitizePassports(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    const c = typeof v === 'string' ? v.trim().toUpperCase() : '';
+    if (/^[A-Z]{2}$/.test(c) && !out.includes(c)) out.push(c);
+    if (out.length >= MAX_PASSPORTS) break;
+  }
+  return out;
+}
+
 export const EMPTY_PROFILE: Readonly<TravelProfile> = Object.freeze({
   v: 1,
   styles: [],
@@ -54,6 +67,7 @@ export const EMPTY_PROFILE: Readonly<TravelProfile> = Object.freeze({
   onwardBudget: 'any',
   dismissed: [],
   usualItems: [],
+  passports: [],
   updatedAt: null,
 }) as Readonly<TravelProfile>;
 
@@ -86,6 +100,7 @@ export function sanitizeProfile(raw: unknown): TravelProfile {
     onwardBudget: r['onwardBudget'] === 'low' ? 'low' : 'any',
     dismissed,
     usualItems: sanitizeUsualItems(r['usualItems']),
+    passports: sanitizePassports(r['passports']),
     updatedAt: typeof r['updatedAt'] === 'string' && !Number.isNaN(Date.parse(r['updatedAt'])) ? r['updatedAt'] : null,
   };
 }

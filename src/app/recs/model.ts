@@ -24,6 +24,8 @@ export interface TravelProfile {
   onwardBudget: 'low' | 'any';   // default 'any'
   dismissed: string[];           // Recommendation ids, newest last, capped at 200
   usualItems: string[];          // "My usual items": copied into new trips' prep list (max 30, each <= 80 chars)
+  /** Passport countries (ISO 3166-1 alpha-2), 0..2 for dual nationals; [] = not set. Shows entry listings; stays on the phone. */
+  passports: string[];
   updatedAt: string | null;      // null = never set up ("empty profile")
 }
 

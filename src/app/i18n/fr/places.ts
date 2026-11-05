@@ -116,6 +116,8 @@ export const places: Translation<typeof en> = {
   'places.prep.onlyEstimated': 'Estimation seulement pour l\'instant',
   'places.prep.typicalNote': 'Typique pour ces mois, pas une prévision',
   'places.prep.advice': 'Conseils du gouvernement du Canada pour {country} : {text}{regional, select, yes { · avertissements régionaux en vigueur} other {}}',
+  'places.prep.entryListed': "{country} : {status} pour les titulaires d'un passeport ({passport}), selon Passport Index",
+  'places.prep.entryCheck': "Vérifiez les conditions d'entrée de {country} pour votre passeport",
   'places.prep.official': 'Page officielle de voyage.gc.ca',
   'places.prep.officialUpd': 'Page officielle de voyage.gc.ca · {upd}',
   'places.prep.holiday': 'Jour férié en {country} · {date} · {name}',

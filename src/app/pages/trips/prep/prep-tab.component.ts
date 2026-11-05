@@ -137,10 +137,14 @@ export class PrepTabComponent {
   constructor() {
     void this.climate.ensureLoaded();
     void this.reference.ensureLoaded();
+    void this.reference.ensureVisa();
   }
 
   protected readonly draft = signal('');
-  protected readonly items = computed(() => buildPrepChecklist(this.trip(), this.climate.index(), { advisories: this.reference.advisories(), holidays: this.reference.holidays() }));
+  protected readonly items = computed(() => buildPrepChecklist(this.trip(), this.climate.index(), {
+    advisories: this.reference.advisories(), holidays: this.reference.holidays(),
+    passports: this.profile.profile().passports, visa: this.reference.visa(),
+  }));
   protected readonly rows = computed(() => this.items().map(prepRow));
   protected readonly count = computed(() => doneLabel(this.items()));
   protected readonly ess = computed(() => {

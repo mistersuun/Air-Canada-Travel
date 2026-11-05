@@ -8,8 +8,13 @@ import { PROFILE_STORAGE, ProfileService } from '../../recs/profile.service';
 import { RECS_NOW, RECS_PROFILE } from '../../recs/testing/recs-fixture';
 import { NOW } from '../../state/app-state.service';
 import { BlockedStorage, MemoryStorage } from '../../state/testing';
+import { REFERENCE_FETCH } from '../../reference/reference.service';
 import { ProfilePage, toggled } from './profile.page';
 
+const VISA = {
+  v: 1, attribution: 'Passport Index data', asOf: '2026-02-17', cols: ['ES', 'US'],
+  rows: { CA: 'F90,F180', FR: 'O,T', IN: 'V,V' },
+};
 const squash = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
 
 async function render(storage: Storage = new MemoryStorage()) {
@@ -18,6 +23,7 @@ async function render(storage: Storage = new MemoryStorage()) {
       provideRouter([]),
       { provide: NOW, useValue: () => RECS_NOW },
       { provide: PROFILE_STORAGE, useValue: storage },
+      { provide: REFERENCE_FETCH, useValue: async (n: string) => (n === 'visa' ? VISA : null) },
       { provide: SwUpdate, useValue: { isEnabled: false, versionUpdates: EMPTY, unrecoverable: EMPTY } },
     ],
   });
@@ -36,6 +42,29 @@ async function render(storage: Storage = new MemoryStorage()) {
 describe('ProfilePage', () => {
   afterEach(() => TestBed.resetTestingModule());
 
+  it('picks a passport and an optional second one, saved on the phone', async () => {
+    const { q, saved, fixture, el } = await render();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const first = q<HTMLSelectElement>('[data-passport-slot="0"]');
+    expect([...first.options].map(o => o.textContent)).toEqual(['Not set', 'Canada', 'France', 'India']);
+    expect(el.querySelector('[data-passport-slot="1"]')).toBeNull();
+    first.value = 'CA';
+    first.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(saved().passports).toEqual(['CA']);
+    const second = q<HTMLSelectElement>('[data-passport-slot="1"]');
+    second.value = 'FR';
+    second.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(saved().passports).toEqual(['CA', 'FR']);
+    // Clearing the first moves the second up.
+    q<HTMLSelectElement>('[data-passport-slot="0"]').value = '';
+    q<HTMLSelectElement>('[data-passport-slot="0"]').dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    expect(saved().passports).toEqual(['FR']);
+  });
+
   it('lays out the x12 controls with the privacy note', async () => {
     const { el, q } = await render();
     expect(squash(q('h1').textContent)).toBe('Travel profile');
@@ -45,7 +74,7 @@ describe('ProfilePage', () => {
     expect(el.textContent).toContain('Mondays that are holidays count too.');
     expect(el.textContent).toContain('Used to prefer days with more departures, never to guess seats.');
     expect(el.textContent).toContain('Any lets ideas include a train or bus past the airport.');
-    expect(squash(q('.note').textContent)).toBe('Stays on this phone. Used only to pick suggestions. Not in share links.');
+    expect(squash(q('.note').textContent)).toBe('Stays on this phone. Used only to pick suggestions and show entry listings. Not in share links.');
     expect(squash(q('[data-max-text]').textContent)).toBe('Any length');
     expect(q<HTMLInputElement>('[data-any]').checked).toBe(true);
     expect(q<HTMLInputElement>('[data-max]').disabled).toBe(true);

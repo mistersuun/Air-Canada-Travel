@@ -36,6 +36,12 @@ describe('sanitizeProfile', () => {
     expect(sanitizeProfile({ maxFlightHours: null }).maxFlightHours).toBeNull();
   });
 
+  it('keeps up to two passports as upper-case ISO codes (dual nationals), dropping junk', () => {
+    expect(sanitizeProfile({ passports: ['ca', 'CA', 'xyz', 7, ' fr ', 'GB'] }).passports).toEqual(['CA', 'FR']);
+    expect(sanitizeProfile({ passports: 'CA' }).passports).toEqual([]);
+    expect(sanitizeProfile({}).passports).toEqual([]);
+  });
+
   it('caps dismissed at 200, newest kept', () => {
     const ids = Array.from({ length: 250 }, (_, i) => `style:X${i}:`);
     const p = sanitizeProfile({ dismissed: ids });

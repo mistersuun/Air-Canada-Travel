@@ -116,6 +116,8 @@ export const places = {
   'places.prep.onlyEstimated': 'Only estimated so far',
   'places.prep.typicalNote': 'Typical for these months, not a forecast',
   'places.prep.advice': 'Government of Canada advice for {country}: {text}{regional, select, yes { · regional advisories in effect} other {}}',
+  'places.prep.entryListed': '{country}: {status} for {passport} passport holders, as listed by Passport Index',
+  'places.prep.entryCheck': 'Check the entry rules for {country} with your passport',
   'places.prep.official': 'Official travel.gc.ca page',
   'places.prep.officialUpd': 'Official travel.gc.ca page · {upd}',
   'places.prep.holiday': 'Public holiday in {country} · {date} · {name}',

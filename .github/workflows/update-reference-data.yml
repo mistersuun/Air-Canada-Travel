@@ -4,6 +4,7 @@ name: Update Reference Data
 #   public/data/advisories.json  Government of Canada travel advice levels
 #   public/data/fx.json          ECB reference rates via Frankfurter (CAD base)
 #   public/data/holidays.json    public holidays (Nager.Date), this year and next
+#   public/data/visa.json        entry requirements by passport (Passport Index data, MIT)
 # Weekly is enough: the app shows each source's own date, and a missing or
 # stale file only hides the line it feeds.
 
@@ -38,7 +39,7 @@ jobs:
       - name: Builder unit tests
         run: |
           pip install pytest==9.1.1
-          python -m pytest -q scripts/tests/test_reference_data.py
+          python -m pytest -q scripts/tests/test_reference_data.py scripts/tests/test_build_visa.py
 
       - name: Build advisories.json
         # Refuses to write under 80% of destination countries.
@@ -50,13 +51,17 @@ jobs:
       - name: Build holidays.json
         run: python3 scripts/build-holidays.py
 
+      - name: Build visa.json
+        # Refuses to write without a readable data date, 150 passports, 40 destinations and a CA row.
+        run: python3 scripts/build-visa.py
+
       - name: Diff summary
         run: |
-          git add -N public/data/advisories.json public/data/fx.json public/data/holidays.json
+          git add -N public/data/advisories.json public/data/fx.json public/data/holidays.json public/data/visa.json
           {
             echo '### reference data diff'
             echo '```'
-            git diff --stat -- public/data/advisories.json public/data/fx.json public/data/holidays.json || true
+            git diff --stat -- public/data/advisories.json public/data/fx.json public/data/holidays.json public/data/visa.json || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -77,11 +82,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git diff --quiet -- public/data/advisories.json public/data/fx.json public/data/holidays.json && exit 0
+          git diff --quiet -- public/data/advisories.json public/data/fx.json public/data/holidays.json public/data/visa.json && exit 0
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/data/advisories.json public/data/fx.json public/data/holidays.json
-          git commit -m "chore: update advisories, exchange rates and holidays"
+          git add public/data/advisories.json public/data/fx.json public/data/holidays.json public/data/visa.json
+          git commit -m "chore: update advisories, exchange rates, holidays and visa requirements"
           # Other data workflows push to the same branch: rebase onto it and retry.
           remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           for attempt in 1 2 3; do

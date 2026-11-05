@@ -169,7 +169,7 @@ export const recs = {
   'recs.profile.passportMain': 'Passport country',
   'recs.profile.passportSecond': 'Second passport (optional)',
   'recs.profile.passportNone': 'Not set',
-  'recs.profile.passportHint': 'Shows entry listings (visa, e-visa, authorization) on destination pages, with their source and date. Stays on this phone.',
+  'recs.profile.passportHint': 'Shows entry listings (visa, e-visa, authorization) on destination pages and in trip prep, with their source and date. Stays on this phone.',
   'recs.profile.days': 'Days I can usually leave or come back',
   'recs.profile.daysHint': 'Mondays that are holidays count too.',
   'recs.profile.daysNone': 'None picked means any day.',

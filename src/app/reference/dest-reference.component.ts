@@ -152,7 +152,7 @@ export class DestReferenceComponent {
     const iso = (this.iso2() ?? '').toUpperCase();
     if (!table || !iso || visaStale(table, this.todayKey())) return null;
     const best = bestEntry(table, this.profile.profile().passports, iso);
-    if (!best) return null;
+    if (!best || best.kind === 'O') return null;
     const adv = this.advisory();
     return {
       line: t('dest.visa.line', { country: passportCountry(best.passport), status: entryLabel(best) }),

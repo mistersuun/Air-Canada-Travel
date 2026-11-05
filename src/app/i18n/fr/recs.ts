@@ -169,7 +169,7 @@ export const recs: Translation<typeof en> = {
   'recs.profile.passportMain': 'Pays du passeport',
   'recs.profile.passportSecond': 'Deuxième passeport (facultatif)',
   'recs.profile.passportNone': 'Non défini',
-  'recs.profile.passportHint': "Affiche les conditions d'entrée (visa, visa électronique, autorisation) sur les pages de destination, avec leur source et leur date. Reste sur ce téléphone.",
+  'recs.profile.passportHint': "Affiche les conditions d'entrée (visa, visa électronique, autorisation) sur les pages de destination et dans la préparation des voyages, avec leur source et leur date. Reste sur ce téléphone.",
   'recs.profile.days': 'Jours où je peux habituellement partir ou rentrer',
   'recs.profile.daysHint': 'Les lundis fériés comptent aussi.',
   'recs.profile.daysNone': 'Si rien n\'est choisi, tous les jours conviennent.',

@@ -12,7 +12,7 @@ import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { flightPath } from '../../ui/links';
 import { findDestination, airportTz } from '../../utils/airports';
-import { MINUTE_MS, formatClock, formatKey, isDateKey, todayKey } from '../../utils/time';
+import { MINUTE_MS, formatClock, formatKey, isDateKey, todayKey, utcToLocal } from '../../utils/time';
 import {
   MIN_THERE_HOURS, WEEKEND_LIMIT, WEEKEND_PRESETS, WEEKEND_SORTS, WeekendOption, WeekendPreset, WeekendSort, WeekendWindow,
   presetWindow, profileWindow, refineWeekend, weekendMeta, weekendOptions, windowProblem,
@@ -54,7 +54,7 @@ import {
         @if (mineWindow()) {
           <p class="ui-sub hint">{{ t('weekend.mineHint') }}</p>
         } @else {
-          <p class="ui-sub hint" data-set-days><a routerLink="/profile">{{ t('weekend.setDays') }}</a></p>
+          <p class="ui-sub hint" data-set-days>{{ t('weekend.mineFallback') }} <a routerLink="/profile">{{ t('weekend.setDays') }}</a></p>
         }
       }
 
@@ -103,7 +103,10 @@ import {
         </div>
       }
       @if (!problem() && options().length && !refined().length) {
-        <p class="ui-card note" role="status" data-none-refined>{{ t('weekend.none1') }}</p>
+        <p class="ui-card note" role="status" data-none-refined>
+          {{ t('weekend.noneRefined', { h: minHours() }) }}
+          <button type="button" class="ui-link" (click)="minHours.set(0)">{{ t('weekend.minAny') }}</button>
+        </p>
       } @else if (!problem() && rows().length) {
         <div class="ui-card list">
           @for (r of shown(); track r.o.code) {
@@ -208,7 +211,8 @@ export class WeekendPage {
   /** Today at the hub: flight dates are hub-local, so the device's date can be a day off. */
   private readonly hubToday = computed(() => todayKey(airportTz(this.state.hub()), this.state.nowMs()));
 
-  protected readonly mineWindow = computed(() => profileWindow(this.profileDays(), this.hubToday()));
+  protected readonly mineWindow = computed(() =>
+    profileWindow(this.profileDays(), this.hubToday(), utcToLocal(this.nowMin(), airportTz(this.state.hub())).hhmm));
   protected readonly window = computed<WeekendWindow>(() =>
     (this.preset() === 'custom' && this.custom()) || (this.preset() === 'mine' && this.mineWindow())
     || presetWindow(this.preset(), this.hubToday()));

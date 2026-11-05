@@ -109,6 +109,10 @@ describe('WeekendPage', () => {
     el.querySelector<HTMLButtonElement>('[data-min="48"]')!.click();
     fixture.detectChanges();
     expect(el.querySelectorAll('a.row').length).toBeLessThan(before);
+    if (!el.querySelectorAll('a.row').length) {
+      // Filtered to nothing: says so (flights do fit) and offers to undo.
+      expect(el.querySelector('[data-none-refined]')!.textContent).toContain('none leaves you 48h or more there');
+    }
     el.querySelector<HTMLButtonElement>('[data-min="0"]')!.click();
     fixture.detectChanges();
     expect(el.querySelectorAll('a.row').length).toBe(before);

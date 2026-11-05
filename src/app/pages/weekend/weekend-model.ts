@@ -37,16 +37,25 @@ export const MAX_RUN_DAYS = 9;
  * later: leave from 06:00 on its first day, home by 22:00 on its last. Null
  * when the profile has no days, or every day (nothing to plan around).
  */
-export function profileWindow(days: readonly number[], todayKey: string): WeekendWindow | null {
+export function profileWindow(days: readonly number[], todayKey: string, nowHhmm = '00:00'): WeekendWindow | null {
   const set = new Set(days);
   if (!set.size || set.size >= 7) return null;
   const iso = (k: string) => weekdayIndex(k) + 1;   // Mon = 1
-  let start = todayKey;
-  for (let i = 0; i < 7 && !set.has(iso(start)); i++) start = addDays(start, 1);
-  let end = start;
-  while (diffDays(start, end) + 1 < MAX_RUN_DAYS && set.has(iso(addDays(end, 1)))) end = addDays(end, 1);
+  const stretchFrom = (from: string) => {
+    let start = from;
+    for (let i = 0; i < 7 && !set.has(iso(start)); i++) start = addDays(start, 1);
+    let end = start;
+    while (diffDays(start, end) + 1 < MAX_RUN_DAYS && set.has(iso(addDays(end, 1)))) end = addDays(end, 1);
+    return { start, end };
+  };
+  let { start, end } = stretchFrom(todayKey);
+  // A stretch that ends today with the afternoon gone leaves no trip: plan the next one.
+  if (end === todayKey && nowHhmm >= LAST_DAY_CUTOFF) ({ start, end } = stretchFrom(addDays(todayKey, 1)));
   return { leaveKey: start, leaveHhmm: '06:00', homeKey: end, homeHhmm: '22:00' };
 }
+
+/** From this hub time on the last day of a stretch, "My days off" plans the next stretch. */
+export const LAST_DAY_CUTOFF = '14:00';
 
 export type WeekendSort = 'tries' | 'there' | 'short' | 'warm';
 export const WEEKEND_SORTS: readonly { value: WeekendSort; label: MsgKey }[] = [

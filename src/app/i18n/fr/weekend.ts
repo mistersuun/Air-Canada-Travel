@@ -15,6 +15,8 @@ export const weekend: Translation<typeof en> = {
   'weekend.onlyClear': 'Toutes les destinations',
   'weekend.mineHint': 'Selon les jours de votre profil de voyage.',
   'weekend.setDays': 'Indiquez vos jours de voyage habituels dans votre profil',
+  'weekend.noneRefined': 'Des vols conviennent, mais aucun ne laisse {h}\u00a0h ou plus sur place.',
+  'weekend.mineFallback': 'Voici cette fin de semaine.',
   'weekend.preset.this': 'Cette fin de semaine',
   'weekend.preset.next': 'Fin de semaine prochaine',
   'weekend.preset.friSun': 'Ven. soir → dim.',

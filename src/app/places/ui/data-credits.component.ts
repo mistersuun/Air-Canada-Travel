@@ -29,6 +29,9 @@ import { formatKey, isDateKey } from '../../utils/time';
         <li data-hotels-credit>
           <b>{{ t('places.credit.hotels') }}</b>&ngsp;{{ t('places.credit.hotelsA') }} <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">{{ osm }}</a>, <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener license">{{ odbl }}</a>. {{ t('places.credit.hotelsB') }}
         </li>
+        <li data-visa-credit>
+          <b>{{ t('places.credit.entry') }}</b>&ngsp;<a href="https://www.passportindex.org/" target="_blank" rel="noopener">{{ passportIndex }}</a>, {{ t('places.credit.entryA') }} <a href="https://github.com/imorte/passport-index-data" target="_blank" rel="noopener">{{ passportData }}</a>&ngsp;{{ openParen }}<a href="https://github.com/imorte/passport-index-data/blob/main/LICENSE" target="_blank" rel="noopener license">{{ mit }}</a>{{ closeParen }} {{ t('places.credit.entryB') }}
+        </li>
         <li>
           <b>{{ t('places.credit.onward') }}</b>&ngsp;{{ t('places.credit.onwardText') }}
         </li>
@@ -52,6 +55,11 @@ import { formatKey, isDateKey } from '../../utils/time';
 export class DataCreditsComponent {
   protected readonly t = t;
   protected readonly geonames = 'GeoNames (geonames.org)';   // i18n-ignore
+  protected readonly passportIndex = 'Passport Index';   // i18n-ignore
+  protected readonly passportData = 'imorte/passport-index-data';   // i18n-ignore
+  protected readonly mit = 'MIT';   // i18n-ignore
+  protected readonly openParen = '(';   // i18n-ignore
+  protected readonly closeParen = ').';   // i18n-ignore
   protected readonly ccBy = 'CC BY 4.0';
   protected readonly ccBySa = 'CC BY-SA 4.0';
   protected readonly odbl = 'ODbL 1.0';

@@ -53,6 +53,8 @@ jobs:
 
       - name: Build visa.json
         # Refuses to write without a readable data date, 150 passports, 40 destinations and a CA row.
+        # A third-party source: if it fails, the old file stays and the other files still update.
+        continue-on-error: true
         run: python3 scripts/build-visa.py
 
       - name: Diff summary

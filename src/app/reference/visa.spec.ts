@@ -103,6 +103,11 @@ describe('entry line on the destination page', () => {
     expect(line.querySelector('a')).toBeNull();
   });
 
+  it('no line for your own country', async () => {
+    const el = await render('IN', ['IN']);
+    expect(el.querySelector('[data-entry]')).toBeNull();
+  });
+
   it('no passport set: one link to choose it; no file: nothing', async () => {
     const el = await render('ES', null);
     expect(el.querySelector('[data-entry]')).toBeNull();
@@ -122,12 +127,12 @@ describe('Trip Prep entry items by passport', () => {
 
   it('another passport: one listed item per route country, with source and date, never the Canadian rows', () => {
     const items = buildPrepChecklist(sevilleTrip(), null, { passports: ['IN'], visa: decodeVisa(VISA) }).filter(i => i.id.startsWith('entry:'));
-    expect(items.map(i => i.id)).toEqual(['entry:listed:CA', 'entry:listed:ES', 'entry:listed:PT']);
-    expect(items[1]).toMatchObject({ title: 'Spain: visa required for India passport holders, as listed by Passport Index', critical: true, link: null });
-    expect(items[1].detail).toContain('Data as of Feb 17, 2026, not official');
-    expect(items[0].title).toBe('Canada: electronic travel authorization before you fly for India passport holders, as listed by Passport Index');
+    // Canada (home) is left out: residents' status is not in the listings.
+    expect(items.map(i => i.id)).toEqual(['entry:listed:ES', 'entry:listed:PT']);
+    expect(items[0]).toMatchObject({ title: 'Spain: visa required for India passport holders, as listed by Passport Index', critical: true, link: null });
+    expect(items[0].detail).toContain('Data as of Feb 17, 2026, not official');
     const noData = buildPrepChecklist(sevilleTrip(), null, { passports: ['IN'], visa: null }).filter(i => i.id.startsWith('entry:'));
-    expect(noData[1].title).toBe('Check the entry rules for Spain with your passport');
+    expect(noData[0].title).toBe('Check the entry rules for Spain with your passport');
   });
 });
 

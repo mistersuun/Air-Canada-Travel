@@ -15,6 +15,8 @@ export const weekend = {
   'weekend.onlyClear': 'All destinations',
   'weekend.mineHint': 'From the days in your travel profile.',
   'weekend.setDays': 'Set your usual travel days in your profile',
+  'weekend.noneRefined': 'Flights fit this window, but none leaves you {h}h or more there.',
+  'weekend.mineFallback': 'Showing this weekend.',
   'weekend.preset.this': 'This weekend',
   'weekend.preset.next': 'Next weekend',
   'weekend.preset.friSun': 'Fri eve → Sun',

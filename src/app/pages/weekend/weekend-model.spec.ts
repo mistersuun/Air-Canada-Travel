@@ -176,6 +176,11 @@ describe('my days off and refining', () => {
     expect(profileWindow([6, 7, 1], '2026-10-08')).toMatchObject({ leaveKey: '2026-10-10', homeKey: '2026-10-12' });
     // Today is a travel day: start today.
     expect(profileWindow([2, 3], '2026-10-06')).toMatchObject({ leaveKey: '2026-10-06', homeKey: '2026-10-07' });
+    // The last day of a stretch, after the cutoff: the next stretch (Sun Oct 11 evening → Fri Oct 16).
+    expect(profileWindow([5, 6, 7], '2026-10-11', '13:59')).toMatchObject({ leaveKey: '2026-10-11', homeKey: '2026-10-11' });
+    expect(profileWindow([5, 6, 7], '2026-10-11', '22:30')).toMatchObject({ leaveKey: '2026-10-16', homeKey: '2026-10-18' });
+    // Mid-stretch is fine: Sat evening still plans Sat → Sun.
+    expect(profileWindow([5, 6, 7], '2026-10-10', '22:30')).toMatchObject({ leaveKey: '2026-10-10', homeKey: '2026-10-11' });
     expect(profileWindow([], '2026-10-06')).toBeNull();
     expect(profileWindow([1, 2, 3, 4, 5, 6, 7], '2026-10-06')).toBeNull();
   });

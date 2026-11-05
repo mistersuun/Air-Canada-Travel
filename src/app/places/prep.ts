@@ -157,7 +157,8 @@ export function entryItems(trip: Trip, opts: { info?: boolean; passports?: reado
 /** One item per route country for a non-Canadian passport: the listing when the data has one, else a plain check. */
 function listedEntryItems(trip: Trip, passports: readonly string[], visa: VisaTable | null): PrepItem[] {
   const fresh = visa && !visaStale(visa, trip.outboundDate) ? visa : null;
-  return routeCountries(trip).filter(c => !passports.includes(c)).map(c => {
+  // Canada (home) is left out: residents' status (PR, eTA exemptions) is not in the listings.
+  return routeCountries(trip).filter(c => c !== HOME && !passports.includes(c)).map(c => {
     const id = `entry:listed:${c}`;
     const best = bestEntry(fresh, passports, c);
     return {

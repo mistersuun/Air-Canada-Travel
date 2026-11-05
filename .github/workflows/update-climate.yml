@@ -10,6 +10,11 @@ on:
     # 2nd and 3rd of September at 05:17 UTC (the second day finishes what the daily API quota cut off)
     - cron: '17 5 2,3 9 *'
   workflow_dispatch:
+    inputs:
+      only:
+        description: 'Comma-separated airport codes to fetch (e.g. a new destination); the rest of the file is kept. Empty = all.'
+        required: false
+        default: ''
 
 concurrency:
   group: update-climate
@@ -49,7 +54,17 @@ jobs:
         # Stdlib only. Hubs first: the "Escape the cold" comparison needs them.
         # ~170 locations x 60 calls don't fit one job: the budget stops requests
         # well before timeout-minutes so the partial file and the cache are kept.
-        run: python3 -u scripts/build-climate.py --budget-min 290 --first YYZ,YUL,YVR,YYC,YOW,YHZ,YEG,YQB,YWG,YTZ
+        # A dispatch with `only` fetches just those codes (--limit keeps the others as they are).
+        env:
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          if [[ -n "$ONLY" ]]; then
+            [[ "$ONLY" =~ ^[A-Z]{3}(,[A-Z]{3})*$ ]] || { echo "::error::only must be codes like SVQ,SDF"; exit 1; }
+            n=$(tr ',' '\n' <<< "$ONLY" | wc -l)
+            python3 -u scripts/build-climate.py --budget-min 290 --first "$ONLY" --limit "$n"
+          else
+            python3 -u scripts/build-climate.py --budget-min 290 --first YYZ,YUL,YVR,YYC,YOW,YHZ,YEG,YQB,YWG,YTZ
+          fi
 
       - name: Save Open-Meteo responses
         # Even when a later step fails, so the next dispatch resumes from here.

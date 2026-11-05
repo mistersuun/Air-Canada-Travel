@@ -146,6 +146,7 @@ const AC_URL = 'https://www.aircanada.com/';
           <a class="ui-btn ui-btn--ghost" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
           <a class="ui-btn wide" [href]="acUrl" target="_blank" rel="noopener">{{ t('dest.openAc') }}</a>
         </div>
+        <a class="ui-link days-off d-only" routerLink="/weekend" [queryParams]="daysOffParams()" data-days-off>{{ t('dest.daysOff') }}</a>
         <app-dest-trip-actions class="d-only" [code]="code()" />
       </section>
 
@@ -296,6 +297,7 @@ const AC_URL = 'https://www.aircanada.com/';
 
       <div class="m-actions m-only">
         <a class="ui-btn ui-btn--block" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
+        <a class="ui-btn ui-btn--ghost ui-btn--block" routerLink="/weekend" [queryParams]="daysOffParams()" data-days-off>{{ t('dest.daysOff') }}</a>
         <a class="ui-btn ui-btn--ghost ui-btn--block" [href]="acUrl" target="_blank" rel="noopener">{{ acHost }}</a>
       </div>
     </div>
@@ -378,6 +380,7 @@ const AC_URL = 'https://www.aircanada.com/';
       .handle { width: 36px; height: 5px; border-radius: 3px; background: var(--hair); margin: 0 auto 12px; }
       .card { margin-top: 10px; }
       .dep app-dest-trip-actions { margin-bottom: 14px; }
+    .days-off { display: inline-block; margin-top: 10px; font-size: 13.5px; }
       .ret, .side, .avail { margin-top: 16px; }
       .side { display: grid; gap: 22px; }
       .mapc { margin-top: 0; }
@@ -710,6 +713,11 @@ export class DestinationPage {
   // ── Actions ───────────────────────────────────────────────────────────────
   protected flightLink(it: Itinerary): string[] {
     return flightPath(this.code(), it.dateKey, it);
+  }
+
+  /** The days-off finder for this destination only. */
+  protected daysOffParams(): Record<string, string> {
+    return { ...this.state.globalParams(), to: this.code() };
   }
 
   protected calLink(): string[] {

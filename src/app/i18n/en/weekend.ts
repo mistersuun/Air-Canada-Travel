@@ -2,6 +2,19 @@ import type { Messages } from '../catalogue';
 
 /** Weekend finder (pages/weekend). Chunk C in docs/i18n.md; keys start with 'weekend.'. */
 export const weekend = {
+  'weekend.preset.mine': 'My days off',
+  'weekend.sort.tries': 'Most tries home',
+  'weekend.sort.there': 'Most time there',
+  'weekend.sort.short': 'Shortest flight',
+  'weekend.sort.warm': 'Warmest (typical)',
+  'weekend.sortAria': 'Sort destinations',
+  'weekend.minAria': 'Time there',
+  'weekend.minAny': 'Any time there',
+  'weekend.minThere': '{h}h+ there',
+  'weekend.only': 'Only {city}',
+  'weekend.onlyClear': 'All destinations',
+  'weekend.mineHint': 'From the days in your travel profile.',
+  'weekend.setDays': 'Set your usual travel days in your profile',
   'weekend.preset.this': 'This weekend',
   'weekend.preset.next': 'Next weekend',
   'weekend.preset.friSun': 'Fri eve → Sun',

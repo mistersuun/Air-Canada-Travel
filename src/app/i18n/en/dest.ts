@@ -95,6 +95,7 @@ export const dest = {
   'dest.removed': 'Removed {city}',
   'dest.saved': 'Saved {city}',
   'dest.nextDeparture': 'Next departure',
+  'dest.daysOff': 'Check my days off',
   'dest.planDates': 'Plan dates',
   'dest.openAc': 'Open in aircanada.com',
   'dest.tabs.aria': 'Destination sections',

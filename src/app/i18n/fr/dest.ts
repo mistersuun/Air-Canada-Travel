@@ -95,6 +95,7 @@ export const dest: Translation<typeof en> = {
   'dest.removed': '{city} retiré',
   'dest.saved': '{city} enregistré',
   'dest.nextDeparture': 'Prochain départ',
+  'dest.daysOff': 'Vérifier mes congés',
   'dest.planDates': 'Choisir les dates',
   'dest.openAc': 'Ouvrir sur aircanada.com',
   'dest.tabs.aria': 'Sections de la destination',

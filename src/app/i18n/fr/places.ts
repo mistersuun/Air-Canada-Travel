@@ -224,6 +224,8 @@ export const places: Translation<typeof en> = {
   'places.reach.searchAgain': 'Relancez la recherche depuis Explorer.',
   'places.reach.flies': 'Air Canada dessert {place}',
   'places.reach.noNeed': 'Inutile de passer par un autre aéroport.',
+  'places.reach.noNonstopNext': "Aucun vol sans escale depuis {hub} le {date}; le prochain : {next}. Voici d'autres façons d'y aller.",
+  'places.reach.noNonstop': "Aucun vol sans escale depuis {hub} le {date}. Voici d'autres façons d'y aller.",
   'places.reach.open': 'Ouvrir {place}',
   'places.reach.thisSearch': 'Cette recherche',
   'places.reach.leave': 'Départ le {date}',

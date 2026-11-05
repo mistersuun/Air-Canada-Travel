@@ -432,7 +432,7 @@ export class HomePage {
   readonly places = computed(() => {
     const q = this.state.query();
     if (q.trim().length < PLACES_MIN_QUERY || this.cities.status() !== 'ready' || flightNumberQuery(q)) return [];
-    return placeRows(this.cities.search(q, 6), q);
+    return placeRows(this.cities.search(q, 6), q, new Set(this.results().map(r => r.destination.code)));
   });
 
   protected readonly placeParams = computed(() => ({

@@ -305,12 +305,13 @@ export interface PlaceRow {
 }
 
 /**
- * City hits that AC does not serve itself, as rows. Hits with `servedBy`
- * are dropped: the AC destination already shows in the results.
+ * City hits as rows, except those whose AC destination already shows in the
+ * results (`shown`). A served city with no flight in view (a seasonal route
+ * such as SVQ out of season) still gets a row, so the search never dead-ends.
  */
-export function placeRows(hits: readonly CityHit[], query: string): PlaceRow[] {
+export function placeRows(hits: readonly CityHit[], query: string, shown: ReadonlySet<string> = new Set()): PlaceRow[] {
   if (query.trim().length < PLACES_MIN_QUERY) return [];
-  const rows = hits.filter(h => !h.servedBy);
+  const rows = hits.filter(h => !h.servedBy || !shown.has(h.servedBy));
   return rows.map(h => {
     // The state or region is always shown when the city data has it ('Paris · Texas, United States').
     const where = h.place.admin1 && h.place.country ? `${h.place.admin1}, ${h.place.country}` : h.place.country || h.place.admin1;

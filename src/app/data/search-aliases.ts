@@ -40,7 +40,7 @@ const A: Record<string, readonly string[]> = {
   FCO: ['Fiumicino', 'Lazio', 'Leonardo da Vinci'], MXP: ['Malpensa', 'Lombardy', 'Lombardia'], VCE: ['Marco Polo', 'Veneto'], // i18n-ignore
   NAP: ['Campania', 'Capodichino'], CTA: ['Sicily', 'Sicilia', 'Fontanarossa'], BCN: ['Catalonia', 'Catalunya', 'El Prat'],
   MAD: ['Barajas'], PMI: ['Mallorca', 'Majorca', 'Balearic', 'Balearics'], TFS: ['Canary Islands', 'Canarias', 'Canaries', 'Tenerife South'],
-  LIS: ['Portela', 'Humberto Delgado'], OPO: ['Francisco Sa Carneiro'], PDL: ['Azores', 'Sao Miguel', 'Ponta Delgada'],
+  LIS: ['Portela', 'Humberto Delgado'], SVQ: ['Sevilla', 'Seville', 'Andalusia', 'Andalucia', 'San Pablo'], OPO: ['Francisco Sa Carneiro'], PDL: ['Azores', 'Sao Miguel', 'Ponta Delgada'],
   DUB: ['Eire'], SNN: ['Eire', 'Clare'], AMS: ['Schiphol', 'Holland'], FRA: ['Hesse'], MUC: ['Bavaria', 'Bayern', 'Franz Josef Strauss'],
   BER: ['Brandenburg'], BSL: ['EuroAirport', 'Mulhouse'], GVA: ['Cointrin'], ZRH: ['Kloten'], ARN: ['Arlanda'], CPH: ['Kastrup'],
   KEF: ['Keflavik'], BUD: ['Ferenc Liszt'], DBV: ['Dalmatia', 'Cilipi'], ATH: ['Eleftherios Venizelos', 'Attica'],

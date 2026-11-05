@@ -14,6 +14,7 @@ import { destPath, gatewayPath } from '../../ui/links';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { airportTz } from '../../utils/airports';
 import { todayKey } from '../../utils/time';
+import { flightsOn, nextFlightDate } from '../../utils/week';
 import { GatewayRow, ReachParams, dayLabel, formatHome, gatewayRow, parseHome, readReachParams, reachQueryParams } from './reach-model';
 import { reachPlace } from './reach-place';
 import { reachTitle } from './reach-title';
@@ -66,12 +67,17 @@ type Editing = 'dep' | 'home' | 'hub';
           }
           @case ('ready') {
             @if (served(); as code) {
-              <section class="ui-card empty" role="status">
+              <section class="ui-card empty" role="status" data-served>
                 <h1 class="ui-h3">{{ t('places.reach.flies', { place: placeName() }) }}</h1>
-                <p class="ui-sub">{{ t('places.reach.noNeed') }}</p>
+                @if (directOnDep()) {
+                  <p class="ui-sub">{{ t('places.reach.noNeed') }}</p>
+                } @else {
+                  <p class="ui-sub">{{ nextDirect() ? t('places.reach.noNonstopNext', { hub: p().hub, date: depLabel(), next: nextDirectLabel() }) : t('places.reach.noNonstop', { hub: p().hub, date: depLabel() }) }}</p>
+                }
                 <a class="ui-btn ui-btn--dark ui-btn--sm" [routerLink]="dest(code)" [queryParams]="state.globalParams()">{{ t('places.reach.open', { place: placeName() }) }}</a>
               </section>
-            } @else {
+            }
+            @if (!served() || !directOnDep()) {
               <div class="ui-card chips" role="group" [attr.aria-label]="t('places.reach.thisSearch')">
                 <button type="button" class="ui-tag ui-tag--neutral chip tn" (click)="edit('dep')" aria-haspopup="dialog">{{ t('places.reach.leave', { date: depLabel() }) }}</button>
                 <button type="button" class="ui-tag ui-tag--neutral chip tn" (click)="edit('home')" aria-haspopup="dialog">{{ t('places.reach.homeBy', { date: homeLabel() }) }}</button>
@@ -307,10 +313,20 @@ export class ReachPage {
   });
   protected readonly placeName = computed(() => this.placeObj()?.name ?? '');
   protected readonly served = computed(() => this.placeObj()?.acCode ?? null);
+  /** A served city still needs other ways on a day with no nonstop (seasonal routes such as SVQ). */
+  protected readonly directOnDep = computed(() => {
+    const code = this.served();
+    return !!code && flightsOn(this.p().hub, code, this.p().dep).length > 0;
+  });
+  protected readonly nextDirect = computed(() => {
+    const code = this.served();
+    return code && !this.directOnDep() ? nextFlightDate(this.p().hub, code, this.p().dep) : null;
+  });
+  protected readonly nextDirectLabel = computed(() => { const k = this.nextDirect(); return k ? dayLabel(k) : ''; });
 
   readonly result = computed(() => {
     const place = this.placeObj();
-    if (!place || place.acCode) return { gateways: [], unknownOnward: [] };
+    if (!place || this.directOnDep()) return { gateways: [], unknownOnward: [] };
     const p = this.p();
     return reachGateways({ place, hub: p.hub, dateKey: p.dep, includeOtherHubs: p.hubs, sort: p.sort, connect: this.state.connect() });
   });

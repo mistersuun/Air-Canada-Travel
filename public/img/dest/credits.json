@@ -1,6 +1,6 @@
 {
  "version": 1,
- "generated": "2026-10-01",
+ "generated": "2026-11-05",
  "photos": {
   "AKL": {
    "subject": "Auckland Skyline as seen from Devonport 20100128 3",
@@ -1585,6 +1585,18 @@
    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
    "position": "50% 50%",
    "tone": "dark"
+  },
+  "SVQ": {
+   "subject": "Plaza de España (Sevilla) - 01",
+   "author": "Carlos Delgado",
+   "authorUrl": "https://commons.wikimedia.org/wiki/User:Kadellar",
+   "source": "wikimedia",
+   "sourceUrl": "https://commons.wikimedia.org/wiki/File:Plaza_de_Espa%C3%B1a_(Sevilla)_-_01.jpg",
+   "license": "CC BY-SA 4.0",
+   "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "position": "50% 50%",
+   "tone": "dark",
+   "hero": true
   },
   "SXM": {
    "subject": "St Maarten Philipsburg Wathey Square Courthouse",

@@ -208,8 +208,15 @@ describe('placeRows / reachDep', () => {
     ({ place: { ...SEVILLE_PLACE, ...over }, population: 1000, servedBy });
 
   it('drops cities AC serves and labels the rest "Not on AC\'s network"', () => {
-    const rows = placeRows([hit({}), hit({ id: 'gn-2267057', name: 'Lisbon', country: 'Portugal' }, 'LIS')], 'sev');
+    const rows = placeRows([hit({}), hit({ id: 'gn-2267057', name: 'Lisbon', country: 'Portugal' }, 'LIS')], 'sev', new Set(['LIS']));
     expect(rows).toEqual([{ id: 'gn-2510911', name: 'Seville', sub: "Andalusia, Spain · Find ways to get there" }]);
+  });
+
+  it('keeps a served city whose destination is not in the results (a seasonal route out of season)', () => {
+    const lis = hit({ id: 'gn-2267057', name: 'Lisbon', country: 'Portugal' }, 'LIS');
+    const svq = hit({}, 'SVQ');
+    expect(placeRows([svq, lis], 'sev', new Set(['LIS'])).map(r => r.name)).toEqual(['Seville']);
+    expect(placeRows([svq, lis], 'sev', new Set(['LIS', 'SVQ']))).toEqual([]);
   });
 
   it('always adds the region, and needs 3 characters', () => {

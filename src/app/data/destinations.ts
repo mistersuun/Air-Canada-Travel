@@ -155,6 +155,7 @@ export const DESTINATIONS: Destination[] = [
   { city: 'Rome', country: 'Italy', code: 'FCO', iso2: 'IT', tz: 'Europe/Rome', lat: 41.80, lng: 12.25, region: 'Europe', type: 'City', duration: '13h 10m', aircraft: '777-300ER', season: 'Year-round' },
   { city: 'Barcelona', country: 'Spain', code: 'BCN', iso2: 'ES', tz: 'Europe/Madrid', lat: 41.30, lng: 2.08, region: 'Europe', type: 'City', duration: '12h 35m', aircraft: 'A330-300', season: 'Year-round' },
   { city: 'Lisbon', country: 'Portugal', code: 'LIS', iso2: 'PT', tz: 'Europe/Lisbon', lat: 38.77, lng: -9.13, region: 'Europe', type: 'City', duration: '10h 45m', aircraft: 'A330-300', season: 'Year-round' },
+  { city: 'Seville', country: 'Spain', code: 'SVQ', iso2: 'ES', tz: 'Europe/Madrid', lat: 37.42, lng: -5.89, region: 'Europe', type: 'City', duration: '7h 00m', aircraft: 'A321neo', season: 'Sep – Oct', isNew: true },
   { city: 'Dublin', country: 'Ireland', code: 'DUB', iso2: 'IE', tz: 'Europe/Dublin', lat: 53.43, lng: -6.27, region: 'Europe', type: 'City', duration: '11h 10m', aircraft: '787-9', season: 'Year-round' },
   { city: 'Amsterdam', country: 'Netherlands', code: 'AMS', iso2: 'NL', tz: 'Europe/Amsterdam', lat: 52.31, lng: 4.77, region: 'Europe', type: 'City', duration: '12h 45m', aircraft: '787-8', season: 'Year-round' },
   { city: 'Athens', country: 'Greece', code: 'ATH', iso2: 'GR', tz: 'Europe/Athens', lat: 37.94, lng: 23.94, region: 'Europe', type: 'City', duration: '15h 10m', aircraft: '787-9', season: 'Mar – Nov' },

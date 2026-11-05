@@ -177,6 +177,9 @@ describe('ReachPage', () => {
     expect(text(el)).toContain('Leave Thu Oct 8');
     expect(text(el)).toContain('Home by Tue Oct 13');
     expect(text(el)).toContain('From YUL');
+    // AC flies to Seville (SVQ, seasonal) but not that day, so the other ways still show.
+    expect(text(el.querySelector('[data-served]')!)).toContain('Air Canada flies to Seville');
+    expect(text(el.querySelector('[data-served]')!)).toContain('No nonstop from YUL on Thu Oct 8');
     expect(text(el)).toContain('Ways to reach Seville');
     expect(text(el)).toContain("Not in our schedule data");
     expect([...el.querySelectorAll('.row .c')].map(c => c.textContent)).toEqual(['MAD', 'BCN', 'LIS', 'OPO']);

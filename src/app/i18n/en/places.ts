@@ -224,6 +224,8 @@ export const places = {
   'places.reach.searchAgain': 'Search again from Explore.',
   'places.reach.flies': 'Air Canada flies to {place}',
   'places.reach.noNeed': 'No need to go through another airport.',
+  'places.reach.noNonstopNext': 'No nonstop from {hub} on {date}; the next is {next}. Other ways are below.',
+  'places.reach.noNonstop': 'No nonstop from {hub} on {date}. Other ways are below.',
   'places.reach.open': 'Open {place}',
   'places.reach.thisSearch': 'This search',
   'places.reach.leave': 'Leave {date}',

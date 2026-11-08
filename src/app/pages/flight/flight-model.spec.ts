@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
-import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
+import { FIXTURE_META, FIXTURE_ROUTES, rec, route } from '../../data/testing/schedule-fixtures';
 import { allItineraries, directItineraries, findAlternatives, type Itinerary } from '../../utils/connections';
 import {
-  backupGroups, choose, frequencyLabel, isPick, optionRow, parseNights, pickOf, placeName, roundTrip, shortAircraft,
+  backupGroups, choose, missSummary, missSummaryText, nearbyAirports, nearbyOptions, frequencyLabel, isPick, optionRow, parseNights, pickOf, placeName, roundTrip, shortAircraft,
   ticketModel, weekFrequency,
 } from './flight-model';
 
@@ -136,5 +136,42 @@ describe('flight-model', () => {
     const ath = backupGroups(findAlternatives('YUL', 'ATH', first), first);
     expect(ath[0]).toMatchObject({ id: 'later', label: 'Later nonstop' });
     expect(ath[0].rows[0].slug).toBe('AC922');
+  });
+});
+
+describe('if you miss this: nearby airports and what is left', () => {
+  const D = '2026-10-07';
+  const toronto = [
+    route('YYZ', 'LGA', rec('AC700', '08:00', '09:30', D, '2026-10-08'), rec('AC702', '12:00', '13:30', D, '2026-10-08'), rec('AC704', '19:00', '20:30', D, '2026-10-08')),
+    route('YTZ', 'LGA', rec('AC8900', '08:45', '10:15', D, D), rec('AC8902', '10:00', '11:30', D, D)),
+    route('YYZ', 'EWR', rec('AC7000', '09:00', '10:30', D, D)),
+  ];
+  beforeEach(() => setScheduleSource(toronto, FIXTURE_META));
+
+  it('finds the same-country AC airports close by (Toronto Island, Newark), not across a border or the sea', () => {
+    expect(nearbyAirports('YYZ')).toEqual(['YTZ']);
+    expect(nearbyAirports('LGA')).toEqual(['EWR']);
+    expect(nearbyAirports('FDF')).toEqual([]);   // Saint Lucia is 96 km away but another country
+  });
+
+  it('lists nearby options after the missed flight, allowing a transfer from another origin', () => {
+    const [missed] = directItineraries('YYZ', 'LGA', D);   // AC700 08:00
+    const near = nearbyOptions(missed);
+    // YTZ 08:45 leaves within 90 min of the missed 08:00 (no time to cross town); YTZ 10:00 and YYZ→EWR 09:00 count.
+    expect(near.map(i => `${i.origin}-${i.dest} ${i.legs[0].flightNumber}`)).toEqual(['YYZ-EWR AC7000', 'YTZ-LGA AC8902']);
+    const groups = backupGroups(findAlternatives('YYZ', 'LGA', missed), missed, '24h', near);
+    const g = groups.find(x => x.id === 'nearby')!;
+    expect(g.label).toBe('Nearby airports, same day');
+    expect(g.rows.map(r => r.name)).toEqual(['To Newark', 'From Toronto Island']);
+  });
+
+  it('says how many options are left today, the last one, and the next day', () => {
+    const [missed] = directItineraries('YYZ', 'LGA', D);
+    const m = missSummary(findAlternatives('YYZ', 'LGA', missed), missed);
+    expect(m).toMatchObject({ laterToday: 2, tomorrow: 3 });
+    expect(missSummaryText(m)).toBe('After this: 2 more options today, the last at 19:00. Next day: 3, the first at 08:00.');
+    const last = directItineraries('YYZ', 'LGA', D)[2];
+    expect(missSummaryText(missSummary(findAlternatives('YYZ', 'LGA', last), last), '12h'))
+      .toBe('After this: no more options today. Next day: 3, the first at 8:00 AM.');
   });
 });

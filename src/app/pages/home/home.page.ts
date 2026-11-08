@@ -115,6 +115,7 @@ interface ListRow {
           }
           <div class="xrow">
             <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">{{ t('home.weekendFinder') }}</a>
+            <a class="wkend ui-link" routerLink="/commute" [queryParams]="state.globalParams()">{{ t('home.commute') }}</a>
             <app-surprise-sheet [entries]="results()" [timeFormat]="state.timeFormat()" />
           </div>
         </div>

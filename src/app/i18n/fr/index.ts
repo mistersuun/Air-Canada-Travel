@@ -27,6 +27,7 @@ import { today } from './today';
 import { trips } from './trips';
 import { ui } from './ui';
 import { weekend } from './weekend';
+import { commute } from './commute';
 
 type Areas = typeof EN_AREAS;
 
@@ -56,6 +57,7 @@ export const FR_AREAS: { readonly [A in keyof Areas]: { readonly [K in keyof Are
   trips,
   ui,
   weekend,
+  commute,
 };
 
 export const FR = {
@@ -83,4 +85,5 @@ export const FR = {
   ...trips,
   ...ui,
   ...weekend,
+  ...commute,
 };

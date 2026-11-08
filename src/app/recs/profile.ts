@@ -4,8 +4,9 @@
  */
 import { typeLabel } from '../i18n/labels';
 import { MsgKey, t } from '../i18n/t';
+import { hasKnownTz, isHub } from '../utils/airports';
 import { weekdayShort } from '../utils/time';
-import { TravelProfile, TripLength, TripStyle } from './model';
+import { CommuteSettings, TravelProfile, TripLength, TripStyle } from './model';
 
 export const TRIP_STYLES: readonly TripStyle[] = ['Sun', 'City', 'Adventure'];
 export const TRIP_LENGTHS: readonly TripLength[] = ['day', 'weekend', 'week'];
@@ -68,12 +69,29 @@ export const EMPTY_PROFILE: Readonly<TravelProfile> = Object.freeze({
   dismissed: [],
   usualItems: [],
   passports: [],
+  commute: null,
   updatedAt: null,
 }) as Readonly<TravelProfile>;
 
 function clampInt(v: unknown, lo: number, hi: number): number | null {
   if (typeof v !== 'number' || !Number.isFinite(v)) return null;
   return Math.min(hi, Math.max(lo, Math.round(v)));
+}
+
+/** Buffer choices before report, in minutes. */
+export const COMMUTE_BUFFERS: readonly number[] = [30, 45, 60, 90, 120, 180];
+export const DEFAULT_COMMUTE_BUFFER = 60;
+
+/** A valid commute (known home airport, a hub as base, different, listed buffer), else null. */
+export function sanitizeCommute(raw: unknown): CommuteSettings | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const code = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : '');
+  const home = code(r['home']);
+  const base = code(r['base']);
+  if (!/^[A-Z]{3}$/.test(home) || !hasKnownTz(home) || !isHub(base) || home === base) return null;
+  const buf = r['bufferMin'];
+  return { home, base, bufferMin: typeof buf === 'number' && COMMUTE_BUFFERS.includes(buf) ? buf : DEFAULT_COMMUTE_BUFFER };
 }
 
 /** Coerce anything into a valid TravelProfile. Never throws. */
@@ -101,6 +119,7 @@ export function sanitizeProfile(raw: unknown): TravelProfile {
     dismissed,
     usualItems: sanitizeUsualItems(r['usualItems']),
     passports: sanitizePassports(r['passports']),
+    commute: sanitizeCommute(r['commute']),
     updatedAt: typeof r['updatedAt'] === 'string' && !Number.isNaN(Date.parse(r['updatedAt'])) ? r['updatedAt'] : null,
   };
 }

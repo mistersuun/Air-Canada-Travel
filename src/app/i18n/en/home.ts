@@ -12,6 +12,7 @@ export const home = {
   'home.plusConnections': '+ Connections',
   'home.legend': 'A dot under a day means a nonstop flies that day. Blue marks today.',
   'home.gotIt': 'Got it',
+  'home.commute': 'Commute to base ›',
   'home.weekendFinder': 'Weekend finder ›',
   'home.destinations': 'Destinations',
   'home.backToExplore': 'Back to Explore',

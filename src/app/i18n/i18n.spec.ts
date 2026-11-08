@@ -16,7 +16,7 @@ const SAME_IN_FRENCH: ReadonlySet<string> = new Set<MsgKey>([
   'settings.language.en', 'settings.language.fr', 'settings.theme.auto', 'settings.photo',
   'shell.title.home', 'shell.title.page',
   'data.region.europe', 'data.hub.YUL',
-  'format.via', 'format.range.twoMonths',
+  'format.via', 'format.range.twoMonths', 'commute.base', 'commute.bufferOpt',
   'home.destinations', 'home.week.destinations', 'home.badge.at', 'home.filter.sort.az', 'home.chips.via',
   // trips (chunk A)
   'trips.mode.train', 'trips.modeLabel.train', 'trips.tab.plan', 'trips.leg.mode', 'trips.leg.note', 'trips.off.trains', 'trips.off.photos',

@@ -146,6 +146,11 @@ export const routes: Routes = [
     title: 'shell.title.profile',
   },
   {
+    path: 'commute',
+    loadComponent: () => import('./pages/commute/commute.page').then(m => m.CommutePage),
+    title: 'shell.title.commute',
+  },
+  {
     path: 'weekend',
     loadComponent: () => import('./pages/weekend/weekend.page').then(m => m.WeekendPage),
     title: 'shell.title.weekend',

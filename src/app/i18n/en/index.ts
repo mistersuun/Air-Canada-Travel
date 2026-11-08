@@ -28,6 +28,7 @@ import { today } from './today';
 import { trips } from './trips';
 import { ui } from './ui';
 import { weekend } from './weekend';
+import { commute } from './commute';
 
 /** Area name → its messages. Every key of an area starts with '<area>.' (checked by i18n.spec.ts). */
 export const EN_AREAS = {
@@ -55,6 +56,7 @@ export const EN_AREAS = {
   trips,
   ui,
   weekend,
+  commute,
 } as const;
 
 export const EN = {
@@ -82,4 +84,5 @@ export const EN = {
   ...trips,
   ...ui,
   ...weekend,
+  ...commute,
 };

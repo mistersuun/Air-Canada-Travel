@@ -46,6 +46,7 @@ export const shell = {
   'shell.title.group': 'Group trip · Routes',
   'shell.title.logbook': 'Logbook · Routes',
   'shell.title.profile': 'Travel profile · Routes',
+  'shell.title.commute': 'Commute to base · Routes',
   'shell.title.weekend': 'Weekend finder · Routes',
   'shell.title.compare': 'Compare · Routes',
   'shell.title.today': 'Today · Routes',

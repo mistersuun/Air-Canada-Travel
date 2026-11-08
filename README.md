@@ -18,6 +18,7 @@ Routes are defined in `src/app/app.routes.ts` (all lazy-loaded):
 | `/saved` | Saved destinations |
 | `/today` | Today's flights and live status (optional) |
 | `/weekend` | Weekend finder |
+| `/commute` | Commute-to-base planner for crew (flights that arrive before report) |
 | `/trips`, `/trips/:id` | Your trips; `/trips/import` opens a shared trip |
 | `/trips/:id/passes/add`, `/trips/:id/pass/:passId` | Scan or add a boarding pass; the pass view |
 | `/trips/:id/files`, `/share`, `/recap`, `/recover` | Trip files, sharing, recap, and "still reachable" if a flight changes |

@@ -46,6 +46,7 @@ export const shell: Translation<typeof en> = {
   'shell.title.group': 'Voyage de groupe · Routes',
   'shell.title.logbook': 'Carnet de vols · Routes',
   'shell.title.profile': 'Profil de voyage · Routes',
+  'shell.title.commute': 'Navettage vers la base · Routes',
   'shell.title.weekend': 'Fins de semaine · Routes',
   'shell.title.compare': 'Comparer · Routes',
   'shell.title.today': 'Aujourd\'hui · Routes',

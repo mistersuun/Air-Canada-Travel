@@ -17,7 +17,7 @@ export function navSection(path: string): NavSection {
  * a shared link → g/:id), not tab roots.
  */
 export function isDetailPath(path: string): boolean {
-  return /^\/(to|flight|calendar|today|reach|profile|logbook|saved|weekend|g)(\/|$)/.test(path) || /^\/trips\/[^/]+/.test(path);
+  return /^\/(to|flight|calendar|today|reach|profile|logbook|saved|weekend|commute|g)(\/|$)/.test(path) || /^\/trips\/[^/]+/.test(path);
 }
 
 /** The desktop top nav is replaced by the destination hero's own buttons. */

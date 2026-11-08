@@ -1,5 +1,5 @@
 import { Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
-import { PROFILE_KEY, TravelProfile } from './model';
+import { CommuteSettings, PROFILE_KEY, TravelProfile } from './model';
 import { EMPTY_PROFILE, MAX_DISMISSED, profileSummary, sanitizeProfile, sanitizeUsualItems } from './profile';
 
 /** Storage backing the travel profile (same pattern as PREFS_STORAGE). Null when blocked. */
@@ -33,9 +33,14 @@ export class ProfileService {
     this.set(sanitizeProfile({ ...this.state(), ...patch, updatedAt: new Date(this.now()).toISOString() }));
   }
 
+  /** Save (or clear) the commute settings. Not a taste setting: does not mark the profile as set up. */
+  setCommute(c: CommuteSettings | null): void {
+    this.set(sanitizeProfile({ ...this.state(), commute: c }));
+  }
+
   /** Back to the empty profile ("Not set up"). */
   reset(): void {
-    this.set({ ...EMPTY_PROFILE, styles: [], days: [], dismissed: [], usualItems: [], passports: [] });
+    this.set({ ...EMPTY_PROFILE, styles: [], days: [], dismissed: [], usualItems: [], passports: [], commute: null });
   }
 
   /** Hide a recommendation ("Not for me"). Does not mark the profile as set up. */

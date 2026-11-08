@@ -174,6 +174,10 @@ export const DEFAULT_MAX_HOURS = 7;
         <span>{{ t('recs.profile.logbook') }}</span><span aria-hidden="true">›</span>
       </button>
 
+      <button type="button" class="lb" data-commute (click)="openCommute()">
+        <span>{{ t('commute.link') }}</span><span aria-hidden="true">›</span>
+      </button>
+
       <!-- Nothing to reset on a fresh profile: no button, rather than one that looks disabled. -->
       <div class="reset">
         @if (confirming()) {
@@ -392,6 +396,10 @@ export class ProfilePage {
 
   protected openLogbook(): void {
     void this.router.navigate(logbookPath(), { queryParams: this.state.globalParams() });
+  }
+
+  protected openCommute(): void {
+    void this.router.navigate(['/commute'], { queryParams: this.state.globalParams() });
   }
 
   protected back(): void {

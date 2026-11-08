@@ -657,8 +657,15 @@ def test_required_feed_with_no_stops_still_fails_loudly(tmp_path, monkeypatch):
         bg.main(["--offline", "--cache", str(cache), "--only", "t", "--out", str(tmp_path / "g.json"), "--today", "2026-10-02"])
 
 
-def test_fra_pins_are_the_current_gtfs_de_ids_with_a_near_hint():
+def test_fra_pins_are_station_names_that_survive_gtfs_de_renumbering():
     c = next(x for x in bg.CORRIDORS if x["key"] == "FRA-2886242")
-    assert c["a"]["stops"] == ["296266"] and c["b"]["stops"] == ["265963"]
+    assert c["a"]["stops"] == ["name:Frankfurt (Main) Flughafen Fernbahnhof"] and c["b"]["stops"] == ["name:Köln Hbf"]
+    # The 2026-11 release renumbered both stations again; the name pins still resolve, child platforms included.
+    stops = {"285016": "", "285016_1": "285016", "381220": "", "474510": ""}
+    names = {"285016": "Frankfurt (Main) Flughafen Fernbahnhof", "285016_1": "Frankfurt (Main) Flughafen Fernbahnhof",
+             "381220": "Köln Hbf", "474510": "Frankfurt (Main) Flughafen Regionalbahnhof"}
+    assert bg.resolve_stops(stops, c["a"]["stops"], "a", names) >= {"285016"}
+    assert "474510" not in bg.resolve_stops(stops, c["a"]["stops"], "a", names)
+    assert bg.resolve_stops(stops, c["b"]["stops"], "b", names) == {"381220"}
     assert bg.km(tuple(c["a"]["near"]), (50.0530, 8.5698)) < 0.2  # Frankfurt Flughafen Fernbahnhof
     assert bg.km(tuple(c["b"]["near"]), (50.9430, 6.9587)) < 0.2  # Köln Hbf

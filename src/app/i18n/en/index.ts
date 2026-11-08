@@ -6,6 +6,7 @@
  */
 import { calendar } from './calendar';
 import { common } from './common';
+import { compare } from './compare';
 import { data } from './data';
 import { dest } from './dest';
 import { files } from './files';
@@ -32,6 +33,7 @@ import { weekend } from './weekend';
 export const EN_AREAS = {
   calendar,
   common,
+  compare,
   data,
   dest,
   files,
@@ -58,6 +60,7 @@ export const EN_AREAS = {
 export const EN = {
   ...calendar,
   ...common,
+  ...compare,
   ...data,
   ...dest,
   ...files,

@@ -115,3 +115,36 @@ describe('SavedPage', () => {
     expect(el.querySelectorAll('.list--watch app-dest-row')).toHaveLength(3);
   });
 });
+
+describe('SavedPage compare', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  it('has no Compare action with fewer than two saved destinations', async () => {
+    configure(['LHR']);
+    const { el } = await render();
+    expect(el.querySelector('[data-compare-start]')).toBeNull();
+  });
+
+  it('ticks 2 to 3 saved destinations, then opens /compare?c=', async () => {
+    configure(['LHR', 'ATH', 'NRT', 'LIS']);
+    const { el, nav, stable } = await render();
+    el.querySelector<HTMLButtonElement>('[data-compare-start]')!.click();
+    await stable();
+    const open = () => el.querySelector<HTMLButtonElement>('[data-compare-open]')!;
+    expect(open().disabled).toBe(true);
+    const tick = (c: string) => el.querySelector<HTMLInputElement>(`[data-tick="${c}"]`)!;
+    for (const c of ['LHR', 'ATH', 'NRT']) { tick(c).click(); await stable(); }
+    // The fourth is disabled once three are ticked.
+    expect(tick('LIS').disabled).toBe(true);
+    expect(open().disabled).toBe(false);
+    open().click();
+    const arg = nav.mock.calls[0];
+    expect(arg[0]).toEqual(['/compare']);
+    const c = (arg[1] as { queryParams: { c: string } }).queryParams.c.split(',').sort();
+    expect(c).toEqual(['ATH', 'LHR', 'NRT']);
+  });
+});

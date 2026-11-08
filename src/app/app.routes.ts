@@ -54,6 +54,11 @@ export const routes: Routes = [
     title: 'shell.title.saved',
   },
   {
+    path: 'compare',
+    loadComponent: () => import('./pages/compare/compare.page').then(m => m.ComparePage),
+    title: 'shell.title.compare',
+  },
+  {
     path: 'calendar',
     loadComponent: () => import('./pages/calendar/calendar.page').then(m => m.CalendarPage),
     title: 'shell.title.calendar',

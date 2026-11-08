@@ -5,6 +5,7 @@
 import type { EN_AREAS } from '../en';
 import { calendar } from './calendar';
 import { common } from './common';
+import { compare } from './compare';
 import { data } from './data';
 import { dest } from './dest';
 import { files } from './files';
@@ -33,6 +34,7 @@ type Areas = typeof EN_AREAS;
 export const FR_AREAS: { readonly [A in keyof Areas]: { readonly [K in keyof Areas[A]]: string } } = {
   calendar,
   common,
+  compare,
   data,
   dest,
   files,
@@ -59,6 +61,7 @@ export const FR_AREAS: { readonly [A in keyof Areas]: { readonly [K in keyof Are
 export const FR = {
   ...calendar,
   ...common,
+  ...compare,
   ...data,
   ...dest,
   ...files,

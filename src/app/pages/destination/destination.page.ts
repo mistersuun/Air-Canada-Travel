@@ -40,6 +40,7 @@ import { historyFor, recordAria, recordTag, type HistoryCounts } from '../../tri
 import { TripsService } from '../../trips/trips.service';
 import { DestHomeByComponent } from './dest-home-by.component';
 import { DestTripActionsComponent } from './dest-trip-actions.component';
+import { DestCompareButtonComponent } from './dest-compare-button.component';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
 import { routeOnlyText } from '../../data/route-network';
 
@@ -81,7 +82,7 @@ const AC_URL = 'https://www.aircanada.com/';
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent, DestWeatherLineComponent,
+    MonthAvailabilityComponent, DestTripActionsComponent, DestCompareButtonComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent, DestWeatherLineComponent,
     DestReferenceComponent, EventsCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -148,6 +149,7 @@ const AC_URL = 'https://www.aircanada.com/';
         </div>
         <a class="ui-link days-off d-only" routerLink="/weekend" [queryParams]="daysOffParams()" data-days-off>{{ t('dest.daysOff') }}</a>
         <app-dest-trip-actions class="d-only" [code]="code()" />
+        <app-dest-compare-button class="d-only cmp" [code]="code()" />
       </section>
 
       <app-seg class="tabs m-only" stretch [options]="tabs()" [value]="tab()" (valueChange)="setTab($event)"
@@ -217,6 +219,7 @@ const AC_URL = 'https://www.aircanada.com/';
 
       <section class="card dep" [class.is-empty]="!outItems().length" [class.m-hide]="tab() !== 'departures'" aria-labelledby="dep-h">
         <app-dest-trip-actions class="m-only" [code]="code()" />
+        <app-dest-compare-button class="m-only cmp" [code]="code()" />
         <div class="ui-sec-h d-only">
           <h2 id="dep-h" class="ui-h3">{{ t('dest.nextDepartures') }}</h2>
           <span class="ui-tag ui-tag--blue">{{ state.hub() }} → {{ code() }}</span>
@@ -305,6 +308,7 @@ const AC_URL = 'https://www.aircanada.com/';
   `,
   styles: [`
     :host { display: block; min-height: 100dvh; background: var(--bg); }
+    .cmp { margin-top: 8px; }
 
     /* ── Hero ─────────────────────────────────────────────────────────── */
     .hero { position: relative; height: min(380px, 40vh); min-height: 240px; overflow: hidden; background: var(--fill); }

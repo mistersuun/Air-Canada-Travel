@@ -1,3 +1,4 @@
+import { OnTheDayComponent } from '../../ui/on-the-day.component';
 import { celebrate } from '../../ui/celebrate';
 import { success } from '../../ui/haptics';
 import { clearedMessage } from '../../trips/cleared';
@@ -34,7 +35,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 @Component({
   selector: 'app-today-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent, TodayInAirComponent, LiveStatusComponent],
+  imports: [OnTheDayComponent, RouterLink, IconComponent, LegStatusTagComponent, ProvenanceTagComponent, PlansChangedSheetComponent, TodayPassComponent, TodayTimelineComponent, TodayInAirComponent, LiveStatusComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page ui-page--bare td">
@@ -72,6 +73,7 @@ import { TodayPassComponent } from '../../passes/ui/today-pass.component';
 
         <app-today-pass [tripId]="v.tripId" [legId]="v.legId" />
         <app-today-in-air [ref]="v.ref" [status]="v.status" />
+        <app-on-the-day [codes]="[v.ref.origin, v.ref.dest]" />
         <app-today-timeline [tripId]="v.tripId" [legId]="v.legId" />
 
         @if (!v.final) {

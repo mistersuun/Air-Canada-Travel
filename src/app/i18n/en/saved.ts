@@ -15,4 +15,12 @@ export const saved = {
   'saved.showing': 'Showing {week}',
   'saved.thatWeek': '{n}× that week',
   'saved.ends': 'ends {date}',
+  'saved.chg.new': 'New: nonstop from {hub} from {date}',
+  'saved.chg.newNow': 'New: nonstop from {hub}',
+  'saved.chg.ends': 'Ends: last nonstop {date}',
+  'saved.chg.fewer': 'Fewer days this week: {from} → {to}',
+  'saved.chg.fewerWeek': 'Fewer days the week of {date}: {from} → {to}',
+  'saved.chg.more': 'More days this week: {from} → {to}',
+  'saved.chg.moreWeek': 'More days the week of {date}: {from} → {to}',
+  'saved.chg.fromHub': '{text} (from {hub})',
 } satisfies Messages;

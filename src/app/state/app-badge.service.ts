@@ -2,6 +2,7 @@ import { Injectable, effect, inject } from '@angular/core';
 import { badgeCount } from '../trips/engine/coming-up';
 import { TripsService } from '../trips/trips.service';
 import { AppStateService } from './app-state.service';
+import { SavedSnapshotService } from './saved-snapshot.service';
 
 export interface BadgeNav { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> }
 
@@ -10,10 +11,14 @@ export interface BadgeNav { setAppBadge?: (n?: number) => Promise<void>; clearAp
 export class AppBadgeService {
   private readonly trips = inject(TripsService);
   private readonly state = inject(AppStateService);
+  private readonly saved = inject(SavedSnapshotService);
   private last = -1;
 
   constructor() {
-    effect(() => this.apply(badgeCount(this.trips.readOnly() ? [] : this.trips.trips(), this.trips.pendingOutcomes().length, this.state.nowMs())));
+    effect(() => this.apply(
+      badgeCount(this.trips.readOnly() ? [] : this.trips.trips(), this.trips.pendingOutcomes().length, this.state.nowMs())
+      + this.saved.unseenCount(),
+    ));
   }
 
   apply(count: number, nav: BadgeNav | undefined = typeof navigator === 'undefined' ? undefined : (navigator as BadgeNav)): void {

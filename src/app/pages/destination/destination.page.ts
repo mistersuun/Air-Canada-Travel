@@ -29,6 +29,7 @@ import {
   HORIZON_DAYS, bestHub, destState, destSummary, nextConnectionDate, nextDeparture, placeLabel, timelineItems, upcoming,
   zoneAbbr,
 } from './dest-model';
+import { routeFacts } from './route-facts';
 import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
 import { DestClimateComponent } from './dest-climate.component';
@@ -248,6 +249,11 @@ const AC_URL = 'https://www.aircanada.com/';
             }
           </div>
         </app-dest-timeline>
+        @if (facts().length) {
+          <ul class="facts" [attr.aria-label]="t('dest.facts.title')" data-route-facts>
+            @for (f of facts(); track f) { <li>{{ f }}</li> }
+          </ul>
+        }
       </section>
 
       <section class="card ret" [class.is-empty]="!retItems().length" [class.m-hide]="tab() !== 'returns'" aria-labelledby="ret-h">
@@ -357,6 +363,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .notice p { flex: 1 1 220px; min-width: 0; }
     .notice b { color: var(--ink); }
     .notice__acts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .facts { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--hair); display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
     .empty { padding: 8px 0 4px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 6px; justify-items: start; }
     .empty .ui-link { font-size: 13.5px; }
 
@@ -603,6 +610,9 @@ export class DestinationPage {
     const d = formatKey(ev.dateKey, { month: 'short', day: 'numeric' });
     return t(ev.kind === 'pauses' ? 'dest.seasonPauses' : 'dest.seasonLast', { date: d });
   });
+  /** A few plain counts from the published schedules (frequency, season, last nonstop home). */
+  protected readonly facts = computed(() => this.routeOnly() ? [] : routeFacts(this.state.hub(), this.code(), this.outToday(), this.state.nowMs(), this.state.timeFormat()));
+
   protected readonly next = computed(() => nextDeparture(this.outList()[0], this.outToday(), this.state.timeFormat()));
 
   // ── States ────────────────────────────────────────────────────────────────

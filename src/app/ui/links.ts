@@ -99,3 +99,8 @@ export function reachPath(placeId: string): string[] {
 export function gatewayPath(placeId: string, code: string): string[] {
   return ['/reach', placeId, code.toUpperCase()];
 }
+
+/** Command array for the pass-rider `/guide`. */
+export function guidePath(): string[] {
+  return ['/guide'];
+}

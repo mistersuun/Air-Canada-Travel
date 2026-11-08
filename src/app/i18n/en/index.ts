@@ -13,6 +13,7 @@ import { files } from './files';
 import { flight } from './flight';
 import { format } from './format';
 import { group } from './group';
+import { guide } from './guide';
 import { home } from './home';
 import { logbook } from './logbook';
 import { map } from './map';
@@ -41,6 +42,7 @@ export const EN_AREAS = {
   flight,
   format,
   group,
+  guide,
   home,
   logbook,
   map,
@@ -69,6 +71,7 @@ export const EN = {
   ...flight,
   ...format,
   ...group,
+  ...guide,
   ...home,
   ...logbook,
   ...map,

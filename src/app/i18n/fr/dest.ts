@@ -137,4 +137,12 @@ export const dest: Translation<typeof en> = {
   'dest.didYouKnow': 'Le saviez-vous',
   'dest.seasonPauses': 'Saisonnier · suspendu après le {date}',
   'dest.seasonLast': 'Saisonnier · dernier vol sans escale le {date}',
+  'dest.facts.title': 'Faits sur la liaison',
+  'dest.facts.none': 'Aucun vol sans escale depuis {hub} au cours des 7 prochains jours',
+  'dest.facts.daily': '{n, plural, one {1 vol sans escale par jour depuis {hub}} other {# vols sans escale par jour depuis {hub}}}',
+  'dest.facts.dailyRange': 'De {lo} à {hi} vols sans escale par jour depuis {hub}',
+  'dest.facts.weekly': '{n, plural, one {Sans escale 1 jour par semaine} other {Sans escale # jours par semaine}} ({days})',
+  'dest.facts.seasonal': 'Saisonnier\u00a0: {months} seulement',
+  'dest.facts.lastHome': "Dernier vol sans escale de retour aujourd'hui\u00a0: {time}",
+  'dest.facts.noHome': "Aucun vol sans escale de retour aujourd'hui; prochain\u00a0: {day}",
 };

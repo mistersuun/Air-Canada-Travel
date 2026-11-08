@@ -34,6 +34,7 @@ import { FactsCardComponent } from './facts-card.component';
 import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
 import { OptionRowComponent } from './option-row.component';
+import { OnTheDayComponent } from '../../ui/on-the-day.component';
 import { ReturnPanelComponent } from './return-panel.component';
 
 /** Other options listed before "Show all". */
@@ -66,7 +67,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
   selector: 'app-flight-page',
   standalone: true,
   imports: [
-    RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
+    OnTheDayComponent, RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
     FactsCardComponent, FunFactCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -208,6 +209,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
               </div>
             </app-glass-sheet>
           }
+          <app-on-the-day [codes]="[hub(), dest()]" />
           <p class="foot ui-sub">{{ t('flight.footer') }}</p>
         </div>
       </div>

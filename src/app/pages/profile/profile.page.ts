@@ -12,6 +12,7 @@ import { clearDismissedFacts, dismissedFacts } from '../flight/fun-fact';
 import { typeLabel } from '../../i18n/labels';
 import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
+import { guidePath } from '../../ui/links';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { weekdayLetters, weekdayLong } from '../../utils/time';
 
@@ -176,6 +177,10 @@ export const DEFAULT_MAX_HOURS = 7;
 
       <button type="button" class="lb" data-commute (click)="openCommute()">
         <span>{{ t('commute.link') }}</span><span aria-hidden="true">›</span>
+      </button>
+
+      <button type="button" class="lb" data-guide (click)="openGuide()">
+        <span>{{ t('guide.profile.row') }}</span><span aria-hidden="true">›</span>
       </button>
 
       <!-- Nothing to reset on a fresh profile: no button, rather than one that looks disabled. -->
@@ -392,6 +397,10 @@ export class ProfilePage {
     this.profile.reset();
     this.confirming.set(false);
     this.state.flash(t('recs.profile.resetDone'));
+  }
+
+  protected openGuide(): void {
+    void this.router.navigate(guidePath());
   }
 
   protected openLogbook(): void {

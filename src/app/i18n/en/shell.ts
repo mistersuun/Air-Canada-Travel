@@ -49,6 +49,7 @@ export const shell = {
   'shell.title.commute': 'Commute to base · Routes',
   'shell.title.weekend': 'Weekend finder · Routes',
   'shell.title.compare': 'Compare · Routes',
+  'shell.title.guide': 'Standby guide · Routes',
   'shell.title.today': 'Today · Routes',
   'shell.title.reach': 'Reach · Routes',
   'shell.shortcuts.title': 'Keyboard shortcuts',

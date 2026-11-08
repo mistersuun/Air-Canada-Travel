@@ -49,6 +49,7 @@ export const shell: Translation<typeof en> = {
   'shell.title.commute': 'Navettage vers la base · Routes',
   'shell.title.weekend': 'Fins de semaine · Routes',
   'shell.title.compare': 'Comparer · Routes',
+  'shell.title.guide': 'Guide de la disponibilité · Routes',
   'shell.title.today': 'Aujourd\'hui · Routes',
   'shell.title.reach': 'Comment s\'y rendre · Routes',
   'shell.shortcuts.title': 'Raccourcis clavier',

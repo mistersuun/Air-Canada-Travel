@@ -137,4 +137,12 @@ export const dest = {
   'dest.didYouKnow': 'Did you know',
   'dest.seasonPauses': 'Seasonal · pauses after {date}',
   'dest.seasonLast': 'Seasonal · last nonstop {date}',
+  'dest.facts.title': 'Route facts',
+  'dest.facts.none': 'No nonstop from {hub} in the next 7 days',
+  'dest.facts.daily': '{n, plural, one {1 nonstop a day from {hub}} other {# nonstops a day from {hub}}}',
+  'dest.facts.dailyRange': '{lo} to {hi} nonstops a day from {hub}',
+  'dest.facts.weekly': 'Nonstop {n, plural, one {1 day a week} other {# days a week}} ({days})',
+  'dest.facts.seasonal': 'Seasonal: {months} only',
+  'dest.facts.lastHome': 'Last nonstop home today {time}',
+  'dest.facts.noHome': 'No nonstop home today; next {day}',
 } satisfies Messages;

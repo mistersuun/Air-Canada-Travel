@@ -130,4 +130,8 @@ export const flight = {
   'flight.noReturn.any': 'No published return on {day}.',
   'flight.showMore': 'Show {n} more',
   'flight.nearby': 'Nearby:',
+  'flight.onDay.title': 'On the day',
+  'flight.onDay.ac': 'Air Canada flight status',
+  'flight.onDay.weather': 'Weather alerts (Environment Canada)',
+  'flight.onDay.faa': 'US airport status (FAA)',
 } satisfies Messages;

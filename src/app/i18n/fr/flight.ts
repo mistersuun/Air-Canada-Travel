@@ -130,4 +130,8 @@ export const flight: Translation<typeof en> = {
   'flight.noReturn.any': 'Aucun retour publié le {day}.',
   'flight.showMore': 'Afficher {n} de plus',
   'flight.nearby': 'À proximité\u00a0:',
+  'flight.onDay.title': 'Le jour du départ',
+  'flight.onDay.ac': 'État des vols d’Air Canada',
+  'flight.onDay.weather': 'Alertes météo (Environnement Canada)',
+  'flight.onDay.faa': 'État des aéroports américains (FAA)',
 };

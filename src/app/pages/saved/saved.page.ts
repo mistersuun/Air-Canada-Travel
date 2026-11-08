@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { SavedSnapshotService } from '../../state/saved-snapshot.service';
+import { changeLabel, diffSnapshots, snapshotFor } from './saved-changes';
 import { Router, RouterLink } from '@angular/router';
 import { MAX_COMPARE, compareParam } from '../compare/compare-model';
 import { IconComponent } from '../../components/shared/icons.component';
@@ -120,6 +122,11 @@ const TABS = [
                 <app-icon name="star" [size]="20" [filled]="true" />
               </button>
             </app-dest-row>
+            @if (w.changes.length) {
+              <ul class="chg" [attr.data-changes]="w.code">
+                @for (c of w.changes; track c) { <li>{{ c }}</li> }
+              </ul>
+            }
           }
         </div>
         <p class="ui-sub foot">{{ t('saved.showing', { week: weekLabel() }) }} · <a [routerLink]="calendarPath()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a></p>
@@ -152,6 +159,7 @@ const TABS = [
     .tick input { width: 22px; height: 22px; flex: none; }
     .tick__t { font-weight: 600; }
     .cmp-bar { display: flex; gap: 8px; margin-top: 12px; }
+    .chg { list-style: none; margin: -2px 0 8px 58px; padding: 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
     .foot { margin-top: 12px; padding: 0 4px; }
     .foot a { color: var(--blue); font-weight: 600; }
     .empty {
@@ -251,11 +259,40 @@ export class SavedPage {
     });
   });
 
+  private readonly snaps = inject(SavedSnapshotService);
+  /** What was stored when this page opened: changes are measured against it, then it is refreshed. */
+  private readonly baseline = this.snaps.seen();
+
+  /** Per starred destination: plain lines on what the schedules changed since the viewer last saw it. */
+  private readonly changes = computed(() => {
+    this.state.scheduleRev();
+    const today = this.hubToday();
+    const hub = this.state.hub();
+    const out = new Map<string, string[]>();
+    for (const code of this.state.favourites()) {
+      const list = diffSnapshots(this.baseline[code], snapshotFor(code, today), today, hub).map(c => changeLabel(c, today, hub));
+      if (list.length) out.set(code, list);
+    }
+    return out;
+  });
+
+  constructor() {
+    // Viewing Saved is what marks the changes as seen.
+    effect(() => {
+      this.state.scheduleRev();
+      if (!this.state.coverage().from) return;
+      const today = this.hubToday();
+      const favs = this.state.favourites();
+      untracked(() => { for (const code of favs) this.snaps.commit(code, snapshotFor(code, today)); });
+    });
+  }
+
   readonly watching = computed(() => {
     const week = this.state.weekStartKey();
     const cov = this.state.coverage();
+    const changes = this.changes();
     return this.state.starredThisWeek().map(s => ({
-      code: s.code, city: s.city, meta: watchingMeta(s), dots: starredDots(s, week, cov),
+      code: s.code, city: s.city, meta: watchingMeta(s), dots: starredDots(s, week, cov), changes: changes.get(s.code) ?? [],
     }));
   });
 

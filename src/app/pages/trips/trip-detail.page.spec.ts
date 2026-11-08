@@ -340,6 +340,21 @@ describe('TripDetailPage', () => {
       delete (navigator as { clipboard?: unknown }).clipboard;
     });
 
+    it('the Share sheet offers the standby guide link', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: writeText ? { writeText } : undefined });
+      const { el, stable, state } = await render();
+      el.querySelector<HTMLButtonElement>('[data-share-open]')!.click();
+      await stable();
+      const row = el.querySelector('app-trip-share-sheet [data-share-guide]')!;
+      expect(clean(row.textContent)).toContain('Travelling with someone on your pass? Send them the standby guide');
+      row.querySelector<HTMLButtonElement>('[data-guide-share]')!.click();
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalled());
+      expect(writeText.mock.calls[0][0]).toMatch(/\/guide$/);
+      await vi.waitFor(() => expect(state.notice()?.message).toBe('Guide link copied'));
+      delete (navigator as { clipboard?: unknown }).clipboard;
+    });
+
     it('Copy link shares synchronously inside the tap (the link is built when the menu opens)', async () => {
       const share = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'share', { configurable: true, value: share });

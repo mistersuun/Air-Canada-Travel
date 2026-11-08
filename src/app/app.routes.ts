@@ -151,6 +151,11 @@ export const routes: Routes = [
     title: 'shell.title.commute',
   },
   {
+    path: 'guide',
+    loadComponent: () => import('./pages/guide/guide.page').then(m => m.GuidePage),
+    title: 'shell.title.guide',
+  },
+  {
     path: 'weekend',
     loadComponent: () => import('./pages/weekend/weekend.page').then(m => m.WeekendPage),
     title: 'shell.title.weekend',

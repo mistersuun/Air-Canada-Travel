@@ -2,9 +2,10 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { t } from '../../i18n/t';
 import type { Coverage } from '../../data/schedule-index';
 import { NO_OPTS, type ConnectOptions } from '../../utils/connections';
+import { daySignals, signalText } from '../../trips/engine/busy-signals';
 import { weekdayLetters } from '../../utils/time';
 import {
-  barWidth, dayAria, monthDays, monthTitle, monthWeeks, type CalDay, type CalField,
+  barWidth, dayAria, monthDays, monthTitle, monthWeeks, weekdayCounts, weekdayLine, withWays, type CalDay, type CalField,
 } from './cal-model';
 
 /**
@@ -24,6 +25,7 @@ import {
   template: `
     <h2 class="ui-h3 mh" [class.mh--dim]="unpublished()" [id]="'m-' + ym()">{{ title() }}</h2>
     @if (unpublished()) { <p class="ms">{{ t('dest.avail.notYet') }}</p> }
+    @else if (weekdayText(); as wl) { <p class="ms tn">{{ wl }}</p> }
     <div class="wkh wkh--own" aria-hidden="true">
       @for (w of weekdays(); track $index) { <span>{{ w }}</span> }
     </div>
@@ -35,13 +37,19 @@ import {
               <button type="button" role="gridcell" class="d"
                       [class.off]="d.past || d.outside" [class.today]="d.key === today()"
                       [class.s]="d.key === dep()" [class.e]="d.key === ret()" [class.solo]="d.key === dep() && !ret()"
-                      [class.mid]="inRange(d.key)"
+                      [class.mid]="inRange(d.key)" [class.zero]="d.ways?.total === 0"
+                      [attr.title]="signals(d.key).text || null"
                       [attr.data-key]="d.key" [attr.tabindex]="d.key === focusKey() ? 0 : -1"
                       [attr.aria-selected]="d.key === dep() || d.key === ret()"
                       [attr.aria-disabled]="d.past || d.outside || null"
                       [attr.aria-label]="aria(d)"
                       (click)="tap(d)">
                 <span class="n tn">{{ d.day }}</span>
+                @if (signals(d.key); as sg) {
+                  @if (sg.holiday) { <i class="mk mk--h" aria-hidden="true"></i> }
+                  @if (sg.brk) { <i class="mk mk--b" aria-hidden="true"></i> }
+                }
+                @if (d.ways && !d.past && !d.outside) { <span class="w tn" aria-hidden="true">{{ d.ways.total }}</span> }
                 @if (!d.past && !d.outside) {
                   <span class="bar">
                     @if (d.direct) { <i [style.width.%]="bar(d.direct)"></i> }
@@ -80,6 +88,17 @@ import {
     .bar { width: 18px; height: 3px; border-radius: 2px; background: var(--hair); overflow: hidden; position: relative; }
     .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--teal); border-radius: 2px; }
     .bar i.cn { width: 6px; background: var(--amber); }
+    .d.zero .n, .d.zero .w { opacity: .45; }
+    .w { font-size: 10.5px; font-weight: 600; color: var(--ink-2); line-height: 1; margin-bottom: -2px; }
+    .d.zero .w { color: var(--ink-3); }
+    .d.s .w, .d.e .w { color: #FFFFFF; }
+    .d:has(.w) { gap: 2px; }
+    /* Neutral date markers: a filled dot for a holiday, a ring for a school break. */
+    .mk { position: absolute; top: 6px; width: 5px; height: 5px; border-radius: 50%; box-sizing: border-box; }
+    .mk--h { right: 10px; background: var(--ink-2); }
+    .mk--b { right: 18px; border: 1.5px solid var(--ink-2); }
+    .d.s .mk--h, .d.e .mk--h { background: #FFFFFF; }
+    .d.s .mk--b, .d.e .mk--b { border-color: #FFFFFF; }
     .d.mid { background: color-mix(in srgb, var(--red) 10%, transparent); }
     .d.s, .d.e { color: #FFFFFF; }
     .d.s:hover .n, .d.e:hover .n { color: #FFFFFF; }
@@ -104,6 +123,8 @@ export class CalMonthComponent {
   readonly coverage = input<Coverage | null>(null);
   readonly withConnections = input(false);
   readonly connect = input<ConnectOptions>(NO_OPTS);
+  /** The hub, for holidays and school breaks (its province). */
+  readonly hub = input<string>('');
   readonly dep = input<string | null>(null);
   readonly ret = input<string | null>(null);
   readonly field = input<CalField>('dep');
@@ -115,9 +136,20 @@ export class CalMonthComponent {
   protected readonly weekdays = computed(() => weekdayLetters());
   protected readonly bar = barWidth;
 
-  readonly days = computed<CalDay[]>(() =>
-    monthDays(this.from(), this.to(), this.ym(), this.today(), this.coverage(), this.withConnections(), this.connect()),
-  );
+  readonly days = computed<CalDay[]>(() => {
+    const days = monthDays(this.from(), this.to(), this.ym(), this.today(), this.coverage(), this.withConnections(), this.connect());
+    const dep = this.dep();
+    // The return field runs dest → hub: from is the destination, to the hub.
+    return this.field() === 'ret' && dep
+      ? withWays(days, dep, this.from(), this.to(), this.today(), this.coverage(), this.withConnections(), this.connect())
+      : days;
+  });
+  protected readonly weekdayText = computed(() =>
+    weekdayLine(weekdayCounts(this.from(), this.to(), this.ym(), this.today(), this.coverage()), this.ym()));
+  private readonly signalCache = computed(() => {
+    this.hub();
+    return new Map<string, { holiday: boolean; brk: boolean; text: string }>();
+  });
   protected readonly weeks = computed(() => monthWeeks(this.ym(), this.days()));
   protected readonly title = computed(() => monthTitle(this.ym()));
   /** Every remaining day is beyond the published window. */
@@ -133,7 +165,21 @@ export class CalMonthComponent {
   }
 
   protected aria(d: CalDay): string {
-    return dayAria(d, this.field());
+    const sg = this.signals(d.key);
+    return sg.text ? `${dayAria(d, this.field())}, ${sg.text}` : dayAria(d, this.field());
+  }
+
+  /** Holiday / school-break markers and their text for one day (empty when none). */
+  protected signals(key: string): { holiday: boolean; brk: boolean; text: string } {
+    const cache = this.signalCache();
+    let hit = cache.get(key);
+    if (!hit) {
+      const hub = this.hub();
+      const s = hub ? daySignals(hub, key) : { holidays: [], schoolBreak: null };
+      hit = { holiday: s.holidays.length > 0, brk: !!s.schoolBreak, text: hub ? signalText(hub, s).join('; ') : '' };
+      cache.set(key, hit);
+    }
+    return hit;
   }
 
   protected tap(d: CalDay): void {

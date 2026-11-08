@@ -128,6 +128,11 @@ function baseName(h: Holiday): string {
   return slug ? t(`trips.holiday.ca.${slug}` as MsgKey) : h.name;
 }
 
+/** The holiday's own name without the province list: 'Family Day', 'Fête nationale'. */
+export function holidayShortName(h: Holiday): string {
+  return h.region === 'US' ? holidayDisplayName(h) : baseName(h);
+}
+
 /** 'Canadian Thanksgiving', 'US Thanksgiving', 'Family Day (ON, BC, AB, SK, NB)', 'Canada Day'. */
 export function holidayDisplayName(h: Holiday): string {
   if (h.region === 'CA') return CA_DISTINCT.has(h.name) ? t(`trips.holiday.caFull.${CA_SLUG[h.name]}` as MsgKey) : baseName(h);

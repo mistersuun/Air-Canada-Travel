@@ -9,11 +9,12 @@ import { AppStateService } from '../../state/app-state.service';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { shortDay } from '../../ui/format';
 import { calendarPath, destPath, flightPath } from '../../ui/links';
+import { breakLegend } from '../../trips/engine/busy-signals';
 import { findDestination } from '../../utils/airports';
 import { monthKeys, weekdayLetters } from '../../utils/time';
 import { coverageHubFor } from '../../utils/week';
 import {
-  chooserRows, clampKey, monthRange, moveKey, nextSelection, pickable, selectLabel, type CalField, type ChooserRow,
+  chooserRows, clampKey, monthRange, moveKey, nextSelection, nightShortcuts, pickable, selectLabel, waysLabel, type Ways, type CalField, type ChooserRow,
 } from './cal-model';
 import { CalMonthComponent } from './cal-month.component';
 
@@ -61,6 +62,18 @@ const EAGER_MONTHS = 3;
           </div>
           <p class="ui-sr-only" aria-live="polite">{{ hint() }}</p>
 
+          @if (sel().dep && shortcuts().length) {
+            <div class="nts" role="group" [attr.aria-label]="t('calendar.nightsAria')">
+              @for (n of shortcuts(); track n.nights) {
+                <button type="button" class="nt" [class.on]="sel().ret === n.key" [class.zero]="n.ways.total === 0"
+                        [attr.aria-pressed]="sel().ret === n.key" (click)="pickReturn(n.key)">
+                  <b>{{ nightsText(n.nights) }}</b>
+                  <span class="tn">{{ waysText(n.ways) }}</span>
+                </button>
+              }
+            </div>
+          }
+
           <div class="wkh" aria-hidden="true">
             @for (w of weekdays(); track $index) { <span>{{ w }}</span> }
           </div>
@@ -69,13 +82,13 @@ const EAGER_MONTHS = 3;
             @for (m of months(); track m; let i = $index) {
               @if (eager > i) {
                 <app-cal-month class="mo" [ym]="m" [from]="dir().from" [to]="dir().to" [today]="state.todayKey()"
-                               [coverage]="coverage()" [withConnections]="state.showConnections()" [connect]="state.connect()"
+                               [hub]="state.hub()" [coverage]="coverage()" [withConnections]="state.showConnections()" [connect]="state.connect()"
                                [dep]="sel().dep" [ret]="sel().ret" [field]="sel().active" [focusKey]="focusKey()"
                                (pick)="pick($event)" />
               } @else {
                 @defer (on viewport; when renderUpTo() >= i) {
                   <app-cal-month class="mo" [ym]="m" [from]="dir().from" [to]="dir().to" [today]="state.todayKey()"
-                                 [coverage]="coverage()" [withConnections]="state.showConnections()" [connect]="state.connect()"
+                                 [hub]="state.hub()" [coverage]="coverage()" [withConnections]="state.showConnections()" [connect]="state.connect()"
                                  [dep]="sel().dep" [ret]="sel().ret" [field]="sel().active" [focusKey]="focusKey()"
                                  (pick)="pick($event)" />
                 } @placeholder {
@@ -90,6 +103,8 @@ const EAGER_MONTHS = 3;
               <span><i class="lg__b"></i> {{ t('calendar.legendMore') }}</span>
               <span><i class="lg__b lg__b--1"></i> {{ t('calendar.legendOne') }}</span>
               @if (state.showConnections()) { <span><i class="lg__b lg__b--c"></i> {{ t('calendar.legendConn') }}</span> }
+              <span><i class="lg__m lg__m--h"></i> {{ t('calendar.legendHoliday') }}</span>
+              @if (breakLegend(); as bl) { <span><i class="lg__m lg__m--b"></i> {{ bl }}</span> }
             </div>
             <button type="button" class="ui-btn ui-btn--block" [disabled]="!sel().dep" (click)="done()">{{ select() }}</button>
           </footer>
@@ -212,6 +227,19 @@ const EAGER_MONTHS = 3;
     .lg__b { display: inline-block; width: 18px; height: 3px; border-radius: 2px; background: var(--teal); }
     .lg__b--1 { width: 6px; }
     .lg__b--c { width: 6px; background: var(--amber); }
+    .lg__m { display: inline-block; width: 7px; height: 7px; border-radius: 50%; box-sizing: border-box; }
+    .lg__m--h { background: var(--ink-2); }
+    .lg__m--b { border: 1.5px solid var(--ink-2); }
+    .nts { display: flex; gap: 8px; padding: 4px 18px 10px; overflow-x: auto; scrollbar-width: none; }
+    .nt {
+      flex: none; min-height: 44px; min-width: 88px; padding: 6px 12px; border-radius: 14px; background: var(--fill);
+      color: var(--ink); display: flex; flex-direction: column; align-items: flex-start; gap: 1px; font-size: 13px;
+      box-shadow: inset 0 0 0 2px transparent;
+    }
+    .nt span { font-size: 11px; color: var(--ink-2); }
+    .nt.on { box-shadow: inset 0 0 0 2px var(--red); }
+    .nt.zero { opacity: .6; }
+    @media (min-width: 720px) { .nts { padding: 4px 28px 10px; } }
 
     /* ── Desktop: a centred card on the sky wash ── */
     @media (min-width: 720px) {
@@ -314,6 +342,32 @@ export class CalendarPage {
     const k = this.focusKey();
     return k ? this.months().indexOf(k.slice(0, 7)) : -1;
   });
+
+  protected readonly breakLegend = computed(() => breakLegend(this.state.hub()));
+
+  /** '2 / 3 / 4 / 7 nights' return days with their ways home (destination → hub). */
+  readonly shortcuts = computed(() => {
+    const dep = this.sel().dep;
+    const code = this.dest()?.code;
+    if (!dep || !code) return [];
+    return nightShortcuts(dep, code, this.state.hub(), this.state.todayKey(), this.coverage(), this.state.showConnections(), this.state.connect());
+  });
+  protected nightsText(n: number): string { return t('flight.nights', { n }); }
+  protected waysText(w: Ways): string { return waysLabel(w); }
+
+  pickReturn(key: string): void {
+    const dep = this.sel().dep;
+    if (!dep) return;
+    const next = { dep, ret: key, active: 'ret' as CalField };
+    this.sel.set(next);
+    this.focusKey.set(key);
+    void this.router.navigate([], {
+      queryParams: { dep, ret: key },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+      scroll: 'manual',
+    });
+  }
 
   readonly select = computed(() => selectLabel(this.sel().dep, this.sel().ret));
   readonly depLabel = computed(() => (this.sel().dep ? shortDay(this.sel().dep!) : t('calendar.addDate')));

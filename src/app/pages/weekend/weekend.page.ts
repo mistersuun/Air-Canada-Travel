@@ -11,6 +11,7 @@ import { climateFor } from '../../recs/climate';
 import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { flightPath } from '../../ui/links';
+import { windowSignalLines } from '../../trips/engine/busy-signals';
 import { findDestination, airportTz } from '../../utils/airports';
 import { MINUTE_MS, formatClock, formatKey, isDateKey, todayKey, utcToLocal } from '../../utils/time';
 import {
@@ -82,6 +83,7 @@ import {
       }
 
       <p class="sum tn">{{ t('weekend.summary', { a: stamp(window().leaveKey, window().leaveHhmm), b: stamp(window().homeKey, window().homeHhmm), hub: state.hub() }) }}</p>
+      @for (line of signals(); track line) { <p class="sig tn">{{ line }}</p> }
 
       @if (problem(); as why) {
         <p class="ui-card note" role="status">{{ why }}</p>
@@ -161,6 +163,7 @@ import {
     .pair { display: flex; gap: 8px; }
     .pair input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hair); background: var(--bg); color: var(--ink); font: inherit; }
     .wx { display: grid; justify-items: end; gap: 2px; text-align: right; }
+    .sig { margin-top: 4px; font-size: 12.5px; color: var(--ink-2); }
     .sum { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
     .list { padding: 4px 14px; margin-top: 12px; }
     .note { padding: 18px; margin-top: 12px; font-size: 14px; color: var(--ink-2); }
@@ -218,6 +221,8 @@ export class WeekendPage {
     || presetWindow(this.preset(), this.hubToday()));
   /** The minute: the options need not recompute on every clock tick. */
   private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / MINUTE_MS) * MINUTE_MS);
+  /** Holidays and school breaks (the hub's province) inside the window: dates only, no verdict. */
+  protected readonly signals = computed(() => windowSignalLines(this.state.hub(), this.window().leaveKey, this.window().homeKey));
   protected readonly problem = computed(() => windowProblem(this.window(), this.state.hub(), this.nowMin()));
   protected readonly minKey = computed(() => this.hubToday());
   protected readonly maxKey = computed(() => this.state.coverage().to ?? '');

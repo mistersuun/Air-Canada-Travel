@@ -12,6 +12,10 @@ describe('onDayLinks', () => {
     expect(onDayLinks(['YYZ', 'LAX'], 'en').map(l => l.id)).toEqual(['ac', 'weather', 'faa']);
     expect(onDayLinks(['LIS'], 'en').map(l => l.id)).toEqual(['ac']);
   });
+  it('points Air Canada status at the flight-information page in the UI language', () => {
+    expect(onDayLinks(['LIS'], 'en')[0].href).toBe('https://www.aircanada.com/ca/en/aco/home/fly/flight-information.html');
+    expect(onDayLinks(['LIS'], 'fr')[0].href).toBe('https://www.aircanada.com/ca/fr/aco/home/fly/flight-information.html');
+  });
   it('uses the French alerts page in French', () => {
     expect(onDayLinks(['YUL'], 'fr')[1].href).toBe('https://weather.gc.ca/warnings/index_f.html');
   });

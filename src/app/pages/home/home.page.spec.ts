@@ -536,6 +536,7 @@ describe('HomePage · trip fit filters', () => {
     await stable();
     const tags = [...el.querySelectorAll('[data-entry-tag]')].map(x => x.textContent!.trim());
     expect(tags).toEqual(['eTA-type', 'No visa listed', 'eTA-type']);
+    expect(el.querySelector('[data-entry-note]')!.textContent).toMatch(/^Entry tags: as listed by Passport Index, data as of .+\./);
     state.setFilters({ hideAdvisory: true }); // GB is level 2 in the fixture
     await stable();
     await stable();
@@ -565,6 +566,7 @@ describe('HomePage · trip fit filters', () => {
     await stable();
     await stable();
     expect(el.querySelector('[data-entry-tag]')).toBeNull();
+    expect(el.querySelector('[data-entry-note]')).toBeNull();
     expect(TestBed.inject(ReferenceService).status.visa()).toBe('idle');
     el.querySelector<HTMLButtonElement>('.search .f')!.click();
     await stable();

@@ -61,6 +61,23 @@ describe('diffSnapshots', () => {
     expect(changeLabel(later[0], TODAY, 'YUL')).toBe('More days the week of Oct 5: 3 → 5');
   });
 
+  it('does not compare weeks past either end of the published window (coverage extended)', () => {
+    const prev = snap({ YUL: ['2026-09-01', '2026-10-14'] }, { YUL: { '2026-10-05': 3, '2026-10-12': 0, '2026-10-19': 0 } });
+    // schedules now run further: the later weeks gained days, the partial week too
+    const next = snap({ YUL: ['2026-09-01', '2026-10-31'] }, { YUL: { '2026-10-05': 3, '2026-10-12': 3, '2026-10-19': 4 } });
+    expect(diffSnapshots(prev, next, TODAY, 'YUL')).toEqual([]);
+    // a real removal inside the shared window still shows
+    const cut = snap({ YUL: ['2026-09-01', '2026-10-31'] }, { YUL: { '2026-10-05': 2, '2026-10-12': 3, '2026-10-19': 4 } });
+    expect(diffSnapshots(prev, cut, TODAY, 'YUL')).toEqual([{ kind: 'fewer', hub: 'YUL', weekStart: '2026-10-05', from: 3, to: 2 }]);
+  });
+
+  it('respects the stored coverage end', () => {
+    const season: Record<string, [string, string]> = { YUL: ['2026-09-01', '2027-03-31'] };
+    const prev: DestSnapshot = { ...snap(season, { YUL: { '2026-10-05': 3, '2026-10-12': 0 } }), cover: { YUL: '2026-10-11' } };
+    const next: DestSnapshot = { ...snap(season, { YUL: { '2026-10-05': 3, '2026-10-12': 3 } }), cover: { YUL: '2026-10-25' } };
+    expect(diffSnapshots(prev, next, TODAY, 'YUL')).toEqual([]);
+  });
+
   it('puts the selected hub first and names other hubs', () => {
     const prev = snap({ YUL: ['2026-09-01', '2027-03-31'], YYZ: ['2026-09-01', '2027-03-31'] });
     const next = snap({ YUL: ['2026-09-01', '2027-03-31'], YYZ: ['2026-09-01', '2026-11-02'] });

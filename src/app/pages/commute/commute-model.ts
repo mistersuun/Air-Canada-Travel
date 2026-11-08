@@ -54,12 +54,20 @@ export interface CommuteResult {
   nonstopCount: number;
   /** Latest arrival time at base that still works (report minus buffer), 'HH:MM' base-local. */
   deadlineHhmm: string;
+  /** The deadline falls on the day before the report date (report minus buffer crosses midnight). */
+  deadlineDayBefore: boolean;
 }
 
 export interface CommuteDay {
   dateKey: string;
   /** Qualifying arrivals on that date (null when the schedules do not reach it). */
   count: number | null;
+  /** Of `count`, arrivals the evening before (included in the count). */
+  eveningBefore: number;
+  /** Today at base: flights already departed are not counted, so it is never flagged. */
+  today: boolean;
+  /** Today, and the report time has already passed. */
+  past: boolean;
   /** Latest arrival that day that still works, 'HH:MM'. */
   lastHhmm: string | null;
   fewer: boolean;
@@ -140,21 +148,32 @@ export function commuteOptions(input: CommuteInput, reportKey: string, reportHhm
   return {
     options, count: options.length, nonstopCount: options.filter(o => o.nonstop).length,
     deadlineHhmm: utcToLocal(cutoff, baseTz).hhmm,
+    deadlineDayBefore: utcToLocal(cutoff, baseTz).dateKey < reportKey,
   };
 }
 
-/** The 14-day view: for each day from todayKey, arrivals that date by the same report time. */
+/**
+ * The 14-day view: for each day from todayKey, arrivals by the same report time,
+ * on the day or the evening before. Today only counts flights that have not left,
+ * so it is never flagged (and is marked past once its report time has gone).
+ */
 export function commuteDays(input: CommuteInput, reportHhmm: string, todayKey: string, days = COMMUTE_DAYS): CommuteDay[] {
   const cov = coverageHubFor(input.home, input.base) ?? input.home;
+  const baseTz = airportTz(input.base);
   const out: CommuteDay[] = [];
   for (let i = 0; i < days; i++) {
     const dateKey = addDays(todayKey, i);
+    const today = i === 0;
+    const past = today && toUtcMs(dateKey, reportHhmm, baseTz) <= input.nowMs;
     if (!isCovered(dateKey, cov)) {
-      out.push({ dateKey, count: null, lastHhmm: null, fewer: false });
+      out.push({ dateKey, count: null, eveningBefore: 0, today, past, lastHhmm: null, fewer: false });
       continue;
     }
-    const same = commuteOptions(input, dateKey, reportHhmm).options.filter(o => !o.dayBefore);
-    out.push({ dateKey, count: same.length, lastHhmm: latestOf(same)?.arriveHhmm ?? null, fewer: same.length < MIN_OPTIONS });
+    const opts = commuteOptions(input, dateKey, reportHhmm).options;
+    out.push({
+      dateKey, count: opts.length, eveningBefore: opts.filter(o => o.dayBefore).length, today, past,
+      lastHhmm: latestOf(opts)?.arriveHhmm ?? null, fewer: !today && opts.length < MIN_OPTIONS,
+    });
   }
   return out;
 }

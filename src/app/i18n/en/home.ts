@@ -125,6 +125,7 @@ export const home = {
   'home.entry.tag.eta': 'eTA-type',
   'home.entry.tag.arrival': 'On arrival',
   'home.entry.tag.visa': 'Visa',
+  'home.entry.note': 'Entry tags: as listed by Passport Index, data as of {date}. Not official.',
   'home.entry.tagTitle': 'Entry listing for your passport, Passport Index, data as of {date}. Not official.',
   'home.weather.label': 'Typical weather',
   'home.weather.month': 'Month',

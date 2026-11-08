@@ -102,6 +102,7 @@ const ENTRY_TAG_KEYS = {
           </section>
         }
         @if (places().length) { <ng-container *ngTemplateOutlet="placesTpl" /> }
+        @if (tagTitle() && hasTag()) { <p class="ui-sub tagnote" data-entry-note>{{ t('home.entry.note', { date: tagDate() }) }}</p> }
       </div>
     }
 
@@ -199,10 +200,13 @@ export class ResultsListComponent {
 
   private readonly fit = inject(TripFitService);
   private readonly fitData = this.fit.data;
-  protected readonly tagTitle = computed(() => {
+  protected readonly tagDate = computed(() => {
     const table = usableVisa(this.fitData());
-    return table ? t('home.entry.tagTitle', { date: visaAsOf(table) }) : '';
+    return table ? visaAsOf(table) : '';
   });
+  protected readonly tagTitle = computed(() => (this.tagDate() ? t('home.entry.tagTitle', { date: this.tagDate() }) : ''));
+  /** True when any listed destination shows an entry tag (the footnote then names the source). */
+  protected readonly hasTag = computed(() => [...this.direct(), ...this.connecting()].some(r => r.tag));
 
   private tagFor(e: RouteEntry): MsgKey | null {
     const k = entryTag(this.fitData(), e.destination.iso2);

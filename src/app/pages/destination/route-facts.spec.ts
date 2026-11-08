@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
-import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
+import { FIXTURE_META, FIXTURE_ROUTES, rec, route } from '../../data/testing/schedule-fixtures';
 import { setLocale } from '../../i18n/locale';
 import { toUtcMs } from '../../utils/time';
 import { routeFacts } from './route-facts';
@@ -26,6 +26,18 @@ describe('routeFacts', () => {
 
   it('says so when nothing flies in the next 7 days', () => {
     expect(routeFacts('YUL', 'ATH', '2026-12-01', NOON)[0]).toBe('No nonstop from YUL in the next 7 days');
+  });
+
+  it('counts only covered days and says so when fewer than 7 remain', () => {
+    // fixture coverage ends 2027-03-31: from Mar 29 only 3 days are published
+    const f = routeFacts('YUL', 'LHR', '2027-03-29', NOON);
+    expect(f[0]).toBe('Nonstop on 3 of the next 3 published days');
+    expect(routeFacts('YUL', 'LHR', '2027-05-01', NOON).some(x => /a day|a week|next 7 days|published days/.test(x))).toBe(false);
+  });
+
+  it('describes the published months without claiming "only"', () => {
+    setScheduleSource([...FIXTURE_ROUTES, route('YUL', 'DEL', rec('AC880', '20:00', '10:00', '2026-10-05', '2026-10-31', 'Mon,Fri', '789'))], FIXTURE_META);
+    expect(routeFacts('YUL', 'DEL', '2026-10-01', NOON).find(x => x.startsWith('Published:'))).toBe('Published: Oct');
   });
 
   it('after the last return has left, names the next day', () => {

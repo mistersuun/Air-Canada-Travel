@@ -142,7 +142,8 @@ export const dest: Translation<typeof en> = {
   'dest.facts.daily': '{n, plural, one {1 vol sans escale par jour depuis {hub}} other {# vols sans escale par jour depuis {hub}}}',
   'dest.facts.dailyRange': 'De {lo} à {hi} vols sans escale par jour depuis {hub}',
   'dest.facts.weekly': '{n, plural, one {Sans escale 1 jour par semaine} other {Sans escale # jours par semaine}} ({days})',
-  'dest.facts.seasonal': 'Saisonnier\u00a0: {months} seulement',
+  'dest.facts.seasonal': 'Publié\u00a0: {months}',
+  'dest.facts.partial': '{n, plural, one {Vol sans escale 1 des {d} prochains jours publiés} other {Vol sans escale # des {d} prochains jours publiés}}',
   'dest.facts.lastHome': "Dernier vol sans escale de retour aujourd'hui\u00a0: {time}",
   'dest.facts.noHome': "Aucun vol sans escale de retour aujourd'hui; prochain\u00a0: {day}",
 };

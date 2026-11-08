@@ -277,9 +277,10 @@ export class SavedPage {
   });
 
   constructor() {
-    // Viewing Saved is what marks the changes as seen.
+    // Seeing the change lines (the Watching tab) is what marks the changes as seen.
     effect(() => {
       this.state.scheduleRev();
+      if (this.view() !== 'watching') return;
       if (!this.state.coverage().from) return;
       const today = this.hubToday();
       const favs = this.state.favourites();

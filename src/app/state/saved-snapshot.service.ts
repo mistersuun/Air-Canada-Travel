@@ -57,6 +57,9 @@ export class SavedSnapshotService {
       untracked(() => {
         const have = this.store();
         for (const code of favs) if (!have[code]) this.commit(code, snapshotFor(code, today));
+        // An un-starred destination forgets its snapshot, so starring it again baselines fresh.
+        const stale = Object.keys(have).filter(code => !favs.includes(code));
+        if (stale.length) this.prune(stale);
       });
     });
   }
@@ -68,6 +71,17 @@ export class SavedSnapshotService {
       this.storage?.setItem(SAVED_SNAPSHOT_KEY, JSON.stringify(next));
     } catch {
       // quota or blocked: keep the in-memory copy
+    }
+  }
+
+  private prune(codes: string[]): void {
+    const next = { ...this.store() };
+    for (const c of codes) delete next[c];
+    this.store.set(next);
+    try {
+      this.storage?.setItem(SAVED_SNAPSHOT_KEY, JSON.stringify(next));
+    } catch {
+      // keep the in-memory copy
     }
   }
 

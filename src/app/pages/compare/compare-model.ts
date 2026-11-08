@@ -6,6 +6,7 @@
  * is never an overall verdict.
  */
 import { t } from '../../i18n/t';
+import { DESTINATIONS } from '../../data/destinations';
 import { isCovered } from '../../data/schedule-index';
 import { findDestination, airportTz } from '../../utils/airports';
 import { NO_OPTS, findItineraries, type ConnectOptions } from '../../utils/connections';
@@ -29,7 +30,7 @@ export function parseCompareCodes(raw: string | null | undefined): string[] {
   const out: string[] = [];
   for (const part of (raw ?? '').split(',')) {
     const code = part.trim().toUpperCase();
-    if (code && !out.includes(code) && findDestination(code)) out.push(code);
+    if (code && !out.includes(code) && DESTINATIONS.some(d => d.code === code)) out.push(code);
     if (out.length >= MAX_COMPARE) break;
   }
   return out;

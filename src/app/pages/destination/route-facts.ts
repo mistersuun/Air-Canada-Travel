@@ -6,9 +6,10 @@ import { t } from '../../i18n/t';
 import type { TimeFormat } from '../../state/prefs.service';
 import { shortDay } from '../../ui/format';
 import { airportTz } from '../../utils/airports';
+import { isCovered } from '../../data/schedule-index';
 import { routeSeason } from '../../utils/season';
 import { addDays, formatClock, todayKey, weekdayIndex, weekdayShort } from '../../utils/time';
-import { flightsOn, nextFlightDate } from '../../utils/week';
+import { coverageHubFor, flightsOn, nextFlightDate } from '../../utils/week';
 
 /** Up to three short facts: frequency, season, last nonstop home today. Empty when the schedules say nothing. */
 export function routeFacts(hub: string, code: string, today: string, nowMs: number, fmt: TimeFormat = '24h'): string[] {
@@ -16,14 +17,22 @@ export function routeFacts(hub: string, code: string, today: string, nowMs: numb
 
   const counts: number[] = [];
   const days: number[] = [];
+  const covHub = coverageHubFor(hub, code) ?? hub;
+  let covered = 0;
   for (let i = 0; i < 7; i++) {
     const key = addDays(today, i);
+    if (!isCovered(key, covHub)) continue;
+    covered++;
     const n = flightsOn(hub, code, key).length;
     counts.push(n);
     if (n) days.push(weekdayIndex(key));
   }
   const flying = counts.filter(n => n > 0);
-  if (!flying.length) {
+  if (!covered) {
+    // nothing published for these days: say nothing rather than guess
+  } else if (covered < 7) {
+    out.push(t('dest.facts.partial', { n: flying.length, d: covered }));
+  } else if (!flying.length) {
     out.push(t('dest.facts.none', { hub }));
   } else if (flying.length === 7) {
     const lo = Math.min(...flying);
@@ -34,7 +43,7 @@ export function routeFacts(hub: string, code: string, today: string, nowMs: numb
     out.push(t('dest.facts.weekly', { n: flying.length, days: names }));
   }
 
-  const season = routeSeason(hub, code);
+  const season = routeSeason(hub, code, covHub);
   if (season) out.push(t('dest.facts.seasonal', { months: season }));
 
   const homeToday = todayKey(airportTz(code), nowMs);

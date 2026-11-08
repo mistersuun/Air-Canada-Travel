@@ -24,7 +24,7 @@ export const guide = {
 
   'guide.s4.h': 'At the airport',
   'guide.s4.p1': 'Dress neatly, and follow the dress code your employee tells you.',
-  'guide.s4.p2': 'Be polite to agents. They are working a busy flight and cannot change the order of the list.',
+  'guide.s4.p2': 'Be polite to agents. They are working a full shift and cannot change the order of the list.',
   'guide.s4.p3': 'You represent your employee. Stay calm and do not argue.',
 
   'guide.s5.h': 'If you do not get on',

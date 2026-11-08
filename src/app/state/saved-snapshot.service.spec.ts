@@ -4,7 +4,7 @@ import { resetScheduleSource, setScheduleSource } from '../data/schedule-index';
 import { FIXTURE_META, FIXTURE_ROUTES } from '../data/testing/schedule-fixtures';
 import { snapshotFor } from '../pages/saved/saved-changes';
 import { NOW } from './app-state.service';
-import { PREFS_STORAGE } from './prefs.service';
+import { PREFS_STORAGE, PrefsService } from './prefs.service';
 import { SAVED_SNAPSHOT_KEY, SAVED_SNAPSHOT_STORAGE, SavedSnapshotService } from './saved-snapshot.service';
 import { MemoryStorage } from './testing';
 
@@ -48,6 +48,16 @@ describe('SavedSnapshotService', () => {
       ],
     });
     expect(TestBed.inject(SavedSnapshotService).unseenCount()).toBe(1);
+  });
+
+  it('forgets the snapshot of a destination that is no longer starred', () => {
+    const s = TestBed.inject(SavedSnapshotService);
+    TestBed.tick();
+    expect(Object.keys(s.seen())).toEqual(['ATH']);
+    TestBed.inject(PrefsService).toggleFavourite('ATH');
+    TestBed.tick();
+    expect(s.seen()).toEqual({});
+    expect(JSON.parse(snaps.getItem(SAVED_SNAPSHOT_KEY)!)).toEqual({});
   });
 
   it('ignores corrupt or blocked storage', () => {

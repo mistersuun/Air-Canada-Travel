@@ -8,7 +8,7 @@ import { HUBS } from '../../data/destinations';
 import { airportTz } from '../../utils/airports';
 import { addDays, formatClock, formatKey, isDateKey, todayKey } from '../../utils/time';
 import {
-  COMMUTE_BUFFERS, CommuteInput, CommuteOption, DEFAULT_COMMUTE_BUFFER, DEFAULT_RELEASE_HHMM, DEFAULT_REPORT_HHMM,
+  COMMUTE_BUFFERS, CommuteInput, CommuteOption, CommuteResult, DEFAULT_COMMUTE_BUFFER, DEFAULT_RELEASE_HHMM, DEFAULT_REPORT_HHMM,
   commuteAirports, commuteDays, commuteOptions, commuteProblem, tripHomeOptions,
 } from './commute-model';
 
@@ -86,7 +86,7 @@ type View = 'day' | 'range';
 
         @if (view() === 'day') {
           @let r = result();
-          <h2 class="ui-h3 sum" data-summary>{{ r.count ? t('commute.summary', { n: r.count, time: clock(r.deadlineHhmm) }) : t('commute.summaryNone', { time: clock(r.deadlineHhmm) }) }}</h2>
+          <h2 class="ui-h3 sum" data-summary>{{ r.count ? t('commute.summary', { n: r.count, time: deadline(r) }) : t('commute.summaryNone', { time: deadline(r) }) }}</h2>
           <p class="ui-sub tn">{{ t('commute.summarySub', { date: stamp(reportKey()), report: clock(reportHhmm()), buffer: buffer(), home: home(), base: base() }) }}
             @if (r.count && r.nonstopCount < r.count) { · {{ t('commute.nonstopOf', { n: r.nonstopCount }) }} }</p>
           @if (r.count) {
@@ -129,15 +129,16 @@ type View = 'day' | 'range';
             </ul>
           }
         } @else {
-          <p class="ui-sub tn">{{ t('commute.rangeSub', { time: clock(rangeDeadline()), report: clock(reportHhmm()), buffer: buffer(), base: base() }) }}</p>
+          <p class="ui-sub tn">{{ t('commute.rangeSub', { time: rangeDeadline(), report: clock(reportHhmm()), buffer: buffer(), base: base() }) }}</p>
           <ul class="ui-card list" role="list" data-days>
             @for (d of days(); track d.dateKey) {
               <li class="row" [attr.data-fewer]="d.fewer || null">
                 <div class="times tn"><b>{{ stamp(d.dateKey) }}</b>
                   <span class="fl">
                     @if (d.count === null) { {{ t('commute.noSchedule') }} }
-                    @else if (d.count === 0) { {{ t('commute.rangeNone', { time: clock(rangeDeadline()) }) }} }
-                    @else { {{ t('commute.rangeCount', { n: d.count, time: clock(rangeDeadline()) }) }}@if (d.lastHhmm) { · {{ t('commute.lastArrives', { time: clock(d.lastHhmm) }) }} } }
+                    @else if (d.past) { {{ t('commute.past') }} }
+                    @else if (d.count === 0) { {{ t('commute.rangeNone', { time: rangeDeadline() }) }} }
+                    @else { {{ t('commute.rangeCount', { n: d.count, time: rangeDeadline() }) }}@if (d.eveningBefore) { ({{ t('commute.inclEvening', { n: d.eveningBefore }) }}) }@if (d.today) { · {{ t('commute.todayNote') }} }@if (d.lastHhmm) { · {{ t('commute.lastArrives', { time: clock(d.lastHhmm) }) }} } }
                   </span></div>
                 <span class="tags">
                   @if (d.fewer) { <span class="ui-tag ui-tag--neutral">{{ t('commute.fewer') }}</span> }
@@ -218,9 +219,10 @@ export class CommutePage {
   protected readonly problem = computed(() => commuteProblem(this.home(), this.base()));
 
   /** The minute: results need not recompute on every clock tick. */
+  private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / 60_000) * 60_000);
   private readonly input = computed<CommuteInput>(() => ({
     home: this.home(), base: this.base(), bufferMin: this.buffer(),
-    nowMs: Math.floor(this.state.nowMs() / 60_000) * 60_000,
+    nowMs: this.nowMin(),
     showConnections: this.state.showConnections(), connect: this.state.connect(),
   }));
 
@@ -228,7 +230,13 @@ export class CommutePage {
   protected readonly days = computed(() => commuteDays(this.input(), this.reportHhmm(), this.baseToday()));
   protected readonly tripHome = computed(() => tripHomeOptions(this.input(), this.releaseKey(), this.releaseHhmm()));
   /** Latest arrival time that works, same for every day of the range. */
-  protected readonly rangeDeadline = computed(() => commuteOptions(this.input(), this.baseToday(), this.reportHhmm()).deadlineHhmm);
+  protected readonly rangeDeadline = computed(() => {
+    return this.deadline(commuteOptions(this.input(), this.baseToday(), this.reportHhmm()));
+  });
+
+  protected deadline(r: CommuteResult): string {
+    return r.deadlineDayBefore ? t('commute.byDayBefore', { time: this.clock(r.deadlineHhmm) }) : this.clock(r.deadlineHhmm);
+  }
 
   protected setHome(code: string): void { this.home.set(code); this.save(); }
   protected setBase(code: string): void { this.base.set(code); this.save(); }

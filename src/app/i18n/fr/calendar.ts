@@ -30,6 +30,8 @@ export const calendar: Translation<typeof en> = {
   'calendar.meta.next': '{country} · prochain vol le {date}',
   'calendar.meta.none': '{country} · aucun vol sans escale publié',
   'calendar.legendHoliday': 'Jour férié',
+  'calendar.sources': 'Sources des congés scolaires\u00a0:',
+  'calendar.reviewed': 'vérifié le {date}',
   'calendar.legendBreak': 'Congé scolaire ({province})',
   'calendar.prov.ON': 'Ontario',
   'calendar.prov.QC': 'Québec',

@@ -86,24 +86,42 @@ describe('commuteOptions', () => {
 });
 
 describe('commuteDays', () => {
-  it('counts same-day arrivals for 14 days and flags fewer than 2', () => {
+  it('counts arrivals on the day and the evening before for 14 days', () => {
     const days = commuteDays(input(), '12:00', '2026-11-08');
     expect(days).toHaveLength(14);
-    // Arrive by 11:00: weekdays 401 + 403 (2); weekends 403 only (1).
-    const sun = days[0];
-    expect(sun.dateKey).toBe('2026-11-08');
-    expect(sun.count).toBe(1);
-    expect(sun.fewer).toBe(true);
-    expect(sun.lastHhmm).toBe('08:10');
+    // Arrive by 11:00 Mon: 401 + 403 that morning, plus 407 and 409 the evening before.
     const mon = days[1];
-    expect(mon.count).toBe(2);
+    expect(mon.count).toBe(4);
+    expect(mon.eveningBefore).toBe(2);
     expect(mon.fewer).toBe(false);
-    expect(days.filter(d => d.fewer).map(d => d.dateKey)).toEqual(['2026-11-08', '2026-11-14', '2026-11-15', '2026-11-21']);
+    // Sat: 403 plus the Friday evening pair.
+    expect(days[6].count).toBe(3);
+    expect(days[6].lastHhmm).toBe('08:10');
+  });
+
+  it('flags a day with fewer than 2 arrivals', () => {
+    setScheduleSource([route('YOW', 'YYZ', rec('AC403', '07:00', '08:10', A, B, ALL, '223'))], FIXTURE_META);
+    const days = commuteDays(input(), '12:00', '2026-11-08');
+    expect(days[1].count).toBe(1);
+    expect(days[1].fewer).toBe(true);
+  });
+
+  it('never flags today: not before the report time, and it is past after it', () => {
+    setScheduleSource([route('YOW', 'YYZ', rec('AC403', '07:00', '08:10', A, B, ALL, '223'))], FIXTURE_META);
+    const before = commuteDays(input({ nowMs: toUtcMs('2026-11-08', '09:00', TZ) }), '12:00', '2026-11-08')[0];
+    expect(before).toMatchObject({ today: true, past: false, fewer: false });
+    const after = commuteDays(input({ nowMs: toUtcMs('2026-11-08', '13:00', TZ) }), '12:00', '2026-11-08')[0];
+    expect(after).toMatchObject({ today: true, past: true, fewer: false });
+  });
+
+  it('marks a deadline that crosses midnight as the day before', () => {
+    expect(commuteOptions(input({ bufferMin: 60 }), '2026-11-09', '00:30').deadlineDayBefore).toBe(true);
+    expect(commuteOptions(input({ bufferMin: 60 }), '2026-11-09', '08:00').deadlineDayBefore).toBe(false);
   });
 
   it('has no flag where the schedules do not reach', () => {
     const days = commuteDays(input(), '12:00', '2027-03-28');
-    expect(days.at(-1)).toEqual({ dateKey: '2027-04-10', count: null, lastHhmm: null, fewer: false });
+    expect(days.at(-1)).toMatchObject({ dateKey: '2027-04-10', count: null, lastHhmm: null, fewer: false });
   });
 });
 

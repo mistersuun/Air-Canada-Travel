@@ -24,7 +24,7 @@ export const guide: Translation<typeof en> = {
 
   'guide.s4.h': 'À l’aéroport',
   'guide.s4.p1': 'Soignez votre tenue et suivez le code vestimentaire que votre employé vous indique.',
-  'guide.s4.p2': 'Soyez poli avec les agents. Ils s’occupent d’un vol chargé et ne peuvent pas changer l’ordre de la liste.',
+  'guide.s4.p2': 'Soyez poli avec les agents. Ils sont en plein service et ne peuvent pas changer l’ordre de la liste.',
   'guide.s4.p3': 'Vous représentez votre employé. Restez calme et ne discutez pas.',
 
   'guide.s5.h': 'Si vous ne montez pas à bord',

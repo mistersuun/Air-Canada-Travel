@@ -30,6 +30,8 @@ export const calendar = {
   'calendar.meta.next': '{country} · next {date}',
   'calendar.meta.none': '{country} · no nonstop published',
   'calendar.legendHoliday': 'Holiday',
+  'calendar.sources': 'School break sources:',
+  'calendar.reviewed': 'reviewed {date}',
   'calendar.legendBreak': 'School break ({province})',
   'calendar.prov.ON': 'Ontario',
   'calendar.prov.QC': 'Quebec',

@@ -3,8 +3,10 @@
  * like places/prep-rules.ts. Every row was read on an official page (the
  * ministry, or the largest board's own calendar) and carries its `source`
  * and `reviewed` date. Dates that could not be verified are left out; this
- * is why Quebec's school-board closure is the CSSDM's, and why no other
- * Ontario, Quebec or BC board is listed.
+ * is why Quebec's school-board closure is the CSSDM's (its 21 Dec to 31 Dec
+ * closure plus the 1 Jan holiday), and why no other Ontario, Quebec or BC
+ * board is listed. BC is the Vancouver School Board's district calendar; Nova
+ * Scotia is the Department's own 2026-27 notice. Re-verified 2026-11-08.
  *
  * The app only states the dates. It never calls a period busy or full, and
  * never changes a number because of one. Re-check the rows when `reviewed`
@@ -45,7 +47,7 @@ const WSD = 'Winnipeg School Division'; // i18n-ignore
 
 const ON_SRC = 'https://www.tdsb.on.ca/Portals/0/docs/2026-27%20TDSB%20School%20Year%20Calendar%20Key%20Dates.pdf';
 const QC_SRC = 'https://georges-vanier.cssdm.gouv.qc.ca/wp-content/uploads/sites/30/2026/07/Calendrier-scolaire-2026-2027.pdf';
-const BC_SRC = 'https://media.vsb.bc.ca/media/Default/medialib/2026-27stywten-pointgreysecondaryschoolcalendar.c2ce5590529.pdf';
+const BC_SRC = 'https://media.vsb.bc.ca/media/Default/medialib/compact-vsb-calendar-2026-2027-final.20df0087560.pdf';
 const AB_SRC = 'https://cbe.ab.ca/registration/calendars/Documents/2026-2027-Instructional-Calendar.pdf';
 const NS_SRC = 'https://www.ednet.ns.ca/docs/schoolcalendar-2026-27-en.pdf';
 const MB_SRC = 'https://media.winnipegsd.ca/media/Default/medialib/wsd-school-calendar-2026-27.21548436919.pdf';
@@ -53,9 +55,9 @@ const MB_SRC = 'https://media.winnipegsd.ca/media/Default/medialib/wsd-school-ca
 export const SCHOOL_BREAKS: readonly SchoolBreak[] = [
   { province: 'ON', board: TDSB, kind: 'winter', from: '2026-12-21', to: '2027-01-01', source: ON_SRC, reviewed: R },
   { province: 'ON', board: TDSB, kind: 'march', from: '2027-03-15', to: '2027-03-19', source: ON_SRC, reviewed: R },
-  { province: 'QC', board: CSSDM, kind: 'winter', from: '2026-12-21', to: '2026-12-31', source: QC_SRC, reviewed: R },
+  { province: 'QC', board: CSSDM, kind: 'winter', from: '2026-12-21', to: '2027-01-01', source: QC_SRC, reviewed: R },
   { province: 'QC', board: CSSDM, kind: 'relache', from: '2027-03-01', to: '2027-03-05', source: QC_SRC, reviewed: R },
-  { province: 'BC', board: VSB, kind: 'winter', from: '2026-12-21', to: '2027-01-01', source: BC_SRC, reviewed: R },
+  { province: 'BC', board: VSB, kind: 'winter', from: '2026-12-21', to: '2026-12-31', source: BC_SRC, reviewed: R },
   { province: 'BC', board: VSB, kind: 'spring', from: '2027-03-15', to: '2027-03-25', source: BC_SRC, reviewed: R },
   { province: 'AB', board: CBE, kind: 'fall', from: '2026-11-11', to: '2026-11-15', source: AB_SRC, reviewed: R },
   { province: 'AB', board: CBE, kind: 'winter', from: '2026-12-19', to: '2027-01-03', source: AB_SRC, reviewed: R },
@@ -105,4 +107,19 @@ export function breakRange(b: SchoolBreak): string {
     start: formatKey(b.from, md), end: formatKey(b.to, md),
     startDay: formatKey(b.from, { day: 'numeric' }), endDay: formatKey(b.to, { day: 'numeric' }),
   });
+}
+
+export interface BreakSource { board: string; source: string; reviewed: string }
+
+/** Each board/ministry calendar behind the shown breaks (all of the hub's province, or only those overlapping [from, to]). */
+export function breakSources(hub: string, from?: string, to?: string): BreakSource[] {
+  const list = from && to ? schoolBreaksBetween(hub, from, to) : schoolBreaksFor(hub);
+  const seen = new Set<string>();
+  const out: BreakSource[] = [];
+  for (const b of list) {
+    if (seen.has(b.source)) continue;
+    seen.add(b.source);
+    out.push({ board: b.board, source: b.source, reviewed: b.reviewed });
+  }
+  return out;
 }

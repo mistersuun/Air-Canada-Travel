@@ -120,6 +120,7 @@ export const home: Translation<typeof en> = {
   'home.entry.tag.eta': 'Type AVE',
   'home.entry.tag.arrival': 'À l\'arrivée',
   'home.entry.tag.visa': 'Visa',
+  'home.entry.note': 'Étiquettes d\'entrée\u00a0: selon Passport Index, données du {date}. Non officiel.',
   'home.entry.tagTitle': 'Liste d\'entrée pour votre passeport, Passport Index, données du {date}. Non officiel.',
   'home.weather.label': 'Météo typique',
   'home.weather.month': 'Mois',

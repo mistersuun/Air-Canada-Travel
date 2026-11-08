@@ -4,7 +4,7 @@
  * published nonstop date) and a pure diff between two snapshots. Facts only:
  * what the published schedules said last time versus now.
  */
-import { getSchedulesForRoute } from '../../data/schedule-index';
+import { getCoverage, getSchedulesForRoute } from '../../data/schedule-index';
 import { HUBS } from '../../data/destinations';
 import { t } from '../../i18n/t';
 import { addDays, formatKey, weekStartKey } from '../../utils/time';
@@ -19,6 +19,8 @@ export interface DestSnapshot {
   weeks: Record<string, Record<string, number>>;
   /** hub → [first, last] date of any published nonstop record. */
   season: Record<string, [string, string]>;
+  /** hub → end of that hub's published schedule window when the snapshot was taken. */
+  cover?: Record<string, string>;
 }
 
 export type SavedChange =
@@ -28,7 +30,7 @@ export type SavedChange =
 
 /** The snapshot of `code` as the schedules stand now. */
 export function snapshotFor(code: string, today: string, hubs: readonly string[] = HUBS.map(h => h.code)): DestSnapshot {
-  const snap: DestSnapshot = { v: 1, weeks: {}, season: {} };
+  const snap: DestSnapshot = { v: 1, weeks: {}, season: {}, cover: {} };
   const first = weekStartKey(today);
   for (const hub of hubs) {
     const records = getSchedulesForRoute(hub, code);
@@ -40,6 +42,8 @@ export function snapshotFor(code: string, today: string, hubs: readonly string[]
       if (r.toDate > hi) hi = r.toDate;
     }
     snap.season[hub] = [lo, hi];
+    const cto = getCoverage(hub).to;
+    if (cto) snap.cover![hub] = cto;
     const weeks: Record<string, number> = {};
     for (let i = 0; i < SNAPSHOT_WEEKS; i++) {
       const ws = addDays(first, i * 7);
@@ -81,7 +85,12 @@ export function diffSnapshots(prev: DestSnapshot | null | undefined, next: DestS
       } else {
         const pw = prev.weeks[h] ?? {};
         const nw = next.weeks[h] ?? {};
-        const ws = Object.keys(nw).filter(k => k >= thisWeek && k in pw).sort().find(k => nw[k] !== pw[k]);
+        // Only weeks fully inside both published windows can be compared: a week past
+        // either end is stored as 0 only because nothing was published yet.
+        const lo = p[0] > n[0] ? p[0] : n[0];
+        const hi = [p[1], n[1], prev.cover?.[h], next.cover?.[h]].filter((x): x is string => !!x).reduce((m, x) => (x < m ? x : m));
+        const ws = Object.keys(nw).filter(k => k >= thisWeek && k in pw && k >= lo && addDays(k, 6) <= hi)
+          .sort().find(k => nw[k] !== pw[k]);
         if (ws) out.push({ kind: nw[ws] < pw[ws] ? 'fewer' : 'more', hub: h, weekStart: ws, from: pw[ws], to: nw[ws] });
       }
     }

@@ -142,7 +142,8 @@ export const dest = {
   'dest.facts.daily': '{n, plural, one {1 nonstop a day from {hub}} other {# nonstops a day from {hub}}}',
   'dest.facts.dailyRange': '{lo} to {hi} nonstops a day from {hub}',
   'dest.facts.weekly': 'Nonstop {n, plural, one {1 day a week} other {# days a week}} ({days})',
-  'dest.facts.seasonal': 'Seasonal: {months} only',
+  'dest.facts.seasonal': 'Published: {months}',
+  'dest.facts.partial': '{n, plural, one {Nonstop on 1 of the next {d} published days} other {Nonstop on # of the next {d} published days}}',
   'dest.facts.lastHome': 'Last nonstop home today {time}',
   'dest.facts.noHome': 'No nonstop home today; next {day}',
 } satisfies Messages;

@@ -400,7 +400,7 @@ export class ProfilePage {
   }
 
   protected openGuide(): void {
-    void this.router.navigate(guidePath());
+    void this.router.navigate(guidePath(), { queryParams: this.state.globalParams() });
   }
 
   protected openLogbook(): void {

@@ -9,6 +9,7 @@ import { AppStateService } from '../../state/app-state.service';
 import { ClimateService } from '../../recs/climate.service';
 import { climateFor } from '../../recs/climate';
 import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
+import { BreakSourcesComponent } from '../../ui/break-sources.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { flightPath } from '../../ui/links';
 import { windowSignalLines } from '../../trips/engine/busy-signals';
@@ -27,7 +28,7 @@ import {
 @Component({
   selector: 'app-weekend-page',
   standalone: true,
-  imports: [IconComponent, DestRowComponent, ForecastLineComponent, EventsCardComponent, RouterLink, SegComponent],
+  imports: [IconComponent, DestRowComponent, ForecastLineComponent, EventsCardComponent, RouterLink, SegComponent, BreakSourcesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page wk">
@@ -84,6 +85,7 @@ import {
 
       <p class="sum tn">{{ t('weekend.summary', { a: stamp(window().leaveKey, window().leaveHhmm), b: stamp(window().homeKey, window().homeHhmm), hub: state.hub() }) }}</p>
       @for (line of signals(); track line) { <p class="sig tn">{{ line }}</p> }
+      <app-break-sources [hub]="state.hub()" [from]="window().leaveKey" [to]="window().homeKey" />
 
       @if (problem(); as why) {
         <p class="ui-card note" role="status">{{ why }}</p>

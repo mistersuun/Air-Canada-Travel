@@ -6,6 +6,7 @@ import { IconComponent } from '../../components/shared/icons.component';
 import { getCoverage } from '../../data/schedule-index';
 import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
+import { BreakSourcesComponent } from '../../ui/break-sources.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { shortDay } from '../../ui/format';
 import { calendarPath, destPath, flightPath } from '../../ui/links';
@@ -35,7 +36,7 @@ const EAGER_MONTHS = 3;
 @Component({
   selector: 'app-calendar-page',
   standalone: true,
-  imports: [IconComponent, DestRowComponent, CalMonthComponent],
+  imports: [IconComponent, DestRowComponent, CalMonthComponent, BreakSourcesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wash" aria-hidden="true"></div>
@@ -106,6 +107,7 @@ const EAGER_MONTHS = 3;
               <span><i class="lg__m lg__m--h"></i> {{ t('calendar.legendHoliday') }}</span>
               @if (breakLegend(); as bl) { <span><i class="lg__m lg__m--b"></i> {{ bl }}</span> }
             </div>
+            <app-break-sources [hub]="state.hub()" />
             <button type="button" class="ui-btn ui-btn--block" [disabled]="!sel().dep" (click)="done()">{{ select() }}</button>
           </footer>
         </div>

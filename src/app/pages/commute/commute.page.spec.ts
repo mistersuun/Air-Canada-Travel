@@ -100,10 +100,11 @@ describe('CommutePage', () => {
     fixture.detectChanges();
     const rows = [...el.querySelectorAll('[data-days] li')];
     expect(rows).toHaveLength(14);
-    // Sun Nov 8: weekend, only AC403 arrives by 11:00. Mon Nov 9: AC401 and AC403.
-    expect(rows[0].textContent).toContain('1 flight arrives by 11:00');
-    expect(rows[0].textContent).toContain('fewer than 2 options');
-    expect(rows[1].textContent).toContain('2 flights arrive by 11:00');
+    // Sun Nov 8 is today (flights already gone are not counted, so never flagged).
+    expect(rows[0].textContent).not.toContain('fewer than 2 options');
+    // Mon Nov 9: AC401 and AC403, plus the evening-before arrival still to leave.
+    expect(rows[1].textContent).toContain('3 flights arrive by 11:00');
+    expect(rows[1].textContent).toContain('incl. 1 the evening before');
     expect(rows[1].textContent).not.toContain('fewer than 2 options');
     expect(q('[data-days]').textContent).not.toMatch(/risk/i);
   });

@@ -17,6 +17,7 @@ const BASE: CompareInput = {
 describe('parseCompareCodes', () => {
   it('keeps valid codes, upper-cased and de-duplicated, ignoring the rest', () => {
     expect(parseCompareCodes('lhr, ATH,LHR,ZZZ,,')).toEqual(['LHR', 'ATH']);
+    expect(parseCompareCodes('YYZ,LHR,yul')).toEqual(['LHR']); // hubs are not destinations
     expect(parseCompareCodes(null)).toEqual([]);
     expect(parseCompareCodes('')).toEqual([]);
   });

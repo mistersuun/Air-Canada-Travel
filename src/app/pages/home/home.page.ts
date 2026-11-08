@@ -24,6 +24,7 @@ import {
   seasonEvents, seasonMeta, withFlightMatches,
 } from './home-model';
 import { CityIndexService } from '../../places/city-index.service';
+import { TripFitService } from './trip-fit.service';
 import { SurpriseSheetComponent } from './surprise-sheet.component';
 import { ResultsListComponent } from './results-list.component';
 import { WeekCardComponent } from './week-card.component';
@@ -323,6 +324,7 @@ export class HomePage {
   private readonly route = inject(ActivatedRoute);
   private readonly doc = inject(DOCUMENT);
   private readonly cities = inject(CityIndexService);
+  private readonly fit = inject(TripFitService);
   private readonly recentSvc = inject(RecentService);
 
   /** Last viewed destinations (empty search state only), newest first. */
@@ -426,7 +428,8 @@ export class HomePage {
 
   readonly results = computed(() => {
     const q = this.state.query();
-    return withFlightMatches(this.state.routes(), flightNumberQuery(q) ? this.state.unsearchedRoutes() : [], q);
+    const found = withFlightMatches(this.state.routes(), flightNumberQuery(q) ? this.state.unsearchedRoutes() : [], q);
+    return this.fit.apply(found, e => e.destination).items;
   });
 
   /** Cities AC does not fly to, for the "Places" group (Trips v2 §5.3). */

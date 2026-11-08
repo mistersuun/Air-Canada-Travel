@@ -21,4 +21,6 @@ export const map: Translation<typeof en> = {
   'map.count': '{n, plural, one {# destination} other {# destinations}}',
   'map.rowSelected': '. Sélectionné; appuyez de nouveau pour ouvrir',
   'map.thisWeek': '{n} cette semaine',
+  'map.filters': '{n, plural, =0 {Filtres} one {Filtres, # actif} other {Filtres, # actifs}}',
+  'map.noFit': 'Aucune destination ne correspond à ces filtres.',
 };

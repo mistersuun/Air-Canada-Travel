@@ -49,6 +49,23 @@ export interface Filters {
   starredOnly: boolean;
   /** Longest flight to keep, in hours (null = any). Itineraries count door to door. */
   maxHours: number | null;
+  /**
+   * "Trip fit" filters. They need async reference data (entry listings, typical
+   * weather, advisories), so computeRoutes ignores them: pages apply them
+   * afterwards with applyTripFit (pages/home/trip-fit-model.ts).
+   */
+  /** Entry listings for the profile's passports: any, no visa listed (O, F), or no visa or authorization only (O, F, T). */
+  entry: 'any' | 'noVisa' | 'noVisaOrEta';
+  /** Month (1..12) for the weather filters; null = the month of the selected week. */
+  weatherMonth: number | null;
+  /** Lowest typical daily high, °C (null = any). */
+  minHighC: number | null;
+  /** Most typical rainy days in the month (null = any). */
+  maxWetDays: number | null;
+  /** Largest clock difference from the hub, hours (null = any). */
+  maxTzHours: number | null;
+  /** Hide "Avoid non-essential travel" (level 2) and higher advisories. */
+  hideAdvisory: boolean;
 }
 
 export const EMPTY_FILTERS: Filters = {
@@ -59,13 +76,21 @@ export const EMPTY_FILTERS: Filters = {
   widebodyOnly: false,
   starredOnly: false,
   maxHours: null,
+  entry: 'any',
+  weatherMonth: null,
+  minHighC: null,
+  maxWetDays: null,
+  maxTzHours: null,
+  hideAdvisory: false,
 };
 
 /** Number of filters that differ from EMPTY_FILTERS (for a badge). */
 export function activeFilterCount(f: Partial<Filters> | null | undefined): number {
   if (!f) return 0;
   return (f.types?.length ? 1 : 0) + (f.departWindows?.length ? 1 : 0) + (f.sameDayArrival ? 1 : 0)
-    + (f.viaHubs?.length ? 1 : 0) + (f.widebodyOnly ? 1 : 0) + (f.starredOnly ? 1 : 0) + (f.maxHours ? 1 : 0);
+    + (f.viaHubs?.length ? 1 : 0) + (f.widebodyOnly ? 1 : 0) + (f.starredOnly ? 1 : 0) + (f.maxHours ? 1 : 0)
+    + (f.entry && f.entry !== 'any' ? 1 : 0) + (f.minHighC != null ? 1 : 0) + (f.maxWetDays != null ? 1 : 0)
+    + (f.maxTzHours != null ? 1 : 0) + (f.hideAdvisory ? 1 : 0);
 }
 
 /** Pseudo-region that selects starred destinations. */

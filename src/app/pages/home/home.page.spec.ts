@@ -17,6 +17,9 @@ import { CITIES_FETCH } from '../../places/city-index.service';
 import { FIXTURE_CITIES_FILE } from '../../places/testing/cities-fixture';
 import { SEVILLE_META, SEVILLE_ROUTES } from '../../trips/testing/seville-fixture';
 import { setLocale } from '../../i18n/locale';
+import { CLIMATE_FETCH, ClimateService } from '../../recs/climate.service';
+import { ReferenceService, REFERENCE_FETCH } from '../../reference/reference.service';
+import { ADVISORY_FILE, CLIMATE_FILE, VISA_FILE } from './testing/trip-fit-fixture';
 
 let citiesFetches = 0;
 
@@ -38,6 +41,8 @@ function configure(prefs?: object, recent?: string[], profile?: object) {
     providers: [
       provideRouter([]), { provide: PREFS_STORAGE, useValue: storage },
       { provide: RECENT_STORAGE, useValue: recentStore }, { provide: PROFILE_STORAGE, useValue: profileStore }, { provide: NOW, useValue: () => CLOCK },
+      { provide: REFERENCE_FETCH, useValue: async (n: string) => (n === 'visa' ? VISA_FILE : n === 'advisories' ? ADVISORY_FILE : null) },
+      { provide: CLIMATE_FETCH, useValue: async () => CLIMATE_FILE },
       { provide: CITIES_FETCH, useValue: async () => { citiesFetches++; return FIXTURE_CITIES_FILE; } },
     ],
   });
@@ -491,5 +496,79 @@ describe('HomePage in French', () => {
     await stable();
     expect(el.textContent).toContain('Aucune destination ne correspond');
     expect(el.textContent).toContain('Effacer les filtres');
+  });
+});
+
+describe('HomePage · trip fit filters', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  const rowNames = (el: HTMLElement) => names(el.querySelector('app-results-list')!);
+  const chipLabels = (el: HTMLElement) => [...el.querySelectorAll('app-filter-chips .chip')].map(c => c.textContent!.trim());
+
+  it('an entry filter adds a labelled chip, shrinks the results, and Clear removes both', async () => {
+    configure(undefined, undefined, { v: 1, passports: ['CA'] });
+    const { el, state, stable } = await render();
+    state.setSort('duration'); // results mode with both nonstops
+    await stable();
+    expect(rowNames(el)).toEqual(['London', 'Athens', 'Sydney']);
+    state.setFilters({ entry: 'noVisa' });
+    await stable();
+    await stable();
+    expect(chipLabels(el)).toContain('Entry: no visa listed (Passport Index)');
+    expect(chipLabels(el).join(' ')).not.toMatch(/no visa needed/i);
+    expect(rowNames(el)).toEqual(['Athens']);
+    el.querySelector<HTMLButtonElement>('app-filter-chips .clear')!.click();
+    await stable();
+    expect(state.filters().entry).toBe('any');
+    expect(chipLabels(el)).toEqual([]);
+    expect(state.sort()).toBe('az');
+  });
+
+  it('removing a chip with its x restores the rows; tags show the entry listing', async () => {
+    configure(undefined, undefined, { v: 1, passports: ['CA'] });
+    const { el, state, stable } = await render();
+    state.setSort('duration');
+    await stable();
+    await stable();
+    const tags = [...el.querySelectorAll('[data-entry-tag]')].map(x => x.textContent!.trim());
+    expect(tags).toEqual(['eTA-type', 'No visa listed', 'eTA-type']);
+    state.setFilters({ hideAdvisory: true }); // GB is level 2 in the fixture
+    await stable();
+    await stable();
+    expect(rowNames(el)).toEqual(['Athens', 'Sydney']);
+    expect(chipLabels(el)).toContain('Hiding “Avoid non-essential travel” or higher');
+    [...el.querySelectorAll<HTMLButtonElement>('app-filter-chips .chip')].find(c => c.textContent!.includes('Hiding'))!.click();
+    await stable();
+    expect(rowNames(el)).toEqual(['London', 'Athens', 'Sydney']);
+  });
+
+  it('weather filter loads the climate on demand and uses the selected week month', async () => {
+    configure();
+    const { el, state, stable } = await render();
+    const climate = TestBed.inject(ClimateService);
+    state.setFilters({ minHighC: 20 });
+    await stable();
+    await stable();
+    expect(climate.status()).toBe('ready');
+    expect(chipLabels(el)).toContain('Oct: typical high 20° or more');
+    expect(rowNames(el)).toEqual(['Athens']);
+  });
+
+  it('shows no entry tags and no entry control without a passport', async () => {
+    configure();
+    const { el, state, stable } = await render();
+    state.setSort('duration');
+    await stable();
+    await stable();
+    expect(el.querySelector('[data-entry-tag]')).toBeNull();
+    expect(TestBed.inject(ReferenceService).status.visa()).toBe('idle');
+    el.querySelector<HTMLButtonElement>('.search .f')!.click();
+    await stable();
+    expect(document.body.querySelector('[data-filter="entry"]')).toBeNull();
+    expect(document.body.querySelector('[data-filter="minHigh"]')).toBeTruthy();
   });
 });

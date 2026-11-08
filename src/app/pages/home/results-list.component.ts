@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import type { Coverage } from '../../data/schedule-index';
 import type { TimeFormat } from '../../state/prefs.service';
@@ -10,7 +10,10 @@ import { DestRowComponent } from '../../ui/dest-row.component';
 import { entryDots } from '../../ui/dot-row.component';
 import { destPath, reachPath } from '../../ui/links';
 import { CoverageStatus, PlaceRow, coverageStatus, focusDayIndex, rowMeta } from './home-model';
-import { t } from '../../i18n/t';
+import { visaAsOf } from '../../reference/visa';
+import { entryTag, usableVisa } from './trip-fit-model';
+import { TripFitService } from './trip-fit.service';
+import { MsgKey, t } from '../../i18n/t';
 
 const LONG_DATE: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
 
@@ -20,7 +23,13 @@ interface Row {
   small: string;
   dots: ReturnType<typeof entryDots> | null;
   fav: boolean;
+  /** Entry listing tag for the profile's passports (message key), when there is one. */
+  tag: MsgKey | null;
 }
+
+const ENTRY_TAG_KEYS = {
+  noVisa: 'home.entry.tag.noVisa', eta: 'home.entry.tag.eta', arrival: 'home.entry.tag.arrival', visa: 'home.entry.tag.visa',
+} as const;
 
 /**
  * Home's results: every route in scope as rows (nonstop first, then one
@@ -66,6 +75,7 @@ interface Row {
             <div class="rows">
               @for (r of direct(); track r.code) {
                 <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="path(r.code)" [dots]="r.dots" [selectedDay]="focus()">
+                  @if (r.tag) { <span trailing class="ui-tag ui-tag--neutral tag" [attr.title]="tagTitle()" data-entry-tag>{{ t(r.tag) }}</span> }
                   <button trailing type="button" class="star" [class.on]="r.fav" [attr.aria-pressed]="r.fav"
                           [attr.aria-label]="t(r.fav ? 'common.unstar' : 'common.star', { code: r.code })" (click)="star($event, r.code)">
                     <app-icon name="star" [size]="18" [filled]="r.fav" />
@@ -81,6 +91,7 @@ interface Row {
             <div class="rows">
               @for (r of connecting(); track r.code) {
                 <app-dest-row [code]="r.code" [small]="r.small" [meta]="r.meta" [link]="path(r.code)" [dots]="r.dots" [selectedDay]="focus()">
+                  @if (r.tag) { <span trailing class="ui-tag ui-tag--neutral tag" [attr.title]="tagTitle()" data-entry-tag>{{ t(r.tag) }}</span> }
                   <button trailing type="button" class="star" [class.on]="r.fav" [attr.aria-pressed]="r.fav"
                           [attr.aria-label]="t(r.fav ? 'common.unstar' : 'common.star', { code: r.code })" (click)="star($event, r.code)">
                     <app-icon name="star" [size]="18" [filled]="r.fav" />
@@ -147,6 +158,7 @@ interface Row {
       display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
       margin: 0 auto; max-width: 480px; padding: 32px 24px;
     }
+    .tag { flex: none; margin-left: 8px; }
     .empty__ic {
       display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%;
       background: var(--fill); color: var(--ink-2); margin-bottom: 4px;
@@ -185,6 +197,18 @@ export class ResultsListComponent {
 
   protected readonly focus = computed(() => focusDayIndex(this.weekStartKey(), this.selectedDateKey(), this.todayKey()));
 
+  private readonly fit = inject(TripFitService);
+  private readonly fitData = this.fit.data;
+  protected readonly tagTitle = computed(() => {
+    const table = usableVisa(this.fitData());
+    return table ? t('home.entry.tagTitle', { date: visaAsOf(table) }) : '';
+  });
+
+  private tagFor(e: RouteEntry): MsgKey | null {
+    const k = entryTag(this.fitData(), e.destination.iso2);
+    return k ? ENTRY_TAG_KEYS[k] : null;
+  }
+
   private toRow(e: RouteEntry): Row {
     const it = e.itinerary ?? e.weekSummary?.days.find(d => d.best)?.best;
     return {
@@ -193,6 +217,7 @@ export class ResultsListComponent {
       meta: rowMeta(e, this.timeFormat()),
       dots: this.compact() ? null : entryDots(e),
       fav: this.favourites().has(e.destination.code),
+      tag: this.tagFor(e),
     };
   }
 

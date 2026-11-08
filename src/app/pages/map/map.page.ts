@@ -6,6 +6,9 @@ import { Router, RouterLink } from '@angular/router';
 import { IconComponent } from '../../components/shared/icons.component';
 import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
+import { FilterSheetComponent } from '../home/filters/filter-sheet.component';
+import { NO_TRIP_FIT, tripFitCount } from '../home/trip-fit-model';
+import { TripFitService } from '../home/trip-fit.service';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { destPath } from '../../ui/links';
 import { MapPoint, RouteMapComponent } from '../../ui/route-map.component';
@@ -38,7 +41,7 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
 @Component({
   selector: 'app-map-page',
   standalone: true,
-  imports: [RouterLink, IconComponent, DestRowComponent, RouteMapComponent, SegComponent],
+  imports: [RouterLink, IconComponent, DestRowComponent, RouteMapComponent, SegComponent, FilterSheetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1 class="sr-only">{{ t('map.title') }}</h1>
@@ -59,6 +62,11 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
           </button>
         }
       </label>
+      <button type="button" class="ui-circ ui-circ--glass fbtn" data-map-filters aria-haspopup="dialog"
+              [attr.aria-label]="t('map.filters', { n: fitCount() })" (click)="filtersOpen.set(true)">
+        <app-icon name="filter" [size]="19" [strokeWidth]="2" />
+        @if (fitCount()) { <span class="badge tn" aria-hidden="true">{{ fitCount() }}</span> }
+      </button>
       <button type="button" class="ui-circ ui-circ--glass locate m-only" [attr.aria-label]="t('map.recentre', { hub: state.hubName() })"
               (click)="locate()">
         <app-icon name="locate" [size]="19" [strokeWidth]="2" />
@@ -100,7 +108,10 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
           </app-dest-row>
         } @empty {
           <div class="empty">
-            @if (state.query()) {
+            @if (fitCount() && !state.query()) {
+              <p class="ui-sub">{{ t('map.noFit') }}</p>
+              <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="clearFit()">{{ t('home.list.clearFilters') }}</button>
+            } @else if (state.query()) {
               <p class="ui-sub">{{ t('map.noMatch', { query: state.query() }) }}</p>
               <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="state.setQuery('')">{{ t('map.clearSearch') }}</button>
             } @else if (outside()) {
@@ -113,6 +124,7 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
         }
       </div>
     </section>
+    <app-filter-sheet [(open)]="filtersOpen" fitOnly [shown]="listed().length" />
   `,
   styles: [`
     :host {
@@ -131,7 +143,12 @@ const sheetHeight = (h: number) => Math.min(390, Math.round(h * 0.5));
     .search input { font-size: 14px; }
     .clear { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2); flex: none; }
     .clear:hover { background: var(--fill); }
-    .locate { width: 44px; height: 44px; }
+    .locate, .fbtn { width: 44px; height: 44px; }
+    .fbtn { position: relative; flex: none; }
+    .badge {
+      position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+      display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--blue); color: #fff;
+    }
 
     .ctrls { position: absolute; z-index: 5; right: 24px; bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
     .zm { font-size: 22px; font-weight: 500; line-height: 1; }
@@ -195,6 +212,9 @@ export class MapPage {
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly fit = inject(TripFitService);
+  protected readonly filtersOpen = signal(false);
+  protected readonly fitCount = computed(() => tripFitCount(this.state.filters()));
 
   /** ?sel= (selected destination) and ?sort= (distance | time), bound by withComponentInputBinding. */
   readonly selParam = input<string | undefined>(undefined, { alias: 'sel' });
@@ -226,7 +246,9 @@ export class MapPage {
   private readonly items = computed(() =>
     mapItems(this.state.allRoutes(), this.state.hubInfo(), this.state.showConnections()));
 
-  protected readonly listed = computed(() => sortItems(filterItems(this.items(), this.state.query()), this.sort()));
+  /** Search, then the trip-fit filters (entry, weather, time zone, advisory), then sort: the list and the markers. */
+  protected readonly listed = computed(() =>
+    sortItems(this.fit.apply(filterItems(this.items(), this.state.query()), i => i.entry.destination).items, this.sort()));
 
   protected readonly sel = computed(() => {
     const code = this.selParam()?.toUpperCase() ?? null;
@@ -346,6 +368,10 @@ export class MapPage {
 
   protected open(code: string): string[] {
     return destPath(code);
+  }
+
+  protected clearFit(): void {
+    this.state.setFilters({ ...this.state.filters(), ...NO_TRIP_FIT });
   }
 
   protected onSearch(e: Event): void {

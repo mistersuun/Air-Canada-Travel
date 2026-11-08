@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, computed, effect, inject, input, model, untracked } from '@angular/core';
 import { HUBS, REGIONS, TYPES } from '../../../data/destinations';
 import type { DestinationType } from '../../../data/destinations';
 import { ProfileService } from '../../../recs/profile.service';
@@ -6,7 +6,10 @@ import { AppStateService } from '../../../state/app-state.service';
 import { aircraftName, widebodyCodes } from '../../../utils/aircraft';
 import { regionVar } from '../../../utils/region-color';
 import { DEPART_WINDOWS, DepartWindow, Filters, STARRED_REGION, SortKey } from '../../../utils/routes';
-import { minToHhmm } from '../../../utils/time';
+import { minToHhmm, monthShort } from '../../../utils/time';
+import { visaAsOf } from '../../../reference/visa';
+import { NO_TRIP_FIT, MAX_TZ_CHOICES, MAX_WET_CHOICES, MIN_HIGH_CHOICES, usableVisa, weatherActive, weatherMonthOf } from '../trip-fit-model';
+import { TripFitService } from '../trip-fit.service';
 import { GlassSheetComponent } from '../../../ui/glass-sheet.component';
 import type { SegOption } from '../../../ui/seg.component';
 import { hubDisplayName } from '../../../ui/format';
@@ -43,8 +46,9 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
   imports: [GlassSheetComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-glass-sheet [title]="t('home.filter.title')" [(open)]="open">
+    <app-glass-sheet [title]="fitOnly() ? t('home.filter.fit') : t('home.filter.title')" [(open)]="open">
       <div class="fs">
+        @if (!fitOnly()) {
         <section class="grp">
           <span class="nm" id="fs-sort">{{ t('home.filter.sortBy') }}</span>
           <div class="chips" role="group" aria-labelledby="fs-sort" data-filter="sort">
@@ -128,6 +132,60 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
                    [checked]="f().starredOnly" (change)="patch({ starredOnly: checked($event) })">
           </label>
         </section>
+        }
+
+        <section class="grp" data-fit>
+          @if (!fitOnly()) { <h3 class="hd">{{ t('home.filter.fit') }}</h3> }
+          <span class="hint">{{ t('home.filter.fitHint') }}</span>
+
+          @if (hasPassport()) {
+            <span class="nm" id="fs-entry">{{ t('home.entry.label') }}</span>
+            <div class="chips" role="group" aria-labelledby="fs-entry" data-filter="entry">
+              <button type="button" class="chip" [attr.aria-pressed]="f().entry === 'any'" (click)="patch({ entry: 'any' })">{{ t('home.filter.any') }}</button>
+              @for (o of entryChoices; track o.value) {
+                <button type="button" class="chip" [attr.aria-pressed]="f().entry === o.value" (click)="patch({ entry: o.value })">{{ t(o.label) }}</button>
+              }
+            </div>
+            @if (entryHint(); as h) { <span class="hint">{{ h }}</span> }
+          }
+
+          <span class="nm" id="fs-wx">{{ t('home.weather.label') }}</span>
+          <label class="row" for="fs-wxm">
+            <span class="nm sub">{{ t('home.weather.month') }}</span>
+            <select id="fs-wxm" class="sel" data-wx-month [value]="wxMonth()" (change)="patch({ weatherMonth: monthVal($event) })">
+              @for (m of months; track m) { <option [value]="m" [selected]="wxMonth() === m">{{ monthLabel(m) }}</option> }
+            </select>
+          </label>
+          <span class="nm sub" id="fs-wxh">{{ t('home.weather.minHigh') }}</span>
+          <div class="chips" role="group" aria-labelledby="fs-wxh" data-filter="minHigh">
+            <button type="button" class="chip" [attr.aria-pressed]="f().minHighC == null" (click)="patch({ minHighC: null })">{{ t('home.filter.any') }}</button>
+            @for (n of minHigh; track n) {
+              <button type="button" class="chip" [attr.aria-pressed]="f().minHighC === n" (click)="patch({ minHighC: n })">{{ t('home.weather.deg', { n }) }}</button>
+            }
+          </div>
+          <span class="nm sub" id="fs-wxw">{{ t('home.weather.maxWet') }}</span>
+          <div class="chips" role="group" aria-labelledby="fs-wxw" data-filter="maxWet">
+            <button type="button" class="chip" [attr.aria-pressed]="f().maxWetDays == null" (click)="patch({ maxWetDays: null })">{{ t('home.filter.any') }}</button>
+            @for (n of maxWet; track n) {
+              <button type="button" class="chip" [attr.aria-pressed]="f().maxWetDays === n" (click)="patch({ maxWetDays: n })">{{ t('home.weather.days', { n }) }}</button>
+            }
+          </div>
+          @if (noWeather() > 0) { <span class="hint" data-no-weather>{{ t('home.weather.noData', { n: noWeather() }) }}</span> }
+
+          <span class="nm" id="fs-tz">{{ t('home.tz.label', { hub: state.hub() }) }}</span>
+          <div class="chips" role="group" aria-labelledby="fs-tz" data-filter="tz">
+            <button type="button" class="chip" [attr.aria-pressed]="f().maxTzHours == null" (click)="patch({ maxTzHours: null })">{{ t('home.filter.any') }}</button>
+            @for (n of maxTz; track n) {
+              <button type="button" class="chip" [attr.aria-pressed]="f().maxTzHours === n" (click)="patch({ maxTzHours: n })">{{ t('home.tz.max', { n }) }}</button>
+            }
+          </div>
+
+          <label class="row" for="fs-adv">
+            <span class="row__tx"><span class="nm">{{ t('home.advisory.label') }}</span><span class="hint">{{ t('home.advisory.hint') }}</span></span>
+            <input id="fs-adv" type="checkbox" role="switch" class="switch" data-advisory
+                   [checked]="f().hideAdvisory" (change)="patch({ hideAdvisory: checked($event) })">
+          </label>
+        </section>
       </div>
       <footer class="foot">
         <button type="button" class="ui-btn ui-btn--ghost" (click)="reset()">{{ t('common.reset') }}</button>
@@ -144,6 +202,9 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
     .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
     .row__tx { display: grid; gap: 2px; }
     .nm { font-size: 15px; font-weight: 600; }
+    .hd { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+    .nm.sub { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+    .sel { min-height: 44px; padding: 0 12px; border-radius: 12px; background: var(--surface); color: var(--ink); font-size: 14px; box-shadow: inset 0 0 0 1px var(--hair); }
     .hint { font-size: 13px; color: var(--ink-2); }
     .chips { display: flex; flex-wrap: wrap; gap: 8px; }
     .chips { row-gap: 14px; }
@@ -181,7 +242,17 @@ export const TYPE_CHIPS = TYPES.filter(t => t !== 'All') as DestinationType[];
 export class FilterSheetComponent {
   protected readonly state = inject(AppStateService);
   private readonly profile = inject(ProfileService);
+  private readonly fit = inject(TripFitService);
   readonly open = model(false);
+  /** Map: only the "Trip fit" group (the other controls do not apply there). */
+  readonly fitOnly = input(false, { transform: booleanAttribute });
+  /** Destinations the "Show" button counts; null = Home's own list. */
+  readonly shown = input<number | null>(null);
+
+  constructor() {
+    // Load the listings and typical weather only once the sheet is opened.
+    effect(() => { if (this.open()) untracked(() => this.fit.prepare()); });
+  }
 
   protected readonly f = this.state.filters;
   protected readonly regions = REGION_CHIPS;
@@ -206,7 +277,33 @@ export class FilterSheetComponent {
     const names = widebodyCodes().map(c => aircraftName(c).replace(/^(Boeing|Airbus) /, ''));
     return names.length ? names.join(', ') : t('home.filter.widebodyFallback');
   });
-  protected readonly count = computed(() => this.state.routes().length);
+  protected readonly count = computed(() =>
+    this.shown() ?? this.fit.apply(this.state.routes(), e => e.destination).items.length);
+
+  protected readonly hasPassport = computed(() => this.fit.passports().length > 0);
+  protected readonly months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  protected readonly entryChoices: readonly { value: Filters['entry']; label: MsgKey }[] = [
+    { value: 'noVisa', label: 'home.entry.noVisa' },
+    { value: 'noVisaOrEta', label: 'home.entry.noVisaOrEta' },
+  ];
+  protected readonly minHigh = MIN_HIGH_CHOICES;
+  protected readonly maxWet = MAX_WET_CHOICES;
+  protected readonly maxTz = MAX_TZ_CHOICES;
+  protected readonly wxMonth = computed(() => weatherMonthOf(this.f(), this.fit.data().weekMonth));
+  protected readonly noWeather = computed(() => {
+    if (!weatherActive(this.f())) return 0;
+    return this.fit.apply(this.fitPool(), e => e.destination).noWeather;
+  });
+  /** What the weather note counts: the routes before the trip-fit filters. */
+  private readonly fitPool = computed(() => this.state.allRoutes());
+  protected readonly entryHint = computed(() => {
+    const d = this.fit.data();
+    if (!d.visa) return '';
+    const table = usableVisa(d);
+    return table ? t('home.entry.hint', { date: visaAsOf(table) }) : t('home.entry.stale');
+  });
+  protected monthLabel(m: number): string { return monthShort(m - 1); }
+  protected monthVal(e: Event): number { return Number((e.target as HTMLSelectElement).value); }
 
   /** What the switch turns on: the profile's longest flight when it has one, else 6 hours. */
   protected readonly maxDefault = computed(() => this.profile.profile().maxFlightHours ?? DEFAULT_MAX_HOURS);
@@ -256,6 +353,10 @@ export class FilterSheetComponent {
 
   /** Resets everything this sheet controls: filters, sort, region and connections. The search box is left alone. */
   reset(): void {
+    if (this.fitOnly()) {
+      this.patch(NO_TRIP_FIT);
+      return;
+    }
     this.state.setFilters({});
     if (this.state.sort() !== 'az') this.state.setSort('az');
     if (this.state.region() !== 'All') this.state.setRegion('All');

@@ -5,6 +5,9 @@ import { IconComponent } from '../../../components/shared/icons.component';
 import { hubDisplayName } from '../../../ui/format';
 import { SORT_OPTIONS } from './filter-sheet.component';
 import { t } from '../../../i18n/t';
+import { monthShort } from '../../../utils/time';
+import { TripFitService } from '../trip-fit.service';
+import { weatherMonthOf } from '../trip-fit-model';
 import { departWindowLabel, regionLabel, typeLabel } from '../../../i18n/labels';
 
 export interface ActiveChip {
@@ -50,6 +53,7 @@ export interface ActiveChip {
 })
 export class FilterChipsComponent {
   private readonly state = inject(AppStateService);
+  private readonly fit = inject(TripFitService);
   /** False when the page shows the region elsewhere (its own chip row). */
   readonly showRegion = input(true);
   /** After "Clear" (the page also drops ?view). */
@@ -73,6 +77,14 @@ export class FilterChipsComponent {
     if (f.sameDayArrival) out.push({ id: 'same', label: t('home.chips.sameDay'), remove: () => this.patch({ sameDayArrival: false }) });
     if (f.widebodyOnly) out.push({ id: 'wide', label: t('home.chips.widebody'), remove: () => this.patch({ widebodyOnly: false }) });
     if (f.maxHours) out.push({ id: 'max', label: t('home.chips.maxHours', { h: f.maxHours }), remove: () => this.patch({ maxHours: null }) });
+    if (f.entry === 'noVisa' || f.entry === 'noVisaOrEta') {
+      out.push({ id: 'entry', label: t(f.entry === 'noVisa' ? 'home.chips.entryNoVisa' : 'home.chips.entryNoVisaOrEta'), remove: () => this.patch({ entry: 'any' }) });
+    }
+    const month = monthShort(weatherMonthOf(f, this.fit.data().weekMonth) - 1);
+    if (f.minHighC != null) out.push({ id: 'minHigh', label: t('home.chips.minHigh', { month, n: f.minHighC }), remove: () => this.patch({ minHighC: null }) });
+    if (f.maxWetDays != null) out.push({ id: 'maxWet', label: t('home.chips.maxWet', { month, n: f.maxWetDays }), remove: () => this.patch({ maxWetDays: null }) });
+    if (f.maxTzHours != null) out.push({ id: 'tz', label: t('home.chips.tz', { n: f.maxTzHours, hub: this.state.hub() }), remove: () => this.patch({ maxTzHours: null }) });
+    if (f.hideAdvisory) out.push({ id: 'advisory', label: t('home.chips.advisory'), remove: () => this.patch({ hideAdvisory: false }) });
     if (f.starredOnly) out.push({ id: 'star', label: t('home.chips.starred'), remove: () => this.patch({ starredOnly: false }) });
     const s = this.state.sort();
     if (s !== 'az') {

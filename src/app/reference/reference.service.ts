@@ -3,9 +3,10 @@ import {
   decodeAdvisories, decodeFx, decodeHolidays,
   type AdvisoryIndex, type FxTable, type HolidayIndex,
 } from './reference';
+import { decodeVisa, type VisaTable } from './visa';
 import { fetchWithTimeout, isAbortError } from '../utils/fetch-timeout';
 
-export type ReferenceFile = 'advisories' | 'fx' | 'holidays';
+export type ReferenceFile = 'advisories' | 'fx' | 'holidays' | 'visa';
 
 /**
  * Fetches data/<name>.json (relative to the base href). Resolves null on a 4xx
@@ -76,7 +77,7 @@ class Loader<T> {
 }
 
 /**
- * Advisories, exchange rates and holidays: each loaded once on first use
+ * Advisories, exchange rates, holidays and entry listings: each loaded once on first use
  * (never at startup). A missing or broken file gives 'missing' silently and
  * the app hides that line.
  */
@@ -86,18 +87,27 @@ export class ReferenceService {
   private readonly adv = new Loader<AdvisoryIndex>('advisories', () => this.fetcher('advisories'), decodeAdvisories);
   private readonly fxl = new Loader<FxTable>('fx', () => this.fetcher('fx'), decodeFx);
   private readonly hol = new Loader<HolidayIndex>('holidays', () => this.fetcher('holidays'), decodeHolidays);
+  private readonly vis = new Loader<VisaTable>('visa', () => this.fetcher('visa'), decodeVisa);
 
   readonly advisories = this.adv.data.asReadonly();
   readonly fx = this.fxl.data.asReadonly();
   readonly holidays = this.hol.data.asReadonly();
+  /** Entry listings by passport (see visa.ts). */
+  readonly visa = this.vis.data.asReadonly();
   readonly status = {
     advisories: this.adv.status.asReadonly(),
     fx: this.fxl.status.asReadonly(),
     holidays: this.hol.status.asReadonly(),
+    visa: this.vis.status.asReadonly(),
   };
 
-  /** Loads all three (each at most once). Never rejects. */
+  /** Loads advisories, rates and holidays (each at most once). Never rejects. */
   ensureLoaded(): Promise<void> {
     return Promise.all([this.adv.ensureLoaded(), this.fxl.ensureLoaded(), this.hol.ensureLoaded()]).then(() => undefined);
+  }
+
+  /** Loads the entry listings (at most once), only where they are shown. Never rejects. */
+  ensureVisa(): Promise<void> {
+    return this.vis.ensureLoaded();
   }
 }

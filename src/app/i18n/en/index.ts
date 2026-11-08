@@ -6,12 +6,14 @@
  */
 import { calendar } from './calendar';
 import { common } from './common';
+import { compare } from './compare';
 import { data } from './data';
 import { dest } from './dest';
 import { files } from './files';
 import { flight } from './flight';
 import { format } from './format';
 import { group } from './group';
+import { guide } from './guide';
 import { home } from './home';
 import { logbook } from './logbook';
 import { map } from './map';
@@ -27,17 +29,20 @@ import { today } from './today';
 import { trips } from './trips';
 import { ui } from './ui';
 import { weekend } from './weekend';
+import { commute } from './commute';
 
 /** Area name → its messages. Every key of an area starts with '<area>.' (checked by i18n.spec.ts). */
 export const EN_AREAS = {
   calendar,
   common,
+  compare,
   data,
   dest,
   files,
   flight,
   format,
   group,
+  guide,
   home,
   logbook,
   map,
@@ -53,17 +58,20 @@ export const EN_AREAS = {
   trips,
   ui,
   weekend,
+  commute,
 } as const;
 
 export const EN = {
   ...calendar,
   ...common,
+  ...compare,
   ...data,
   ...dest,
   ...files,
   ...flight,
   ...format,
   ...group,
+  ...guide,
   ...home,
   ...logbook,
   ...map,
@@ -79,4 +87,5 @@ export const EN = {
   ...trips,
   ...ui,
   ...weekend,
+  ...commute,
 };

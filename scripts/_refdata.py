@@ -87,6 +87,26 @@ def get_json(url: str, tries: int = 4, sleep: Callable[[float], None] = time.sle
     raise RuntimeError(f"giving up on {url}: {last}")
 
 
+def get_text(url: str, tries: int = 4, sleep: Callable[[float], None] = time.sleep,
+             opener: Callable[..., object] = urllib.request.urlopen) -> str:
+    """GET a text body (UTF-8). Same retry rules as get_json: 5xx/429/network retried, other 4xx raises Final."""
+    last: Exception | None = None
+    for attempt in range(tries):
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/plain, */*"})
+        try:
+            with opener(req, timeout=60) as res:  # type: ignore[operator]
+                return res.read().decode("utf-8")
+        except urllib.error.HTTPError as e:
+            if e.code != 429 and 400 <= e.code < 500:
+                raise Final(f"HTTP {e.code} for {url}") from e
+            last = e
+        except (urllib.error.URLError, TimeoutError, ConnectionError, ValueError) as e:
+            last = e
+        if attempt < tries - 1:
+            sleep(2 ** attempt)
+    raise RuntimeError(f"giving up on {url}: {last}")
+
+
 def load_json(path: pathlib.Path) -> dict:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

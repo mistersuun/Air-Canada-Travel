@@ -29,6 +29,7 @@ import {
   HORIZON_DAYS, bestHub, destState, destSummary, nextConnectionDate, nextDeparture, placeLabel, timelineItems, upcoming,
   zoneAbbr,
 } from './dest-model';
+import { routeFacts } from './route-facts';
 import { DestTimelineComponent } from './dest-timeline.component';
 import { MonthAvailabilityComponent } from './month-availability.component';
 import { DestClimateComponent } from './dest-climate.component';
@@ -40,6 +41,7 @@ import { historyFor, recordAria, recordTag, type HistoryCounts } from '../../tri
 import { TripsService } from '../../trips/trips.service';
 import { DestHomeByComponent } from './dest-home-by.component';
 import { DestTripActionsComponent } from './dest-trip-actions.component';
+import { DestCompareButtonComponent } from './dest-compare-button.component';
 import { ProvenanceTagComponent } from '../../trips/ui/provenance-tag.component';
 import { routeOnlyText } from '../../data/route-network';
 
@@ -81,7 +83,7 @@ const AC_URL = 'https://www.aircanada.com/';
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent, DestTripActionsComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent, DestWeatherLineComponent,
+    MonthAvailabilityComponent, DestTripActionsComponent, DestCompareButtonComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent, DestWeatherLineComponent,
     DestReferenceComponent, EventsCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -146,7 +148,9 @@ const AC_URL = 'https://www.aircanada.com/';
           <a class="ui-btn ui-btn--ghost" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
           <a class="ui-btn wide" [href]="acUrl" target="_blank" rel="noopener">{{ t('dest.openAc') }}</a>
         </div>
+        <a class="ui-link days-off d-only" routerLink="/weekend" [queryParams]="daysOffParams()" data-days-off>{{ t('dest.daysOff') }}</a>
         <app-dest-trip-actions class="d-only" [code]="code()" />
+        <app-dest-compare-button class="d-only cmp" [code]="code()" />
       </section>
 
       <app-seg class="tabs m-only" stretch [options]="tabs()" [value]="tab()" (valueChange)="setTab($event)"
@@ -216,6 +220,7 @@ const AC_URL = 'https://www.aircanada.com/';
 
       <section class="card dep" [class.is-empty]="!outItems().length" [class.m-hide]="tab() !== 'departures'" aria-labelledby="dep-h">
         <app-dest-trip-actions class="m-only" [code]="code()" />
+        <app-dest-compare-button class="m-only cmp" [code]="code()" />
         <div class="ui-sec-h d-only">
           <h2 id="dep-h" class="ui-h3">{{ t('dest.nextDepartures') }}</h2>
           <span class="ui-tag ui-tag--blue">{{ state.hub() }} → {{ code() }}</span>
@@ -244,6 +249,11 @@ const AC_URL = 'https://www.aircanada.com/';
             }
           </div>
         </app-dest-timeline>
+        @if (facts().length) {
+          <ul class="facts" [attr.aria-label]="t('dest.facts.title')" data-route-facts>
+            @for (f of facts(); track f) { <li>{{ f }}</li> }
+          </ul>
+        }
       </section>
 
       <section class="card ret" [class.is-empty]="!retItems().length" [class.m-hide]="tab() !== 'returns'" aria-labelledby="ret-h">
@@ -296,6 +306,7 @@ const AC_URL = 'https://www.aircanada.com/';
 
       <div class="m-actions m-only">
         <a class="ui-btn ui-btn--block" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
+        <a class="ui-btn ui-btn--ghost ui-btn--block" routerLink="/weekend" [queryParams]="daysOffParams()" data-days-off>{{ t('dest.daysOff') }}</a>
         <a class="ui-btn ui-btn--ghost ui-btn--block" [href]="acUrl" target="_blank" rel="noopener">{{ acHost }}</a>
       </div>
     </div>
@@ -303,6 +314,7 @@ const AC_URL = 'https://www.aircanada.com/';
   `,
   styles: [`
     :host { display: block; min-height: 100dvh; background: var(--bg); }
+    .cmp { margin-top: 8px; }
 
     /* ── Hero ─────────────────────────────────────────────────────────── */
     .hero { position: relative; height: min(380px, 40vh); min-height: 240px; overflow: hidden; background: var(--fill); }
@@ -351,6 +363,7 @@ const AC_URL = 'https://www.aircanada.com/';
     .notice p { flex: 1 1 220px; min-width: 0; }
     .notice b { color: var(--ink); }
     .notice__acts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .facts { list-style: none; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px solid var(--hair); display: grid; gap: 4px; font-size: 13px; color: var(--ink-2); }
     .empty { padding: 8px 0 4px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 6px; justify-items: start; }
     .empty .ui-link { font-size: 13.5px; }
 
@@ -378,6 +391,7 @@ const AC_URL = 'https://www.aircanada.com/';
       .handle { width: 36px; height: 5px; border-radius: 3px; background: var(--hair); margin: 0 auto 12px; }
       .card { margin-top: 10px; }
       .dep app-dest-trip-actions { margin-bottom: 14px; }
+    .days-off { display: inline-block; margin-top: 10px; font-size: 13.5px; }
       .ret, .side, .avail { margin-top: 16px; }
       .side { display: grid; gap: 22px; }
       .mapc { margin-top: 0; }
@@ -596,6 +610,9 @@ export class DestinationPage {
     const d = formatKey(ev.dateKey, { month: 'short', day: 'numeric' });
     return t(ev.kind === 'pauses' ? 'dest.seasonPauses' : 'dest.seasonLast', { date: d });
   });
+  /** A few plain counts from the published schedules (frequency, season, last nonstop home). */
+  protected readonly facts = computed(() => this.routeOnly() ? [] : routeFacts(this.state.hub(), this.code(), this.outToday(), this.state.nowMs(), this.state.timeFormat()));
+
   protected readonly next = computed(() => nextDeparture(this.outList()[0], this.outToday(), this.state.timeFormat()));
 
   // ── States ────────────────────────────────────────────────────────────────
@@ -710,6 +727,11 @@ export class DestinationPage {
   // ── Actions ───────────────────────────────────────────────────────────────
   protected flightLink(it: Itinerary): string[] {
     return flightPath(this.code(), it.dateKey, it);
+  }
+
+  /** The days-off finder for this destination only. */
+  protected daysOffParams(): Record<string, string> {
+    return { ...this.state.globalParams(), to: this.code() };
   }
 
   protected calLink(): string[] {

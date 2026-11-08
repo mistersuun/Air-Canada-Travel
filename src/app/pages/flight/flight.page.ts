@@ -24,7 +24,7 @@ import { TripsService } from '../../trips/trips.service';
 import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component';
 import { countdown, isOutside, itinKey, prettyFlight, relativeDay, shortDay } from '../../ui/format';
 import {
-  backupGroups, choose, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering, tripsFor,
+  backupGroups, choose, missSummary, missSummaryText, nearbyOptions, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering, tripsFor,
   type Pick,
 } from './flight-model';
 import { historyFor, recordLine } from '../../trips/engine/track-record';
@@ -34,6 +34,7 @@ import { FactsCardComponent } from './facts-card.component';
 import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
 import { OptionRowComponent } from './option-row.component';
+import { OnTheDayComponent } from '../../ui/on-the-day.component';
 import { ReturnPanelComponent } from './return-panel.component';
 
 /** Other options listed before "Show all". */
@@ -66,7 +67,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
   selector: 'app-flight-page',
   standalone: true,
   imports: [
-    RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
+    OnTheDayComponent, RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
     FactsCardComponent, FunFactCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -173,6 +174,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
                 <h2 class="ui-h3" id="fl-miss">{{ t('flight.ifMiss') }}</h2>
                 <span class="ui-sub small">{{ t('flight.schedulesNotSeats') }}</span>
               </div>
+              @if (missLine()) { <p class="miss tn" data-miss-summary>{{ missLine() }}</p> }
               <div class="ui-card list">
                 @for (g of backups(); track g.id) {
                   <div class="grp" [attr.data-group]="g.id">{{ g.label }}</div>
@@ -207,12 +209,14 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
               </div>
             </app-glass-sheet>
           }
+          <app-on-the-day [codes]="[hub(), dest()]" />
           <p class="foot ui-sub">{{ t('flight.footer') }}</p>
         </div>
       </div>
     </div>
   `,
   styles: [`
+    .miss { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-2); }
     :host { display: block; }
     .fl { max-width: 480px; }
     .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
@@ -389,10 +393,19 @@ export class FlightPage {
   });
   protected readonly visibleOthers = computed(() => (this.allOthers() ? this.others() : this.others().slice(0, OPTIONS_SHOWN)));
 
-  protected readonly backups = computed(() => {
+  private readonly alternatives = computed(() => {
     const it = this.current();
-    if (!it) return [];
-    return backupGroups(findAlternatives(it.origin, it.dest, it, this.state.connect()), it, this.state.timeFormat());
+    return it ? findAlternatives(it.origin, it.dest, it, this.state.connect()) : null;
+  });
+  protected readonly backups = computed(() => {
+    const it = this.current(), alts = this.alternatives();
+    if (!it || !alts) return [];
+    return backupGroups(alts, it, this.state.timeFormat(), nearbyOptions(it, this.state.connect()));
+  });
+  /** 'After this: 3 more options today, the last at 21:40. Next day: 5, the first at 06:10.' */
+  protected readonly missLine = computed(() => {
+    const it = this.current(), alts = this.alternatives();
+    return it && alts ? missSummaryText(missSummary(alts, it, this.state.connect()), this.state.timeFormat()) : '';
   });
 
   protected readonly nextDate = computed(() => {

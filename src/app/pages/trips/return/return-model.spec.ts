@@ -69,7 +69,11 @@ describe('return model (g3)', () => {
     expect(returnGateway(inbound)).toBe('MAD');                    // the train starts at MAD: not Lisbon, a 6h45 bus away
     const empty = withoutReturn();
     empty.legs = [];
-    expect(returnGateway(empty)).toBe('MAD');                      // shortest estimated trip to Seville (train), not nearest
+    expect(returnGateway(empty)).toBe('SVQ');                      // Seville's own airport (a destination since Nov 2026)
+    const noSvq = withoutReturn();
+    noSvq.legs = [];
+    noSvq.homeAirport = 'SVQ';                                     // with SVQ ruled out: shortest estimated trip (train), not nearest
+    expect(returnGateway(noSvq)).toBe('MAD');
     const dropped = sevilleTrip();
     dropped.legs = dropped.legs.map(l => (l.id === SEVILLE_IDS.ret ? { ...l, status: 'abandoned' } : l));
     expect(activeReturnLeg(dropped)).toBeNull();

@@ -19,6 +19,7 @@ import {
 } from '../reference/reference';
 import { acAirports, countryName } from './place';
 import { ENTRY_RULES, EntryRule, SCHENGEN, TRAVEL_GC_SLUG_OVERRIDES } from './prep-rules';
+import { bestEntry, entryLabel, passportCountry, visaAsOf, visaStale, type VisaTable } from '../reference/visa';
 
 export interface PrepItem {
   id: string;               // 'entry:etias', 'list:<legId>:<i>', 'checkin:<legId>', 'ground:<legId>', 'custom:<id>'
@@ -113,8 +114,15 @@ function entryItem(trip: Trip, rule: EntryRule, id: string, vars: Record<string,
   };
 }
 
-/** Entry reminders for a Canadian passport, in ENTRY_RULES order (country-advice per country, route order). */
-export function entryItems(trip: Trip, opts: { info?: boolean } = {}): PrepItem[] {
+/**
+ * Entry reminders. The hand-kept ENTRY_RULES are written for a Canadian
+ * passport: they show when the profile has a Canadian passport or none set.
+ * Other passports get one critical item per route country with the listing
+ * from the entry data (source and date in the detail, never a verdict).
+ */
+export function entryItems(trip: Trip, opts: { info?: boolean; passports?: readonly string[]; visa?: VisaTable | null } = {}): PrepItem[] {
+  const pp = opts.passports ?? [];
+  if (pp.length && !pp.includes(HOME)) return opts.info ? [] : listedEntryItems(trip, pp, opts.visa ?? null);
   const countries = routeCountries(trip).filter(c => c !== HOME);
   const schengen = countries.filter(c => SCHENGEN.includes(c));
   const out: PrepItem[] = [];
@@ -146,9 +154,30 @@ export function entryItems(trip: Trip, opts: { info?: boolean } = {}): PrepItem[
   return out;
 }
 
+/** One item per route country for a non-Canadian passport: the listing when the data has one, else a plain check. */
+function listedEntryItems(trip: Trip, passports: readonly string[], visa: VisaTable | null): PrepItem[] {
+  const fresh = visa && !visaStale(visa, trip.outboundDate) ? visa : null;
+  // Canada (home) is left out: residents' status (PR, eTA exemptions) is not in the listings.
+  return routeCountries(trip).filter(c => c !== HOME && !passports.includes(c)).map(c => {
+    const id = `entry:listed:${c}`;
+    const best = bestEntry(fresh, passports, c);
+    return {
+      id,
+      title: best
+        ? t('places.prep.entryListed', { country: countryName(c), passport: passportCountry(best.passport), status: entryLabel(best) })
+        : t('places.prep.entryCheck', { country: countryName(c) }),
+      detail: best ? `${t('dest.visa.source', { date: visaAsOf(fresh!) })} · ${t('dest.visa.checkGov')}` : t('dest.visa.checkGov'),
+      link: null,
+      critical: true,
+      source: 'manual',
+      done: !!trip.prep[id]?.done,
+    };
+  });
+}
+
 /** Info-only entry notes (EES), not counted in the checklist. */
-export function entryInfo(trip: Trip): PrepItem[] {
-  return entryItems(trip, { info: true }).filter(i => !i.critical);
+export function entryInfo(trip: Trip, passports: readonly string[] = []): PrepItem[] {
+  return entryItems(trip, { info: true, passports }).filter(i => !i.critical);
 }
 
 const isOpen = (leg: { status: LegStatus }) => !isFinalStatus(leg.status);
@@ -232,7 +261,13 @@ export function weatherItems(trip: Trip, climate: ClimateIndex | null | undefine
 }
 
 /** Reference facts the checklist can use (all optional: a missing file adds nothing). */
-export interface PrepReference { advisories?: AdvisoryIndex | null; holidays?: HolidayIndex | null }
+export interface PrepReference {
+  advisories?: AdvisoryIndex | null;
+  holidays?: HolidayIndex | null;
+  /** The profile's passports ([] = not set) and the entry listings, for entryItems. */
+  passports?: readonly string[];
+  visa?: VisaTable | null;
+}
 
 /**
  * Not critical, from the destination country's static data: the Government of
@@ -285,7 +320,7 @@ export function buildPrepChecklist(trip: Trip, climate?: ClimateIndex | null, re
     id: `custom:${c.id}`, title: c.text, detail: null, link: null, critical: false, source: 'manual',
     done: !!trip.prep[`custom:${c.id}`]?.done,
   }));
-  return [...entryItems(trip), ...listing, ...ground, ...weatherItems(trip, climate), ...referenceItems(trip, ref), ...custom];
+  return [...entryItems(trip, { passports: ref?.passports, visa: ref?.visa }), ...listing, ...ground, ...weatherItems(trip, climate), ...referenceItems(trip, ref), ...custom];
 }
 
 /** One leg's own to-dos (Today's "Left to do"): listing and check-in for a flight, finding the ride for a ground leg. */

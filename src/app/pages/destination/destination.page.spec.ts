@@ -73,6 +73,9 @@ describe('DestinationPage', () => {
     expect(el.querySelector('a.next')!.getAttribute('href')).toBe('/flight/LHR/2026-10-01/AC864?from=YUL');
     expect(el.querySelector('.head__btns a.ui-btn--ghost')!.getAttribute('href')).toBe('/calendar/LHR?from=YUL');
     expect(el.querySelector('.head__btns a.wide')!.getAttribute('href')).toBe('https://www.aircanada.com/');
+    const daysOff = [...el.querySelectorAll('[data-days-off]')].map(a => a.getAttribute('href'));
+    expect(daysOff.length).toBe(2); // desktop and mobile placements
+    expect(daysOff.every(h => h === '/weekend?from=YUL&to=LHR')).toBe(true);
   });
 
   it('shows the photo credit linking to its source, author and licence', async () => {

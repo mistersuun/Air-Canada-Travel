@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { ProfileService } from '../../recs/profile.service';
+import { SegComponent, SegOption } from '../../ui/seg.component';
 import { t } from '../../i18n/t';
 import { EventsCardComponent } from '../../events/events-card.component';
 import { IconComponent } from '../../components/shared/icons.component';
@@ -6,12 +9,15 @@ import { AppStateService } from '../../state/app-state.service';
 import { ClimateService } from '../../recs/climate.service';
 import { climateFor } from '../../recs/climate';
 import { ForecastLineComponent } from '../../recs/ui/forecast-line.component';
+import { BreakSourcesComponent } from '../../ui/break-sources.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { flightPath } from '../../ui/links';
+import { windowSignalLines } from '../../trips/engine/busy-signals';
 import { findDestination, airportTz } from '../../utils/airports';
-import { MINUTE_MS, formatClock, formatKey, isDateKey, todayKey } from '../../utils/time';
+import { MINUTE_MS, formatClock, formatKey, isDateKey, todayKey, utcToLocal } from '../../utils/time';
 import {
-  WEEKEND_LIMIT, WEEKEND_PRESETS, WeekendOption, WeekendPreset, WeekendWindow, presetWindow, weekendMeta, weekendOptions, windowProblem,
+  MIN_THERE_HOURS, WEEKEND_LIMIT, WEEKEND_PRESETS, WEEKEND_SORTS, WeekendOption, WeekendPreset, WeekendSort, WeekendWindow,
+  presetWindow, profileWindow, refineWeekend, weekendMeta, weekendOptions, windowProblem,
 } from './weekend-model';
 
 /**
@@ -22,7 +28,7 @@ import {
 @Component({
   selector: 'app-weekend-page',
   standalone: true,
-  imports: [IconComponent, DestRowComponent, ForecastLineComponent, EventsCardComponent],
+  imports: [IconComponent, DestRowComponent, ForecastLineComponent, EventsCardComponent, RouterLink, SegComponent, BreakSourcesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="ui-page wk">
@@ -34,11 +40,25 @@ import {
         <p class="ui-sub">{{ t('weekend.sub', { hub: state.hub() }) }}</p>
       </header>
 
+      @if (onlyCode(); as code) {
+        <p class="only" data-only>
+          <span class="ui-tag ui-tag--neutral">{{ t('weekend.only', { city: cityOf(code) }) }}</span>
+          <button type="button" class="ui-link" data-only-clear (click)="clearOnly()">{{ t('weekend.onlyClear') }}</button>
+        </p>
+      }
+
       <div class="chips ui-snap-row" role="group" [attr.aria-label]="t('weekend.groupAria')">
         @for (p of presets; track p.value) {
-          <button type="button" class="chip" [attr.aria-pressed]="preset() === p.value" (click)="choose(p.value)">{{ t(p.label) }}</button>
+          <button type="button" class="chip" [attr.aria-pressed]="preset() === p.value" [attr.data-preset]="p.value" (click)="choose(p.value)">{{ t(p.label) }}</button>
         }
       </div>
+      @if (preset() === 'mine') {
+        @if (mineWindow()) {
+          <p class="ui-sub hint">{{ t('weekend.mineHint') }}</p>
+        } @else {
+          <p class="ui-sub hint" data-set-days>{{ t('weekend.mineFallback') }} <a routerLink="/profile">{{ t('weekend.setDays') }}</a></p>
+        }
+      }
 
       @if (preset() === 'custom') {
         <div class="ui-card custom">
@@ -64,15 +84,34 @@ import {
       }
 
       <p class="sum tn">{{ t('weekend.summary', { a: stamp(window().leaveKey, window().leaveHhmm), b: stamp(window().homeKey, window().homeHhmm), hub: state.hub() }) }}</p>
+      @for (line of signals(); track line) { <p class="sig tn">{{ line }}</p> }
+      <app-break-sources [hub]="state.hub()" [from]="window().leaveKey" [to]="window().homeKey" />
 
       @if (problem(); as why) {
         <p class="ui-card note" role="status">{{ why }}</p>
-      } @else if (!rows().length) {
+      } @else if (!options().length) {
         <p class="ui-card note" role="status">
           {{ t('weekend.none1') }}
           {{ t('weekend.none2') }}
         </p>
       } @else {
+        <div class="refine">
+          <div class="chips chips--sm ui-snap-row" role="group" [attr.aria-label]="t('weekend.minAria')">
+            @for (h of minChoices; track h) {
+              <button type="button" class="chip chip--sm" [attr.aria-pressed]="minHours() === h" [attr.data-min]="h" (click)="minHours.set(h); all.set(false)">
+                {{ h ? t('weekend.minThere', { h }) : t('weekend.minAny') }}</button>
+            }
+          </div>
+          <app-seg class="sort" stretch [ariaLabel]="t('weekend.sortAria')" [options]="sortOptions()" [value]="sort()"
+                   (valueChange)="setSort($event)" />
+        </div>
+      }
+      @if (!problem() && options().length && !refined().length) {
+        <p class="ui-card note" role="status" data-none-refined>
+          {{ t('weekend.noneRefined', { h: minHours() }) }}
+          <button type="button" class="ui-link" (click)="minHours.set(0)">{{ t('weekend.minAny') }}</button>
+        </p>
+      } @else if (!problem() && rows().length) {
         <div class="ui-card list">
           @for (r of shown(); track r.o.code) {
             <app-dest-row [code]="r.o.code" [small]="r.o.code" [meta]="r.meta" wrapMeta [link]="r.link" [queryParams]="r.query">
@@ -114,12 +153,19 @@ import {
       background: var(--fill); border: 1px solid transparent;
     }
     .chip[aria-pressed='true'] { background: var(--ink); color: var(--bg); }
+    .chips--sm { margin-top: 0; }
+    .chip--sm { min-height: 36px; padding: 6px 12px; font-size: 12.5px; }
+    .refine { display: grid; gap: 10px; margin-top: 12px; }
+    .only { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; }
+    .hint { margin-top: 8px; }
+    .hint a { color: var(--blue); }
     .custom { display: grid; gap: 12px; padding: 14px; margin-top: 12px; }
     .custom fieldset { display: flex; flex-direction: column; gap: 6px; border: 0; padding: 0; margin: 0; min-width: 0; }
     .custom legend { padding: 0; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
     .pair { display: flex; gap: 8px; }
     .pair input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hair); background: var(--bg); color: var(--ink); font: inherit; }
     .wx { display: grid; justify-items: end; gap: 2px; text-align: right; }
+    .sig { margin-top: 4px; font-size: 12.5px; color: var(--ink-2); }
     .sum { margin-top: 12px; font-size: 13px; color: var(--ink-2); }
     .list { padding: 4px 14px; margin-top: 12px; }
     .note { padding: 18px; margin-top: 12px; font-size: 14px; color: var(--ink-2); }
@@ -147,8 +193,20 @@ export class WeekendPage {
   protected readonly state = inject(AppStateService);
   private readonly climate = inject(ClimateService);
 
+  private readonly profile = inject(ProfileService);
+  private readonly router = inject(Router);
+
+  /** ?to=SVQ: search one destination ("Check my days off" on its page). */
+  readonly to = input<string | undefined>();
+  protected readonly onlyCode = computed(() => { const c = (this.to() ?? '').toUpperCase(); return findDestination(c) ? c : null; });
+
   protected readonly presets = WEEKEND_PRESETS;
-  protected readonly preset = signal<WeekendPreset>('this');
+  /** "My days off" first when the profile has travel days. */
+  protected readonly preset = signal<WeekendPreset>(this.profileDays().length && this.profileDays().length < 7 ? 'mine' : 'this');
+  protected readonly minChoices = MIN_THERE_HOURS;
+  protected readonly minHours = signal(0);
+  protected readonly sort = signal<WeekendSort>('tries');
+  protected readonly sortOptions = computed<SegOption[]>(() => WEEKEND_SORTS.map(o => ({ value: o.value, label: t(o.label) })));
   /** Set when Custom is first chosen, from the window then shown (hub-local). */
   protected readonly custom = signal<WeekendWindow | null>(null);
   protected readonly all = signal(false);
@@ -158,24 +216,36 @@ export class WeekendPage {
   /** Today at the hub: flight dates are hub-local, so the device's date can be a day off. */
   private readonly hubToday = computed(() => todayKey(airportTz(this.state.hub()), this.state.nowMs()));
 
+  protected readonly mineWindow = computed(() =>
+    profileWindow(this.profileDays(), this.hubToday(), utcToLocal(this.nowMin(), airportTz(this.state.hub())).hhmm));
   protected readonly window = computed<WeekendWindow>(() =>
-    (this.preset() === 'custom' && this.custom()) || presetWindow(this.preset(), this.hubToday()));
+    (this.preset() === 'custom' && this.custom()) || (this.preset() === 'mine' && this.mineWindow())
+    || presetWindow(this.preset(), this.hubToday()));
   /** The minute: the options need not recompute on every clock tick. */
   private readonly nowMin = computed(() => Math.floor(this.state.nowMs() / MINUTE_MS) * MINUTE_MS);
+  /** Holidays and school breaks (the hub's province) inside the window: dates only, no verdict. */
+  protected readonly signals = computed(() => windowSignalLines(this.state.hub(), this.window().leaveKey, this.window().homeKey));
   protected readonly problem = computed(() => windowProblem(this.window(), this.state.hub(), this.nowMin()));
   protected readonly minKey = computed(() => this.hubToday());
   protected readonly maxKey = computed(() => this.state.coverage().to ?? '');
 
-  private readonly options = computed<WeekendOption[]>(() => this.problem() ? [] : weekendOptions({
+  protected readonly options = computed<WeekendOption[]>(() => this.problem() ? [] : weekendOptions({
     hub: this.state.hub(), nowMs: this.nowMin(), window: this.window(),
     connect: this.state.connect(), showConnections: this.state.showConnections(),
+    codes: this.onlyCode() ? [this.onlyCode()!] : undefined,
   }));
+  /** Time-there filter and the chosen order, on top of the ranked options. */
+  protected readonly refined = computed(() => {
+    const index = this.climate.index();
+    const month = Number(this.window().leaveKey.slice(5, 7));
+    return refineWeekend(this.options(), this.minHours(), this.sort(), code => climateFor(index, code, month)?.tmaxC ?? null);
+  });
 
   protected readonly rows = computed(() => {
     const index = this.climate.index();
     const globals = this.state.globalParams();
     const month = Number(this.window().leaveKey.slice(5, 7));
-    return this.options().map(o => {
+    return this.refined().map(o => {
       const first = o.out[0];
       const c = climateFor(index, o.code, month);
       return {
@@ -190,6 +260,18 @@ export class WeekendPage {
     });
   });
   protected readonly shown = computed(() => this.all() ? this.rows() : this.rows().slice(0, WEEKEND_LIMIT));
+
+  private profileDays(): number[] {
+    return this.profile.profile().days;
+  }
+
+  protected setSort(v: string | null | undefined): void {
+    if (WEEKEND_SORTS.some(o => o.value === v)) { this.sort.set(v as WeekendSort); this.all.set(false); }
+  }
+
+  protected clearOnly(): void {
+    void this.router.navigate([], { queryParams: { to: null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
 
   constructor() {
     void this.climate.ensureLoaded();

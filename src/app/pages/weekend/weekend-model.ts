@@ -15,18 +15,81 @@ import { ConnectOptions, Itinerary, NO_OPTS, directItineraries, findItineraries 
 import { MINUTE_MS, addDays, diffDays, formatKey, isDateKey, toUtcMs, weekdayIndex } from '../../utils/time';
 import { coverageHubFor } from '../../utils/week';
 
-export type WeekendPreset = 'this' | 'next' | 'fri-sun' | 'sat-mon' | 'custom';
+export type WeekendPreset = 'mine' | 'this' | 'next' | 'fri-sun' | 'sat-mon' | 'custom';
 
 /** Hub-local wall-clock window: leave at or after leaveKey/leaveHhmm, be home by homeKey/homeHhmm. */
 export interface WeekendWindow { leaveKey: string; leaveHhmm: string; homeKey: string; homeHhmm: string }
 
 export const WEEKEND_PRESETS: readonly { value: WeekendPreset; label: MsgKey }[] = [
+  { value: 'mine', label: 'weekend.preset.mine' },
   { value: 'this', label: 'weekend.preset.this' },
   { value: 'next', label: 'weekend.preset.next' },
   { value: 'fri-sun', label: 'weekend.preset.friSun' },
   { value: 'sat-mon', label: 'weekend.preset.satMon' },
   { value: 'custom', label: 'weekend.preset.custom' },
 ];
+
+/** "My days off" (profile days): the longest stretch it plans, in days. */
+export const MAX_RUN_DAYS = 9;
+
+/**
+ * The next stretch of the profile's travel days (ISO 1..7) starting today or
+ * later: leave from 06:00 on its first day, home by 22:00 on its last. Null
+ * when the profile has no days, or every day (nothing to plan around).
+ */
+export function profileWindow(days: readonly number[], todayKey: string, nowHhmm = '00:00'): WeekendWindow | null {
+  const set = new Set(days);
+  if (!set.size || set.size >= 7) return null;
+  const iso = (k: string) => weekdayIndex(k) + 1;   // Mon = 1
+  const stretchFrom = (from: string) => {
+    let start = from;
+    for (let i = 0; i < 7 && !set.has(iso(start)); i++) start = addDays(start, 1);
+    let end = start;
+    while (diffDays(start, end) + 1 < MAX_RUN_DAYS && set.has(iso(addDays(end, 1)))) end = addDays(end, 1);
+    return { start, end };
+  };
+  let { start, end } = stretchFrom(todayKey);
+  // A stretch that ends today with the afternoon gone leaves no trip: plan the next one.
+  if (end === todayKey && nowHhmm >= LAST_DAY_CUTOFF) ({ start, end } = stretchFrom(addDays(todayKey, 1)));
+  return { leaveKey: start, leaveHhmm: '06:00', homeKey: end, homeHhmm: '22:00' };
+}
+
+/** From this hub time on the last day of a stretch, "My days off" plans the next stretch. */
+export const LAST_DAY_CUTOFF = '14:00';
+
+export type WeekendSort = 'tries' | 'there' | 'short' | 'warm';
+export const WEEKEND_SORTS: readonly { value: WeekendSort; label: MsgKey }[] = [
+  { value: 'tries', label: 'weekend.sort.tries' },
+  { value: 'there', label: 'weekend.sort.there' },
+  { value: 'short', label: 'weekend.sort.short' },
+  { value: 'warm', label: 'weekend.sort.warm' },
+];
+/** "At least … there" choices, in hours (0 = any). */
+export const MIN_THERE_HOURS: readonly number[] = [0, 12, 24, 48];
+
+/** The shortest outbound, in minutes (connections included). */
+export function shortestOut(o: WeekendOption): number {
+  return Math.min(...o.out.map(it => (it.arriveUtc - it.departUtc) / MINUTE_MS));
+}
+
+/**
+ * Filters by time on the ground and re-sorts: 'tries' keeps compareWeekend,
+ * 'there' longest first, 'short' shortest flight first, 'warm' warmest typical
+ * high first (unknown last). Ties fall back to compareWeekend.
+ */
+export function refineWeekend(options: readonly WeekendOption[], minHours: number, sort: WeekendSort,
+                              typicalHigh: (code: string) => number | null = () => null): WeekendOption[] {
+  const kept = options.filter(o => o.hoursThere >= minHours);
+  const key = (o: WeekendOption): number => {
+    switch (sort) {
+      case 'there': return -o.hoursThere;
+      case 'short': return shortestOut(o);
+      case 'warm': { const h = typicalHigh(o.code); return h === null ? Infinity : -h; }
+      default: return 0;
+    }
+  };
+  return kept.sort((a, b) => key(a) - key(b) || compareWeekend(a, b));
+}
 
 /** Outbound flights leave on the leave day or at most this many days in all. */
 export const OUT_DAYS = 2;

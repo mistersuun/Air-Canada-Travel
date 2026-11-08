@@ -54,6 +54,11 @@ export const routes: Routes = [
     title: 'shell.title.saved',
   },
   {
+    path: 'compare',
+    loadComponent: () => import('./pages/compare/compare.page').then(m => m.ComparePage),
+    title: 'shell.title.compare',
+  },
+  {
     path: 'calendar',
     loadComponent: () => import('./pages/calendar/calendar.page').then(m => m.CalendarPage),
     title: 'shell.title.calendar',
@@ -139,6 +144,16 @@ export const routes: Routes = [
     path: 'profile',
     loadComponent: () => import('./pages/profile/profile.page').then(m => m.ProfilePage),
     title: 'shell.title.profile',
+  },
+  {
+    path: 'commute',
+    loadComponent: () => import('./pages/commute/commute.page').then(m => m.CommutePage),
+    title: 'shell.title.commute',
+  },
+  {
+    path: 'guide',
+    loadComponent: () => import('./pages/guide/guide.page').then(m => m.GuidePage),
+    title: 'shell.title.guide',
   },
   {
     path: 'weekend',

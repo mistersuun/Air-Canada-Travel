@@ -4,14 +4,16 @@
  */
 import { typeLabel } from '../i18n/labels';
 import { MsgKey, t } from '../i18n/t';
+import { hasKnownTz, isHub } from '../utils/airports';
 import { weekdayShort } from '../utils/time';
-import { TravelProfile, TripLength, TripStyle } from './model';
+import { CommuteSettings, TravelProfile, TripLength, TripStyle } from './model';
 
 export const TRIP_STYLES: readonly TripStyle[] = ['Sun', 'City', 'Adventure'];
 export const TRIP_LENGTHS: readonly TripLength[] = ['day', 'weekend', 'week'];
 export const MAX_DISMISSED = 200;
 export const MAX_USUAL_ITEMS = 30;
 export const MAX_USUAL_ITEM_LEN = 80;
+export const MAX_PASSPORTS = 2;
 /** One-tap suggestions for "My usual items" (standby trips: the flight you want may be full). */
 const USUAL_SUGGESTION_KEYS: readonly MsgKey[] = [
   'recs.usual.clothes',
@@ -44,6 +46,18 @@ export function sanitizeUsualItems(raw: unknown): string[] {
   return out;
 }
 
+/** Upper-case ISO alpha-2 codes, de-duplicated, at most MAX_PASSPORTS. */
+export function sanitizePassports(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    const c = typeof v === 'string' ? v.trim().toUpperCase() : '';
+    if (/^[A-Z]{2}$/.test(c) && !out.includes(c)) out.push(c);
+    if (out.length >= MAX_PASSPORTS) break;
+  }
+  return out;
+}
+
 export const EMPTY_PROFILE: Readonly<TravelProfile> = Object.freeze({
   v: 1,
   styles: [],
@@ -54,12 +68,30 @@ export const EMPTY_PROFILE: Readonly<TravelProfile> = Object.freeze({
   onwardBudget: 'any',
   dismissed: [],
   usualItems: [],
+  passports: [],
+  commute: null,
   updatedAt: null,
 }) as Readonly<TravelProfile>;
 
 function clampInt(v: unknown, lo: number, hi: number): number | null {
   if (typeof v !== 'number' || !Number.isFinite(v)) return null;
   return Math.min(hi, Math.max(lo, Math.round(v)));
+}
+
+/** Buffer choices before report, in minutes. */
+export const COMMUTE_BUFFERS: readonly number[] = [30, 45, 60, 90, 120, 180];
+export const DEFAULT_COMMUTE_BUFFER = 60;
+
+/** A valid commute (known home airport, a hub as base, different, listed buffer), else null. */
+export function sanitizeCommute(raw: unknown): CommuteSettings | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const code = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : '');
+  const home = code(r['home']);
+  const base = code(r['base']);
+  if (!/^[A-Z]{3}$/.test(home) || !hasKnownTz(home) || !isHub(base) || home === base) return null;
+  const buf = r['bufferMin'];
+  return { home, base, bufferMin: typeof buf === 'number' && COMMUTE_BUFFERS.includes(buf) ? buf : DEFAULT_COMMUTE_BUFFER };
 }
 
 /** Coerce anything into a valid TravelProfile. Never throws. */
@@ -86,6 +118,8 @@ export function sanitizeProfile(raw: unknown): TravelProfile {
     onwardBudget: r['onwardBudget'] === 'low' ? 'low' : 'any',
     dismissed,
     usualItems: sanitizeUsualItems(r['usualItems']),
+    passports: sanitizePassports(r['passports']),
+    commute: sanitizeCommute(r['commute']),
     updatedAt: typeof r['updatedAt'] === 'string' && !Number.isNaN(Date.parse(r['updatedAt'])) ? r['updatedAt'] : null,
   };
 }

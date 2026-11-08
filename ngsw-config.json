@@ -31,7 +31,8 @@
           "/data/climate.json",
           "/data/advisories.json",
           "/data/fx.json",
-          "/data/holidays.json"
+          "/data/holidays.json",
+          "/data/visa.json"
         ]
       }
     },

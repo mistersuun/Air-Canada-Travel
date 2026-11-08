@@ -11,7 +11,6 @@ import { isValidTimeZone } from './time';
 export const EXTRA_AIRPORTS: Record<string, { name: string; tz: string; country: string }> = {
   // First seen in the 2026-10-19 schedules (no destination page yet).
   SDF: { name: 'Louisville', tz: 'America/Kentucky/Louisville', country: 'USA' },
-  SVQ: { name: 'Seville', tz: 'Europe/Madrid', country: 'Spain' },
 };
 
 const DEST_BY_CODE = new Map<string, Destination>(DESTINATIONS.map(d => [d.code, d]));

@@ -230,13 +230,14 @@ CORRIDORS: list[dict] = [
            "tz": "Europe/Dublin"},
      "b": {"stops": ["700000017125", "700000017104"], "name": "Belfast Grand Central", "tz": "Europe/London"},
      "note": "Dublin Express only. Translink Goldline also runs this route."},
-    # gtfs.de renumbers stop ids between releases (2026-10: 350706 -> 296266 "Frankfurt (Main) Flughafen
-    # Fernbahnhof", 2678 -> 265963 "Köln Hbf"). "near" (lat, lon) makes a missing pin's report list the
-    # feed's stations there, to re-pin from.
+    # gtfs.de renumbers stop ids in every release (2026-10: 350706 -> 296266, 2026-11: 296266 -> 285016
+    # for Frankfurt (Main) Flughafen Fernbahnhof; Köln Hbf 2678 -> 265963 -> 381220), so these are pinned
+    # by exact station name (unique in the long-distance feed). "near" (lat, lon) still makes a missing
+    # pin's report list the feed's stations there.
     {"key": "FRA-2886242", "feed": "dbfv", "mode": "train", "op": "Deutsche Bahn", "product": "word",
-     "a": {"stops": ["296266"], "name": "Frankfurt Airport long-distance station", "tz": "Europe/Berlin",
-           "near": [50.0531, 8.5702]},
-     "b": {"stops": ["265963"], "name": "Köln Hbf", "tz": "Europe/Berlin", "near": [50.9430, 6.9587]}},
+     "a": {"stops": ["name:Frankfurt (Main) Flughafen Fernbahnhof"], "name": "Frankfurt Airport long-distance station",
+           "tz": "Europe/Berlin", "near": [50.0531, 8.5702]},
+     "b": {"stops": ["name:Köln Hbf"], "name": "Köln Hbf", "tz": "Europe/Berlin", "near": [50.9430, 6.9587]}},
     {"key": "FCO-3172394", "feed": "trenitalia", "mode": "train", "op": "Trenitalia", "product": "long",
      "a": {"stops": ["IT::StopPlace:otherTRENITALIA:830008409"], "name": "Roma Termini", "tz": "Europe/Rome"},
      "b": {"stops": ["IT::StopPlace:otherTRENITALIA:830009218"], "name": "Napoli Centrale", "tz": "Europe/Rome"},

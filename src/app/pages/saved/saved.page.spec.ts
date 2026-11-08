@@ -6,6 +6,7 @@ import { FIXTURE_META, FIXTURE_ROUTES, rec, route } from '../../data/testing/sch
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
+import { SAVED_SNAPSHOT_KEY, SAVED_SNAPSHOT_STORAGE, SavedSnapshotService } from '../../state/saved-snapshot.service';
 import { SavedPage } from './saved.page';
 
 /** Wed Oct 7 2026, 08:00 in Montréal. */
@@ -113,5 +114,64 @@ describe('SavedPage', () => {
     await stable();
     expect(state.favourites()).toContain('LHR');
     expect(el.querySelectorAll('.list--watch app-dest-row')).toHaveLength(3);
+  });
+});
+
+describe('SavedPage schedule changes', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => resetScheduleSource());
+
+  function withStale() {
+    const snaps = new MemoryStorage();
+    const stale = { v: 1, season: { YUL: ['2026-10-01', '2026-10-31'] }, weeks: { YUL: { '2026-10-05': 1 } } };
+    snaps.setItem(SAVED_SNAPSHOT_KEY, JSON.stringify({ ATH: stale }));
+    configure(['ATH']);
+    TestBed.overrideProvider(SAVED_SNAPSHOT_STORAGE, { useValue: snaps });
+    return snaps;
+  }
+
+  it('marks changes as seen only once the Watching tab is shown', async () => {
+    withStale();
+    const up = await render();
+    expect(Object.keys(TestBed.inject(SavedSnapshotService).seen().ATH.weeks['YUL'])).toEqual(['2026-10-05']);
+    up.fixture.destroy();
+    TestBed.resetTestingModule();
+    withStale();
+    const w = await render('watching');
+    expect(w.el.querySelector('[data-changes="ATH"]')?.textContent).toContain('1 → 3');
+    expect(Object.keys(TestBed.inject(SavedSnapshotService).seen().ATH.weeks['YUL'])).toHaveLength(8);
+  });
+});
+
+describe('SavedPage compare', () => {
+  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  afterEach(() => {
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  it('has no Compare action with fewer than two saved destinations', async () => {
+    configure(['LHR']);
+    const { el } = await render();
+    expect(el.querySelector('[data-compare-start]')).toBeNull();
+  });
+
+  it('ticks 2 to 3 saved destinations, then opens /compare?c=', async () => {
+    configure(['LHR', 'ATH', 'NRT', 'LIS']);
+    const { el, nav, stable } = await render();
+    el.querySelector<HTMLButtonElement>('[data-compare-start]')!.click();
+    await stable();
+    const open = () => el.querySelector<HTMLButtonElement>('[data-compare-open]')!;
+    expect(open().disabled).toBe(true);
+    const tick = (c: string) => el.querySelector<HTMLInputElement>(`[data-tick="${c}"]`)!;
+    for (const c of ['LHR', 'ATH', 'NRT']) { tick(c).click(); await stable(); }
+    // The fourth is disabled once three are ticked.
+    expect(tick('LIS').disabled).toBe(true);
+    expect(open().disabled).toBe(false);
+    open().click();
+    const arg = nav.mock.calls[0];
+    expect(arg[0]).toEqual(['/compare']);
+    const c = (arg[1] as { queryParams: { c: string } }).queryParams.c.split(',').sort();
+    expect(c).toEqual(['ATH', 'LHR', 'NRT']);
   });
 });

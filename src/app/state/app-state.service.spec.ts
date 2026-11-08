@@ -272,13 +272,34 @@ describe('AppStateService', () => {
       expect(state.weekStartKey()).toBe('2026-09-28');
     });
 
-    it('leaves a week the user chose alone', () => {
+    it('leaves a week the user chose alone while it is not over', () => {
       const { state, clock } = setup();
-      state.goToWeek('2026-09-21');
+      state.goToWeek('2026-10-19');
       clock.now = hubTime('2026-10-05', '08:00');
       state.refreshToday();
       expect(state.todayKey()).toBe('2026-10-05');
-      expect(state.weekStartKey()).toBe('2026-09-21');
+      expect(state.weekStartKey()).toBe('2026-10-19');
+    });
+
+    it('a chosen week that is now over moves to the current week', () => {
+      const { state, clock } = setup();
+      state.goToWeek('2026-10-05');
+      clock.now = hubTime('2026-10-13', '08:00'); // days later, app left open
+      state.refreshToday();
+      expect(state.weekStartKey()).toBe('2026-10-12');
+      expect(state.selectedDateKey()).toBeNull();
+    });
+
+    it('a chosen day that is now past moves to the current week, and it rolls again after', () => {
+      const { state, clock } = setup();
+      state.jumpTo('2026-10-02');
+      clock.now = hubTime('2026-10-03', '08:00');
+      state.refreshToday();
+      expect(state.weekStartKey()).toBe('2026-09-28');
+      expect(state.selectedDateKey()).toBeNull();
+      clock.now = hubTime('2026-10-05', '08:00');
+      state.refreshToday();
+      expect(state.weekStartKey()).toBe('2026-10-05');
     });
   });
 
@@ -300,6 +321,43 @@ describe('AppStateService', () => {
       expect(state.selectedDateKey()).toBe('2026-10-07');
       expect(state.region()).toBe('Europe');
       expect(state.query()).toBe('lon');
+    });
+
+    it('ignores a past ?day=2026-09-20 (stale link, or the URL an installed app reopens)', async () => {
+      const { state, clock } = await boot('?day=2026-09-20');
+      expect(state.weekStartKey()).toBe('2026-09-28');
+      expect(state.selectedDateKey()).toBeNull();
+      clock.now = hubTime('2026-10-05', '08:00');
+      state.refreshToday();
+      expect(state.weekStartKey()).toBe('2026-10-05');
+    });
+
+    it('ignores a past ?week=2026-09-14 (stale link, or the URL an installed app reopens)', async () => {
+      const { state, clock } = await boot('?week=2026-09-14');
+      expect(state.weekStartKey()).toBe('2026-09-28');
+      expect(state.selectedDateKey()).toBeNull();
+      clock.now = hubTime('2026-10-05', '08:00');
+      state.refreshToday();
+      expect(state.weekStartKey()).toBe('2026-10-05');
+    });
+
+    it('ignores a past ?week=2026-09-21&day=2026-09-30 (stale link, or the URL an installed app reopens)', async () => {
+      const { state, clock } = await boot('?week=2026-09-21&day=2026-09-30');
+      expect(state.weekStartKey()).toBe('2026-09-28');
+      expect(state.selectedDateKey()).toBeNull();
+      clock.now = hubTime('2026-10-05', '08:00');
+      state.refreshToday();
+      expect(state.weekStartKey()).toBe('2026-10-05');
+    });
+
+    it('keeps ?day= of today', async () => {
+      const { state } = await boot('?day=2026-10-01');
+      expect(state.selectedDateKey()).toBe('2026-10-01');
+    });
+
+    it('keeps the current ?week=', async () => {
+      const { state } = await boot('?week=2026-09-28');
+      expect(state.weekStartKey()).toBe('2026-09-28');
     });
 
     it('falls back to prefs for invalid params', async () => {

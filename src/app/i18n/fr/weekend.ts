@@ -2,6 +2,21 @@ import type { Translation } from '../catalogue';
 import type { weekend as en } from '../en/weekend';
 
 export const weekend: Translation<typeof en> = {
+  'weekend.preset.mine': 'Mes jours de congé',
+  'weekend.sort.tries': "Plus d'essais de retour",
+  'weekend.sort.there': 'Plus de temps sur place',
+  'weekend.sort.short': 'Vol le plus court',
+  'weekend.sort.warm': 'Plus chaud (normales)',
+  'weekend.sortAria': 'Trier les destinations',
+  'weekend.minAria': 'Temps sur place',
+  'weekend.minAny': 'Tout séjour',
+  'weekend.minThere': '{h}\u00a0h et plus sur place',
+  'weekend.only': 'Seulement {city}',
+  'weekend.onlyClear': 'Toutes les destinations',
+  'weekend.mineHint': 'Selon les jours de votre profil de voyage.',
+  'weekend.setDays': 'Indiquez vos jours de voyage habituels dans votre profil',
+  'weekend.noneRefined': 'Des vols conviennent, mais aucun ne laisse {h}\u00a0h ou plus sur place.',
+  'weekend.mineFallback': 'Voici cette fin de semaine.',
   'weekend.preset.this': 'Cette fin de semaine',
   'weekend.preset.next': 'Fin de semaine prochaine',
   'weekend.preset.friSun': 'Ven. soir → dim.',

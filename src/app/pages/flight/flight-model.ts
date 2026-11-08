@@ -3,8 +3,11 @@
  * functions only, so the page stays thin and every rule is unit-tested.
  */
 import { t } from '../../i18n/t';
-import type { Alternatives, Itinerary } from '../../utils/connections';
-import { isLayoverAlert, LONG_LAYOVER } from '../../utils/connections';
+import type { Alternatives, ConnectOptions, Itinerary } from '../../utils/connections';
+import { allItineraries, isLayoverAlert, LONG_LAYOVER, NO_OPTS } from '../../utils/connections';
+import { greatCircleKm } from '../../utils/geo';
+import { acAirports } from '../../places/place';
+import { MINUTE_MS } from '../../utils/time';
 import type { FlightInstance } from '../../utils/week';
 import { flightsOn } from '../../utils/week';
 import { aircraftName, aircraftCompact, aircraftWithSeats, shortAircraft } from '../../utils/aircraft';
@@ -199,16 +202,88 @@ export function optionRow(it: Itinerary, fmt: TimeFormat = '24h', name?: string)
 }
 
 export interface BackupGroup {
-  id: 'later' | 'other' | 'next';
+  id: 'later' | 'other' | 'nearby' | 'next';
   label: string;
   rows: OptionRow[];
 }
 
-/** "If you miss this": later same route, other routes the same day, first the next day. */
-export function backupGroups(alts: Alternatives, chosen: Itinerary, fmt: TimeFormat = '24h'): BackupGroup[] {
+/** Another AC airport within this distance, in the same country, counts as "nearby" (YYZ/YTZ, LGA/EWR, HND/NRT). */
+export const NEARBY_KM = 100;
+/** A flight from a nearby airport has to leave at least this long after the missed one: time to get across town. */
+export const NEARBY_TRANSFER_MIN = 90;
+
+/** AC airports near `code` (hubs and destinations, same country, within NEARBY_KM), nearest first. */
+export function nearbyAirports(code: string, km = NEARBY_KM): string[] {
+  const all = acAirports();
+  const self = all.find(a => a.code === code);
+  if (!self) return [];
+  return all
+    .filter(a => a.code !== code && a.iso2 === self.iso2)
+    .map(a => ({ code: a.code, d: greatCircleKm(self, a) }))
+    .filter(a => a.d <= km)
+    .sort((a, b) => a.d - b.d)
+    .map(a => a.code);
+}
+
+/**
+ * The same day's options from an airport near the origin, or to one near the
+ * destination, leaving after the missed flight (a transfer's time later when
+ * the origin changes). Ranked by arrival.
+ */
+export function nearbyOptions(chosen: Itinerary, opts: ConnectOptions = NO_OPTS): Itinerary[] {
+  const from = [chosen.origin, ...nearbyAirports(chosen.origin)];
+  const to = [chosen.dest, ...nearbyAirports(chosen.dest)];
+  const out: Itinerary[] = [];
+  for (const o of from) {
+    for (const d of to) {
+      if (o === chosen.origin && d === chosen.dest) continue;
+      if (o === d) continue;
+      const after = chosen.departUtc + (o === chosen.origin ? 0 : NEARBY_TRANSFER_MIN * MINUTE_MS);
+      out.push(...allItineraries(o, d, chosen.dateKey, opts).filter(it => !it.estimated && it.departUtc > after));
+    }
+  }
+  return out.sort((a, b) => a.arriveUtc - b.arriveUtc || a.departUtc - b.departUtc);
+}
+
+/** What is left after the chosen flight: the count and last departure today, and the next day's count and first. */
+export interface MissSummary {
+  laterToday: number;
+  lastToday: Itinerary | null;
+  tomorrow: number;
+  firstTomorrow: Itinerary | null;
+}
+
+export function missSummary(alts: Alternatives, chosen: Itinerary, opts: ConnectOptions = NO_OPTS): MissSummary {
+  const later = [...alts.laterSameRoute, ...alts.otherHubsSameDay].filter(it => !it.estimated);
+  const lastToday = later.reduce<Itinerary | null>((m, it) => (!m || it.departUtc > m.departUtc ? it : m), null);
+  const tomorrow = allItineraries(chosen.origin, chosen.dest, addDays(chosen.dateKey, 1), opts).filter(it => !it.estimated);
+  const firstTomorrow = tomorrow.reduce<Itinerary | null>((m, it) => (!m || it.departUtc < m.departUtc ? it : m), null);
+  return { laterToday: later.length, lastToday, tomorrow: tomorrow.length, firstTomorrow };
+}
+
+/** 'After this: 3 more options today, the last at 21:40. Next day: 5, the first at 06:10.' */
+export function missSummaryText(m: MissSummary, fmt: TimeFormat = '24h'): string {
+  const dep = (it: Itinerary) => formatClock(it.legs[0].depLocal, fmt);
+  const today = m.lastToday
+    ? t('flight.miss.today', { n: m.laterToday, time: dep(m.lastToday) })
+    : t('flight.miss.noneToday');
+  const next = m.firstTomorrow ? t('flight.miss.tomorrow', { n: m.tomorrow, time: dep(m.firstTomorrow) }) : t('flight.miss.noneTomorrow');
+  return `${today} ${next}`;
+}
+
+/** 'From Toronto Billy Bishop' / 'To Newark' / 'YTZ → EWR': where a nearby option differs from the missed flight. */
+function nearbyName(it: Itinerary, chosen: Itinerary): string {
+  const o = it.origin !== chosen.origin, d = it.dest !== chosen.dest;
+  if (o && d) return `${it.origin} → ${it.dest}`;
+  return o ? t('flight.miss.from', { place: placeName(it.origin) }) : t('flight.miss.to', { place: placeName(it.dest) });
+}
+
+/** "If you miss this": later same route, other routes the same day, nearby airports, first the next day. */
+export function backupGroups(alts: Alternatives, chosen: Itinerary, fmt: TimeFormat = '24h', nearby: readonly Itinerary[] = []): BackupGroup[] {
   const groups: BackupGroup[] = [
     { id: 'later', label: chosen.hubs.length ? t('flight.later.via', { hubs: chosen.hubs.join(' ') }) : t('flight.later.nonstop'), rows: alts.laterSameRoute.slice(0, 2).map(i => optionRow(i, fmt)) },
     { id: 'other', label: chosen.hubs.length ? t('flight.other.routes') : t('flight.other.conn'), rows: alts.otherHubsSameDay.slice(0, 2).map(i => optionRow(i, fmt)) },
+    { id: 'nearby', label: t('flight.miss.nearby'), rows: nearby.slice(0, 3).map(i => optionRow(i, fmt, nearbyName(i, chosen))) },
     {
       id: 'next',
       label: t('flight.nextDay', { date: shortDay(addDays(chosen.dateKey, 1)) }),

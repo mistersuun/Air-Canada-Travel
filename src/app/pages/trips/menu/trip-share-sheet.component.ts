@@ -45,6 +45,11 @@ const TOO_LARGE: MsgKey = 'trips.share.tooLarge';
           </div>
           <app-share-entry [trip]="trip()" />
         </section>
+
+        <section class="grp" data-share-guide>
+          <p class="ui-sub">{{ t('guide.share.line') }}</p>
+          <button type="button" class="ui-btn ui-btn--sm ui-btn--ghost ts__copy" data-guide-share (click)="shareGuide()">{{ t('guide.share.send') }}</button>
+        </section>
       </div>
     </app-glass-sheet>
   `,
@@ -88,6 +93,28 @@ export class TripShareSheetComponent {
       this.trip();
       untracked(() => { this.building = this.buildLink(); });
     });
+  }
+
+  /** The public /guide page: no trip data in it, so just the plain URL. */
+  protected async shareGuide(): Promise<void> {
+    const loc = this.doc.location;
+    const url = `${loc?.origin && loc.origin !== 'null' ? loc.origin : ''}/guide`;
+    const nav = this.doc.defaultView?.navigator;
+    if (nav?.share) {
+      try {
+        await nav.share({ title: t('guide.share.text'), url });
+        return;
+      } catch (e) {
+        if ((e as DOMException)?.name === 'AbortError') return;
+      }
+    }
+    try {
+      if (!nav?.clipboard) throw new Error('no clipboard');
+      await nav.clipboard.writeText(url);
+      this.state.flash(t('guide.share.copied'));
+    } catch {
+      this.state.flash(t('guide.share.failed'));
+    }
   }
 
   protected saveSplit(text: string): void {

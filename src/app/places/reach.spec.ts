@@ -8,7 +8,8 @@ import { placeFromDestination } from './place';
 
 const CONNECT: ConnectOptions = Object.freeze({ minConnect: 60 });
 const q = (over: Partial<ReachQuery> = {}): ReachQuery => ({
-  place: SEVILLE_PLACE, hub: 'YUL', dateKey: '2026-10-08', includeOtherHubs: false, sort: 'onward', connect: CONNECT, ...over,
+  // Seville resolves with acCode SVQ since it is a destination; its own airport is not a gateway.
+  place: { ...SEVILLE_PLACE, acCode: 'SVQ' }, hub: 'YUL', dateKey: '2026-10-08', includeOtherHubs: false, sort: 'onward', connect: CONNECT, ...over,
 });
 const flightNos = (its: { legs: { flightNumber: string | null }[] }[]) => its.map(i => i.legs.map(l => l.flightNumber).join('+'));
 

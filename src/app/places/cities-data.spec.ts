@@ -25,13 +25,13 @@ describe.skipIf(!present)('public/data/cities.json', () => {
     expect(index!.rows.length).toBeGreaterThan(20_000);
   });
 
-  it('finds Seville for sevil, Sevilla and séville, not served by AC', () => {
+  it('finds Seville for sevil, Sevilla and séville, served by SVQ', () => {
     for (const q of ['sevil', 'Sevilla', 'séville', 'Séville']) {
       const [hit] = top(q);
       expect(hit.place.id, q).toBe('gn-2510911');
       expect(hit.place.name).toBe('Seville');
       expect(hit.place.country).toBe('Spain');
-      expect(hit.servedBy).toBeNull();
+      expect(hit.servedBy).toBe('SVQ');
     }
   });
 

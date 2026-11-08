@@ -14,6 +14,9 @@ export const PROFILE_KEY = 'ac.profile.v1';
 export type TripStyle = Exclude<DestinationType, 'Hub'>;     // 'Sun' | 'City' | 'Adventure'
 export type TripLength = 'day' | 'weekend' | 'week';
 
+/** Commute-to-base settings: home airport, base hub, minutes of buffer before report. */
+export interface CommuteSettings { home: string; base: string; bufferMin: number }
+
 export interface TravelProfile {
   v: 1;
   styles: TripStyle[];           // [] = any
@@ -24,6 +27,9 @@ export interface TravelProfile {
   onwardBudget: 'low' | 'any';   // default 'any'
   dismissed: string[];           // Recommendation ids, newest last, capped at 200
   usualItems: string[];          // "My usual items": copied into new trips' prep list (max 30, each <= 80 chars)
+  /** Passport countries (ISO 3166-1 alpha-2), 0..2 for dual nationals; [] = not set. Shows entry listings; stays on the phone. */
+  passports: string[];
+  commute: CommuteSettings | null; // crew commute-to-base planner; null = not set (never shared or backed up)
   updatedAt: string | null;      // null = never set up ("empty profile")
 }
 

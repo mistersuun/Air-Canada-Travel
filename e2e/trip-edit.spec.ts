@@ -78,16 +78,16 @@ test('+ New trip: an Air Canada city opens its destination page, any other place
   await expect(page.getByText('No trips yet')).toHaveCount(0);
   await expect(page.locator('.tc__name').first()).toContainText('Lisbon');
 
-  // A city it does not fly to: the Reach flow, then "Start this trip".
+  // A city it does not fly to (Granada; Seville became a destination): the Reach flow, then "Start this trip".
   await page.getByRole('button', { name: '+ New trip' }).click();
-  await page.locator('[data-place-search]').fill('Seville');
-  await page.locator('[data-place="gn-2510911"]').click();
-  await expect(page).toHaveURL(/\/reach\/gn-2510911/);
-  await page.locator('a[href^="/reach/gn-2510911/"]').first().click();
+  await page.locator('[data-place-search]').fill('Granada');
+  await page.locator('[data-place="gn-2517117"]').click();
+  await expect(page).toHaveURL(/\/reach\/gn-2517117/);
+  await page.locator('a[href^="/reach/gn-2517117/"]').first().click();
   await page.getByRole('button', { name: 'Start this trip' }).click();
   await expect(page).toHaveURL(/\/trips\/(?!import)[^/?]+/);
   await page.goto('/trips');
-  await expect(page.locator('.tc__name', { hasText: 'Seville' }).first()).toBeVisible();
+  await expect(page.locator('.tc__name', { hasText: 'Granada' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '+ New trip' })).toBeVisible();
   expect(problems).toEqual([]);
 });

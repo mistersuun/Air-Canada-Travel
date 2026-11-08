@@ -8,27 +8,33 @@ import { RECS_META, RECS_ROUTES } from '../../recs/testing/recs-fixture';
 import { NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
+import { PROFILE_KEY } from '../../recs/model';
+import { PROFILE_STORAGE } from '../../recs/profile.service';
 import { WeekendPage } from './weekend.page';
 
 /** Tue Oct 6 2026, 09:00 in Montréal. */
 const CLOCK = Date.parse('2026-10-06T13:00:00Z');
 
 describe('WeekendPage', () => {
+  let profileStorage: MemoryStorage;
   beforeEach(() => {
+    profileStorage = new MemoryStorage();
     setScheduleSource(RECS_ROUTES, RECS_META);
     const storage = new MemoryStorage();
     storage.setItem('ac.prefs.v1', JSON.stringify({ hub: 'YUL', showConnections: true }));
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]), { provide: PREFS_STORAGE, useValue: storage }, { provide: NOW, useValue: () => CLOCK },
+        { provide: PROFILE_STORAGE, useValue: profileStorage },
         { provide: CLIMATE_FETCH, useValue: async () => CLIMATE_FIXTURE },
       ],
     });
   });
   afterEach(() => resetScheduleSource());
 
-  async function render() {
+  async function render(to?: string) {
     const fixture = TestBed.createComponent(WeekendPage);
+    if (to) fixture.componentRef.setInput('to', to);
     await fixture.whenStable();
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
@@ -52,12 +58,12 @@ describe('WeekendPage', () => {
 
   it('switches presets and shows the custom fields', async () => {
     const { fixture, el, flat } = await render();
-    const chips = [...el.querySelectorAll<HTMLButtonElement>('.chip')];
-    expect(chips.map(c => c.textContent!.trim())).toEqual(['This weekend', 'Next weekend', 'Fri eve → Sun', 'Sat → Mon', 'Custom']);
-    chips[1].click();
+    const chips = [...el.querySelectorAll<HTMLButtonElement>('[data-preset]')];
+    expect(chips.map(c => c.textContent!.trim())).toEqual(['My days off', 'This weekend', 'Next weekend', 'Fri eve → Sun', 'Sat → Mon', 'Custom']);
+    chips[2].click();
     fixture.detectChanges();
     expect(flat()).toContain('Leave after Fri, Oct 16');
-    chips[4].click();
+    chips[5].click();
     fixture.detectChanges();
     expect(el.querySelectorAll('.custom input').length).toBe(4);
     expect([...el.querySelectorAll('.custom input')].map(i => i.getAttribute('aria-label'))).toEqual([
@@ -67,8 +73,7 @@ describe('WeekendPage', () => {
 
   it('says so when the window ends before it starts', async () => {
     const { fixture, el } = await render();
-    const chips = [...el.querySelectorAll<HTMLButtonElement>('.chip')];
-    chips[4].click();
+    el.querySelector<HTMLButtonElement>('[data-preset="custom"]')!.click();
     fixture.detectChanges();
     const home = el.querySelectorAll<HTMLInputElement>('.custom input')[2];
     home.value = '2026-10-08';
@@ -80,5 +85,42 @@ describe('WeekendPage', () => {
     home.dispatchEvent(new Event('change'));
     fixture.detectChanges();
     expect(el.querySelector('.note')?.textContent).toContain('Enter a date and time');
+  });
+
+  it('starts on "My days off" from the profile days (Fri to Sun: leave Fri 06:00, home Sun 22:00)', async () => {
+    profileStorage.setItem(PROFILE_KEY, JSON.stringify({ v: 1, days: [5, 6, 7], updatedAt: '2026-10-01T00:00:00Z' }));
+    const { el, flat } = await render();
+    expect(el.querySelector('[data-preset="mine"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(flat()).toContain('Leave after Fri, Oct 9');
+    expect(flat()).toContain('home by Sun, Oct 11');
+    expect(flat()).toContain('From the days in your travel profile.');
+  });
+
+  it('without profile days, "My days off" links to the profile', async () => {
+    const { fixture, el } = await render();
+    el.querySelector<HTMLButtonElement>('[data-preset="mine"]')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-set-days] a')!.getAttribute('href')).toBe('/profile');
+  });
+
+  it('filters by time there and sorts by shortest flight', async () => {
+    const { fixture, el } = await render();
+    const before = el.querySelectorAll('a.row').length;
+    el.querySelector<HTMLButtonElement>('[data-min="48"]')!.click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('a.row').length).toBeLessThan(before);
+    if (!el.querySelectorAll('a.row').length) {
+      // Filtered to nothing: says so (flights do fit) and offers to undo.
+      expect(el.querySelector('[data-none-refined]')!.textContent).toContain('none leaves you 48h or more there');
+    }
+    el.querySelector<HTMLButtonElement>('[data-min="0"]')!.click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('a.row').length).toBe(before);
+  });
+
+  it('?to= searches one destination, with a way back to all', async () => {
+    const { el } = await render('LGA');
+    expect(el.querySelector('[data-only]')!.textContent).toContain('Only New York');
+    expect([...el.querySelectorAll('a.row')].every(r => r.textContent!.includes('LGA'))).toBe(true);
   });
 });

@@ -6,10 +6,13 @@ import type { TravelProfile, TripLength, TripStyle } from '../../recs/model';
 import { MAX_USUAL_ITEMS, TRIP_STYLES, usualSuggestions } from '../../recs/profile';
 import { lengthOptions, toggled } from '../../recs/profile-options';
 import { ProfileService } from '../../recs/profile.service';
+import { ReferenceService } from '../../reference/reference.service';
+import { passportOptions } from '../../reference/visa';
 import { clearDismissedFacts, dismissedFacts } from '../flight/fun-fact';
 import { typeLabel } from '../../i18n/labels';
 import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
+import { guidePath } from '../../ui/links';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { weekdayLetters, weekdayLong } from '../../utils/time';
 
@@ -28,7 +31,7 @@ export const DEFAULT_MAX_HOURS = 7;
  * Travel profile (/profile, mock x12): what you like, trip length, longest
  * flight, travellers, onward budget and the days you can usually travel.
  * Changes save immediately to this phone (localStorage 'ac.profile.v1').
- * Used only to pick suggestions; never in share links or backups.
+ * Used only to pick suggestions and show entry listings; never in share links or backups.
  */
 @Component({
   selector: 'app-profile-page',
@@ -120,6 +123,24 @@ export const DEFAULT_MAX_HOURS = 7;
         <p class="hint">{{ t('recs.profile.daysHint') }}@if (!p.days.length) { {{ t('recs.profile.daysNone') }} }</p>
       </div>
 
+      <h2 class="ui-label pf__lbl" id="passport">{{ t('recs.profile.passport') }}</h2>
+      <div class="ui-card pf__card" data-passport>
+        @for (slot of [0, 1]; track slot) {
+          @if (slot === 0 || p.passports.length) {
+            <label class="pp">
+              <span class="pp__l">{{ slot === 0 ? t('recs.profile.passportMain') : t('recs.profile.passportSecond') }}</span>
+              <select class="pp__s" [attr.data-passport-slot]="slot" (change)="setPassport(slot, $any($event.target).value)">
+                <option value="" [selected]="!p.passports[slot]">{{ t('recs.profile.passportNone') }}</option>
+                @for (o of passportOptions(); track o.code) {
+                  <option [value]="o.code" [selected]="p.passports[slot] === o.code">{{ o.name }}</option>
+                }
+              </select>
+            </label>
+          }
+        }
+        <p class="hint">{{ t('recs.profile.passportHint') }}</p>
+      </div>
+
       <h2 class="ui-label pf__lbl" id="pf-usual">{{ t('recs.profile.usual') }}</h2>
       <div class="ui-card pf__card">
         <p class="hint hint--top">{{ t('recs.profile.usualHint') }}</p>
@@ -154,6 +175,14 @@ export const DEFAULT_MAX_HOURS = 7;
         <span>{{ t('recs.profile.logbook') }}</span><span aria-hidden="true">›</span>
       </button>
 
+      <button type="button" class="lb" data-commute (click)="openCommute()">
+        <span>{{ t('commute.link') }}</span><span aria-hidden="true">›</span>
+      </button>
+
+      <button type="button" class="lb" data-guide (click)="openGuide()">
+        <span>{{ t('guide.profile.row') }}</span><span aria-hidden="true">›</span>
+      </button>
+
       <!-- Nothing to reset on a fresh profile: no button, rather than one that looks disabled. -->
       <div class="reset">
         @if (confirming()) {
@@ -168,6 +197,8 @@ export const DEFAULT_MAX_HOURS = 7;
     </div>
   `,
   styles: [`
+    .pp { display: grid; gap: 4px; margin-bottom: 10px; font-size: 13px; font-weight: 650; color: var(--ink-2); }
+    .pp__s { min-height: 44px; padding: 0 12px; border-radius: 12px; font: inherit; font-size: 16px; font-weight: 400; color: var(--ink); background: var(--surface); border: 1px solid var(--hair); }
     :host { display: block; }
     .pf { max-width: 600px; margin-inline: auto; display: flex; flex-direction: column; }
     .pf__head { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 12px; margin-bottom: 4px; }
@@ -279,6 +310,7 @@ export class ProfilePage {
 
   protected readonly profile = inject(ProfileService);
   private readonly state = inject(AppStateService);
+  private readonly ref = inject(ReferenceService);
   private readonly router = inject(Router);
 
   protected readonly styles = TRIP_STYLES;
@@ -289,6 +321,24 @@ export class ProfilePage {
   protected readonly sliderDefault = DEFAULT_MAX_HOURS;
   protected readonly confirming = signal(false);
   private readonly p = computed(() => this.profile.profile());
+
+  /** Every passport the entry listings know, by name in the UI language (plus any saved code they lack). */
+  protected readonly passportOptions = computed(() => {
+    const opts = passportOptions(this.ref.visa());
+    const known = new Set(opts.map(o => o.code));
+    return [...opts, ...this.p().passports.filter(c => !known.has(c)).map(code => ({ code, name: code }))];
+  });
+
+  constructor() {
+    void this.ref.ensureVisa();
+  }
+
+  protected setPassport(slot: number, code: string): void {
+    const next = [...this.p().passports];
+    if (code) next[slot] = code; else next.splice(slot, 1);
+    // Removing the first moves the second up; the same country twice collapses (sanitizePassports).
+    this.save({ passports: next.filter(Boolean) });
+  }
 
   protected readonly draft = signal('');
   protected readonly maxItems = MAX_USUAL_ITEMS;
@@ -349,8 +399,16 @@ export class ProfilePage {
     this.state.flash(t('recs.profile.resetDone'));
   }
 
+  protected openGuide(): void {
+    void this.router.navigate(guidePath(), { queryParams: this.state.globalParams() });
+  }
+
   protected openLogbook(): void {
     void this.router.navigate(logbookPath(), { queryParams: this.state.globalParams() });
+  }
+
+  protected openCommute(): void {
+    void this.router.navigate(['/commute'], { queryParams: this.state.globalParams() });
   }
 
   protected back(): void {

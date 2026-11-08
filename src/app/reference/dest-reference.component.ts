@@ -1,11 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { t } from '../i18n/t';
 import { currencyCode } from '../pages/destination/currency';
 import { AirportInfoService, airportInfo, cityOptionLabel, loungeLabel, terminalLabel } from '../places/airport-info';
 import {
   advisoryQuiet, advisoryUpdated, convertAmount, fxLine, fxRate, holidayKey, holidayName, holidayNote, shortDate, upcomingHolidays,
 } from './reference';
+import { ProfileService } from '../recs/profile.service';
 import { ReferenceService } from './reference.service';
+import { bestEntry, entryLabel, passportCountry, visaAsOf, visaStale } from './visa';
 
 /**
  * Destination Essentials: the Government of Canada advice level (official
@@ -16,6 +19,7 @@ import { ReferenceService } from './reference.service';
 @Component({
   selector: 'app-dest-reference',
   standalone: true,
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (advisory(); as a) {
@@ -25,6 +29,18 @@ import { ReferenceService } from './reference.service';
         @if (a.regional) { <span> · {{ t('dest.ref.regional') }}</span> }
         <span> · </span><a [href]="a.url" target="_blank" rel="noopener">{{ advisoryHost }}</a>
       </p>
+    }
+    @if (entry(); as e) {
+      <p class="r tn" data-entry>
+        <b>{{ e.line }}</b><span class="r--src"> · {{ e.source }}</span>
+        @if (e.official) {
+          <span> · </span><a [href]="e.official" target="_blank" rel="noopener">{{ t('dest.visa.official') }}</a>
+        } @else {
+          <span> · {{ t('dest.visa.checkGov') }}</span>
+        }
+      </p>
+    } @else if (askPassport()) {
+      <p class="r" data-entry-ask><a routerLink="/profile" fragment="passport">{{ t('dest.visa.choose') }}</a></p>
     }
     @if (fx(); as f) {
       <p class="r tn" data-fx>
@@ -84,6 +100,7 @@ export class DestReferenceComponent {
   protected readonly cadCode = 'CAD';
   protected readonly t = t;
   private readonly ref = inject(ReferenceService);
+  private readonly profile = inject(ProfileService);
 
   readonly iso2 = input<string | null | undefined>(null);
   /** Today at the destination (yyyy-mm-dd). */
@@ -114,6 +131,7 @@ export class DestReferenceComponent {
 
   constructor() {
     void this.ref.ensureLoaded();
+    void this.ref.ensureVisa();
     void this.airports.ensureLoaded();
     // A different destination (another currency) starts a fresh converter.
     effect(() => {
@@ -128,6 +146,23 @@ export class DestReferenceComponent {
   protected readonly advisory = computed(() => this.ref.advisories()?.get((this.iso2() ?? '').toUpperCase()) ?? null);
   protected readonly quiet = computed(() => { const a = this.advisory(); return !!a && advisoryQuiet(a); });
   protected readonly updated = computed(() => { const a = this.advisory(); return a ? advisoryUpdated(a, this.todayKey()) : ''; });
+  /** The easiest listing across the user's passports, labelled with its source and date, and the official link when known. */
+  protected readonly entry = computed(() => {
+    const table = this.ref.visa();
+    const iso = (this.iso2() ?? '').toUpperCase();
+    if (!table || !iso || visaStale(table, this.todayKey())) return null;
+    const best = bestEntry(table, this.profile.profile().passports, iso);
+    if (!best || best.kind === 'O') return null;
+    const adv = this.advisory();
+    return {
+      line: t('dest.visa.line', { country: passportCountry(best.passport), status: entryLabel(best) }),
+      source: t('dest.visa.source', { date: visaAsOf(table) }),
+      // travel.gc.ca writes its entry section for Canadian passports only.
+      official: best.passport === 'CA' && adv ? `${adv.url}#entryexit` : null,
+    };
+  });
+  /** No passport set yet: one link to the profile, only once the listings exist. */
+  protected readonly askPassport = computed(() => !!this.ref.visa() && !!this.iso2() && this.profile.profile().passports.length === 0);
   protected readonly fx = computed(() => fxLine(currencyCode(this.iso2()), this.ref.fx()));
   protected readonly holidays = computed(() => upcomingHolidays(this.ref.holidays(), this.iso2(), this.todayKey()));
 

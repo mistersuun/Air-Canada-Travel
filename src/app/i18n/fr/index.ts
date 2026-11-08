@@ -5,12 +5,14 @@
 import type { EN_AREAS } from '../en';
 import { calendar } from './calendar';
 import { common } from './common';
+import { compare } from './compare';
 import { data } from './data';
 import { dest } from './dest';
 import { files } from './files';
 import { flight } from './flight';
 import { format } from './format';
 import { group } from './group';
+import { guide } from './guide';
 import { home } from './home';
 import { logbook } from './logbook';
 import { map } from './map';
@@ -26,6 +28,7 @@ import { today } from './today';
 import { trips } from './trips';
 import { ui } from './ui';
 import { weekend } from './weekend';
+import { commute } from './commute';
 
 type Areas = typeof EN_AREAS;
 
@@ -33,12 +36,14 @@ type Areas = typeof EN_AREAS;
 export const FR_AREAS: { readonly [A in keyof Areas]: { readonly [K in keyof Areas[A]]: string } } = {
   calendar,
   common,
+  compare,
   data,
   dest,
   files,
   flight,
   format,
   group,
+  guide,
   home,
   logbook,
   map,
@@ -54,17 +59,20 @@ export const FR_AREAS: { readonly [A in keyof Areas]: { readonly [K in keyof Are
   trips,
   ui,
   weekend,
+  commute,
 };
 
 export const FR = {
   ...calendar,
   ...common,
+  ...compare,
   ...data,
   ...dest,
   ...files,
   ...flight,
   ...format,
   ...group,
+  ...guide,
   ...home,
   ...logbook,
   ...map,
@@ -80,4 +88,5 @@ export const FR = {
   ...trips,
   ...ui,
   ...weekend,
+  ...commute,
 };

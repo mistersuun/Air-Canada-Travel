@@ -15,4 +15,12 @@ export const saved: Translation<typeof en> = {
   'saved.showing': 'Semaine affichée\u00a0: {week}',
   'saved.thatWeek': '{n}× cette semaine-là',
   'saved.ends': 'se termine le {date}',
+  'saved.chg.new': 'Nouveau\u00a0: vol sans escale depuis {hub} à partir du {date}',
+  'saved.chg.newNow': 'Nouveau\u00a0: vol sans escale depuis {hub}',
+  'saved.chg.ends': 'Fin\u00a0: dernier vol sans escale le {date}',
+  'saved.chg.fewer': 'Moins de jours cette semaine\u00a0: {from} → {to}',
+  'saved.chg.fewerWeek': 'Moins de jours la semaine du {date}\u00a0: {from} → {to}',
+  'saved.chg.more': 'Plus de jours cette semaine\u00a0: {from} → {to}',
+  'saved.chg.moreWeek': 'Plus de jours la semaine du {date}\u00a0: {from} → {to}',
+  'saved.chg.fromHub': '{text} (depuis {hub})',
 };

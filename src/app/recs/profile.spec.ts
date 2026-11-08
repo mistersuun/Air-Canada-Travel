@@ -36,6 +36,12 @@ describe('sanitizeProfile', () => {
     expect(sanitizeProfile({ maxFlightHours: null }).maxFlightHours).toBeNull();
   });
 
+  it('keeps up to two passports as upper-case ISO codes (dual nationals), dropping junk', () => {
+    expect(sanitizeProfile({ passports: ['ca', 'CA', 'xyz', 7, ' fr ', 'GB'] }).passports).toEqual(['CA', 'FR']);
+    expect(sanitizeProfile({ passports: 'CA' }).passports).toEqual([]);
+    expect(sanitizeProfile({}).passports).toEqual([]);
+  });
+
   it('caps dismissed at 200, newest kept', () => {
     const ids = Array.from({ length: 250 }, (_, i) => `style:X${i}:`);
     const p = sanitizeProfile({ dismissed: ids });
@@ -146,5 +152,29 @@ describe('usualItems', () => {
     expect(JSON.parse(storage.getItem(PROFILE_KEY)!).usualItems).toEqual(['Passport / ID']);
     s.removeUsualItem('Passport / ID');
     expect(s.profile().usualItems).toEqual([]);
+  });
+});
+
+describe('commute settings', () => {
+  it('keeps a valid commute and uppercases the codes', () => {
+    expect(sanitizeProfile({ commute: { home: 'yow', base: 'YYZ', bufferMin: 90 } }).commute).toEqual({ home: 'YOW', base: 'YYZ', bufferMin: 90 });
+  });
+
+  it('falls back to a 60 min buffer and rejects bad pairs', () => {
+    expect(sanitizeProfile({ commute: { home: 'YOW', base: 'YYZ', bufferMin: 77 } }).commute?.bufferMin).toBe(60);
+    expect(sanitizeProfile({ commute: { home: 'YYZ', base: 'YYZ', bufferMin: 60 } }).commute).toBeNull();
+    expect(sanitizeProfile({ commute: { home: 'YOW', base: 'LHR', bufferMin: 60 } }).commute).toBeNull();
+    expect(sanitizeProfile({ commute: { home: 'ZZZ', base: 'YYZ', bufferMin: 60 } }).commute).toBeNull();
+    expect(sanitizeProfile({ commute: 'x' }).commute).toBeNull();
+    expect(sanitizeProfile({}).commute).toBeNull();
+  });
+
+  it('is saved without marking the profile as set up', () => {
+    const storage = new MemoryStorage();
+    const s = setup(storage);
+    s.setCommute({ home: 'YOW', base: 'YYZ', bufferMin: 45 });
+    expect(s.profile().commute).toEqual({ home: 'YOW', base: 'YYZ', bufferMin: 45 });
+    expect(s.isEmpty()).toBe(true);
+    expect(JSON.parse(storage.getItem(PROFILE_KEY)!).commute.bufferMin).toBe(45);
   });
 });

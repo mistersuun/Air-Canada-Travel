@@ -1,5 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { SavedSnapshotService } from '../../state/saved-snapshot.service';
+import { changeLabel, diffSnapshots, snapshotFor } from './saved-changes';
 import { Router, RouterLink } from '@angular/router';
+import { MAX_COMPARE, compareParam } from '../compare/compare-model';
 import { IconComponent } from '../../components/shared/icons.component';
 import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
@@ -42,6 +45,9 @@ const TABS = [
           <button type="button" class="ui-circ ui-circ--glass" [attr.aria-label]="t('ui.back')" (click)="back()"><app-icon name="arrow-left" [size]="18" /></button>
           <h1 class="ui-h1 ttl">{{ t('saved.title') }} @if (count()) {<span class="ct tn" [attr.aria-label]="t('saved.countAria', { n: count() })">{{ count() }}</span>}</h1>
         </div>
+        @if (count() >= 2 && !comparing()) {
+          <button type="button" class="ui-btn ui-btn--ghost cmp" data-compare-start (click)="startCompare()">{{ t('compare.saved.start') }}</button>
+        }
         @if (count()) {
           <app-seg class="seg" stretch [options]="tabs()" [value]="view()" (valueChange)="setTab($event)" [ariaLabel]="t('saved.viewAria')" />
         }
@@ -53,6 +59,22 @@ const TABS = [
           <h2 class="ui-h3">{{ t('saved.empty.title') }}</h2>
           <p class="ui-sub">{{ t('saved.empty.text') }}</p>
           <a class="ui-btn" routerLink="/" [queryParams]="state.globalParams()">{{ t('saved.empty.cta') }}</a>
+        </div>
+      } @else if (comparing()) {
+        <p class="ui-sub cmp-hint">{{ t('compare.saved.hint') }}</p>
+        <div class="ui-card list" role="group" [attr.aria-label]="t('compare.saved.hint')">
+          @for (w of watching(); track w.code) {
+            <label class="tick">
+              <input type="checkbox" [attr.data-tick]="w.code" [attr.aria-label]="t('compare.saved.tick', { city: w.city })"
+                     [checked]="ticked().includes(w.code)" [disabled]="!ticked().includes(w.code) && ticked().length >= max"
+                     (change)="toggleTick(w.code)">
+              <span class="tick__t">{{ w.city }} <span class="ui-sub">{{ w.code }}</span></span>
+            </label>
+          }
+        </div>
+        <div class="cmp-bar">
+          <button type="button" class="ui-btn" data-compare-open [disabled]="ticked().length < 2" (click)="openCompare()">{{ t('compare.saved.open', { n: ticked().length }) }}</button>
+          <button type="button" class="ui-btn ui-btn--ghost" data-compare-cancel (click)="comparing.set(false)">{{ t('compare.saved.cancel') }}</button>
         </div>
       } @else if (view() === 'upcoming') {
         @if (cards().length) {
@@ -100,6 +122,11 @@ const TABS = [
                 <app-icon name="star" [size]="20" [filled]="true" />
               </button>
             </app-dest-row>
+            @if (w.changes.length) {
+              <ul class="chg" [attr.data-changes]="w.code">
+                @for (c of w.changes; track c) { <li>{{ c }}</li> }
+              </ul>
+            }
           }
         </div>
         <p class="ui-sub foot">{{ t('saved.showing', { week: weekLabel() }) }} · <a [routerLink]="calendarPath()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a></p>
@@ -113,6 +140,7 @@ const TABS = [
     .ttl { font-size: 30px; display: flex; align-items: baseline; gap: 10px; }
     .ct { font-size: 17px; font-weight: 600; color: var(--ink-3); letter-spacing: 0; }
     .seg { width: 100%; }
+    .cmp { align-self: flex-start; }
     .cards { display: grid; gap: 12px; margin-top: 14px; }
     .ft {
       display: flex; gap: 14px; margin-top: 8px; padding-top: 8px;
@@ -125,6 +153,13 @@ const TABS = [
       color: var(--amber); margin-left: 4px;
     }
     .unstar:hover { background: var(--fill); }
+    .cmp-hint { margin-top: 12px; padding: 0 4px; }
+    .tick { display: flex; align-items: center; gap: 12px; min-height: 48px; border-top: 1px solid var(--hair); }
+    .tick:first-child { border-top: 0; }
+    .tick input { width: 22px; height: 22px; flex: none; }
+    .tick__t { font-weight: 600; }
+    .cmp-bar { display: flex; gap: 8px; margin-top: 12px; }
+    .chg { list-style: none; margin: -2px 0 8px 58px; padding: 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
     .foot { margin-top: 12px; padding: 0 4px; }
     .foot a { color: var(--blue); font-weight: 600; }
     .empty {
@@ -173,6 +208,26 @@ export class SavedPage {
   protected readonly cardMeta = cardMeta;
   protected readonly footerDays = footerDays;
 
+  protected readonly max = MAX_COMPARE;
+  /** Compare mode: tick 2 or 3 saved destinations, then open /compare. */
+  protected readonly comparing = signal(false);
+  protected readonly ticked = signal<string[]>([]);
+
+  protected startCompare(): void {
+    this.ticked.set([]);
+    this.comparing.set(true);
+  }
+
+  protected toggleTick(code: string): void {
+    this.ticked.update(l => (l.includes(code) ? l.filter(c => c !== code) : l.length < MAX_COMPARE ? [...l, code] : l));
+  }
+
+  protected openCompare(): void {
+    if (this.ticked().length < 2) return;
+    this.comparing.set(false);
+    void this.router.navigate(['/compare'], { queryParams: { ...this.state.globalParams(), c: compareParam(this.ticked()) } });
+  }
+
   readonly view = computed<SavedTab>(() => (this.tab() === 'watching' ? 'watching' : 'upcoming'));
   readonly count = computed(() => this.state.starredThisWeek().length);
 
@@ -204,11 +259,41 @@ export class SavedPage {
     });
   });
 
+  private readonly snaps = inject(SavedSnapshotService);
+  /** What was stored when this page opened: changes are measured against it, then it is refreshed. */
+  private readonly baseline = this.snaps.seen();
+
+  /** Per starred destination: plain lines on what the schedules changed since the viewer last saw it. */
+  private readonly changes = computed(() => {
+    this.state.scheduleRev();
+    const today = this.hubToday();
+    const hub = this.state.hub();
+    const out = new Map<string, string[]>();
+    for (const code of this.state.favourites()) {
+      const list = diffSnapshots(this.baseline[code], snapshotFor(code, today), today, hub).map(c => changeLabel(c, today, hub));
+      if (list.length) out.set(code, list);
+    }
+    return out;
+  });
+
+  constructor() {
+    // Seeing the change lines (the Watching tab) is what marks the changes as seen.
+    effect(() => {
+      this.state.scheduleRev();
+      if (this.view() !== 'watching') return;
+      if (!this.state.coverage().from) return;
+      const today = this.hubToday();
+      const favs = this.state.favourites();
+      untracked(() => { for (const code of favs) this.snaps.commit(code, snapshotFor(code, today)); });
+    });
+  }
+
   readonly watching = computed(() => {
     const week = this.state.weekStartKey();
     const cov = this.state.coverage();
+    const changes = this.changes();
     return this.state.starredThisWeek().map(s => ({
-      code: s.code, city: s.city, meta: watchingMeta(s), dots: starredDots(s, week, cov),
+      code: s.code, city: s.city, meta: watchingMeta(s), dots: starredDots(s, week, cov), changes: changes.get(s.code) ?? [],
     }));
   });
 

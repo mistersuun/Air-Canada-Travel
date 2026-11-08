@@ -37,16 +37,16 @@ function label(runs: [number, number][]): string {
  * at all. When the window covers a full year the months wrap (Nov – Apr);
  * otherwise only months inside the window are described.
  */
-export function routeSeason(origin: string, dest: string): string | null {
+export function routeSeason(origin: string, dest: string, coverageHub?: string | null): string | null {
   if (cacheVersion !== scheduleVersion()) {
     cache.clear();
     cacheVersion = scheduleVersion();
   }
   // The label is display text: cached per UI language.
-  const key = `${locale()}:${origin}-${dest}`;
+  const key = `${locale()}:${origin}-${dest}:${coverageHub ?? ''}`;
   if (cache.has(key)) return cache.get(key)!;
 
-  const { from, to } = getCoverage();
+  const { from, to } = getCoverage(coverageHub);
   let result: string | null = null;
   const records = getSchedulesForRoute(origin, dest);
   if (from && to && records.length) {

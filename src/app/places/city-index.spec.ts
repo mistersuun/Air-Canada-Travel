@@ -66,14 +66,15 @@ describe('servedBy and places', () => {
   it('marks a city AC flies to itself', () => {
     expect(servedByAc(index.byId.get(2267057)!)).toBe('LIS');
     expect(servedByAc(index.byId.get(6077243)!)).toBe('YUL');
-    expect(servedByAc(index.byId.get(2510911)!)).toBeNull();
+    expect(servedByAc(index.byId.get(2510911)!)).toBe('SVQ'); // Seville, a destination since Nov 2026
+    expect(servedByAc({ name: 'Dos Hermanas', alt: [], lat: 37.28, lng: -5.92 })).toBeNull(); // 15 km away, another name
     expect(servedByAc(index.byId.get(9999001)!)).toBeNull();
   });
 
   it('builds Places with country names and GeoNames ids', () => {
     const hit = cityHit(index.byId.get(2510911)!);
     expect(hit.population).toBe(687_000);
-    expect(hit.servedBy).toBeNull();
+    expect(hit.servedBy).toBe('SVQ');
     expect(hit.place).toEqual({
       id: 'gn-2510911', name: 'Seville', country: 'Spain', iso2: 'ES', lat: 37.38, lng: -5.97,
       tz: 'Europe/Madrid', admin1: 'Andalusia',

@@ -9,10 +9,12 @@ import { routeOnlyNoteOn } from '../../data/route-network';
 import type { Destination } from '../../data/destinations';
 import { isOutside, longDay, shortDay } from '../../ui/format';
 import { findDestination } from '../../utils/airports';
-import { NO_OPTS, bestItinerary, type ConnectOptions } from '../../utils/connections';
+import {
+  NO_OPTS, bestItinerary, directItineraries, findItineraries, type ConnectOptions,
+} from '../../utils/connections';
 import { matchesQuery } from '../../utils/routes';
 import {
-  addDays, addMonths, diffDays, formatKey, isDateKey, monthKeys, monthOf, weekStartKey, weekdayIndex,
+  addDays, addMonths, diffDays, formatKey, isDateKey, monthKeys, monthOf, weekStartKey, weekdayIndex, weekdayShort,
 } from '../../utils/time';
 import { flightsOn, nextFlightDate } from '../../utils/week';
 
@@ -34,6 +36,95 @@ export interface CalDay {
   past: boolean;
   /** Outside the published window. */
   outside: boolean;
+  /** Flights on this day in the direction shown, once a departure is picked and this is the return field. */
+  ways?: Ways;
+}
+
+/** Flights on one day in one direction: nonstops, and one-stop itineraries when connections are shown. */
+export interface Ways { direct: number; connecting: number; total: number }
+
+/** The nights shortcuts offered once a departure is picked. */
+export const NIGHT_SHORTCUTS: readonly number[] = [2, 3, 4, 7];
+
+/** Nonstop (and, when `withConnections`, connecting) itineraries from → to on `key`; zeros for a past or unpublished day. */
+export function waysOn(
+  from: string,
+  to: string,
+  key: string,
+  today: string,
+  coverage: Coverage | null,
+  withConnections: boolean,
+  connect: ConnectOptions = NO_OPTS,
+): Ways {
+  if (key < today || isOutside(key, coverage)) return { direct: 0, connecting: 0, total: 0 };
+  const direct = directItineraries(from, to, key).length;
+  const connecting = withConnections ? findItineraries(from, to, key, connect).filter(it => it.legs.length > 1).length : 0;
+  return { direct, connecting, total: direct + connecting };
+}
+
+/** The days of month `ym` with their ways home (code → hub) for days after `dep`; earlier days carry none. */
+export function withWays(
+  days: readonly CalDay[],
+  dep: string,
+  code: string,
+  hub: string,
+  today: string,
+  coverage: Coverage | null,
+  withConnections: boolean,
+  connect: ConnectOptions = NO_OPTS,
+): CalDay[] {
+  return days.map(d => (d.key > dep ? { ...d, ways: waysOn(code, hub, d.key, today, coverage, withConnections, connect) } : d));
+}
+
+export interface NightShortcut { nights: number; key: string; ways: Ways }
+
+/**
+ * '2 / 3 / 4 / 7 nights' return shortcuts for a picked departure: the return day
+ * (dep + n) and its ways home, only for days that can be picked.
+ */
+export function nightShortcuts(
+  dep: string,
+  code: string,
+  hub: string,
+  today: string,
+  coverage: Coverage | null,
+  withConnections: boolean,
+  connect: ConnectOptions = NO_OPTS,
+): NightShortcut[] {
+  return NIGHT_SHORTCUTS
+    .map(nights => ({ nights, key: addDays(dep, nights) }))
+    .filter(n => pickable(n.key, today, coverage))
+    .map(n => ({ ...n, ways: waysOn(code, hub, n.key, today, coverage, withConnections, connect) }));
+}
+
+/** '3 ways home', '1 way home', '0 ways home'; with connections on and some needing one: '2 nonstop · 1 with a connection'. */
+export function waysLabel(w: Ways): string {
+  if (w.connecting) return t('calendar.ways.split', { direct: w.direct, connecting: w.connecting });
+  return t('calendar.ways', { n: w.total });
+}
+
+/** Nonstop departures per weekday (Monday first) in month `ym`, counting only days still open to pick. */
+export function weekdayCounts(
+  from: string,
+  to: string,
+  ym: string,
+  today: string,
+  coverage: Coverage | null,
+): number[] {
+  const out = [0, 0, 0, 0, 0, 0, 0];
+  for (const key of monthKeys(ym)) {
+    if (key < today || isOutside(key, coverage)) continue;
+    out[weekdayIndex(key)] += flightsOn(from, to, key).length;
+  }
+  return out;
+}
+
+/** 'Nonstops by weekday in October: Mon 1 · Tue 0 · …', or null when the month has none. */
+export function weekdayLine(counts: readonly number[], ym: string): string | null {
+  if (!counts.some(n => n > 0)) return null;
+  const month = formatKey(`${ym}-01`, { month: 'long' });
+  const list = counts.map((n, i) => `${weekdayShort(i)} ${n}`).join(' · ');
+  return t('calendar.weekdays', { month, list });
 }
 
 /** Availability for every day of month `ym`, from → to. */
@@ -150,6 +241,9 @@ export function dayAria(d: CalDay, field: CalField): string {
   let what: string;
   if (d.past) what = t('calendar.aria.past');
   else if (d.outside) what = t('dest.avail.unpublished');
+  else if (field === 'ret' && d.ways) what = d.ways.connecting
+    ? t('calendar.aria.waysSplit', { direct: d.ways.direct, connecting: d.ways.connecting })
+    : t('calendar.aria.ways', { n: d.ways.total });
   else if (d.direct) what = t(field === 'ret' ? 'calendar.aria.ret' : 'calendar.aria.dep', { n: d.direct });
   else if (d.connect) what = t('dest.avail.connOnly');
   else what = t('calendar.aria.none');

@@ -11,6 +11,11 @@ import { MemoryStorage } from '../../state/testing';
 import { RouteMapComponent } from '../../ui/route-map.component';
 import { toUtcMs } from '../../utils/time';
 import { MapPage } from './map.page';
+import { CLIMATE_FETCH } from '../../recs/climate.service';
+import { REFERENCE_FETCH } from '../../reference/reference.service';
+import { PROFILE_KEY } from '../../recs/model';
+import { PROFILE_STORAGE } from '../../recs/profile.service';
+import { ADVISORY_FILE, CLIMATE_FILE, VISA_FILE } from '../home/testing/trip-fit-fixture';
 
 const NOW_MS = toUtcMs('2026-10-01', '12:00', 'America/Toronto');
 
@@ -44,6 +49,8 @@ describe('MapPage', () => {
         provideRouter([]),
         { provide: PREFS_STORAGE, useValue: new MemoryStorage() },
         { provide: NOW, useValue: () => NOW_MS },
+        { provide: REFERENCE_FETCH, useValue: async (n: string) => (n === 'visa' ? VISA_FILE : n === 'advisories' ? ADVISORY_FILE : null) },
+        { provide: CLIMATE_FETCH, useValue: async () => CLIMATE_FILE },
         { provide: LAND_FETCH, useValue: () => Promise.resolve(null) },
       ],
     });
@@ -196,5 +203,45 @@ describe('MapPage', () => {
     handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     await fixture.whenStable();
     expect(handle.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('the filter button opens the trip-fit sheet; filters shrink the list and the markers; the count badge and clear work', async () => {
+    await render();
+    expect(names()).toEqual(['LHR', 'ATH', 'SYD']);
+    expect(el.querySelector('[data-map-filters] .badge')).toBeNull();
+    el.querySelector<HTMLButtonElement>('[data-map-filters]')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.body.querySelector('[data-fit]')).toBeTruthy();
+    expect(document.body.querySelector('[data-filter="sort"]')).toBeNull(); // Home-only controls are not offered
+    state.setFilters({ minHighC: 20 }); // October: ATH 26°, LHR 14°, SYD has no data
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(names()).toEqual(['ATH']);
+    expect(map().points().map(p => p.code)).toEqual(['ATH']);
+    expect(el.querySelector('[data-map-filters] .badge')!.textContent).toBe('1');
+    state.setFilters({ minHighC: 30 });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(names()).toEqual([]);
+    el.querySelector<HTMLButtonElement>('.empty .ui-btn')!.click();
+    fixture.detectChanges();
+    expect(names()).toEqual(['LHR', 'ATH', 'SYD']);
+    expect(el.querySelector('[data-map-filters] .badge')).toBeNull();
+  });
+
+  it('applies an entry filter for the profile passport', async () => {
+    const profile = new MemoryStorage();
+    profile.setItem(PROFILE_KEY, JSON.stringify({ v: 1, passports: ['CA'] }));
+    TestBed.overrideProvider(PROFILE_STORAGE, { useValue: profile });
+    await render();
+    state.setFilters({ entry: 'noVisa' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(names()).toEqual(['ATH']);
   });
 });

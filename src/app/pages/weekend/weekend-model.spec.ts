@@ -4,7 +4,7 @@ import { MIN_STAY_MIN } from '../../recs/engine';
 import { RECS_META, RECS_ROUTES } from '../../recs/testing/recs-fixture';
 import { toUtcMs } from '../../utils/time';
 import {
-  WeekendInput, WeekendOption, compareWeekend, presetWindow, windowProblem, upcomingFriday, weekendMeta, weekendOption, weekendOptions, windowOutbound,
+  WeekendInput, WeekendOption, compareWeekend, presetWindow, profileWindow, refineWeekend, windowProblem, upcomingFriday, weekendMeta, weekendOption, weekendOptions, windowOutbound,
   windowValid,
 } from './weekend-model';
 
@@ -165,5 +165,35 @@ describe('window problems', () => {
   });
   it('refuses home-by before leave-after', () => {
     expect(windowProblem({ ...ok, homeKey: '2026-10-08' }, 'YUL', NOW)).toBe('Home-by has to be after leave-after');
+  });
+});
+
+describe('my days off and refining', () => {
+  it('plans the next stretch of profile days, starting today or later, at most 9 days', () => {
+    // Tue Oct 6: Fri-Sun → Oct 9-11.
+    expect(profileWindow([5, 6, 7], '2026-10-06')).toEqual({ leaveKey: '2026-10-09', leaveHhmm: '06:00', homeKey: '2026-10-11', homeHhmm: '22:00' });
+    // A stretch that wraps the week: Sat, Sun, Mon from Thu Oct 8 → Oct 10-12.
+    expect(profileWindow([6, 7, 1], '2026-10-08')).toMatchObject({ leaveKey: '2026-10-10', homeKey: '2026-10-12' });
+    // Today is a travel day: start today.
+    expect(profileWindow([2, 3], '2026-10-06')).toMatchObject({ leaveKey: '2026-10-06', homeKey: '2026-10-07' });
+    // The last day of a stretch, after the cutoff: the next stretch (Sun Oct 11 evening → Fri Oct 16).
+    expect(profileWindow([5, 6, 7], '2026-10-11', '13:59')).toMatchObject({ leaveKey: '2026-10-11', homeKey: '2026-10-11' });
+    expect(profileWindow([5, 6, 7], '2026-10-11', '22:30')).toMatchObject({ leaveKey: '2026-10-16', homeKey: '2026-10-18' });
+    // Mid-stretch is fine: Sat evening still plans Sat → Sun.
+    expect(profileWindow([5, 6, 7], '2026-10-10', '22:30')).toMatchObject({ leaveKey: '2026-10-10', homeKey: '2026-10-11' });
+    expect(profileWindow([], '2026-10-06')).toBeNull();
+    expect(profileWindow([1, 2, 3, 4, 5, 6, 7], '2026-10-06')).toBeNull();
+  });
+
+  it('filters by hours there and sorts by the chosen key, ranking ties as before', () => {
+    const all = weekendOptions(input());
+    expect(all.length).toBeGreaterThan(2);
+    const long = refineWeekend(all, 30, 'tries');
+    expect(long.every(o => o.hoursThere >= 30)).toBe(true);
+    const byThere = refineWeekend(all, 0, 'there');
+    expect(byThere.map(o => o.hoursThere)).toEqual([...byThere.map(o => o.hoursThere)].sort((a, b) => b - a));
+    const warm = refineWeekend(all, 0, 'warm', code => (code === all[all.length - 1].code ? 40 : null));
+    expect(warm[0].code).toBe(all[all.length - 1].code);           // the only known high comes first
+    expect(refineWeekend(all, 0, 'tries').map(o => o.code)).toEqual(all.map(o => o.code));
   });
 });

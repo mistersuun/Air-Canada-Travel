@@ -21,4 +21,6 @@ export const map = {
   'map.count': '{n, plural, one {# destination} other {# destinations}}',
   'map.rowSelected': '. Selected; press again to open',
   'map.thisWeek': '{n} this week',
+  'map.filters': '{n, plural, =0 {Filters} other {Filters, # active}}',
+  'map.noFit': 'No destination fits these filters.',
 } satisfies Messages;

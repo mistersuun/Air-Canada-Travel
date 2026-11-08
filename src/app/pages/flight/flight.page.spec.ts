@@ -193,6 +193,7 @@ describe('FlightPage', () => {
     const groups = [...el.querySelectorAll('.grp')].map(g => g.getAttribute('data-group'));
     expect(groups[0]).toBe('later');
     expect(el.querySelector('section[aria-labelledby="fl-miss"] app-option-row')!.textContent).toContain('AC922');
+    expect(el.querySelector("[data-miss-summary]")!.textContent).toBe("After this: 1 more option today, the last at 21:30. None the next day.");
   });
 
   it('no flights that day: empty card with the next nonstop date', async () => {

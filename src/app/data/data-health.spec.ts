@@ -88,6 +88,17 @@ describe('data health', () => {
     report(problems.map(p => `${p} is older than 21 days`));
   });
 
+  it('visa.json is present, versioned, not stale and has the home-country row', () => {
+    // Warning only: the source is a monthly-ish community compilation, so its own date can lag.
+    const f = readJson<{ v: number; asOf: string; cols: string[]; rows: Record<string, string> }>('visa.json');
+    expect(f.v).toBe(1);
+    expect(Number.isNaN(Date.parse(f.asOf))).toBe(false);
+    const ca = (f.rows['CA'] ?? '').split(',');
+    expect(ca.length).toBe(f.cols.length);
+    expect(ca.filter(c => c !== '').length).toBeGreaterThanOrEqual(40);
+    report(ageDays(f.asOf) > 400 ? [`visa.json asOf ${f.asOf} is older than 400 days`] : [], { warnOnly: true });
+  });
+
   it('reports through console.warn locally and fails in CI', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     report([]);

@@ -564,12 +564,14 @@ export class AppStateService {
     const t = this.todayKey();
     if (t === this.rolledFor) return;
     this.rolledFor = t;
-    if (!this.navigated) {
-      const current = weekStartKey(t);
-      if (this.weekStartKey() !== current) {
-        this.weekStartKey.set(current);
-        this.selectedDateKey.set(null);
-      }
+    // A chosen week or day is kept until it is entirely in the past: an app left open for
+    // days (or reopened at its last URL) comes back on the current week, not a gone one.
+    if (this.navigated && !isPastSelection(this.weekStartKey(), this.selectedDateKey(), t)) return;
+    this.navigated = false;
+    const current = weekStartKey(t);
+    if (this.weekStartKey() !== current || this.selectedDateKey() !== null) {
+      this.weekStartKey.set(current);
+      this.selectedDateKey.set(null);
     }
   }
 
@@ -577,11 +579,15 @@ export class AppStateService {
   private applyUrl(s: UrlState): void {
     if (s.from) this.hubOverride.set(s.from);
     if (s.region) this.regionOverride.set(s.region);
-    if (s.week) {
+    // The hub is set first, so this is its today. A past week or day (a stale link, or
+    // the last URL an installed app reopens) falls back to the current week.
+    if (s.week && !isPastSelection(s.week, s.day ?? null, this.todayKey())) {
       this.navigated = true;
       this.weekStartKey.set(s.week);
+      this.selectedDateKey.set(s.day ?? null);
+    } else {
+      this.selectedDateKey.set(null);
     }
-    this.selectedDateKey.set(s.day ?? null);
     if (s.q !== undefined) this.query.set(s.q);
   }
 
@@ -601,4 +607,9 @@ export class AppStateService {
     if (!changed) return;
     void this.router.navigate([], { queryParams: patch, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   }
+}
+
+/** True when the selected day, or else the whole week, is before `today`. */
+export function isPastSelection(week: string, day: string | null, today: string): boolean {
+  return day ? day < today : addDays(week, 6) < today;
 }

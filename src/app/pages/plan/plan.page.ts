@@ -272,7 +272,7 @@ function flightsOf(it: Itinerary): string {
     .hid .ui-link { min-height: 44px; }
     .stay { margin: 0 0 10px 58px; font-size: 12.5px; font-weight: 600; color: var(--teal-ink, var(--teal)); }
     .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
-    .acts .ui-btn { flex: 1 1 auto; padding: 13px 16px; font-size: 14.5px; }
+    .acts .ui-btn { flex: 1 1 auto; min-height: 44px; padding: 13px 16px; font-size: 14.5px; }
     .foot { margin: 18px 0 0; font-size: 12px; text-align: center; }
 
     @media (min-width: 720px) {

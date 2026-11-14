@@ -326,6 +326,8 @@ function writeLegendOpen(open: boolean): void {
     .bn__s { font-size: 12.5px; color: var(--ink-2); }
     .bn__c { font-size: 12.5px; color: var(--ink-2); }
     .bn__tg { position: relative; font-size: 12.5px; font-weight: 600; }
+    /* The text line is ~16px tall: reach the 44px tap height. */
+    .bn__tg::after { inset: -14px -6px; }
     .chips { padding: 10px 16px 0; }
     .vw { padding: 10px 16px 4px; }
     .wkh {

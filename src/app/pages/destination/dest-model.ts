@@ -17,7 +17,7 @@ import {
 } from '../../utils/time';
 import { coverageHubFor, flightsOn, nextFlightDate } from '../../utils/week';
 import type { TimeFormat } from '../../state/prefs.service';
-import { countdown, hm, isOutside, operatesLabel, prettyFlight, weekRangeLabel } from '../../ui/format';
+import { countdown, dayLabel, hm, isOutside, operatesLabel, prettyFlight, weekRangeLabel } from '../../ui/format';
 
 /** How far ahead the timelines look (spec: "up to 21 days ahead"). */
 export const HORIZON_DAYS = 21;
@@ -278,7 +278,7 @@ export function destState(
   return {
     kind: 'no-nonstop',
     next,
-    nextLabel: next ? formatKey(next, { weekday: 'short', month: 'short', day: 'numeric' }) : null,
+    nextLabel: next ? dayLabel(next, today) : null,
     connections: hasConnections,
   };
 }

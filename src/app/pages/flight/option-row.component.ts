@@ -45,7 +45,7 @@ import type { OptionRow } from './flight-model';
     :host { display: block; min-width: 0; contain: inline-size; border-bottom: 1px solid var(--hair); }
     :host(:last-child) { border-bottom: 0; }
     .row { display: flex; align-items: center; gap: 14px; padding: 12px 0; width: 100%; color: var(--ink); text-align: left; min-width: 0; }
-    a.row:hover .nm, button.row:hover .nm { color: var(--blue); }
+    @media (hover: hover) { a.row:hover .nm, button.row:hover .nm { color: var(--blue); } }
     .row:focus-visible { outline-offset: -2px; border-radius: 12px; }
     .th { width: 44px; height: 44px; flex: none; border-radius: var(--radius-thumb, 12px); }
     .tx { flex: 1; min-width: 0; display: block; }

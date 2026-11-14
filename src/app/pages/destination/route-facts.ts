@@ -4,7 +4,7 @@
  */
 import { t } from '../../i18n/t';
 import type { TimeFormat } from '../../state/prefs.service';
-import { shortDay } from '../../ui/format';
+import { dayLabel } from '../../ui/format';
 import { airportTz } from '../../utils/airports';
 import { isCovered } from '../../data/schedule-index';
 import { routeSeason } from '../../utils/season';
@@ -53,7 +53,7 @@ export function routeFacts(hub: string, code: string, today: string, nowMs: numb
   } else {
     const next = nextFlightDate(code, hub, homeToday, false);
     if (next) {
-      const day = next <= addDays(homeToday, 6) ? weekdayShort(weekdayIndex(next)) : shortDay(next);
+      const day = next <= addDays(homeToday, 6) ? weekdayShort(weekdayIndex(next)) : dayLabel(next, homeToday);
       out.push(t('dest.facts.noHome', { day }));
     }
   }

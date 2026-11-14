@@ -57,7 +57,7 @@ export interface PlanBarSide {
       text-align: center; overflow-wrap: anywhere;
     }
     .pb__s.is-open { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-2); }
-    .pb__go { padding: 12px 16px; font-size: 15px; }
+    .pb__go { min-height: 44px; padding: 12px 16px; font-size: 15px; }
     @media (min-width: 720px) { .pb { margin-bottom: 12px; border-radius: 20px; } }
   `],
 })

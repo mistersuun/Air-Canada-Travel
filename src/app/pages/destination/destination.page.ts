@@ -179,7 +179,7 @@ const AC_URL = 'https://www.aircanada.com/';
         } @else {
           <div class="dates__row">
             @let r = rangeLabel();
-            <p class="dates__q tn" data-dates-text><span class="nw">{{ r.range }}</span> · <span class="nw">{{ r.stay }}</span></p>
+            <p class="dates__q tn" data-dates-text><span class="nw">{{ r.range }}</span>&ngsp;<span class="nw">· {{ r.stay }}</span></p>
             <a class="ui-btn ui-btn--sm dates__btn" [routerLink]="planLink()" [queryParams]="planQuery()" data-dates-see>{{ t('planner.dest.seeFlights') }}</a>
             <button type="button" class="dates__x" [attr.aria-label]="t('planner.dest.clearDates')" (click)="clearDates()" data-dates-clear>
               <app-icon name="close" [size]="16" [strokeWidth]="2.2" />
@@ -803,7 +803,7 @@ export class DestinationPage {
   protected readonly farConnection = computed(() => {
     if (this.outDirect().length || this.outVia().length) return null;
     const key = nextConnectionDate(this.state.hub(), this.code(), addDays(this.startKey(), HORIZON_DAYS), this.state.connect());
-    return key ? { key, label: formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }) } : null;
+    return key ? { key, label: dayLabel(key, this.state.todayKey()) } : null;
   });
   protected readonly hasConnections = computed(() => this.outVia().length > 0 || !!this.farConnection());
   protected readonly status = computed(() =>
@@ -825,7 +825,7 @@ export class DestinationPage {
   /** The next nonstop beyond the timeline's horizon (empty-timeline link). */
   protected readonly nextAhead = computed(() => {
     const key = nextFlightDate(this.state.hub(), this.code(), this.startKey(), false);
-    return key ? { key, label: formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }) } : null;
+    return key ? { key, label: dayLabel(key, this.state.todayKey()) } : null;
   });
   protected readonly otherHubs = computed(() =>
     getOrigins(this.code()).filter(o => o.isHub && o.code !== this.state.hub()).map(o => ({ code: o.code, name: hubDisplayName(o.code) })));

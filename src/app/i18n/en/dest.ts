@@ -67,10 +67,6 @@ export const dest = {
   'dest.estimated': 'Estimated',
   'dest.arrives': '{flights} · arrives {time}{offset}',
   'dest.arrivesLocal': '{flights} · arrives {day} {time} local',
-  'dest.avail.unpublished': 'not yet published',
-  'dest.avail.connOnly': 'connection only',
-  /** Shared with the calendar picker (pages/calendar) */
-  'dest.avail.notYet': 'Not yet published',
   /** Daily facts */
   'dest.fact.ord': '{k, select, st {st} nd {nd} rd {rd} other {th}}',
   'dest.fact.longest': 'The longest nonstop from {hub}',

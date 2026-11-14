@@ -67,10 +67,6 @@ export const dest: Translation<typeof en> = {
   'dest.estimated': 'Estimé',
   'dest.arrives': '{flights} · arrivée {time}{offset}',
   'dest.arrivesLocal': '{flights} · arrivée {day} {time} (heure locale)',
-  'dest.avail.unpublished': 'pas encore publié',
-  'dest.avail.connOnly': 'correspondance seulement',
-  /** Shared with the calendar picker (pages/calendar) */
-  'dest.avail.notYet': 'Pas encore publié',
   /** Daily facts */
   'dest.fact.ord': '{k, select, other {e}}',
   'dest.fact.longest': 'Le vol sans escale le plus long depuis {hub}',

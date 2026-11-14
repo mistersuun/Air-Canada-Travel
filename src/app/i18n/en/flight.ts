@@ -115,7 +115,6 @@ export const flight = {
   'flight.sheet.hint': 'As you read it in your load tool. Notes stay on this device, with the time you wrote them.',
   'flight.sheet.save': 'Save note',
   'flight.ticket.estimated': 'Estimated · verify on aircanada.com',
-  'flight.nights': '{n, plural, one {# night} other {# nights}}',
   'flight.onDay.title': 'On the day',
   'flight.onDay.ac': 'Air Canada flight status',
   'flight.onDay.weather': 'Weather alerts (Environment Canada)',

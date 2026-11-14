@@ -115,7 +115,6 @@ export const flight: Translation<typeof en> = {
   'flight.sheet.hint': "Tel que vous le lisez dans votre outil de suivi des places. Les notes restent sur cet appareil, avec l'heure à laquelle vous les avez écrites.",
   'flight.sheet.save': 'Enregistrer la note',
   'flight.ticket.estimated': 'Estimé · vérifiez sur aircanada.com',
-  'flight.nights': '{n, plural, one {# nuit} other {# nuits}}',
   'flight.onDay.title': 'Le jour du départ',
   'flight.onDay.ac': 'État des vols d’Air Canada',
   'flight.onDay.weather': 'Alertes météo (Environnement Canada)',

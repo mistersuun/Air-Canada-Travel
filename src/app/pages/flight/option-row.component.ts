@@ -8,7 +8,7 @@ import type { OptionRow } from './flight-model';
  * One itinerary as a list row (`.row` with a `.mono-thumb` in the mockup):
  * a monogram tile with the hub (or destination) code, 'Via Toronto' /
  * 'Nonstop' with the elapsed time, and the flights and times. It is a link
- * to that flight's page, or, with `selectable`, a toggle button (return pick).
+ * to that flight's page, or, with `selectable`, a radio button inside the caller's role="radiogroup" (a /plan pick).
  */
 @Component({
   selector: 'app-option-row',
@@ -18,7 +18,7 @@ import type { OptionRow } from './flight-model';
   template: `
     @let r = row();
     @if (selectable()) {
-      <button type="button" class="row" [class.is-sel]="selected()" [attr.aria-pressed]="selected()" (click)="pick.emit()">
+      <button type="button" class="row" [class.is-sel]="selected()" role="radio" [attr.aria-checked]="selected()" (click)="pick.emit()">
         <span class="th ui-mono" [style.--mono]="tint()" aria-hidden="true">{{ r.tile }}</span>
         <span class="tx">
           <span class="nm">{{ r.name }}<small>{{ r.small }}</small></span>
@@ -49,7 +49,8 @@ import type { OptionRow } from './flight-model';
     .row:focus-visible { outline-offset: -2px; border-radius: 12px; }
     .th { width: 44px; height: 44px; flex: none; border-radius: var(--radius-thumb, 12px); }
     .tx { flex: 1; min-width: 0; display: block; }
-    .nm { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Flight numbers wrap rather than being cut off with an ellipsis. */
+    .nm { display: block; overflow-wrap: anywhere; }
     /* Times and flight numbers may take a second line rather than being cut off. */
     .tm { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
     .nm { font-weight: 600; font-size: 15px; }

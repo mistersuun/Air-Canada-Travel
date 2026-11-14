@@ -80,7 +80,7 @@ async function renderPlan(inputs: PlanInputs = {}) {
   };
   const text = (sel?: string) => ((sel ? el.querySelector(sel) : el)?.textContent ?? '').replace(/\s+/g, ' ').trim();
   const pressed = (list: 'out' | 'home') =>
-    [...el.querySelectorAll(`[data-list="${list}"] button[aria-pressed="true"]`)].map(b => (b.textContent ?? '').replace(/\s+/g, ' ').trim());
+    [...el.querySelectorAll(`[data-list="${list}"] button[aria-checked="true"]`)].map(b => (b.textContent ?? '').replace(/\s+/g, ' ').trim());
   const lastQuery = () => (nav.mock.calls.at(-1)?.[1] as { queryParams?: Record<string, unknown> } | undefined)?.queryParams;
   return { fixture, el, nav, stable, set, text, pressed, lastQuery, cmp: fixture.componentInstance };
 }

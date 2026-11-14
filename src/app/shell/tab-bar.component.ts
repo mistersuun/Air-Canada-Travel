@@ -12,6 +12,11 @@ interface Tab {
   icon: IconName;
 }
 
+/** The round trip (/plan/:code) keeps its PlanBar at the bottom, where the tab bar would sit. */
+export function isPlanPath(path: string): boolean {
+  return /^\/plan(\/|$|\?)/.test(path);
+}
+
 export const TABS: readonly Tab[] = [
   { section: 'explore', label: 'shell.nav.explore', path: '/', icon: 'compass' },
   { section: 'map', label: 'shell.nav.map', path: '/map', icon: 'map' },
@@ -22,7 +27,8 @@ export const TABS: readonly Tab[] = [
  * Mobile floating tab bar (< 720px): a glass pill 26px above the bottom.
  * The active tab is an ink pill with its label; the others are icons.
  * Settings opens the sheet. Hidden on detail pages (/to, /flight, /calendar,
- * /trips/:id, /today, /reach, /saved, /weekend, /g/:id), which show back buttons instead.
+ * /trips/:id, /today, /reach, /saved, /weekend, /g/:id, /plan), which show back buttons instead.
+ * /plan also has its own sticky bar where the tab bar would sit.
  */
 @Component({
   selector: 'app-tab-bar',
@@ -71,5 +77,5 @@ export class TabBarComponent {
   protected readonly tabs = TABS;
   protected readonly t = t;
   protected readonly section = computed(() => navSection(this.state.path()));
-  protected readonly hidden = computed(() => isDetailPath(this.state.path()));
+  protected readonly hidden = computed(() => isDetailPath(this.state.path()) || isPlanPath(this.state.path()));
 }

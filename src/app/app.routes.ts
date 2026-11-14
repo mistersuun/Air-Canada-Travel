@@ -6,7 +6,7 @@ import {
 /**
  * URL scheme (spec §2.1). Pages receive params as signal inputs
  * (withComponentInputBinding): code = input.required<string>(), date, flight.
- * Build links with ui/links.ts (destPath, flightPath, calendarPath, and the
+ * Build links with ui/links.ts (destPath, flightPath, calendarPath, planPath, and the
  * Trips v2 builders tripPath, tripImportPath, recoverPath, todayPath,
  * reachPath, gatewayPath).
  *
@@ -68,6 +68,13 @@ export const routes: Routes = [
     canActivate: [knownDestination],
     loadComponent: () => import('./pages/calendar/calendar.page').then(m => m.CalendarPage),
     title: 'shell.title.calendar',
+  },
+  {
+    // Round trip: flights out and ways home for ?dep / ?ret, picks in ?out / ?back (dates-spec §3.2).
+    path: 'plan/:code',
+    canActivate: [knownDestination],
+    loadComponent: () => import('./pages/plan/plan.page').then(m => m.PlanPage),
+    title: 'shell.title.plan',
   },
   {
     path: 'trips',

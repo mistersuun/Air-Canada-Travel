@@ -143,4 +143,6 @@ export const planner: Translation<typeof en> = {
   'planner.flight.planRound': 'Planifier l’aller-retour',
 
   'planner.home.plan': 'Planifier un aller-retour',
+
+  'planner.plan.barHomeNoDay': 'Retour · choisir un jour',
 };

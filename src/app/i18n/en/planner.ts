@@ -157,4 +157,7 @@ export const planner = {
 
   // ── Home ───────────────────────────────────────────────────────────────────
   'planner.home.plan': 'Plan a round trip',
+
+  // ── Round trip bar (WS-C) ──────────────────────────────────────────────────
+  'planner.plan.barHomeNoDay': 'Home · pick a day',
 };

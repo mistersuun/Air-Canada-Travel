@@ -68,18 +68,9 @@ export const dest: Translation<typeof en> = {
   'dest.arrives': '{flights} · arrivée {time}{offset}',
   'dest.arrivesLocal': '{flights} · arrivée {day} {time} (heure locale)',
   'dest.avail.unpublished': 'pas encore publié',
-  'dest.avail.nonstop': '{n, plural, one {# départ sans escale} other {# départs sans escale}}',
   'dest.avail.connOnly': 'correspondance seulement',
-  'dest.avail.none': 'aucun vol',
-  'dest.avail.label': '{day}\u00a0: {what}',
-  /** Month availability card */
-  'dest.avail.title': 'Jours de vol',
-  'dest.avail.prev': 'Mois précédent',
-  'dest.avail.next': 'Mois suivant',
+  /** Shared with the calendar picker (pages/calendar) */
   'dest.avail.notYet': 'Pas encore publié',
-  'dest.avail.legendMore': 'Plus de départs sans escale',
-  'dest.avail.legendOne': 'Un seul',
-  'dest.avail.legendConn': 'Correspondance seulement',
   /** Daily facts */
   'dest.fact.ord': '{k, select, other {e}}',
   'dest.fact.longest': 'Le vol sans escale le plus long depuis {hub}',
@@ -100,7 +91,6 @@ export const dest: Translation<typeof en> = {
   'dest.openAc': 'Ouvrir sur aircanada.com',
   'dest.tabs.aria': 'Sections de la destination',
   'dest.tab.departures': 'Départs',
-  'dest.tab.returns': 'Retours',
   'dest.tab.map': 'Carte',
   'dest.showConnections': 'Afficher les correspondances',
   'dest.notPublished': 'Non publié',

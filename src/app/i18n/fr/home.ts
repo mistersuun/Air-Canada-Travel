@@ -10,8 +10,6 @@ export const home: Translation<typeof en> = {
   'home.filterButton': '{n, plural, =0 {Filtrer et trier} one {Filtrer et trier, # actif} other {Filtrer et trier, # actifs}}',
   'home.flightsShown': 'Vols affichés',
   'home.plusConnections': '+ Correspondances',
-  'home.legend': 'Un point sous un jour indique un vol sans escale ce jour-là. Le bleu marque aujourd\'hui.',
-  'home.gotIt': 'Compris',
   'home.commute': 'Navettage vers la base ›',
   'home.weekendFinder': 'Fins de semaine ›',
   'home.destinations': 'Destinations',

@@ -68,18 +68,9 @@ export const dest = {
   'dest.arrives': '{flights} · arrives {time}{offset}',
   'dest.arrivesLocal': '{flights} · arrives {day} {time} local',
   'dest.avail.unpublished': 'not yet published',
-  'dest.avail.nonstop': '{n, plural, one {# nonstop departure} other {# nonstop departures}}',
   'dest.avail.connOnly': 'connection only',
-  'dest.avail.none': 'no flights',
-  'dest.avail.label': '{day}: {what}',
-  /** Month availability card */
-  'dest.avail.title': 'Availability',
-  'dest.avail.prev': 'Previous month',
-  'dest.avail.next': 'Next month',
+  /** Shared with the calendar picker (pages/calendar) */
   'dest.avail.notYet': 'Not yet published',
-  'dest.avail.legendMore': 'More nonstop departures',
-  'dest.avail.legendOne': 'One',
-  'dest.avail.legendConn': 'Connection only',
   /** Daily facts */
   'dest.fact.ord': '{k, select, st {st} nd {nd} rd {rd} other {th}}',
   'dest.fact.longest': 'The longest nonstop from {hub}',
@@ -100,7 +91,6 @@ export const dest = {
   'dest.openAc': 'Open in aircanada.com',
   'dest.tabs.aria': 'Destination sections',
   'dest.tab.departures': 'Departures',
-  'dest.tab.returns': 'Returns',
   'dest.tab.map': 'Map',
   'dest.showConnections': 'Show connections',
   'dest.notPublished': 'Not published',

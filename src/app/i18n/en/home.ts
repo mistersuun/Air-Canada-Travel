@@ -10,8 +10,6 @@ export const home = {
   'home.filterButton': '{n, plural, =0 {Filter and sort} other {Filter and sort, # active}}',
   'home.flightsShown': 'Flights shown',
   'home.plusConnections': '+ Connections',
-  'home.legend': 'A dot under a day means a nonstop flies that day. Blue marks today.',
-  'home.gotIt': 'Got it',
   'home.commute': 'Commute to base ›',
   'home.weekendFinder': 'Weekend finder ›',
   'home.destinations': 'Destinations',

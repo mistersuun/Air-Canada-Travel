@@ -14,7 +14,8 @@ import { TripsService } from '../../trips/trips.service';
 import { placeFromDestination } from '../../places/place';
 import { allItineraries, directItineraries } from '../../utils/connections';
 import { toUtcMs } from '../../utils/time';
-import { FlightPage, homeByFor } from './flight.page';
+import { homeByFor } from '../../planner/round-trip';
+import { FlightPage } from './flight.page';
 import { agoLabel, factsView, noteFlights, noteRow, tripConnects, tripTarget, tripsCovering, tripsFor } from './flight-model';
 
 const TZ = 'America/Toronto';
@@ -271,37 +272,15 @@ describe('FlightPage additions (g6)', () => {
     expect(nav).toHaveBeenCalledWith(['/trips', t.id], expect.anything());
   });
 
-  it('"Start a trip" with a chosen return adds it as the return leg and sets home-by from its arrival', async () => {
+  it('"Start a trip" stays one way; with ?ret= the trip is home by that day at 22:00', async () => {
     configure(at('2026-10-02', '09:00'), { seedTrip: false });
     const { el, svc, fixture } = await render('LIS', '2026-10-09');
-    const ret = directItineraries('LIS', 'YUL', '2026-10-13')[0];
-    expect(ret).toBeTruthy();
-    (fixture.componentInstance as unknown as { returnPick: { set(v: unknown): void } }).returnPick.set(ret);
+    fixture.componentRef.setInput('ret', '2026-10-13');
+    fixture.detectChanges();
     (el.querySelector('[data-add-trip]') as HTMLButtonElement).click();
     const t = svc.trips()[0];
-    expect(t.legs.map(l => (l.kind === 'flight' ? `${l.role}:${l.refs[0].flightNumber}` : l.kind))).toEqual(['outbound:AC812', 'return:AC813']);
+    expect(t.legs.map(l => (l.kind === 'flight' ? `${l.role}:${l.refs[0].flightNumber}` : l.kind))).toEqual(['outbound:AC812']);
     expect(t.homeBy).toEqual({ dateKey: '2026-10-13', hhmm: '22:00' });
-  });
-
-  it('Start (no flight) → flight page → pick a return → Add puts both legs in the trip and moves its dates', async () => {
-    configure(at('2026-10-02', '09:00'), { seedTrip: false });
-    const svc = TestBed.inject(TripsService);
-    // What the destination page's Start leaves behind: a trip with no leg, on a guessed day.
-    const trip = svc.create({
-      goal: placeFromDestination('LIS'), fromHub: 'YUL', outboundDate: '2026-10-08',
-      homeBy: { dateKey: '2026-10-13', hhmm: '22:00' },
-    });
-    const { el, fixture } = await render('LIS', '2026-10-09');
-    const ret = directItineraries('LIS', 'YUL', '2026-10-14')[0];
-    expect(ret).toBeTruthy();
-    (fixture.componentInstance as unknown as { returnPick: { set(v: unknown): void } }).returnPick.set(ret);
-    const btn = el.querySelector('[data-add-trip]') as HTMLButtonElement;
-    expect(clean(btn.textContent)).toContain('Add to');
-    btn.click();
-    const t = svc.trip(trip.id)!;
-    expect(t.legs.map(l => (l.kind === 'flight' ? `${l.role}:${l.refs[0].flightNumber}` : l.kind))).toEqual(['outbound:AC812', 'return:AC813']);
-    expect(t.outboundDate).toBe('2026-10-09');
-    expect(t.homeBy).toEqual({ dateKey: ret.arrDateKey, hhmm: '22:00' });
   });
 
   it('Start (no flight) → Add without a return shifts home-by with the outbound day', async () => {

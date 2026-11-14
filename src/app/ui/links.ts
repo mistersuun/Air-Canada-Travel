@@ -104,3 +104,8 @@ export function gatewayPath(placeId: string, code: string): string[] {
 export function guidePath(): string[] {
   return ['/guide'];
 }
+
+/** Command array for the round trip `/plan/:code` (query: `?dep&ret&out&back`). */
+export function planPath(code: string): string[] {
+  return ['/plan', code.toUpperCase()];
+}

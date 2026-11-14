@@ -21,7 +21,7 @@ import { currencyName } from './destination/currency';
 import { dailyFact, distanceRankFact, extremeFact } from './destination/fun-facts';
 import { destSummary, placeLabel, timelineDay } from './destination/dest-model';
 import { frequencyLabel, agoLabel } from './flight/flight-model';
-import { nightsLabel, rangeLabel, selectLabel } from './calendar/cal-model';
+import { nightsLabel, rangeLabel, seeLabel } from './calendar/cal-model';
 import { itemMeta } from './map/map-model';
 import { cardMeta, watchingMeta } from './saved/saved-model';
 import { presetWindow, weekendMeta, windowProblem } from './weekend/weekend-model';
@@ -106,8 +106,8 @@ describe('flight and calendar models in French', () => {
     expect(nb(rangeLabel('2026-10-08', '2026-10-15'))).toBe('8–15 oct.');
     expect(nb(rangeLabel('2026-10-28', '2026-11-04'))).toBe('28 oct. – 4 nov.');
     expect(nightsLabel('2026-10-08', '2026-10-15')).toBe('7 nuits');
-    expect(nb(selectLabel('2026-10-08', null))).toMatch(/^Choisir le .* · aller simple$/);
-    expect(selectLabel(null, null)).toBe('Choisir une date de départ');
+    expect(nb(seeLabel('2026-10-08', null, '2026-10-07'))).toMatch(/^Voir les vols · aller simple · jeu. 8 oct.$/);
+    expect(seeLabel(null, null, '2026-10-07')).toBe('Touchez le jour du départ');
   });
 
   it('words ICS text in French', () => {

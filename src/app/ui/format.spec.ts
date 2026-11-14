@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import type { Itinerary } from '../utils/connections';
 import {
-  countdown, daysLabel, formatStay, greeting, hm, hubDisplayName, isOutside, itinKey,
-  operatesLabel, prettyFlight, relativeCountdown, relativeDay, shortDay, supOffset, timeRange,
+  countdown, dayLabel, dayNum, daysLabel, formatStay, greeting, hm, hubDisplayName, isOutside, itinKey, longDayLabel,
+  operatesLabel, prettyFlight, relativeCountdown, relativeDay, shortDay, shortRange, supOffset, timeRange,
   tzAbbr, tzDiffLabel, weekRangeLabel,
 } from './format';
 
@@ -115,5 +115,16 @@ describe('ui/format', () => {
     expect(weekRangeLabel('2026-10-05')).toBe('Oct 5 – 11');
     expect(weekRangeLabel('2026-09-28')).toBe('Sep 28 – Oct 4');
     expect(weekRangeLabel('2026-12-28')).toBe('Dec 28, 2026 – Jan 3, 2027');
+  });
+
+  it('planner days and ranges: the year only outside today\'s year', () => {
+    expect(dayLabel('2026-11-28', '2026-11-14')).toBe('Sat, Nov 28');
+    expect(dayLabel('2027-06-02', '2026-11-14')).toBe('Wed, Jun 2, 2027');
+    expect(dayNum('2026-11-24')).toBe('Tue 24');
+    expect(longDayLabel('2026-11-28', '2026-11-14')).toBe('Saturday, November 28');
+    expect(longDayLabel('2027-01-04', '2026-11-14')).toBe('Monday, January 4, 2027');
+    expect(shortRange('2026-11-20', '2026-11-28', '2026-11-14')).toBe('Nov 20 – 28');
+    expect(shortRange('2026-11-28', '2026-12-03', '2026-11-14')).toBe('Nov 28 – Dec 3');
+    expect(shortRange('2026-12-28', '2027-01-03', '2026-11-14')).toBe('Dec 28, 2026 – Jan 3, 2027');
   });
 });

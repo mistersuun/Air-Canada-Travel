@@ -11,6 +11,7 @@ import {
 import { IconComponent } from '../components/shared/icons.component';
 import { shortcutAllowed } from '../shell/keyboard';
 import { isOutside, weekRangeLabel } from './format';
+import { type DayCount, countWords } from '../planner/round-trip';
 
 export interface StripDay {
   key: string;
@@ -61,7 +62,11 @@ export const SWIPE_PX = 50;
                   (click)="onDay(d.key)">
             <span class="dow">{{ d.dow }}</span>
             <b class="tn">{{ d.date }}</b>
-            <i class="dt" [class.is-on]="hasDot($index, d)"></i>
+            @if (counts(); as cs) {
+              <span class="ct tn" [class.dm--hatch]="cs[$index]?.state === 'unpublished'">{{ countText(cs[$index]) }}</span>
+            } @else {
+              <i class="dt" [class.is-on]="hasDot($index, d)"></i>
+            }
           </button>
         }
       </div>
@@ -115,6 +120,9 @@ export const SWIPE_PX = 50;
     .d b { font-size: 18px; font-weight: 650; }
     .dt { display: block; width: 4px; height: 4px; border-radius: 50%; margin: 3px auto 0; background: transparent; }
     .dt.is-on { background: var(--teal); }
+    .ct { display: block; min-height: 14px; margin-top: 1px; font-size: 11px; font-weight: 650; color: var(--ink-2); border-radius: 4px; }
+    .d.on .ct { color: #FFFFFF; }
+    .d.is-past:not(.on) .ct { color: var(--ink-3); }
     .d.is-out b, .d.is-past:not(.on) b { color: var(--ink-3); }
     .d.is-past:not(.on) .dt.is-on { opacity: .45; }
     .d.on { color: #FFFFFF; }
@@ -155,6 +163,12 @@ export class WeekStripComponent {
   readonly coverage = input<Coverage | null>(null);
   /** Seven flags (Mon–Sun): a teal dot under days with a departure. Null hides the dots. */
   readonly dots = input<readonly boolean[] | null>(null);
+  /**
+   * Seven day counts (Mon–Sun, flights out): a count line under each day
+   * ('3', '–', hatched when not yet published) and the count in its label.
+   * Replaces the dots when set; null hides it.
+   */
+  readonly counts = input<readonly (DayCount | null)[] | null>(null);
   readonly glass = input(true, { transform: booleanAttribute });
   /** Bind the page-level keyboard shortcuts (Home only). */
   readonly shortcuts = input(false, { transform: booleanAttribute });
@@ -175,6 +189,8 @@ export class WeekStripComponent {
       let label = formatKey(key, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       if (key === today) label = t('ui.week.today', { label });
       if (outside) label = t('ui.week.outsideSuffix', { label });
+      const c = this.counts()?.[i];
+      if (c && c.state !== 'unpublished' && c.state !== 'past' && c.state !== 'loading') label = `${label}, ${countWords(c, 'out')}`;
       return { key, dow: weekdayShort(i), date: +key.slice(8), label, today: key === today, outside, past: key < today };
     });
   });
@@ -213,6 +229,13 @@ export class WeekStripComponent {
   protected hasDot(i: number, d: StripDay): boolean {
     const dots = this.dots();
     return !!dots && !!dots[i] && !d.outside;
+  }
+
+  /** '3', '–' (none, past, not yet published) or '·' (loading); '' with no count for that day. */
+  protected countText(c: DayCount | null | undefined): string {
+    if (!c) return '';
+    if (c.state === 'loading') return '·';
+    return c.state === 'ok' ? String(c.total) : '–';
   }
 
   protected weekRange(offset: number): string {

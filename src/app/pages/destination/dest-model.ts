@@ -13,12 +13,11 @@ import {
 } from '../../utils/connections';
 import { routeSeason } from '../../utils/season';
 import {
-  addDays, addMonths, diffDays, formatClock, formatKey, monthKeys, monthOf, overriddenZoneLabel, weekKeys, weekdayIndex, weekdayShort,
+  addDays, diffDays, formatClock, formatKey, overriddenZoneLabel, weekKeys, weekdayIndex, weekdayShort,
 } from '../../utils/time';
 import { coverageHubFor, flightsOn, nextFlightDate } from '../../utils/week';
-import { monthAvailability } from '../../utils/routes';
 import type { TimeFormat } from '../../state/prefs.service';
-import { countdown, hm, isOutside, operatesLabel, prettyFlight, weekRangeLabel } from '../../ui/format';
+import { countdown, dayLabel, hm, isOutside, operatesLabel, prettyFlight, weekRangeLabel } from '../../ui/format';
 
 /** How far ahead the timelines look (spec: "up to 21 days ahead"). */
 export const HORIZON_DAYS = 21;
@@ -121,7 +120,10 @@ export function nextConnectionDate(
 /** 'Today, Oct 1' / 'Fri, Oct 2' (the mockup's date line). */
 export function timelineDay(key: string, today: string): string {
   const day = key === today ? t('format.today') : weekdayShort(weekdayIndex(key));
-  return `${day}, ${formatKey(key, { month: 'short', day: 'numeric' })}`;
+  const opts = key.slice(0, 4) === today.slice(0, 4)
+    ? { month: 'short', day: 'numeric' } as const
+    : { month: 'short', day: 'numeric', year: 'numeric' } as const;
+  return `${day}, ${formatKey(key, opts)}`;
 }
 
 /** Flight numbers of an itinerary: 'AC5', 'AC300 + AC1', 'Estimated + AC1'. */
@@ -184,12 +186,23 @@ export interface DestSummary {
   meta: string;
 }
 
+/** '6× this week', or '3× week of May 31, 2027' when another week is shown (?week=). */
+function weekTimes(n: number, weekStart: string, thisWeek: string): string {
+  if (weekStart === thisWeek) return t('dest.timesWeek', { n });
+  const opts = weekStart.slice(0, 4) === thisWeek.slice(0, 4)
+    ? { month: 'short', day: 'numeric' } as const
+    : { month: 'short', day: 'numeric', year: 'numeric' } as const;
+  return t('dest.timesWeekOf', { n, date: formatKey(weekStart, opts) });
+}
+
 /**
  * Header facts for hub → dest over the week starting `weekStart`. When the
  * week has no nonstop, `sample` (upcoming itineraries) supplies the duration,
  * aircraft and the connection hub.
  */
-export function destSummary(hub: string, dest: string, weekStart: string, sample: readonly Itinerary[]): DestSummary {
+export function destSummary(
+  hub: string, dest: string, weekStart: string, sample: readonly Itinerary[], thisWeek: string = weekStart,
+): DestSummary {
   const week = weekKeys(weekStart).map(k => ({ k, flights: flightsOn(hub, dest, k) }));
   const flying = week.filter(d => d.flights.length);
   const weekFlights = flying.flatMap(d => d.flights);
@@ -210,7 +223,7 @@ export function destSummary(hub: string, dest: string, weekStart: string, sample
       aircraft: aircraftName(code),
       aircraftShort: shortAircraft(code),
       season,
-      meta: [stops, days ? t('dest.timesWeek', { n: days }) : '', shortAircraft(code)].filter(Boolean).join(' · '),
+      meta: [stops, days ? weekTimes(days, weekStart, thisWeek) : '', shortAircraft(code)].filter(Boolean).join(' · '),
     };
   }
   const conn = sample.find(it => it.hubs.length);
@@ -279,7 +292,7 @@ export function destState(
   return {
     kind: 'no-nonstop',
     next,
-    nextLabel: next ? formatKey(next, { weekday: 'short', month: 'short', day: 'numeric' }) : null,
+    nextLabel: next ? dayLabel(next, today) : null,
     connections: hasConnections,
   };
 }
@@ -305,83 +318,6 @@ export function nextDeparture(it: Itinerary | null | undefined, today: string, f
     when: `${day} · ${formatClock(it.legs[0].depLocal, fmt)}`,
     detail: t('dest.arrivesLocal', { flights: itinFlights(it), day: arrDay, time: formatClock(last.arrLocal, fmt) }),
   };
-}
-
-// ── Month availability ──────────────────────────────────────────────────────
-
-export interface AvailCell {
-  dateKey: string;
-  day: number;
-  /** Number of nonstop departures. */
-  direct: number;
-  /** Connection only (no nonstop) that day. */
-  connect: boolean;
-  /** Past, or outside the published window. */
-  off: boolean;
-  /** Teal bar fill, 0–100 (n/3 of the bar per departure, as on the calendar page). */
-  fill: number;
-  /** 'Thu, Oct 8: 2 nonstop departures'. */
-  label: string;
-}
-
-export interface AvailMonth {
-  /** 'YYYY-MM'. */
-  ym: string;
-  /** 'October 2026'. */
-  title: string;
-  /** Monday-first: blank cells before the 1st. */
-  lead: number;
-  cells: AvailCell[];
-  /** True when no day of the month is published. */
-  unpublished: boolean;
-}
-
-/** One month of hub → dest availability (connections only when `withConnections`). */
-export function availMonth(
-  hub: string,
-  dest: string,
-  ym: string,
-  today: string,
-  withConnections: boolean,
-  opts: ConnectOptions = NO_OPTS,
-): AvailMonth {
-  const keys = monthKeys(ym);
-  // Connections are the expensive part: only look them up when shown.
-  const days = withConnections
-    ? monthAvailability(hub, dest, ym, opts)
-    : keys.map(k => ({ dateKey: k, direct: flightsOn(hub, dest, k).length, connect: false, covered: isCovered(k, coverageHubFor(hub, dest)) }));
-  const cells = days.map(a => {
-    const off = a.dateKey < today || !a.covered;
-    const connect = !a.direct && a.connect && !off;
-    const day = formatKey(a.dateKey, { weekday: 'short', month: 'short', day: 'numeric' });
-    const what = !a.covered ? t('dest.avail.unpublished')
-      : a.direct ? t('dest.avail.nonstop', { n: a.direct })
-      : connect ? t('dest.avail.connOnly')
-      : t('dest.avail.none');
-    return {
-      dateKey: a.dateKey,
-      day: Number(a.dateKey.slice(8)),
-      direct: off ? 0 : a.direct,
-      connect,
-      off,
-      fill: off ? 0 : Math.min(100, Math.round((a.direct / 3) * 100)),
-      label: t('dest.avail.label', { day, what }),
-    };
-  });
-  return {
-    ym,
-    title: formatKey(`${ym}-01`, { month: 'long', year: 'numeric' }),
-    lead: weekdayIndex(`${ym}-01`),
-    cells,
-    unpublished: days.every(d => !d.covered),
-  };
-}
-
-/** Month bounds for the availability card: today's month to the coverage end month. */
-export function monthRange(today: string, coverage: Coverage | null): { first: string; last: string } {
-  const first = monthOf(today);
-  const last = coverage?.to ? monthOf(coverage.to) : addMonths(first, 2);
-  return { first, last: last < first ? first : last };
 }
 
 // ── Essentials ──────────────────────────────────────────────────────────────

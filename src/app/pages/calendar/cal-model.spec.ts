@@ -3,36 +3,128 @@ import { getCoverage, resetScheduleSource, setScheduleSource } from '../../data/
 import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
 import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
 import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
+import { NO_OPTS } from '../../utils/connections';
 import {
-  MAX_MONTHS, barWidth, chooserMeta, chooserRows, clampKey, dayAria, monthDays, monthLead, monthRange, monthTitle,
-  monthWeeks, moveKey, nextSelection, nightShortcuts, nightsLabel, pickable, rangeLabel, selectLabel, waysLabel, waysOn,
-  weekdayCounts, weekdayLine, withWays,
+  homeAfterUtc, minuteOf, outboundsOn, resetItinerariesMemo, waysHome, type CountCtx, type DayCount,
+} from '../../planner/round-trip';
+import {
+  MAX_MONTHS, blockedPeek, cellCount, chooserMeta, chooserRows, clampKey, dayAria, dayMarker, firstFlightDay, listRowText,
+  monthDays, monthLead, monthRange, monthTitle, monthWeeks, moveKey, nextDayWith, nextSelection, nightsLabel, nonstopWeekdays,
+  nonstopsLine, peekDep, peekRet, pickable, rangeLabel, seeLabel, timesText, windowEnd,
 } from './cal-model';
 import { findDestination } from '../../utils/airports';
 
 const TODAY = '2026-10-07';
 
+const NOW = Date.parse('2026-10-07T12:00:00Z');
+
+function ctx(over: Partial<CountCtx> = {}): CountCtx {
+  return {
+    today: TODAY, nowMinute: minuteOf(NOW), coverage: getCoverage('YUL'), showConnections: false, connect: NO_OPTS, ...over,
+  };
+}
+
 describe('cal-model', () => {
-  beforeEach(() => setScheduleSource(FIXTURE_ROUTES, FIXTURE_META));
+  beforeEach(() => {
+    setScheduleSource(FIXTURE_ROUTES, FIXTURE_META);
+    resetItinerariesMemo();
+  });
   afterEach(() => resetScheduleSource());
 
-  it('computes availability per day: past, unpublished, nonstops and connection-only', () => {
-    const cov = getCoverage('YUL');
-    const oct = monthDays('YUL', 'ATH', '2026-10', TODAY, cov, false);
+  it('counts flights out per day: past, unpublished, nonstops and connections only', () => {
+    const oct = monthDays('YUL', 'ATH', '2026-10', ctx(), '24h');
     expect(oct).toHaveLength(31);
-    expect(oct[4]).toMatchObject({ key: '2026-10-05', past: true, direct: 0 });
-    expect(oct[6]).toMatchObject({ key: '2026-10-07', past: false, direct: 2, connect: false });
-    expect(oct[7]).toMatchObject({ key: '2026-10-08', direct: 0, connect: false });
-    const apr = monthDays('YUL', 'LHR', '2027-04', TODAY, cov, false);
-    expect(apr.every(d => d.outside && d.direct === 0)).toBe(true);
-    const viaYyz = monthDays('YHZ', 'LHR', '2026-10', TODAY, getCoverage('YHZ'), true);
-    expect(viaYyz[6]).toMatchObject({ direct: 0, connect: true });
-    expect(monthDays('YHZ', 'LHR', '2026-10', TODAY, getCoverage('YHZ'), false)[6].connect).toBe(false);
+    expect(oct[4]).toMatchObject({ key: '2026-10-05', past: true, count: { state: 'past', total: 0 } });
+    // Wed: AC898 and AC922 (the duplicate AC898 row is counted once).
+    expect(oct[6]).toMatchObject({ key: '2026-10-07', past: false, count: { state: 'ok', total: 2, direct: 2, first: '17:25', last: '21:30' } });
+    expect(oct[7].count).toMatchObject({ key: '2026-10-08', state: 'none', total: 0 });
+    const apr = monthDays('YUL', 'LHR', '2027-04', ctx(), '24h');
+    expect(apr.every(d => d.outside && d.count.state === 'unpublished')).toBe(true);
+    const yhz = ctx({ coverage: getCoverage('YHZ') });
+    const viaYyz = monthDays('YHZ', 'LHR', '2026-10', { ...yhz, showConnections: true }, '24h');
+    expect(viaYyz[7].count).toMatchObject({ state: 'ok', direct: 0 });
+    expect(viaYyz[7].count.connecting).toBeGreaterThan(0);
+    const off = monthDays('YHZ', 'LHR', '2026-10', yhz, '24h')[7].count;
+    expect(off).toMatchObject({ state: 'none', total: 0 });
+    expect(off.hidden).toBeGreaterThan(0);
+    // Loading wins over every other state.
+    expect(monthDays('YUL', 'ATH', '2026-10', ctx({ loading: true }), '24h')[6].count.state).toBe('loading');
+  });
+
+  it('counts ways home after the departure lands, with nights, and before-dep days', () => {
+    const dep = '2026-10-08';
+    // AC864 lands LHR Fri 10:00; AC865 leaves 12:10, so the arrival day has a way home.
+    const after = homeAfterUtc(null, outboundsOn('YUL', 'LHR', dep, ctx()), NO_OPTS);
+    const days = monthDays('YUL', 'LHR', '2026-10', ctx(), '24h', { dep, afterUtc: after });
+    const at = (k: string) => days.find(d => d.key === k)!.count;
+    expect(at('2026-10-07')).toMatchObject({ state: 'before-dep', total: 0 });
+    expect(at(dep)).toMatchObject({ state: 'none', nights: 0 });
+    expect(at('2026-10-09')).toMatchObject({ state: 'ok', total: 1, nights: 1, first: '12:10' });
+    expect(at('2026-10-15')).toMatchObject({ state: 'ok', total: 1, nights: 7 });
+    // The counts are the rows: the same function lists them.
+    expect(at('2026-10-15').total).toBe(waysHome('LHR', 'YUL', '2026-10-15', ctx(), after).length);
+  });
+
+  it('draws a marker per state and a count line', () => {
+    const c = (o: Partial<DayCount>): DayCount => ({
+      key: '2026-10-08', state: 'ok', total: 1, direct: 1, connecting: 0, hidden: 0, first: '22:10', last: '22:10', ...o,
+    });
+    expect([dayMarker(c({})), cellCount(c({}))]).toEqual(['solid', '1']);
+    expect([dayMarker(c({ direct: 0, connecting: 1 })), cellCount(c({ direct: 0, connecting: 1 }))]).toEqual(['dotted', '1']);
+    expect([dayMarker(c({ state: 'none', total: 0 })), cellCount(c({ state: 'none', total: 0 }))]).toEqual(['none', '–']);
+    expect([dayMarker(c({ state: 'unpublished' })), cellCount(c({ state: 'unpublished' }))]).toEqual(['hatch', '–']);
+    expect([dayMarker(c({ state: 'past' })), cellCount(c({ state: 'past' }))]).toEqual([null, '']);
+    expect([dayMarker(c({ state: 'before-dep' })), cellCount(c({ state: 'before-dep' }))]).toEqual([null, '']);
+    expect(cellCount(c({ state: 'loading' }))).toBe('·');
+  });
+
+  it('words List rows, the footer peek and times', () => {
+    const c = (o: Partial<DayCount>): DayCount => ({
+      key: '2026-11-20', state: 'ok', total: 2, direct: 2, connecting: 0, hidden: 0, first: '18:05', last: '22:10', ...o,
+    });
+    expect(timesText(c({}))).toBe('18:05, 22:10');
+    expect(timesText(c({ total: 1, direct: 1, last: '18:05' }))).toBe('18:05');
+    expect(timesText(c({ total: 3, first: '11:20', last: '11:20' }))).toBe('11:20');
+    expect(listRowText(c({}), 'out', TODAY)).toBe('Fri, Nov 20 · 2 nonstop · 18:05, 22:10');
+    expect(listRowText(c({ total: 4, direct: 4, first: '06:10', last: '22:40' }), 'out', TODAY)).toBe('Fri, Nov 20 · 4 flights · 06:10–22:40');
+    expect(listRowText(c({ key: '2026-11-23', total: 1, direct: 0, connecting: 1, first: '09:40', last: '09:40' }), 'out', TODAY))
+      .toBe('Mon, Nov 23 · connections only · 09:40');
+    const home = c({ key: '2026-11-28', total: 3, direct: 3, first: '07:10', last: '13:00', nights: 8 });
+    expect(listRowText(home, 'home', TODAY)).toBe('8 nights · Sat, Nov 28 · 3 home · 07:10–13:00');
+    expect(peekDep(c({}), TODAY)).toBe('Leave Fri, Nov 20 · 2 flights · 18:05, 22:10');
+    expect(peekRet(home, '2026-11-20', TODAY)).toBe('Home Sat, Nov 28 · 8 nights · 3 ways home · 07:10–13:00');
+    expect(peekRet({ ...home, key: '2026-11-20', nights: 0 }, '2026-11-20', TODAY)).toContain('Day trip');
+  });
+
+  it('explains a day that cannot be picked, with the next one', () => {
+    const cov = getCoverage('YUL');
+    expect(blockedPeek('2026-11-23', 'home', '2026-11-24', TODAY, cov))
+      .toEqual({ text: 'No flights home on Mon, Nov 23 · next: Tue, Nov 24', go: '2026-11-24' });
+    expect(blockedPeek('2026-11-19', 'out', null, TODAY, cov)).toEqual({ text: 'No flights out on Thu, Nov 19' });
+    expect(blockedPeek('2027-05-01', 'out', null, TODAY, cov)).toEqual({ text: 'Not yet published · schedules end Mar 31, 2027' });
+    expect(windowEnd(null)).toBe('');
+    expect(nextDayWith('2026-10-07', k => (k === '2026-10-09' ? 1 : 0), null)).toBe('2026-10-09');
+    expect(nextDayWith('2026-10-07', () => 0, '2026-10-20')).toBeNull();
+  });
+
+  it('finds the first flying day, with connections when they are shown', () => {
+    expect(firstFlightDay('YUL', 'LHR', ctx())).toBe(TODAY);
+    expect(firstFlightDay('YUL', 'ATH', ctx({ today: '2026-10-08' }))).toBe('2026-10-09');
+    expect(firstFlightDay('YHZ', 'LHR', ctx({ coverage: getCoverage('YHZ') }))).toBeNull();
+    expect(firstFlightDay('YHZ', 'LHR', ctx({ coverage: getCoverage('YHZ'), showConnections: true }))).toBe(TODAY);
+  });
+
+  it('lists the weekdays with a nonstop in a month', () => {
+    const cov = getCoverage('YUL');
+    expect(nonstopWeekdays('YUL', 'ATH', '2026-10', TODAY, cov)).toEqual([0, 2, 4]);
+    expect(nonstopsLine([0, 2, 4])).toBe('Nonstops: Mon, Wed, Fri');
+    expect(nonstopsLine([])).toBeNull();
+    expect(nonstopWeekdays('YUL', 'ATH', '2026-11', TODAY, cov)).toEqual([]);
   });
 
   it('lays a month out Monday-first in rows of seven', () => {
     expect(monthLead('2026-10')).toBe(3);
-    const rows = monthWeeks('2026-10', monthDays('YUL', 'LHR', '2026-10', TODAY, null, false));
+    const rows = monthWeeks('2026-10', monthDays('YUL', 'LHR', '2026-10', ctx(), '24h'));
     expect(rows).toHaveLength(5);
     expect(rows[0].slice(0, 3)).toEqual([null, null, null]);
     expect(rows[0][3]?.key).toBe('2026-10-01');
@@ -47,12 +139,6 @@ describe('cal-model', () => {
     expect(monthRange(TODAY, { from: null, to: '2030-01-01', generatedAt: null, hub: null })).toHaveLength(MAX_MONTHS);
   });
 
-  it('fills the bar at three departures', () => {
-    expect(barWidth(1)).toBeCloseTo(33.33, 1);
-    expect(barWidth(3)).toBe(100);
-    expect(barWidth(5)).toBe(100);
-  });
-
   it('only lets future, published days be picked', () => {
     const cov = getCoverage('YUL');
     expect(pickable('2026-10-08', TODAY, cov)).toBe(true);
@@ -63,36 +149,41 @@ describe('cal-model', () => {
     expect(pickable(undefined, TODAY, cov)).toBe(false);
   });
 
-  it('selects depart then return; a tap on or before the departure restarts', () => {
+  it('selects depart then return; a tap before the departure restarts; a tap on it can make a day trip', () => {
     let s = nextSelection({ dep: null, ret: null, active: 'dep' }, '2026-10-08');
     expect(s).toEqual({ dep: '2026-10-08', ret: null, active: 'ret' });
     s = nextSelection(s, '2026-10-15');
     expect(s).toEqual({ dep: '2026-10-08', ret: '2026-10-15', active: 'ret' });
     expect(nextSelection(s, '2026-10-20')).toEqual({ dep: '2026-10-08', ret: '2026-10-20', active: 'ret' });
     expect(nextSelection(s, '2026-10-08')).toEqual({ dep: '2026-10-08', ret: null, active: 'ret' });
+    expect(nextSelection(s, '2026-10-08', true)).toEqual({ dep: '2026-10-08', ret: '2026-10-08', active: 'ret' });
     expect(nextSelection(s, '2026-10-02')).toEqual({ dep: '2026-10-02', ret: null, active: 'ret' });
+    expect(nextSelection(s, '2026-10-02', true)).toEqual({ dep: '2026-10-02', ret: null, active: 'ret' });
     // Editing the departure keeps a later return, drops an earlier one.
     expect(nextSelection({ ...s, active: 'dep' }, '2026-10-10')).toEqual({ dep: '2026-10-10', ret: '2026-10-15', active: 'ret' });
     expect(nextSelection({ ...s, active: 'dep' }, '2026-10-16')).toEqual({ dep: '2026-10-16', ret: null, active: 'ret' });
   });
 
-  it('labels the selection', () => {
+  it('labels the selection and the See flights button', () => {
     expect(rangeLabel('2026-10-08', '2026-10-15')).toBe('Oct 8 – 15');
     expect(rangeLabel('2026-10-28', '2026-11-04')).toBe('Oct 28 – Nov 4');
     expect(nightsLabel('2026-10-08', '2026-10-09')).toBe('1 night');
-    expect(selectLabel(null, null)).toBe('Select a departure date');
-    expect(selectLabel('2026-10-08', null)).toBe('Select Thu, Oct 8 · one way');
-    expect(selectLabel('2026-10-08', '2026-10-15')).toBe('Select Oct 8 – 15 · 7 nights');
+    expect(nightsLabel('2026-10-08', '2026-10-08')).toBe('Day trip');
+    expect(seeLabel(null, null, TODAY)).toBe('Tap the day you leave');
+    expect(seeLabel('2026-11-20', null, TODAY)).toBe('See flights · one way · Fri, Nov 20');
+    expect(seeLabel('2026-11-20', '2026-11-28', TODAY)).toBe('See flights · Nov 20 – 28 · 8 nights');
+    expect(seeLabel('2026-11-20', '2026-11-20', TODAY)).toBe('See flights · Fri, Nov 20 · Day trip');
+    // Another year carries the year.
+    expect(seeLabel('2027-06-02', null, TODAY)).toBe('See flights · one way · Wed, Jun 2, 2027');
   });
 
-  it('describes a day for screen readers', () => {
-    const base = { key: '2026-10-08', day: 8, direct: 0, connect: false, past: false, outside: false };
-    expect(dayAria({ ...base, direct: 2 }, 'dep')).toBe('Thursday, October 8, 2 departures');
-    expect(dayAria({ ...base, direct: 1 }, 'ret')).toBe('Thursday, October 8, 1 return departure');
-    expect(dayAria({ ...base, connect: true }, 'dep')).toBe('Thursday, October 8, connection only');
-    expect(dayAria(base, 'dep')).toBe('Thursday, October 8, no nonstop');
-    expect(dayAria({ ...base, past: true }, 'dep')).toBe('Thursday, October 8, past');
-    expect(dayAria({ ...base, outside: true }, 'dep')).toBe('Thursday, October 8, not yet published');
+  it('describes a day for screen readers from its count', () => {
+    const d = monthDays('YUL', 'ATH', '2026-10', ctx(), '24h');
+    expect(dayAria(d[6], 'out')).toBe('Wednesday, October 7, 2026, 2 flights out');
+    expect(dayAria(d[7], 'out')).toBe('Thursday, October 8, 2026, no flights');
+    expect(dayAria(d[4], 'out')).toBe('Monday, October 5, 2026, past');
+    const apr = monthDays('YUL', 'LHR', '2027-04', ctx(), '24h');
+    expect(dayAria(apr[0], 'out')).toBe('Thursday, April 1, 2027, not yet published');
   });
 
   it('moves through the grid by day, week, month and week ends', () => {
@@ -131,65 +222,4 @@ describe('cal-model', () => {
     }
   });
 
-  describe('ways home', () => {
-    it('counts nonstops destination to hub on a day, and zeros for past or unpublished days', () => {
-      const cov = getCoverage('YUL');
-      expect(waysOn('LHR', 'YUL', '2026-10-15', TODAY, cov, false)).toEqual({ direct: 1, connecting: 0, total: 1 });
-      expect(waysOn('ATH', 'YUL', '2026-10-15', TODAY, cov, false)).toEqual({ direct: 0, connecting: 0, total: 0 });
-      expect(waysOn('LHR', 'YUL', '2026-10-05', TODAY, cov, false).total).toBe(0);
-      expect(waysOn('LHR', 'YUL', '2027-05-01', TODAY, cov, false).total).toBe(0);
-    });
-
-    it('adds one-stop itineraries only when connections are shown', () => {
-      const cov = getCoverage('YHZ');
-      const off = waysOn('LHR', 'YHZ', '2026-10-15', TODAY, cov, false);
-      const on = waysOn('LHR', 'YHZ', '2026-10-15', TODAY, cov, true);
-      expect(off).toEqual({ direct: 0, connecting: 0, total: 0 });
-      expect(on.direct).toBe(0);
-      expect(on.total).toBe(on.connecting);
-    });
-
-    it('attaches ways to the days after the departure only', () => {
-      const cov = getCoverage('YUL');
-      const days = monthDays('LHR', 'YUL', '2026-10', TODAY, cov, false);
-      const out = withWays(days, '2026-10-08', 'LHR', 'YUL', TODAY, cov, false);
-      expect(out.find(d => d.key === '2026-10-08')!.ways).toBeUndefined();
-      expect(out.find(d => d.key === '2026-10-09')!.ways).toEqual({ direct: 1, connecting: 0, total: 1 });
-    });
-
-    it('offers 2 / 3 / 4 / 7 night shortcuts with their return day and count', () => {
-      const cov = getCoverage('YUL');
-      const n = nightShortcuts('2026-10-08', 'LHR', 'YUL', TODAY, cov, false);
-      expect(n.map(x => [x.nights, x.key, x.ways.total])).toEqual([
-        [2, '2026-10-10', 1], [3, '2026-10-11', 1], [4, '2026-10-12', 1], [7, '2026-10-15', 1],
-      ]);
-      // A return past the published window is not offered.
-      const late = nightShortcuts('2027-03-29', 'LHR', 'YUL', TODAY, cov, false);
-      expect(late.map(x => x.nights)).toEqual([2]);
-    });
-
-    it('labels counts as facts', () => {
-      expect(waysLabel({ direct: 0, connecting: 0, total: 0 })).toBe('0 ways home');
-      expect(waysLabel({ direct: 1, connecting: 0, total: 1 })).toBe('1 way home');
-      expect(waysLabel({ direct: 2, connecting: 1, total: 3 })).toBe('2 nonstop · 1 with a connection');
-    });
-  });
-
-  describe('nonstops by weekday', () => {
-    it('counts departures per weekday over the days still open, Monday first', () => {
-      const cov = getCoverage('YUL');
-      const c = weekdayCounts('YUL', 'ATH', '2026-10', TODAY, cov);
-      expect(c).toHaveLength(7);
-      expect(c[1]).toBe(0);
-      expect(c[0]).toBeGreaterThan(0);
-      expect(c.reduce((a, b) => a + b, 0)).toBe(
-        monthDays('YUL', 'ATH', '2026-10', TODAY, cov, false).reduce((a, d) => a + d.direct, 0));
-    });
-
-    it('writes the line, or nothing for a month without nonstops', () => {
-      expect(weekdayLine([1, 0, 2, 0, 0, 0, 0], '2026-10')).toBe(
-        'Nonstops by weekday in October: Mon 1 · Tue 0 · Wed 2 · Thu 0 · Fri 0 · Sat 0 · Sun 0');
-      expect(weekdayLine([0, 0, 0, 0, 0, 0, 0], '2026-10')).toBeNull();
-    });
-  });
 });

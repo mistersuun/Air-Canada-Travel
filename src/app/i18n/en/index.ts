@@ -18,6 +18,7 @@ import { home } from './home';
 import { logbook } from './logbook';
 import { map } from './map';
 import { passes } from './passes';
+import { planner } from './planner';
 import { places } from './places';
 import { recs } from './recs';
 import { saved } from './saved';
@@ -47,6 +48,7 @@ export const EN_AREAS = {
   logbook,
   map,
   passes,
+  planner,
   places,
   recs,
   saved,
@@ -76,6 +78,7 @@ export const EN = {
   ...logbook,
   ...map,
   ...passes,
+  ...planner,
   ...places,
   ...recs,
   ...saved,

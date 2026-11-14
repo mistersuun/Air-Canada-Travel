@@ -60,3 +60,18 @@ export async function waitForServiceWorker(page: Page): Promise<void> {
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, { timeout: 30_000 });
 }
+
+/**
+ * Opens the round trip for `code` (/plan/CODE?dep&ret, dates-spec §3.2) and waits for its sections.
+ * `dep` must be a flying day inside the published window (the page sends anything else back to the picker).
+ * Returns the page's URL path with its query.
+ */
+export async function planRoundTrip(page: Page, code: string, dep: string, ret?: string): Promise<string> {
+  const q = new URLSearchParams({ dep, ...(ret ? { ret } : {}) });
+  await page.goto(`/plan/${code.toUpperCase()}?${q}`);
+  await expect(page.locator('#pl-out')).toBeVisible();
+  await expect(page.locator('#pl-home')).toBeVisible();
+  await expect(page.getByRole('region', { name: /^(Your round trip|Votre aller-retour)$/ })).toBeVisible();
+  const url = new URL(page.url());
+  return url.pathname + url.search;
+}

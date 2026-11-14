@@ -13,7 +13,7 @@ import { DestRowComponent } from '../../ui/dest-row.component';
 import { DotDay, entryDots } from '../../ui/dot-row.component';
 import { greeting, weekRangeLabel } from '../../ui/format';
 import { HubPickerComponent } from '../../ui/hub-picker.component';
-import { destPath } from '../../ui/links';
+import { calendarPath, destPath } from '../../ui/links';
 import { PhotoCardComponent } from '../../ui/photo-card.component';
 import { SegComponent, SegOption } from '../../ui/seg.component';
 import { WeekStripComponent } from '../../ui/week-strip.component';
@@ -36,16 +36,6 @@ import { regionLabel } from '../../i18n/labels';
 
 /** Phone layout (spec 1.4: mobile < 720px). */
 export const NARROW_QUERY = '(max-width: 719px)';
-
-const LEGEND_KEY = 'ac.legend.strip.v1';
-
-function readLegendSeen(): boolean {
-  try {
-    return globalThis.localStorage?.getItem(LEGEND_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
 
 interface ListRow {
   code: string;
@@ -106,14 +96,16 @@ interface ListRow {
                      [value]="state.showConnections() ? 'connect' : 'direct'" (valueChange)="state.setShowConnections($event === 'connect')" />
           </div>
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
-                          [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
+                          [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="null"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
-          @if (!legendSeen()) {
-            <p class="legend" data-legend>
-              <span>{{ t('home.legend') }}</span>
-              <button type="button" class="legend__x" (click)="dismissLegend()">{{ t('home.gotIt') }}</button>
-            </p>
-          }
+          <div class="day-acts">
+            <a class="ui-btn ui-btn--ghost ui-btn--sm plan-rt" [routerLink]="calendarPath()" [queryParams]="planParams()" data-plan-round>
+              <app-icon name="calendar" [size]="16" [strokeWidth]="2" />{{ t('planner.home.plan') }}
+            </a>
+            @if (dayJump(); as dj) {
+              <button type="button" class="ui-link see-day tn" (click)="showDay()" data-see-day>{{ dj }} <span aria-hidden="true">↓</span></button>
+            }
+          </div>
           <div class="xrow">
             <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">{{ t('home.weekendFinder') }}</a>
             <a class="wkend ui-link" routerLink="/commute" [queryParams]="state.globalParams()">{{ t('home.commute') }}</a>
@@ -250,13 +242,10 @@ interface ListRow {
       box-shadow: 0 0 0 2px var(--bg);
     }
     .conn { align-self: center; }
-    .legend {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 0;
-      font-size: 12.5px; color: var(--ink-2);
-    }
-    .legend__x { flex: none; position: relative; padding: 4px 8px; font-weight: 600; color: var(--blue); }
-    .legend__x::after { content: ''; position: absolute; inset: -8px -4px; }
     .strip { margin-top: 14px; }
+    .day-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 10px; }
+    .plan-rt { display: inline-flex; align-items: center; gap: 6px; }
+    .see-day { position: relative; min-height: 44px; font-size: 13.5px; font-weight: 600; }
 
     .sec { margin-top: 40px; }
     .st { margin: 0; }
@@ -334,17 +323,6 @@ export class HomePage {
       return d && d.code !== this.state.hub() ? [{ code: d.code, city: d.city }] : [];
     }));
 
-  /** The week-strip legend shows until dismissed once (per device). */
-  protected readonly legendSeen = signal(readLegendSeen());
-  protected dismissLegend(): void {
-    this.legendSeen.set(true);
-    try {
-      globalThis.localStorage?.setItem(LEGEND_KEY, '1');
-    } catch {
-      // Storage blocked: the legend returns next visit.
-    }
-  }
-
   protected readonly t = t;
   protected readonly regionLabel = regionLabel;
   protected readonly connectOptions = computed<SegOption[]>(() => [
@@ -407,7 +385,27 @@ export class HomePage {
   protected readonly placeholder = computed(() =>
     this.narrow() ? t('home.searchLabel') : t('home.searchPlaceholder', { n: this.state.allRoutes().length }),
   );
-  protected readonly stripDots = computed(() => this.state.stats().departuresByWeekday.map(n => n > 0));
+  protected readonly calendarPath = calendarPath;
+  /** "Plan a round trip": the picker's destination chooser, carrying the selected day as ?dep. */
+  /** 'Flights on Sun, Nov 15': a day is picked on the strip, and its departures are further down the page. */
+  protected readonly dayJump = computed(() => {
+    const day = this.state.selectedDateKey();
+    return day ? t('planner.home.seeDay', { date: formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' }) }) : null;
+  });
+
+  /** Scrolls to the picked day's nonstops and moves the focus there. */
+  protected showDay(): void {
+    const h = this.doc.getElementById('h-nonstop');
+    if (!h) return;
+    h.setAttribute('tabindex', '-1');
+    h.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    h.focus({ preventScroll: true });
+  }
+
+  protected readonly planParams = computed(() => {
+    const day = this.state.selectedDateKey();
+    return { ...this.state.globalParams(), trip: 'round', ...(day && day >= this.state.todayKey() ? { dep: day } : {}) };
+  });
   protected readonly focus = computed(() =>
     focusDayIndex(this.state.weekStartKey(), this.state.selectedDateKey(), this.state.todayKey()),
   );

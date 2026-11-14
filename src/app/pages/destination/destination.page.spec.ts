@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource } from '../../data/schedule-index';
-import { FIXTURE_META, FIXTURE_ROUTES } from '../../data/testing/schedule-fixtures';
+import { ALL_DAYS, FIXTURE_META, FIXTURE_ROUTES, rec, route } from '../../data/testing/schedule-fixtures';
 import { resetRouteNetworkSource, setRouteNetworkSource } from '../../data/route-network';
 import { ROUTE_NETWORK_FIXTURE } from '../../data/testing/route-network-fixtures';
 import { AppStateService, NOW } from '../../state/app-state.service';
@@ -10,7 +10,8 @@ import { PREFS_STORAGE } from '../../state/prefs.service';
 import { PhotoService } from '../../state/photo.service';
 import { ShareService } from '../../state/share.service';
 import { MemoryStorage } from '../../state/testing';
-import { toUtcMs } from '../../utils/time';
+import { addDays, toUtcMs } from '../../utils/time';
+import { type CountCtx, homeAfterUtc, minuteOf, outboundsOn, waysHome } from '../../planner/round-trip';
 import { DestinationPage } from './destination.page';
 
 const NOW_MS = toUtcMs('2026-10-01', '12:00', 'America/Toronto');
@@ -21,13 +22,30 @@ describe('DestinationPage', () => {
   let state: AppStateService;
   let share: { share: ReturnType<typeof vi.fn> };
 
-  async function render(code: string, setup?: (s: AppStateService) => void): Promise<void> {
+  async function render(code: string, setup?: (s: AppStateService) => void, query: Record<string, string> = {}): Promise<void> {
     fixture = TestBed.createComponent(DestinationPage);
     el = fixture.nativeElement;
     state = TestBed.inject(AppStateService);
     setup?.(state);
     fixture.componentRef.setInput('code', code);
+    for (const [k, v] of Object.entries(query)) fixture.componentRef.setInput(k, v);
     await fixture.whenStable();
+  }
+
+  async function setQuery(query: Record<string, string | undefined>): Promise<void> {
+    for (const [k, v] of Object.entries(query)) fixture.componentRef.setInput(k, v);
+    await fixture.whenStable();
+  }
+
+  function spyNav() {
+    return vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+  }
+
+  function ctxOf(s: AppStateService): CountCtx {
+    return {
+      today: s.todayKey(), nowMinute: minuteOf(s.nowMs()), coverage: s.coverage(),
+      showConnections: s.showConnections(), connect: s.connect(),
+    };
   }
 
   const text = (sel: string) => el.querySelector(sel)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
@@ -71,6 +89,7 @@ describe('DestinationPage', () => {
     expect(tags.slice(1)).toEqual(['Daily', 'Airbus A330-300', 'Year-round']);
     expect(text('.next__when')).toBe('Today · 22:10');
     expect(el.querySelector('a.next')!.getAttribute('href')).toBe('/flight/LHR/2026-10-01/AC864?from=YUL');
+    expect(el.querySelector('.head__btns a.ui-btn--ghost')!.textContent!.trim()).toBe('Pick dates');
     expect(el.querySelector('.head__btns a.ui-btn--ghost')!.getAttribute('href')).toBe('/calendar/LHR?from=YUL');
     expect(el.querySelector('.head__btns a.wide')!.getAttribute('href')).toBe('https://www.aircanada.com/');
     const daysOff = [...el.querySelectorAll('[data-days-off]')].map(a => a.getAttribute('href'));
@@ -240,26 +259,185 @@ describe('DestinationPage', () => {
     expect(el.querySelector('.dep')!.classList).toContain('m-hide');
     expect(el.querySelector('.side')!.classList).not.toContain('m-hide');
     const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    expect([...el.querySelectorAll('.tabs button')].map(b => b.textContent!.trim())).toEqual(['Departures', 'Ways home', 'Map']);
     el.querySelectorAll<HTMLButtonElement>('.tabs button')[1].click();
     expect(nav).toHaveBeenCalledWith([], { queryParams: { tab: 'returns' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
     el.querySelectorAll<HTMLButtonElement>('.tabs button')[0].click();
     expect(nav).toHaveBeenLastCalledWith([], { queryParams: { tab: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
   });
 
-  it('moves the app to a day picked in the month availability', async () => {
+  it('has no month availability card and no mobile Plan dates block', async () => {
     await render('LHR');
-    const day = el.querySelector<HTMLButtonElement>('.avail button[data-date="2026-10-09"]')!;
-    expect(day.getAttribute('aria-label')).toBe('Fri, Oct 9: 1 nonstop departure');
-    expect(el.querySelector<HTMLButtonElement>('.avail button[data-date="2026-09-30"]')).toBeNull();
-    day.click();
-    await fixture.whenStable();
-    expect(state.selectedDateKey()).toBe('2026-10-09');
-    expect(day.getAttribute('aria-pressed')).toBe('true');
+    expect(el.querySelector('.avail')).toBeNull();
+    expect(el.querySelector('app-month-availability')).toBeNull();
+    expect(el.textContent).not.toContain('Plan dates');
+  });
+
+  it('Dates bar, unset: asks when you are going and opens the picker', async () => {
+    await render('LHR');
+    expect(text('[data-dates-bar] .dates__q')).toBe('When are you going?');
+    const pick = el.querySelector<HTMLAnchorElement>('[data-dates-pick]')!;
+    expect(pick.textContent!.trim()).toBe('Pick dates');
+    expect(pick.getAttribute('href')).toBe('/calendar/LHR?from=YUL');
+    expect(el.querySelector('app-stay-chips')).toBeNull();
+  });
+
+  it('Dates bar, departure only: five stay chips with their ways home; a chip writes ?ret', async () => {
+    await render('LHR', undefined, { dep: '2026-10-02' });
+    expect(text('[data-dates-text]')).toBe('Leave Fri, Oct 2 · pick a day home');
+    const chips = [...el.querySelectorAll<HTMLButtonElement>('app-stay-chips [role="radio"][data-nights]')];
+    expect(chips.map(c => c.dataset['nights'])).toEqual(['2', '3', '4', '5', '7']);
+    expect(chips[0].textContent!.replace(/\s+/g, ' ').trim()).toBe('2 nights Sun 4 · 1 home');
+    expect(el.querySelector('[data-pick-dates]')!.getAttribute('href')).toBe('/calendar/LHR?from=YUL&dep=2026-10-02');
+    const nav = spyNav();
+    chips[2].click();
+    expect(nav).toHaveBeenCalledWith([], {
+      queryParams: { dep: '2026-10-02', ret: '2026-10-06' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
+    el.querySelector<HTMLButtonElement>('[data-dates-clear]')!.click();
+    expect(nav).toHaveBeenLastCalledWith([], {
+      queryParams: { dep: null, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
+  });
+
+  it('Dates bar, both dates: the range and nights, See flights opens the round trip', async () => {
+    await render('LHR', undefined, { dep: '2026-10-02', ret: '2026-10-10' });
+    expect(text('[data-dates-text]')).toBe('Oct 2 – 10 · 8 nights');
+    const see = el.querySelector<HTMLAnchorElement>('[data-dates-see]')!;
+    expect(see.textContent!.trim()).toBe('See flights');
+    expect(see.getAttribute('href')).toBe('/plan/LHR?from=YUL&dep=2026-10-02&ret=2026-10-10');
+    expect(el.querySelector('[data-dates-clear]')!.getAttribute('aria-label')).toBe('Clear dates');
+    expect(el.querySelector('[data-pick-dates]')!.getAttribute('href')).toBe('/calendar/LHR?from=YUL&dep=2026-10-02&ret=2026-10-10');
+    // Departures open the round trip from their own day, keeping the 8 nights.
+    const rows = el.querySelectorAll<HTMLAnchorElement>('.dep a.ui-tl__it');
+    expect(rows[0].getAttribute('href')).toBe('/plan/LHR?from=YUL&dep=2026-10-02&ret=2026-10-10&out=AC864');
+    expect(rows[1].getAttribute('href')).toBe('/plan/LHR?from=YUL&dep=2026-10-03&ret=2026-10-11&out=AC868');
+  });
+
+  it('drops invalid dates and a same-day return with no way home after landing', async () => {
+    await render('LHR', undefined, { dep: '2026-09-20', ret: '2026-09-25' });
+    expect(text('[data-dates-bar] .dates__q')).toBe('When are you going?');
+    // AC864 lands the next morning: no way home on Oct 2 itself.
+    await setQuery({ dep: '2026-10-02', ret: '2026-10-02' });
+    expect(text('[data-dates-text]')).toBe('Leave Fri, Oct 2 · pick a day home');
+  });
+
+  it('a 14-day strip: a tap writes ?dep; then the timeline starts there with a From chip', async () => {
+    await render('LHR', s => s.setShowConnections(false));
+    const cells = el.querySelectorAll<HTMLButtonElement>('.dep app-day-count-strip [role="option"]');
+    expect(cells).toHaveLength(14);
+    expect(cells[0].dataset['key']).toBe('2026-10-01');
+    expect([...cells[0].querySelectorAll('span')].map(x => x.textContent!.trim())).toEqual(['Thu, Oct 1', '1 flight', '22:10']);
+    expect(el.querySelector('[data-from]')).toBeNull();
+    expect(el.querySelector('[data-full-cal]')!.textContent!.trim()).toBe('Full calendar');
+    const nav = spyNav();
+    el.querySelector<HTMLButtonElement>('.dep app-day-count-strip [data-key="2026-10-09"]')!.click();
+    expect(nav).toHaveBeenCalledWith([], {
+      queryParams: { dep: '2026-10-09', ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
+    await setQuery({ dep: '2026-10-09' });
+    expect(text('[data-from]')).toBe('From Fri, Oct 9');
+    expect(el.querySelector('.dep [aria-selected="true"]')!.getAttribute('data-key')).toBe('2026-10-09');
     expect(items('.dep')[0].querySelector('.d')!.textContent).toBe('Fri, Oct 9');
-    const next = el.querySelector<HTMLButtonElement>('.avail button[aria-label="Next month"]')!;
-    next.click();
+    // Without a return, departures still open their flight page.
+    expect(items('.dep')[0].getAttribute('href')).toBe('/flight/LHR/2026-10-09/AC864?from=YUL');
+    // A later departure moves the return with it, keeping the nights.
+    await setQuery({ ret: '2026-10-12' });
+    el.querySelector<HTMLButtonElement>('.dep app-day-count-strip [data-key="2026-10-14"]')!.click();
+    expect(nav).toHaveBeenLastCalledWith([], {
+      queryParams: { dep: '2026-10-14', ret: '2026-10-17' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
+    el.querySelector<HTMLButtonElement>('[data-from]')!.click();
+    expect(nav).toHaveBeenLastCalledWith([], {
+      queryParams: { dep: null, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
+  });
+
+  it('the strip counts what the list under it shows; a day with none of that kind says so, with the other kind', async () => {
+    resetScheduleSource();
+    setScheduleSource([
+      route('YUL', 'LHR', rec('AC864', '22:10', '10:00', '2026-09-01', '2027-03-31', 'Mon', '333')),
+      route('YYZ', 'LHR', rec('AC848', '18:00', '06:15', '2026-09-01', '2027-03-31', ALL_DAYS, '77W')),
+      route('LHR', 'YUL', rec('AC865', '12:10', '14:35', '2026-09-01', '2027-03-31', ALL_DAYS, '333')),
+    ], FIXTURE_META);
+    await render('LHR', s => s.setShowConnections(true), { dep: '2026-10-06' });
+    const cell = (k: string) => [...el.querySelectorAll(`.dep app-day-count-strip [data-key="${k}"] span`)].map(x => x.textContent!.trim());
+    // Nonstop seg: Monday's AC864 only, never the via-YYZ connection (which flies daily).
+    expect(cell('2026-10-05').slice(1)).toEqual(['1 flight', '22:10']);
+    expect(cell('2026-10-06').slice(0, 2)).toEqual(['Tue 6', '0 flights']);
+    expect(text('[data-day-gap]')).toBe('No nonstop on Tue, Oct 6 · 1 with a connection that day Show · first listed: Mon, Oct 12');
+    // Ways home are counted after the flight that does fly that day (the connection), and the heading says so.
+    expect(text('[data-ret-heading]')).toMatch(/^Leaving LHR after you land via YYZ \(Wed, Oct 7 /);
+    el.querySelector<HTMLButtonElement>('[data-day-gap] button')!.click();
     await fixture.whenStable();
-    expect(el.querySelector('.avail .mt')!.textContent).toBe('November 2026');
-    expect(el.querySelector<HTMLButtonElement>('.avail button[aria-label="Previous month"]')!.disabled).toBe(false);
+    // Via seg: the strip counts connections only, and the tapped day is listed first.
+    expect(cell('2026-10-06').slice(1, 2)).toEqual(['1 flight']);
+    expect(el.querySelector('[data-day-gap]')).toBeNull();
+    expect(items('.dep')[0].querySelector('.d')!.textContent).toContain('Tue, Oct 6');
+  });
+
+  it('a departure tapped past the return moves it and says so (nothing changes silently)', async () => {
+    await render('LHR', s => s.setShowConnections(false), { dep: '2026-10-05', ret: '2026-10-08' });
+    const nav = spyNav();
+    const flash = vi.spyOn(state, 'flash');
+    el.querySelector<HTMLButtonElement>('.dep app-day-count-strip [data-key="2026-10-10"]')!.click();
+    expect(nav).toHaveBeenLastCalledWith([], {
+      queryParams: { dep: '2026-10-10', ret: '2026-10-13' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
+    expect(flash).toHaveBeenCalledWith('Home moved to Tue, Oct 13 to keep 3 nights');
+    // The From chip's name says what it does: it clears both dates.
+    expect(el.querySelector('[data-from]')!.getAttribute('aria-label')).toBe('From Mon, Oct 5 · clear dates');
+  });
+
+  it('Ways home without dates: the next flights home, unlinked, with a prompt to pick dates', async () => {
+    await render('LHR');
+    expect(text('[data-ret-heading]')).toBe('Next flights home from London');
+    expect(text('.ret__pick')).toBe('Pick dates to match these to your stay Pick dates');
+    expect(items('.ret')[0].tagName).toBe('DIV');
+    expect(el.querySelector('.ret [data-stay]')).toBeNull();
+  });
+
+  it('Ways home with a departure: leaving after you land, with a stay tag and a round-trip link', async () => {
+    await render('LHR', s => s.setShowConnections(false), { dep: '2026-10-02' });
+    expect(text('[data-ret-heading]')).toBe('Leaving LHR after you land (Sat, Oct 3 10:00)');
+    const first = items('.ret')[0] as HTMLAnchorElement;
+    expect(first.tagName).toBe('A');
+    expect(first.querySelector('.d')!.textContent).toContain('Sat, Oct 3');
+    expect(text('.ret [data-stay]')).toBe('1 night');
+    // It leaves at least the minimum connection after AC864 lands.
+    const landed = toUtcMs('2026-10-03', '10:00', 'Europe/London');
+    expect(toUtcMs('2026-10-03', '12:10', 'Europe/London')).toBeGreaterThanOrEqual(landed + state.connect().minConnect! * 60_000);
+    expect(first.textContent).toContain('12:10');
+    const href = first.getAttribute('href')!;
+    expect(href).toBe('/plan/LHR?from=YUL&dep=2026-10-02&ret=2026-10-03&back=AC865');
+    expect(el.querySelector('.ret__pick')).toBeNull();
+  });
+
+  it('the stay chips count exactly the ways home the round-trip page lists (parity)', async () => {
+    await render('LHR', s => s.setHub('YHZ'), { dep: '2026-10-05' });
+    state.setShowConnections(true);
+    await fixture.whenStable();
+    const ctx = ctxOf(state);
+    const after = homeAfterUtc(null, outboundsOn('YHZ', 'LHR', '2026-10-05', ctx), ctx.connect);
+    const chips = [...el.querySelectorAll<HTMLButtonElement>('app-stay-chips [data-nights]')];
+    expect(chips).toHaveLength(5);
+    for (const c of chips) {
+      const key = addDays('2026-10-05', Number(c.dataset['nights']));
+      const n = Number(/(\d+) home/.exec(c.textContent!)![1]);
+      expect(n).toBe(waysHome('LHR', 'YHZ', key, ctx, after).length);
+    }
+  });
+
+  it('a seasonal route says, in one sentence with the year, when the first flight home is', async () => {
+    resetScheduleSource();
+    setScheduleSource([
+      ...FIXTURE_ROUTES,
+      route('YUL', 'OPO', rec('AC1988', '21:00', '09:00', '2027-06-01', '2027-09-30', ALL_DAYS, '321')),
+      route('OPO', 'YUL', rec('AC1989', '11:00', '13:30', '2027-06-02', '2027-09-30', ALL_DAYS, '321')),
+    ], { ...FIXTURE_META, coverageTo: '2027-10-31' });
+    await render('OPO');
+    expect(text('[data-seasonal-home]')).toBe('No flights home until Wed, Jun 2, 2027 Go');
+    el.querySelector<HTMLButtonElement>('[data-seasonal-home] button')!.click();
+    expect(state.selectedDateKey()).toBe('2027-06-02');
   });
 });

@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, effect, inject, input, signal,
   untracked, viewChild,
 } from '@angular/core';
-import { Router, RouterLink, type Params } from '@angular/router';
+import { Router, RouterLink, type NavigationExtras, type Params } from '@angular/router';
 import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
 import { ShareService } from '../../state/share.service';
@@ -10,21 +10,21 @@ import { airportTz, findDestination } from '../../utils/airports';
 import { allItineraries, findAlternatives, type Itinerary } from '../../utils/connections';
 import { buildIcs, downloadIcs, icsFilename } from '../../utils/ics';
 import { addDays, diffDays, formatKey, isDateKey, todayKey, weekKeys, weekStartKey as mondayOf } from '../../utils/time';
+import { type CountCtx, minuteOf, nightsBetween, outCounts, retFrom, shiftRet, startRoundTrip } from '../../planner/round-trip';
 import { nextFlightDate } from '../../utils/week';
 import { seasonEvent } from '../home/home-model';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
 import { WeekStripComponent } from '../../ui/week-strip.component';
-import { calendarPath, destPath, flightPath, matchSlug, tripPath } from '../../ui/links';
+import { calendarPath, destPath, flightPath, flightSlug, matchSlug, tripPath } from '../../ui/links';
 import { GlassSheetComponent } from '../../ui/glass-sheet.component';
-import { placeFromDestination } from '../../places/place';
 import { refFromInstance } from '../../trips/engine/legs';
 import { type Trip, instanceKey } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { OutcomePromptComponent } from '../../trips/ui/outcome-prompt.component';
-import { countdown, isOutside, itinKey, prettyFlight, relativeDay, shortDay } from '../../ui/format';
+import { countdown, dayLabel as dayLabelOf, isOutside, itinKey, prettyFlight, relativeDay, shortDay } from '../../ui/format';
 import {
-  backupGroups, choose, missSummary, missSummaryText, nearbyOptions, noteFlights, optionRow, parseNights, pickOf, roundTrip, ticketModel, tripTarget, tripsCovering, tripsFor,
+  backupGroups, choose, missSummary, missSummaryText, nearbyOptions, noteFlights, optionRow, pickOf, ticketModel, tripTarget, tripsCovering, tripsFor,
   type Pick,
 } from './flight-model';
 import { historyFor, recordLine } from '../../trips/engine/track-record';
@@ -35,22 +35,13 @@ import { LoadNotesComponent } from './load-notes.component';
 import { TicketComponent } from './ticket.component';
 import { OptionRowComponent } from './option-row.component';
 import { OnTheDayComponent } from '../../ui/on-the-day.component';
-import { ReturnPanelComponent } from './return-panel.component';
+import { ReturnSummaryComponent } from './return-summary.component';
 
 /** Other options listed before "Show all". */
 export const OPTIONS_SHOWN = 4;
 
-/**
- * Home-by for a chosen return, from its local arrival at home: 22:00 on the
- * arrival date, or 23:59 when it lands after 22:00. A small-hours arrival
- * (before 05:00) would otherwise give a deadline already past, so the deadline
- * is 08:00 that morning.
- */
-export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
-  const arr = ret.legs[ret.legs.length - 1].arrLocal;
-  if (arr < '05:00') return { dateKey: ret.arrDateKey, hhmm: '08:00' };
-  return { dateKey: ret.arrDateKey, hhmm: arr > '22:00' ? '23:59' : '22:00' };
-}
+/** Home-by for a chosen return (moved to the planner model; kept here for existing imports). */
+export { homeByFor } from '../../planner/round-trip';
 
 /**
  * Flight details, /flight/:code/:date/:flight? (spec §4.3).
@@ -58,16 +49,19 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
  * The day's itineraries hub → code (nonstop and, with connections on, one
  * stop), one of them shown as a boarding-pass ticket. Which one: the flight
  * slug when it matches, else ?pick= (Earliest / Nonstop / Fastest), else the
- * earliest. Below: actions (.ics, round-trip .ics, change dates), the other
- * options that day, "If you miss this" backups and the return planner
- * (?nights=, or ?ret= from the calendar). Day chips move the date (replaceUrl).
+ * earliest. Below: actions (.ics, change dates, Start a trip), the "Coming
+ * home" card for ?ret= (counts of ways home after this flight lands, or stay
+ * chips that set ?ret=; picking the return happens on /plan), the other
+ * options that day and "If you miss this" backups. A legacy ?nights=N is
+ * rewritten to ?ret = date + N (dates-spec D1). Day chips move the date
+ * (replaceUrl) and keep the stay length when the return would fall before it.
  * Desktop: the ticket column is sticky on the left, the lists on the right.
  */
 @Component({
   selector: 'app-flight-page',
   standalone: true,
   imports: [
-    OnTheDayComponent, RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnPanelComponent,
+    OnTheDayComponent, RouterLink, IconComponent, SegComponent, WeekStripComponent, TicketComponent, OptionRowComponent, ReturnSummaryComponent,
     FactsCardComponent, FunFactCardComponent, LoadNotesComponent, OutcomePromptComponent, GlassSheetComponent, LiveStatusComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -87,7 +81,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
           <p class="ctx ui-sub tn">{{ hub() }} → {{ dest() }} · {{ destCity() }}</p>
 
           <app-week-strip class="strip" [glass]="true" [weekStartKey]="weekStart()" [selectedDateKey]="dateKey()"
-                          [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="stripDots()"
+                          [todayKey]="state.todayKey()" [coverage]="state.coverage()" [counts]="stripCounts()"
                           (selectDay)="goDate($event)" (prev)="goDate(shift(-7))" (next)="goDate(shift(7))"
                           (jumpTo)="goDate($event)" />
 
@@ -110,14 +104,9 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
               <p class="cd tn" [class.cd--live]="c.live"><app-icon name="clock" [size]="15" />{{ c.text }}</p>
             }
             <div class="acts">
-              <button type="button" class="ui-btn ui-btn--dark" (click)="exportIcs(false)">
+              <button type="button" class="ui-btn ui-btn--dark" (click)="exportIcs()">
                 <app-icon name="calendar" [size]="17" /> {{ t('flight.addCal') }}
               </button>
-              @if (returnPick()) {
-                <button type="button" class="ui-btn ui-btn--ghost" (click)="exportIcs(true)">
-                  <app-icon name="download" [size]="17" /> {{ t('flight.roundIcs') }}
-                </button>
-              }
               <a class="ui-btn ui-btn--ghost" [routerLink]="calendarLink()" [queryParams]="calendarParams()">{{ t('flight.changeDates') }}</a>
               @if (tripAction(); as a) {
                 <button type="button" class="ui-btn ui-btn--ghost" data-add-trip [disabled]="a.disabled" (click)="addToTrip()">
@@ -125,6 +114,11 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
                 </button>
               }
             </div>
+            @if (current(); as it) {
+              <app-return-summary class="ret" [outbound]="it" [hub]="hub()" [code]="dest()" [ret]="retKey()"
+                                  [ctx]="countCtx()" [timeFormat]="state.timeFormat()" [params]="state.globalParams()"
+                                  (pickRet)="setRet($event)" (includeConnections)="state.setShowConnections(true)" />
+            }
           } @else {
             <div class="ui-card state">
               <h2 class="ui-h3">{{ t('flight.noFlightsOn', { day: dayLabel() }) }}</h2>
@@ -151,7 +145,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
         </div>
 
         <div class="right">
-          @if (current(); as it) {
+          @if (current()) {
             @if (others().length) {
               <section class="sec" aria-labelledby="fl-others">
                 <div class="ui-sec-h">
@@ -184,19 +178,6 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
                 } @empty {
                   <p class="none">{{ t('flight.noLater') }}</p>
                 }
-              </div>
-            </section>
-
-            <section class="sec" aria-labelledby="fl-ret">
-              <div class="ui-sec-h">
-                <h2 class="ui-h3" id="fl-ret">{{ t('flight.return') }}</h2>
-                @if (returnPick()) { <span class="ui-tag ui-tag--teal">{{ t('flight.roundReady') }}</span> }
-              </div>
-              <div class="ui-card ret">
-                <app-return-panel [outbound]="it" [hub]="hub()" [code]="dest()" [nights]="nightCount()" [ret]="ret() ?? null"
-                  [coverage]="state.coverage()" [connect]="state.connect()" [showConnections]="state.showConnections()"
-                  [timeFormat]="state.timeFormat()" [selectedKey]="returnKey()" [showAll]="allReturns()"
-                  (nightsChange)="setNights($event)" (selectedChange)="pickReturn($event)" (expand)="allReturns.set(true)" />
               </div>
             </section>
           }
@@ -243,7 +224,7 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
     .grp { padding: 12px 0 0; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
     .none { margin: 0; padding: 14px 0; font-size: 13.5px; color: var(--ink-2); }
     .more { margin-top: 10px; font-size: 13px; }
-    .ret { padding: 16px; }
+    .ret { display: block; margin-top: 14px; }
     .adds { display: grid; gap: 14px; margin-top: 18px; }
     .ff { margin-top: 14px; }
     .pick { display: grid; gap: 8px; }
@@ -259,7 +240,6 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
       .sec { margin-top: 0; margin-bottom: 28px; }
       .sec h2 { font-size: 22px; letter-spacing: -.02em; }
       .list { padding: 6px 22px; }
-      .ret { padding: 20px 22px; }
       .foot { margin: 0; text-align: left; }
       .strip { margin-inline: 40px; }
     }
@@ -282,9 +262,7 @@ export class FlightPage {
   readonly nights = input<string>();
 
   protected readonly allOthers = signal(false);
-  protected readonly allReturns = signal(false);
   protected readonly pickerOpen = signal(false);
-  protected readonly returnPick = signal<Itinerary | null>(null);
   /** The ticket column sticks only while it fits in the viewport (else its bottom could never be reached). */
   protected readonly leftFits = signal(true);
   private readonly left = viewChild.required<ElementRef<HTMLElement>>('left');
@@ -299,7 +277,20 @@ export class FlightPage {
   protected readonly weekStart = computed(() => mondayOf(this.dateKey()));
   protected readonly dayLabel = computed(() => shortDay(this.dateKey()));
   protected readonly outside = computed(() => isOutside(this.dateKey(), this.state.coverage()));
-  protected readonly nightCount = computed(() => parseNights(this.nights()));
+  /** The return day: ?ret= on or after the date, else (legacy) date + ?nights=, else null (dates-spec D1). */
+  readonly retKey = computed(() => retFrom(this.dateKey(), this.ret(), this.nights()));
+
+  /** The planner's count context (one source for the strip and the Coming home card). */
+  /** Minute-floored clock: the 30s tick does not give the count context a new identity. */
+  private readonly nowMinute = computed(() => minuteOf(this.state.nowMs()));
+  readonly countCtx = computed<CountCtx>(() => ({
+    today: this.state.todayKey(),
+    nowMinute: this.nowMinute(),
+    coverage: this.state.coverage(),
+    showConnections: this.state.showConnections(),
+    connect: this.state.connect(),
+    loading: this.state.dataLoad() === 'loading',
+  }));
 
   /** Every itinerary that day; nonstops only when connections are off (unless the slug names a connection). */
   readonly itineraries = computed<Itinerary[]>(() => {
@@ -372,12 +363,9 @@ export class FlightPage {
     return { text: t('flight.departed', { date: shortDay(it.dateKey) }), live: false };
   });
 
-  protected readonly stripDots = computed(() =>
-    weekKeys(this.weekStart()).map(k => {
-      if (isOutside(k, this.state.coverage())) return false;
-      const its = allItineraries(this.hub(), this.dest(), k, this.state.connect());
-      return this.state.showConnections() ? its.length > 0 : its.some(i => !i.hubs.length);
-    }));
+  /** Flights out each day of the shown week (the counts follow the connection setting). */
+  readonly stripCounts = computed(() =>
+    outCounts(this.hub(), this.dest(), weekKeys(this.weekStart()), this.countCtx(), this.state.timeFormat()));
 
   /** Connections exist that day but are switched off in settings. */
   protected readonly hiddenConnections = computed(() =>
@@ -414,16 +402,11 @@ export class FlightPage {
     return key ? { key, label: shortDay(key), link: flightPath(this.dest(), key) } : null;
   });
 
-  protected readonly returnKey = computed(() => {
-    const r = this.returnPick();
-    return r ? itinKey(r) : null;
-  });
-
-  /** Params kept on in-page links: the global keys plus the return planner's. */
+  /** Params kept on in-page links: the global keys plus the return day. */
   protected readonly keepParams = computed<Params>(() => {
     const p: Params = { ...this.state.globalParams() };
-    if (this.ret()) p['ret'] = this.ret();
-    if (this.nights()) p['nights'] = this.nights();
+    const r = this.retKey();
+    if (r) p['ret'] = r;
     return p;
   });
 
@@ -488,7 +471,15 @@ export class FlightPage {
   });
 
   protected readonly calendarLink = computed(() => calendarPath(this.dest()));
-  protected readonly calendarParams = computed<Params>(() => ({ ...this.state.globalParams(), dep: this.dateKey() }));
+  /** The picker opens on this trip: the day, the return day and this flight (carried on to /plan). */
+  protected readonly calendarParams = computed<Params>(() => {
+    const p: Params = { ...this.state.globalParams(), dep: this.dateKey() };
+    const r = this.retKey();
+    if (r) p['ret'] = r;
+    const it = this.current();
+    if (it) p['out'] = flightSlug(it);
+    return p;
+  });
 
   constructor() {
     let ro: ResizeObserver | null = null;
@@ -507,20 +498,17 @@ export class FlightPage {
         win?.removeEventListener('resize', sync);
       });
     });
-    // A different outbound (day or option) or return date drops the picked return.
-    const outKey = computed(() => {
-      const it = this.current();
-      return it ? itinKey(it) : null;
-    });
+    // A legacy ?nights=N becomes ?ret = date + N, written back in place (dates-spec D4).
     effect(() => {
-      this.dateKey();
-      outKey();
-      this.ret();
-      this.nights();
-      untracked(() => {
-        this.returnPick.set(null);
-        this.allReturns.set(false);
-      });
+      const n = this.nights();
+      if (n === undefined || n === null || n === '') return;
+      const ret = this.retKey();
+      untracked(() => void this.router.navigate([], {
+        queryParams: { ret, nights: null },
+        queryParamsHandling: 'merge',
+        replaceUrl: true,
+        scroll: 'manual',
+      }));
     });
     effect(() => {
       this.dateKey();
@@ -544,10 +532,23 @@ export class FlightPage {
     void this.sharer.share(`${this.destCity()} · ${this.dayLabel()}`);
   }
 
-  /** Day chips and week arrows: same page, another date (the slug is dropped). */
+  /**
+   * Day chips and week arrows: same page, another date (the slug is dropped).
+   * Moving to or past the return day moves the return to keep the nights, and
+   * says so (nothing changes silently, D6).
+   */
   goDate(key: string | null): void {
     if (!key || !isDateKey(key) || key === this.dateKey()) return;
-    void this.router.navigate(flightPath(this.dest(), key), { queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
+    const shifted = shiftRet(key, this.dateKey(), this.retKey());
+    const extras: NavigationExtras = { queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' };
+    if (shifted.moved && shifted.ret) {
+      extras.queryParams = { ret: shifted.ret, nights: null };
+      this.state.flash(t('planner.toast.retMoved', {
+        date: dayLabelOf(shifted.ret, this.state.todayKey()),
+        nights: t('planner.nights', { n: nightsBetween(key, shifted.ret) }),
+      }));
+    }
+    void this.router.navigate(flightPath(this.dest(), key), extras);
   }
 
   setPick(value: string | undefined): void {
@@ -562,17 +563,15 @@ export class FlightPage {
     });
   }
 
-  setNights(n: number): void {
+  /** A stay chip or a nearby day: the return day goes in ?ret= (in place). */
+  setRet(key: string): void {
+    if (!isDateKey(key) || key < this.dateKey()) return;
     void this.router.navigate([], {
-      queryParams: { nights: n, ret: null },
+      queryParams: { ret: key, nights: null },
       queryParamsHandling: 'merge',
       replaceUrl: true,
       scroll: 'manual',
     });
-  }
-
-  pickReturn(it: Itinerary | null): void {
-    this.returnPick.set(it);
   }
 
   protected toCoverage(): void {
@@ -596,18 +595,11 @@ export class FlightPage {
       this.addTo(list[0]);
       return;
     }
-    // Same return date the Return panel shows: an explicit ?ret= on/after arrival, else nights from arrival.
-    const pick = this.returnPick();
-    const retDate = this.ret();
-    const homeDate = retDate && isDateKey(retDate) && retDate >= it.arrDateKey ? retDate : addDays(it.arrDateKey, this.nightCount());
-    const trip = this.trips.create({
-      goal: placeFromDestination(this.dest()),
-      fromHub: this.hub(),
-      outboundDate: it.dateKey,
-      homeBy: pick ? homeByFor(pick) : { dateKey: homeDate, hhmm: '22:00' },
+    // One way from here (the return is picked on /plan): home by the return day at 22:00 when it is on or after landing.
+    const r = this.retKey();
+    const trip = startRoundTrip(this.trips, {
+      hub: this.hub(), code: this.dest(), out: it, back: null, ret: r && r >= it.arrDateKey ? r : null,
     });
-    this.trips.addFlightLeg(trip.id, it, 'outbound');
-    if (pick) this.trips.addFlightLeg(trip.id, pick, 'return');
     void this.router.navigate(tripPath(trip.id), { queryParams: this.state.globalParams() });
   }
 
@@ -635,20 +627,13 @@ export class FlightPage {
         }));
       }
       this.trips.addFlightLeg(trip.id, it, target.role);
-      const pick = this.returnPick();
-      const hasReturn = trip.legs.some(l => l.kind === 'flight' && l.role === 'return' && l.status !== 'abandoned');
-      if (first && pick && !hasReturn) {
-        this.trips.addFlightLeg(trip.id, pick, 'return');
-        this.trips.update(trip.id, tr => ({ ...tr, homeBy: homeByFor(pick) }));
-      }
       this.state.flash(t('flight.added', { flights, name: trip.name }), open);
     }
   }
 
-  exportIcs(round: boolean): void {
+  exportIcs(): void {
     const it = this.current();
     if (!it) return;
-    const list = round ? roundTrip(it, this.returnPick()) : [it];
-    downloadIcs(buildIcs(list, this.destCity()), icsFilename(list));
+    downloadIcs(buildIcs([it], this.destCity()), icsFilename([it]));
   }
 }

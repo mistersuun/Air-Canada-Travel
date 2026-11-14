@@ -57,10 +57,12 @@ import { DotDay, DotRowComponent } from './dot-row.component';
     a.row:focus-visible { outline-offset: -2px; border-radius: 12px; }
     .th { width: 44px; height: 44px; flex: none; border-radius: var(--radius-thumb); }
     .tx { flex: 1; min-width: 0; }
-    .nm, .tm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Names, times and durations wrap rather than being cut off: two meta lines (three with wrap-meta). */
+    .nm { overflow-wrap: anywhere; }
+    .tm { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
     .nm { font-weight: 600; font-size: 15px; }
     .nm small { font-weight: 500; color: var(--ink-3); font-size: 12px; margin-left: 6px; }
-    :host(.wrap-meta) .tm { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+    :host(.wrap-meta) .tm { -webkit-line-clamp: 3; }
     .tm { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
     .dots { margin-left: auto; }
     .chev { color: var(--ink-3); font-size: 18px; line-height: 1; margin-left: 8px; flex: none; }

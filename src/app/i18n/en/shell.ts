@@ -48,6 +48,7 @@ export const shell = {
   'shell.title.profile': 'Travel profile · Routes',
   'shell.title.commute': 'Commute to base · Routes',
   'shell.title.weekend': 'Weekend finder · Routes',
+  'shell.title.plan': 'Round trip · Routes',
   'shell.title.compare': 'Compare · Routes',
   'shell.title.guide': 'Standby guide · Routes',
   'shell.title.today': 'Today · Routes',

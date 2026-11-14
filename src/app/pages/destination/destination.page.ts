@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, untracked,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, type Params } from '@angular/router';
 import { regionLabel } from '../../i18n/labels';
 import { t } from '../../i18n/t';
 import { AppStateService } from '../../state/app-state.service';
@@ -12,14 +12,14 @@ import { ShareService } from '../../state/share.service';
 import { airportTz, findDestination, findHub, getOrigins } from '../../utils/airports';
 import { formatKm, greatCircleKm } from '../../utils/geo';
 import type { Itinerary } from '../../utils/connections';
-import { addDays, formatKey, todayKey } from '../../utils/time';
+import { addDays, formatKey, todayKey, weekStartKey } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
 import { RouteMapComponent, type MapPoint } from '../../ui/route-map.component';
 import { DestPhotoComponent } from '../../ui/dest-photo.component';
-import { calendarPath, flightPath } from '../../ui/links';
-import { hubDisplayName, itinKey, prettyFlight, tzDiffLabel } from '../../ui/format';
+import { calendarPath, flightPath, flightSlug, planPath } from '../../ui/links';
+import { dayLabel, hubDisplayName, itinKey, prettyFlight, shortRange, tzDiffLabel } from '../../ui/format';
 import { tap } from '../../ui/haptics';
 import { getDestinationCodes } from '../../data/schedule-index';
 import { seasonEvent } from '../home/home-model';
@@ -30,8 +30,14 @@ import {
   zoneAbbr,
 } from './dest-model';
 import { routeFacts } from './route-facts';
-import { DestTimelineComponent } from './dest-timeline.component';
-import { MonthAvailabilityComponent } from './month-availability.component';
+import { DestTimelineComponent, type TimelineLink } from './dest-timeline.component';
+import type { TimelineItem } from './dest-model';
+import { DayCountStripComponent } from '../../ui/day-count-strip.component';
+import { StayChipsComponent } from '../../ui/stay-chips.component';
+import {
+  type CountCtx, type CountKind, earliestArrival, homeAfterUtc, landingLabel, minuteOf, nightsBetween, outCounts,
+  outboundsOn, planParams, readPlan, shiftRet, stayOptions, stripKeys, waysHome,
+} from '../../planner/round-trip';
 import { DestClimateComponent } from './dest-climate.component';
 import { DestForecastComponent } from './dest-forecast.component';
 import { DestWeatherLineComponent } from './dest-weather-line.component';
@@ -54,14 +60,15 @@ function viaLabel(hub: string | null): string {
 export type DestTab = 'departures' | 'returns' | 'map';
 const TABS = [
   { value: 'departures', label: 'dest.tab.departures' },
-  { value: 'returns', label: 'dest.tab.returns' },
+  { value: 'returns', label: 'planner.dest.waysHomeTab' },
   { value: 'map', label: 'dest.tab.map' },
 ] as const;
 
 /** Timeline rows shown before "Show more" (mobile shows one fewer). */
 export const PAGE_SIZE = 5;
 const MOBILE_QUERY = '(max-width: 719px)';
-const DESKTOP_QUERY = '(min-width: 1024px)';
+/** Days on the departures strip. */
+const STRIP_DAYS = 14;
 /** Beyond this distance the map card shows the whole world. */
 export const LONG_HAUL_KM = 7000;
 /** East of this longitude a world-view label would run off the map. */
@@ -73,7 +80,7 @@ const AC_URL = 'https://www.aircanada.com/';
  * circle buttons, then:
  *  - desktop: a glass header card overlapping the photo (title, tags, next
  *    departure, actions) and three columns: next departures, return flights
- *    (Nonstop / Via seg) and map + Essentials, then the month availability;
+ *    (Nonstop / Via seg) and map + Essentials;
  *  - mobile: a glass sheet with a Departures / Returns / Map seg (?tab=).
  * States: flown but no times in our data (route network only), outside
  * coverage, no nonstop this week, connections only, not served.
@@ -83,7 +90,7 @@ const AC_URL = 'https://www.aircanada.com/';
   standalone: true,
   imports: [
     RouterLink, IconComponent, SegComponent, RouteMapComponent, DestPhotoComponent, DestTimelineComponent,
-    MonthAvailabilityComponent, DestTripActionsComponent, DestCompareButtonComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent, DestWeatherLineComponent,
+    DayCountStripComponent, StayChipsComponent, DestTripActionsComponent, DestCompareButtonComponent, DestHomeByComponent, ProvenanceTagComponent, DestClimateComponent, DestForecastComponent, DestWeatherLineComponent,
     DestReferenceComponent, EventsCardComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -145,12 +152,42 @@ const AC_URL = 'https://www.aircanada.com/';
           </a>
         }
         <div class="head__btns d-only">
-          <a class="ui-btn ui-btn--ghost" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
+          <a class="ui-btn ui-btn--ghost" [routerLink]="calLink()" [queryParams]="calParams()" data-pick-dates>{{ t('planner.dest.pickDates') }}</a>
           <a class="ui-btn wide" [href]="acUrl" target="_blank" rel="noopener">{{ t('dest.openAc') }}</a>
         </div>
         <a class="ui-link days-off d-only" routerLink="/weekend" [queryParams]="daysOffParams()" data-days-off>{{ t('dest.daysOff') }}</a>
         <app-dest-trip-actions class="d-only" [code]="code()" />
         <app-dest-compare-button class="d-only cmp" [code]="code()" />
+      </section>
+
+      @let p = plan();
+      <section class="dates" [class.is-set]="!!p.dep" [attr.aria-label]="t('planner.dest.when')" data-dates-bar>
+        @if (!p.dep) {
+          <div class="dates__row">
+            <p class="dates__q">{{ t('planner.dest.when') }}</p>
+            <a class="ui-btn ui-btn--sm dates__btn" [routerLink]="calLink()" [queryParams]="calParams()" data-dates-pick>{{ t('planner.dest.pickDates') }}</a>
+          </div>
+        } @else if (!p.ret) {
+          <div class="dates__row">
+            <p class="dates__q tn" data-dates-text>{{ t('planner.dest.depOnly', { date: depLabel() }) }}</p>
+            <button type="button" class="dates__x" [attr.aria-label]="t('planner.dest.clearDates')" (click)="clearDates()" data-dates-clear>
+              <app-icon name="close" [size]="16" [strokeWidth]="2.2" />
+            </button>
+          </div>
+          <app-stay-chips class="dates__chips" [options]="stays()" [dep]="p.dep" [today]="state.todayKey()"
+                          [compute]="stayCompute()" (pick)="setRet($event)" />
+        } @else {
+          <div class="dates__row">
+            @let r = rangeLabel();
+            <p class="dates__q tn" data-dates-text>
+              <span class="nw">{{ r.start }}</span>@if (r.end) {{{ ' ' }}<span class="nw">– {{ r.end }}</span>}{{ ' ' }}<span class="nw">· {{ r.stay }}</span>
+            </p>
+            <a class="ui-btn ui-btn--sm dates__btn" [routerLink]="planLink()" [queryParams]="planQuery()" data-dates-see>{{ t('planner.dest.seeFlights') }}</a>
+            <button type="button" class="dates__x" [attr.aria-label]="t('planner.dest.clearDates')" (click)="clearDates()" data-dates-clear>
+              <app-icon name="close" [size]="16" [strokeWidth]="2.2" />
+            </button>
+          </div>
+        }
       </section>
 
       <app-seg class="tabs m-only" stretch [options]="tabs()" [value]="tab()" (valueChange)="setTab($event)"
@@ -229,7 +266,29 @@ const AC_URL = 'https://www.aircanada.com/';
           <app-seg class="out-seg" [options]="outOptions()" [value]="outMode()" (valueChange)="setOutMode($event)"
                    [ariaLabel]="t('dest.tab.departures')" />
         }
-        <app-dest-timeline [items]="outItems()" [code]="code()" [records]="records()" linked [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
+        @if (!routeOnly()) {
+          @if (!stripEmpty() || p.dep) {
+            <app-day-count-strip class="strip" [days]="stripDays()" [selected]="p.dep" [label]="t('planner.dest.stripAria')"
+                                 (pick)="setDep($event)" (extend)="shiftStrip($event)" />
+          }
+          <div class="from" id="dep-list">
+            @if (p.dep) {
+              <button type="button" class="ui-tag ui-tag--blue from__chip tn" [attr.aria-label]="t('planner.dest.fromClear', { date: depLabel() })"
+                      (click)="clearDates()" data-from>
+                {{ t('planner.dest.from', { date: depLabel() }) }} <app-icon name="close" [size]="12" [strokeWidth]="2.4" />
+              </button>
+            }
+            <a class="ui-link from__cal" [routerLink]="calLink()" [queryParams]="calParams()" data-full-cal>{{ t('planner.dest.fullCalendar') }}</a>
+          </div>
+          @if (dayGap(); as g) {
+            <p class="gap tn" role="status" data-day-gap>
+              {{ g.text }}@if (g.other) { · {{ g.other }}
+                <button type="button" class="ui-link gap__b" (click)="showKind(g.show!)">{{ t('planner.dest.show') }}</button>
+              }@if (g.first) { · {{ g.first }} }
+            </p>
+          }
+        }
+        <app-dest-timeline [items]="outItems()" [code]="code()" [records]="records()" linked [linkFor]="outLinkFor()" [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
                            [label]="t('dest.departuresFrom', { hub: hubName() })">
           <div class="empty">
             @if (routeOnly()) {
@@ -258,15 +317,30 @@ const AC_URL = 'https://www.aircanada.com/';
 
       <section class="card ret" [class.is-empty]="!retItems().length" [class.m-hide]="tab() !== 'returns'" aria-labelledby="ret-h">
         <div class="ui-sec-h ret__h">
-          <h2 id="ret-h" class="ui-h3">{{ t('dest.returnFlights') }}</h2>
+          <h2 id="ret-h" class="ui-h3 tn" data-ret-heading>{{ retHeading() }}</h2>
           @if (retOptions().length > 1) {
             <app-seg [options]="retOptions()" [value]="retMode()" (valueChange)="setRetMode($event)"
                      [ariaLabel]="t('dest.returnFlights')" />
           }
         </div>
+        @if (!p.dep) {
+          <p class="ret__pick">
+            {{ t('planner.dest.pickToMatch') }}
+            <a class="ui-link" [routerLink]="calLink()" [queryParams]="calParams()" data-ret-pick>{{ t('planner.dest.pickDates') }}</a>
+          </p>
+        }
         <app-dest-timeline [items]="retItems()" [more]="retMore()" (showMore)="retLimit.set(retLimit() + 5)"
+                           [linkFor]="retLinkFor()" [stayTag]="retStayTag()"
                            [label]="t('dest.returnsTo', { hub: hubName() })">
-          <div class="empty"><p>{{ t('dest.noReturn', { hub: hubName(), n: horizonWeeks }) }}</p></div>
+          <div class="empty">
+            @if (nextHomeAhead(); as nh) {
+              <p data-seasonal-home>{{ t('planner.dest.seasonalHome', { date: nh.label }) }}
+                <button type="button" class="ui-link" (click)="goHome(nh.key)">{{ t('planner.go') }}</button>
+              </p>
+            } @else {
+              <p>{{ t('dest.noReturn', { hub: hubName(), n: horizonWeeks }) }}</p>
+            }
+          </div>
         </app-dest-timeline>
         <app-dest-home-by [code]="code()" />
       </section>
@@ -297,15 +371,7 @@ const AC_URL = 'https://www.aircanada.com/';
         </section>
       </div>
 
-      <section class="card avail" [class.m-hide]="tab() !== 'departures'">
-        <app-month-availability [hub]="state.hub()" [dest]="code()" [todayKey]="outToday()"
-                                [coverage]="state.coverage()" [selectedDateKey]="state.selectedDateKey()"
-                                [showConnections]="state.showConnections()" [connect]="state.connect()"
-                                [months]="monthCount()" (pick)="pickDay($event)" />
-      </section>
-
       <div class="m-actions m-only">
-        <a class="ui-btn ui-btn--block" [routerLink]="calLink()" [queryParams]="state.globalParams()">{{ t('dest.planDates') }}</a>
         <a class="ui-btn ui-btn--ghost ui-btn--block" routerLink="/weekend" [queryParams]="daysOffParams()" data-days-off>{{ t('dest.daysOff') }}</a>
         <a class="ui-btn ui-btn--ghost ui-btn--block" [href]="acUrl" target="_blank" rel="noopener">{{ acHost }}</a>
       </div>
@@ -367,8 +433,39 @@ const AC_URL = 'https://www.aircanada.com/';
     .empty { padding: 8px 0 4px; font-size: 13.5px; color: var(--ink-2); display: grid; gap: 6px; justify-items: start; }
     .empty .ui-link { font-size: 13.5px; }
 
-    .ret__h { align-items: center; }
+    .ret__h { align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+    .ret__h h2 { flex: 1 1 200px; min-width: 0; }
+    .ret__pick { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
+    .ret__pick .ui-link { display: inline-block; font-size: 13.5px; padding: 6px 0; }
     .out-seg { margin: 0 0 12px; }
+
+    /* ── Dates bar (every tab) ────────────────────────────────────────── */
+    .dates {
+      margin-top: 14px; min-height: 56px; padding: 8px 8px 8px 16px; border-radius: 16px; background: var(--fill);
+      display: grid; gap: 8px; align-content: center;
+    }
+    .dates.is-set:has(app-stay-chips) { padding-bottom: 10px; }
+    /* The range wraps at its dash; with years on both ends the buttons move to their own row. */
+    .dates__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 40px; }
+    .dates__q { flex: 1 1 132px; min-width: 0; font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.3; }
+    .dates__q .nw { white-space: nowrap; }
+    .dates__btn { flex: none; white-space: nowrap; }
+    .dates__x {
+      position: relative; flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px;
+      border-radius: 50%; color: var(--ink-2);
+    }
+    .dates__x:hover { color: var(--ink); background: var(--hair); }
+    .dates__chips { margin-right: -8px; }
+
+    /* ── 14-day strip and the From chip ───────────────────────────────── */
+    .strip { margin: 0 -4px 6px; }
+    .from { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0 0 8px; scroll-margin-top: 16px; }
+    .from__chip { position: relative; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; cursor: pointer; }
+    .from__chip::after { content: ''; position: absolute; inset: -8px -4px; }
+    .from__cal { display: inline-block; font-size: 13.5px; padding: 12px 0; }
+    .gap { margin: 0 0 10px; font-size: 13.5px; color: var(--ink-2); }
+    .gap__b { position: relative; font-size: 13.5px; margin-left: 2px; }
+    .gap__b::after { content: ''; position: absolute; inset: -14px -8px; }
     .map { display: block; height: 260px; border-radius: 16px; overflow: hidden; background: var(--sea); }
     .dist { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 0; font-size: 13px; }
     .ess__h { margin-bottom: 12px; }
@@ -392,15 +489,15 @@ const AC_URL = 'https://www.aircanada.com/';
       .card { margin-top: 10px; }
       .dep app-dest-trip-actions { margin-bottom: 14px; }
     .days-off { display: inline-block; margin-top: 10px; font-size: 13.5px; }
-      .ret, .side, .avail { margin-top: 16px; }
+      .ret, .side { margin-top: 16px; }
       .side { display: grid; gap: 22px; }
       .mapc { margin-top: 0; }
       .ess, .mapc { margin-top: 0; }
-      .avail { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--hair); }
     }
 
     /* ── Tablet and up: cards on the page ─────────────────────────────── */
     @media (min-width: 720px) {
+      .dates { margin-top: 0; }
       .m-only { display: none !important; }
       .handle { display: none; }
       .hero { height: 360px; min-height: 0; }
@@ -411,7 +508,7 @@ const AC_URL = 'https://www.aircanada.com/';
         position: relative; z-index: 1; max-width: var(--page-max); margin: -80px auto 0; padding: 0 24px 40px;
         display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start;
       }
-      .head, .notice, .avail { grid-column: 1 / -1; }
+      .head, .notice, .dates { grid-column: 1 / -1; }
       .notice { margin-top: 0; }
       .head {
         display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; padding: 24px 28px;
@@ -468,13 +565,165 @@ export class DestinationPage {
   protected readonly horizonWeeks = Math.round(HORIZON_DAYS / 7);
 
   private readonly mobile = this.media(MOBILE_QUERY);
-  private readonly desktop = this.media(DESKTOP_QUERY);
-  protected readonly monthCount = computed(() => (this.mobile() ? 1 : this.desktop() ? 3 : 2));
 
   readonly tab = computed<DestTab>(() => {
     const tabKey = this.tabParam();
     return tabKey === 'returns' || tabKey === 'map' ? tabKey : 'departures';
   });
+
+  // ── Dates (?dep, ?ret: page-local, dates-spec §3.3) ──────────────────────
+  /** ?dep= (the day you leave), bound from the query. */
+  readonly depParam = input<string | undefined>(undefined, { alias: 'dep' });
+  /** ?ret= (the day you fly home). */
+  readonly retParam = input<string | undefined>(undefined, { alias: 'ret' });
+
+  /** The counting context of the shared planner model (minute-floored clock, so a 30s tick changes nothing). */
+  private readonly ctx = computed<CountCtx>(() => ({
+    today: this.state.todayKey(),
+    nowMinute: minuteOf(this.state.nowMs()),
+    coverage: this.state.coverage(),
+    showConnections: this.state.showConnections(),
+    connect: this.state.connect(),
+    loading: this.state.dataLoad() === 'loading',
+  }), {
+    equal: (a, b) => a.today === b.today && a.nowMinute === b.nowMinute && a.coverage === b.coverage
+      && a.showConnections === b.showConnections && a.connect === b.connect && a.loading === b.loading,
+  });
+
+  /** The dates in the URL, validated (unpickable dates dropped; a same-day return only when a way home leaves that day). */
+  readonly plan = computed(() =>
+    readPlan({ dep: this.depParam(), ret: this.retParam() }, this.state.todayKey(), this.state.coverage(),
+      dep => waysHome(this.code(), this.state.hub(), dep, this.ctx(), this.afterFor(dep)).length > 0));
+
+  /**
+   * The flights out on the departure day: by the connection setting, narrowed
+   * to the kind the departures list shows (Nonstop / Via seg) when that kind
+   * flies that day, so the ways home are counted after a flight you can see.
+   */
+  private readonly depOuts = computed(() => {
+    const dep = this.plan().dep;
+    if (!dep) return [];
+    const all = outboundsOn(this.state.hub(), this.code(), dep, this.ctx());
+    const kind = this.outKind();
+    if (kind === 'setting') return all;
+    const mine = all.filter(it => (kind === 'via') === it.hubs.length > 0);
+    return mine.length ? mine : all;
+  });
+  /** The outbound that lands first on the departure day: the best case for ways home. */
+  private readonly earliest = computed(() => earliestArrival(this.depOuts()));
+  /** A way home leaves at least minConnect after the earliest arrival (null: no outbound that day). */
+  private readonly afterUtc = computed(() => homeAfterUtc(null, this.depOuts(), this.state.connect()));
+
+  /**
+   * What the departures list shows, for the strip's counts: one kind when the
+   * Nonstop / Via seg is there, else the connection setting.
+   */
+  protected readonly outKind = computed<CountKind>(() => {
+    if (!this.state.showConnections() || !this.outDirect().length) return 'setting';
+    return this.outMode() === 'via' ? 'via' : 'direct';
+  });
+  /** What the ways-home list shows, for the stay chips' counts (its Nonstop / Via seg). */
+  protected readonly retKind = computed<CountKind>(() => (this.retMode() === 'via' ? 'via' : 'direct'));
+
+  private afterFor(dep: string): number | null {
+    return homeAfterUtc(null, outboundsOn(this.state.hub(), this.code(), dep, this.ctx()), this.state.connect());
+  }
+
+  protected readonly depLabel = computed(() => {
+    const dep = this.plan().dep;
+    return dep ? dayLabel(dep, this.state.todayKey()) : '';
+  });
+  /**
+   * 'Nov 20 – 28' and '8 nights', as pieces that each stay on one line: the
+   * bar wraps at the dash ('Dec 28, 2026 –' / 'Jan 4, 2027') and before the nights.
+   */
+  protected readonly rangeLabel = computed(() => {
+    const { dep, ret } = this.plan();
+    if (!dep || !ret) return { start: '', end: '', stay: '' };
+    const n = nightsBetween(dep, ret);
+    const stay = n ? t('planner.nights', { n }) : t('planner.dayTrip');
+    if (dep === ret) return { start: dayLabel(dep, this.state.todayKey()), end: '', stay };
+    const range = shortRange(dep, ret, this.state.todayKey());
+    const at = range.lastIndexOf(' – ');
+    return at < 0 ? { start: range, end: '', stay } : { start: range.slice(0, at), end: range.slice(at + 3), stay };
+  });
+
+  /** Five stays compared with no tap: nights, return day and ways home after you land. */
+  protected readonly stays = computed(() => {
+    const dep = this.plan().dep;
+    return dep ? stayOptions(dep, this.code(), this.state.hub(), this.ctx(), this.afterUtc(), this.state.timeFormat(), undefined, this.retKind()) : [];
+  });
+  protected readonly stayCompute = computed(() => {
+    const dep = this.plan().dep;
+    if (!dep) return null;
+    const code = this.code();
+    const hub = this.state.hub();
+    const ctx = this.ctx();
+    const after = this.afterUtc();
+    const fmt = this.state.timeFormat();
+    const kind = this.retKind();
+    return (n: number) => stayOptions(dep, code, hub, ctx, after, fmt, [n], kind)[0];
+  });
+
+  /** The picker's query: the global params plus the dates. */
+  protected readonly calParams = computed<Params>(() => {
+    const { dep, ret } = this.plan();
+    return { ...this.state.globalParams(), ...planParams({ dep, ret, out: null, back: null }) };
+  });
+  protected readonly planLink = computed(() => planPath(this.code()));
+  protected readonly planQuery = computed<Params>(() => ({ ...this.state.globalParams(), ...planParams(this.plan()) }));
+
+  // ── 14-day strip (departures) ─────────────────────────────────────────────
+  /** The strip's first day: three days before the departure (else the timeline start), never before today. */
+  private readonly stripStart = linkedSignal<readonly [string, string, string], string>({
+    source: () => [this.code(), this.plan().dep ?? this.state.selectedDateKey() ?? this.state.weekStartKey(), this.state.todayKey()] as const,
+    computation: ([, base, today], prev) => {
+      const dep = this.plan().dep;
+      // Keep the strip where it is when the picked day is already on it.
+      if (prev && dep && dep >= prev.value && dep <= addDays(prev.value, STRIP_DAYS - 1)) return prev.value;
+      const start = addDays(base, -3);
+      return start > today ? start : today;
+    },
+  });
+  protected readonly stripDays = computed(() =>
+    outCounts(this.state.hub(), this.code(), stripKeys(this.stripStart(), 0, STRIP_DAYS - 1), this.ctx(), this.state.timeFormat(), this.outKind()));
+  /** Nothing on the strip flies (a seasonal route out of season): the notice above says when it does, so the strip hides. */
+  protected readonly stripEmpty = computed(() => this.stripDays().every(c => c.state !== 'ok'));
+
+  /**
+   * The picked day has nothing of the listed kind, so the list starts later:
+   * say so, with the other kind's count that day and a way to show it.
+   */
+  protected readonly dayGap = computed(() => {
+    const dep = this.plan().dep;
+    if (!dep || this.routeOnly()) return null;
+    const first = this.outList()[0];
+    if (first && first.dateKey <= dep) return null;
+    const kind = this.outKind();
+    const ctx = { ...this.ctx(), showConnections: true };
+    const all = outboundsOn(this.state.hub(), this.code(), dep, ctx);
+    const via = kind !== 'via';
+    const other = all.filter(it => (it.hubs.length > 0) === via).length;
+    const today = this.state.todayKey();
+    return {
+      text: t(via ? 'planner.dest.noneOnDay' : 'planner.dest.noneOnDayVia', { date: dayLabel(dep, today) }),
+      other: other ? t(via ? 'planner.dest.otherKind' : 'planner.dest.otherKindNonstop', { n: other }) : null,
+      first: first ? t('planner.dest.firstListed', { date: dayLabel(first.dateKey, today) }) : null,
+      show: other ? (via ? 'via' : 'nonstop') as 'via' | 'nonstop' : null,
+    };
+  });
+
+  /** "Show" on the day-gap line: the other kind (connections are turned on first when they are off). */
+  protected showKind(kind: 'via' | 'nonstop'): void {
+    if (kind === 'via' && !this.state.showConnections()) this.state.setShowConnections(true);
+    this.setOutMode(kind);
+  }
+
+  protected shiftStrip(d: -1 | 1): void {
+    const today = this.state.todayKey();
+    const next = addDays(this.stripStart(), d * 7);
+    this.stripStart.set(next < today ? today : next);
+  }
 
   // ── Destination facts ─────────────────────────────────────────────────────
   protected readonly dest = computed(() => findDestination(this.code()));
@@ -509,20 +758,27 @@ export class DestinationPage {
   private readonly retToday = computed(() => todayKey(airportTz(this.code()), this.state.nowMs()));
 
   /**
-   * Timelines start at the selected day, else at the browsed week's start,
-   * and never before today (at the hub).
+   * Timelines start at ?dep, else the selected day, else the browsed week's
+   * start, and never before today (at the hub).
    */
   private readonly startKey = computed(() => {
     const today = this.outToday();
-    const base = this.state.selectedDateKey() ?? this.state.weekStartKey();
+    const base = this.plan().dep ?? this.state.selectedDateKey() ?? this.state.weekStartKey();
     return base > today ? base : today;
   });
-  /** The return timeline's start: the same day, never before today where it leaves from. */
+  /**
+   * The return timeline's start: ?ret, else the day the earliest outbound on
+   * ?dep lands, else the same day as departures; never before today where it
+   * leaves from.
+   */
   private readonly retStartKey = computed(() => {
     const today = this.retToday();
-    const base = this.state.selectedDateKey() ?? this.state.weekStartKey();
+    const { dep, ret } = this.plan();
+    const base = ret ?? this.earliest()?.arrDateKey ?? dep ?? this.state.selectedDateKey() ?? this.state.weekStartKey();
     return base > today ? base : today;
   });
+  /** Ways home leave no earlier than this (now, or minConnect after you land). */
+  private readonly retFloor = computed(() => Math.max(this.state.nowMs(), this.afterUtc() ?? -Infinity));
 
   private readonly outDirect = computed(() =>
     upcoming(this.state.hub(), this.code(), this.startKey(), this.state.nowMs(), 'direct', this.state.connect()));
@@ -570,9 +826,9 @@ export class DestinationPage {
   protected readonly outMore = computed(() => this.outList().length > this.outLimit());
 
   private readonly retDirect = computed(() =>
-    upcoming(this.code(), this.state.hub(), this.retStartKey(), this.state.nowMs(), 'direct', this.state.connect()));
+    upcoming(this.code(), this.state.hub(), this.retStartKey(), this.retFloor(), 'direct', this.state.connect()));
   private readonly retVia = computed(() =>
-    upcoming(this.code(), this.state.hub(), this.retStartKey(), this.state.nowMs(), 'via', this.state.connect()));
+    upcoming(this.code(), this.state.hub(), this.retStartKey(), this.retFloor(), 'via', this.state.connect()));
   /**
    * The user's Nonstop / Via choice for returns. Keyed on the route only, so
    * the 30s clock tick (which rebuilds the lists) never resets it.
@@ -602,7 +858,8 @@ export class DestinationPage {
 
   // ── Header ────────────────────────────────────────────────────────────────
   protected readonly summary = computed(() =>
-    destSummary(this.state.hub(), this.code(), this.state.weekStartKey(), this.outDirect().length ? this.outDirect() : this.outVia()));
+    destSummary(this.state.hub(), this.code(), this.state.weekStartKey(), this.outDirect().length ? this.outDirect() : this.outVia(),
+      weekStartKey(this.outToday())));
   /** 'Seasonal · last nonstop Oct 23' when the nonstop is about to end or pause (same rule as Home's "Seasonal & ending soon"). */
   protected readonly seasonTag = computed(() => {
     const ev = seasonEvent(this.state.hub(), this.code(), this.outToday());
@@ -620,7 +877,7 @@ export class DestinationPage {
   protected readonly farConnection = computed(() => {
     if (this.outDirect().length || this.outVia().length) return null;
     const key = nextConnectionDate(this.state.hub(), this.code(), addDays(this.startKey(), HORIZON_DAYS), this.state.connect());
-    return key ? { key, label: formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }) } : null;
+    return key ? { key, label: dayLabel(key, this.state.todayKey()) } : null;
   });
   protected readonly hasConnections = computed(() => this.outVia().length > 0 || !!this.farConnection());
   protected readonly status = computed(() =>
@@ -642,7 +899,7 @@ export class DestinationPage {
   /** The next nonstop beyond the timeline's horizon (empty-timeline link). */
   protected readonly nextAhead = computed(() => {
     const key = nextFlightDate(this.state.hub(), this.code(), this.startKey(), false);
-    return key ? { key, label: formatKey(key, { weekday: 'short', month: 'short', day: 'numeric' }) } : null;
+    return key ? { key, label: dayLabel(key, this.state.todayKey()) } : null;
   });
   protected readonly otherHubs = computed(() =>
     getOrigins(this.code()).filter(o => o.isHub && o.code !== this.state.hub()).map(o => ({ code: o.code, name: hubDisplayName(o.code) })));
@@ -688,10 +945,12 @@ export class DestinationPage {
   /** "What's on": the shown day and 3 days either side (the card clamps to what the server accepts). */
   protected readonly eventsFrom = computed(() => addDays(this.climateDay(), -3));
   protected readonly eventsTo = computed(() => addDays(this.climateDay(), 3));
-  /** The day the weather is for: the picked day, else today at the destination. */
+  /** The day the weather is for: ?dep, else the picked day, else today at the destination. */
   protected readonly climateDay = computed(() => {
     const tz = this.dest()?.tz;
-    return this.state.selectedDateKey() ?? (tz ? todayKey(tz, this.state.nowMs()) : this.outToday());
+    const week = this.state.weekStartKey();
+    const browsed = week > weekStartKey(this.outToday()) ? week : null;
+    return this.plan().dep ?? this.state.selectedDateKey() ?? browsed ?? (tz ? todayKey(tz, this.state.nowMs()) : this.outToday());
   });
   /**
    * 'you: 3/4' tags for the departures, keyed by row: only the first row of each
@@ -774,10 +1033,111 @@ export class DestinationPage {
     });
   }
 
-  /** A day tapped in the month availability: the app moves there and the timeline starts on it. */
-  pickDay(key: string): void {
-    this.state.jumpTo(key);
+  /**
+   * A day tapped on the strip: ?dep moves there (a return on or before it
+   * moves too, keeping the nights), the timeline starts on it and the page
+   * scrolls to the list.
+   */
+  setDep(key: string): void {
+    const { dep, ret } = this.plan();
+    const shifted = dep ? shiftRet(key, dep, ret) : { ret: ret && ret >= key ? ret : null, moved: false };
+    this.writeDates({ dep: key, ret: shifted.ret });
+    // Nothing changes silently (D6): a return pushed to keep the nights says so, as on /plan and the Flight page.
+    if (shifted.moved && shifted.ret) {
+      this.state.flash(t('planner.toast.retMoved', {
+        date: dayLabel(shifted.ret, this.state.todayKey()), nights: t('planner.nights', { n: nightsBetween(key, shifted.ret) }),
+      }));
+    }
+    this.doc.defaultView?.requestAnimationFrame?.(() =>
+      this.doc.getElementById('dep-list')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }));
   }
+
+  /** A stay chip: ?ret (a day not yet published says so instead). */
+  setRet(key: string): void {
+    const to = this.state.coverage().to;
+    if (to && key > to) {
+      this.state.flash(t('planner.picker.unpublishedPeek', { date: formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' }) }));
+      return;
+    }
+    this.writeDates({ dep: this.plan().dep, ret: key });
+  }
+
+  clearDates(): void {
+    this.writeDates({ dep: null, ret: null });
+  }
+
+  /** The seasonal "Go": that day becomes the return (with dates), else the app moves there. */
+  goHome(key: string): void {
+    const dep = this.plan().dep;
+    if (dep && key >= dep) this.setRet(key);
+    else this.state.jumpTo(key);
+  }
+
+  private writeDates(d: { dep: string | null; ret: string | null }): void {
+    void this.router.navigate([], {
+      queryParams: { dep: d.dep, ret: d.dep ? d.ret : null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+      scroll: 'manual',
+    });
+  }
+
+  // ── Row links (dates set) ─────────────────────────────────────────────────
+  /** With both dates, a departure opens the round trip from its own day, keeping the nights; else its flight page. */
+  protected readonly outLinkFor = computed(() => {
+    const { dep, ret } = this.plan();
+    if (!dep || !ret) return null;
+    const code = this.code();
+    const nights = nightsBetween(dep, ret);
+    return (row: TimelineItem): TimelineLink => ({
+      path: planPath(code),
+      params: { dep: row.it.dateKey, ret: addDays(row.it.dateKey, nights), out: flightSlug(row.it) },
+    });
+  });
+
+  /** With a departure day, a way home opens the round trip on its own day. */
+  protected readonly retLinkFor = computed(() => {
+    const dep = this.plan().dep;
+    if (!dep) return null;
+    const code = this.code();
+    return (row: TimelineItem): TimelineLink => ({
+      path: planPath(code),
+      params: { dep, ret: row.it.dateKey, back: flightSlug(row.it) },
+    });
+  });
+
+  /** '8 nights' on each way home, counted from ?dep. */
+  protected readonly retStayTag = computed(() => {
+    const dep = this.plan().dep;
+    if (!dep) return null;
+    return (row: TimelineItem): string | null => {
+      const n = nightsBetween(dep, row.it.dateKey);
+      return n >= 0 ? (n ? t('planner.nights', { n }) : t('planner.dayTrip')) : null;
+    };
+  });
+
+  /** 'Leaving LIS after you land (Sat, Nov 21 08:15)', else 'Next flights home from Lisbon'. */
+  protected readonly retHeading = computed(() => {
+    const e = this.earliest();
+    const { dep, ret } = this.plan();
+    if (dep && e) {
+      const today = this.state.todayKey();
+      // A return days after landing: the list starts on that day; the landing time no longer matters.
+      if (ret && ret > e.arrDateKey) return t('planner.dest.homeHeadingFrom', { code: this.code(), date: dayLabel(ret, today) });
+      const when = landingLabel(e, today, this.state.timeFormat());
+      return e.hubs.length
+        ? t('planner.dest.homeHeadingVia', { code: this.code(), via: e.hubs.join(', '), when })
+        : t('planner.dest.homeHeading', { code: this.code(), when });
+    }
+    return t('planner.dest.nextHome', { city: this.city() });
+  });
+
+  /** The next nonstop home beyond an empty timeline (seasonal routes), with its year when not this one. */
+  protected readonly nextHomeAhead = computed(() => {
+    if (this.retDirect().length || this.retVia().length) return null;
+    const key = nextFlightDate(this.code(), this.state.hub(), this.retStartKey(), false);
+    return key ? { key, label: dayLabel(key, this.state.todayKey()) } : null;
+  });
 
   /** A media query as a signal (false where matchMedia is missing). */
   private media(query: string) {

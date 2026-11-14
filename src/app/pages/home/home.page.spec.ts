@@ -72,23 +72,27 @@ describe('HomePage', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the week-strip legend until it is dismissed, and remembers that', async () => {
+  it('Plan a round trip opens the picker with the selected day as ?dep; the strip has no dots', async () => {
     configure();
-    localStorage.removeItem('ac.legend.strip.v1');
-    const a = await render();
-    expect(a.el.querySelector('[data-legend]')?.textContent).toContain('A dot under a day');
-    a.el.querySelector<HTMLButtonElement>('.legend__x')!.click();
-    await a.stable();
-    expect(a.el.querySelector('[data-legend]')).toBeNull();
-    expect(localStorage.getItem('ac.legend.strip.v1')).toBe('1');
-    TestBed.resetTestingModule();
-    configure();
-    const b = await render();
-    expect(b.el.querySelector('[data-legend]')).toBeNull();
-    localStorage.removeItem('ac.legend.strip.v1');
+    const { el, state, stable } = await render();
+    const btn = () => el.querySelector<HTMLAnchorElement>('a[data-plan-round]')!;
+    expect(btn().textContent!.trim()).toBe('Plan a round trip');
+    // No day selected: the picker opens without a departure.
+    expect(btn().getAttribute('href')).toBe('/calendar?from=YUL&trip=round');
+    state.selectDay('2026-10-09');
+    await stable();
+    expect(btn().getAttribute('href')).toContain('/calendar?');
+    expect(btn().getAttribute('href')).toContain('dep=2026-10-09');
+    // A past selected day is not carried.
+    state.selectDay('2026-10-05');
+    await stable();
+    expect(btn().getAttribute('href')).not.toContain('dep=');
+    // The week strip shows no dots, and the old dot legend is gone.
+    expect(el.querySelectorAll('app-week-strip .dt.is-on')).toHaveLength(0);
+    expect(el.querySelector('[data-legend]')).toBeNull();
   });
 
-  it('curated mode: greeting, title, picks, nonstop rows and dots for the week strip', async () => {
+  it('curated mode: greeting, title, picks and nonstop rows', async () => {
     configure();
     const { el, text } = await render();
     expect(text()).toContain('Good morning');
@@ -482,6 +486,7 @@ describe('HomePage in French', () => {
     expect(el.querySelector('app-hub-picker .picker')!.getAttribute('aria-label')).toMatch(/^Aéroport d'attache\s*: .*\. Modifier$/);
     expect(el.querySelector('app-week-strip .ws')!.getAttribute('aria-label')).toMatch(/^Semaine du /);
     expect(el.querySelector('app-week-strip .cap__label')!.getAttribute('aria-label')).toMatch(/Choisir une date$/);
+    expect(el.querySelector('a[data-plan-round]')!.textContent!.trim()).toBe('Planifier un aller-retour');
     expect(text()).not.toMatch(/Nonstop this week|Editor's pick|Show all|Seasonal|This week|Home airport/);
   });
 

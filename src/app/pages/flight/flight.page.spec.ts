@@ -8,6 +8,7 @@ import { PREFS_STORAGE } from '../../state/prefs.service';
 import { ShareService } from '../../state/share.service';
 import { MemoryStorage } from '../../state/testing';
 import { setLocale } from '../../i18n/locale';
+import { homeAfterUtc, waysHome } from '../../planner/round-trip';
 import { FlightPage } from './flight.page';
 
 /** Wed Oct 7 2026, 08:00 in Montréal. */
@@ -133,7 +134,7 @@ describe('FlightPage', () => {
     expect(el.querySelectorAll<HTMLButtonElement>('app-seg button')[1].disabled).toBe(true);
   });
 
-  it('Add to calendar downloads an .ics; picking a return enables the round trip', async () => {
+  it('Add to calendar downloads a one-way .ics; there is no round-trip .ics or "Round trip ready" here', async () => {
     configure({ showConnections: false });
     const blobs: Blob[] = [];
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn((b: Blob) => (blobs.push(b), 'blob:x')) });
@@ -142,49 +143,14 @@ describe('FlightPage', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
       names.push(this.download);
     });
-    const { el, stable, text } = await render();
+    const { el, text } = await render();
     expect(el.querySelector('.acts')!.textContent).not.toContain('Round trip');
+    expect(text()).not.toContain('Round trip ready');
     el.querySelector<HTMLButtonElement>('.acts .ui-btn--dark')!.click();
     expect(names).toEqual(['ac-YUL-LHR-2026-10-07.ics']);
     expect(await read(blobs[0])).toContain('BEGIN:VCALENDAR');
-
-    // Return: 4 nights from the Thu Oct 8 arrival → Mon Oct 12, LHR→YUL AC865.
-    expect(text('app-return-panel .date')).toBe('Mon, Oct 12');
-    const row = el.querySelector<HTMLButtonElement>('app-return-panel app-option-row button')!;
-    expect(row.textContent).toContain('AC865');
-    row.click();
-    await stable();
-    expect(row.getAttribute('aria-pressed')).toBe('true');
-    const round = [...el.querySelectorAll<HTMLButtonElement>('.acts button')].find(b => b.textContent!.includes('Round trip'))!;
-    round.click();
-    expect(names[1]).toBe('ac-YUL-LHR-2026-10-07_2026-10-12.ics');
-    const ics = await read(blobs[1]);
-    expect(ics.match(/BEGIN:VEVENT/g)!.length).toBe(2);
-  });
-
-  it('nights presets write ?nights= and clear ?ret=; ?ret= from the calendar wins', async () => {
-    configure();
-    const a = await render({ nights: '7' });
-    expect(a.text('app-return-panel .date')).toBe('Thu, Oct 15');
-    const chips = [...a.el.querySelectorAll<HTMLButtonElement>('app-return-panel .chip')];
-    expect(chips.find(c => c.getAttribute('aria-pressed') === 'true')!.textContent!.trim()).toBe('7 nights');
-    chips[0].click();
-    expect(a.nav).toHaveBeenCalledWith([], { queryParams: { nights: 2, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
-    expect(a.el.querySelector('app-return-panel .stepper')).toBeNull();   // a preset covers 7 nights
-    a.el.querySelector<HTMLButtonElement>('app-return-panel [data-other]')!.click();
-    a.fixture.detectChanges();
-    a.el.querySelector<HTMLButtonElement>('button[aria-label="One night more"]')!.click();
-    expect(a.nav).toHaveBeenLastCalledWith([], { queryParams: { nights: 8, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
-    a.fixture.componentRef.setInput('nights', '8');
-    a.fixture.detectChanges();
-    expect(a.el.querySelector('app-return-panel .stepper')).not.toBeNull();   // stays open after stepping
-
-    TestBed.resetTestingModule();
-    configure();
-    const b = await render({ ret: '2026-10-20', nights: '3' });
-    expect(b.text('app-return-panel .date')).toBe('Tue, Oct 20');
-    expect(b.text('app-return-panel .when')).toContain('12 nights');
-    expect(b.text('app-return-panel .when')).toContain('from the calendar');
+    // The Coming home card sits right after the actions.
+    expect(el.querySelector('.acts + app-return-summary')).not.toBeNull();
   });
 
   it('If you miss this lists the later flight the same day', async () => {
@@ -236,6 +202,166 @@ describe('FlightPage', () => {
     configure({ showConnections: false });
     const a = await render();
     expect(a.cmp.itineraries().every(i => !i.hubs.length)).toBe(true);
+  });
+});
+
+/**
+ * The Lisbon world of planner/round-trip.spec: AC834 YUL 22:10 → LIS 08:15⁺¹
+ * Mon/Wed/Fri/Sun, AC832 Tue/Thu, AC830 Fri; LIS→YUL AC835 07:10, AC837
+ * 10:40, AC839 13:00 daily, plus AC831 08:45 and AC833 09:15 on Sat Nov 21.
+ */
+const LIS_ROUTES = [
+  route('YUL', 'LIS',
+    rec('AC834', '22:10', '08:15', '2026-09-01', '2027-03-28', 'Mon,Wed,Fri,Sun', '333'),
+    rec('AC832', '21:55', '08:00', '2026-09-01', '2027-03-28', 'Tue,Thu', '333'),
+    rec('AC830', '18:05', '04:05', '2026-09-01', '2027-03-28', 'Fri', '789'),
+  ),
+  route('LIS', 'YUL',
+    rec('AC835', '07:10', '09:10', '2026-09-01', '2027-03-28', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', '333'),
+    rec('AC837', '10:40', '12:40', '2026-09-01', '2027-03-28', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', '333'),
+    rec('AC839', '13:00', '15:00', '2026-09-01', '2027-03-28', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', '333'),
+    rec('AC831', '08:45', '10:45', '2026-11-21', '2026-11-21', 'Sat', '333'),
+    rec('AC833', '09:15', '11:15', '2026-11-21', '2026-11-21', 'Sat', '333'),
+  ),
+];
+const LIS_META = { generatedAt: '2026-11-01T06:00:00Z', coverageFrom: '2026-09-01', coverageTo: '2027-03-28' };
+/** Sat Nov 14 2026, 10:00 in Montréal. */
+const LIS_CLOCK = Date.parse('2026-11-14T15:00:00Z');
+const NAV = { queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' } as const;
+
+describe('FlightPage · Coming home (dates-spec §3.4)', () => {
+  beforeEach(() => setScheduleSource(LIS_ROUTES, LIS_META));
+  afterEach(() => {
+    setLocale('en');
+    resetScheduleSource();
+    vi.restoreAllMocks();
+  });
+
+  function setup(prefs: object = { showConnections: false }) {
+    const storage = new MemoryStorage();
+    storage.setItem('ac.prefs.v1', JSON.stringify(prefs));
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), { provide: PREFS_STORAGE, useValue: storage }, { provide: NOW, useValue: () => LIS_CLOCK }],
+    });
+  }
+  const lis = (inputs: Inputs = {}) => render({ code: 'LIS', date: '2026-11-20', flight: 'AC834', ...inputs });
+
+  it('the LIS Nov 20–28 card says 8 nights, the rule after landing and the first three times', async () => {
+    setup();
+    const { text, el } = await lis({ ret: '2026-11-28' });
+    expect(text('app-return-summary h2')).toBe('Coming home');
+    expect(text('[data-ret-line]')).toBe('Sat, Nov 28 · 8 nights · 3 ways home');
+    expect(text('app-return-summary .l2')).toBe('after this flight lands (Sat, Nov 21 08:15)');
+    expect(text('[data-ret-times]')).toBe('07:10 AC835 · 10:40 AC837 · 13:00 AC839');
+    expect(el.querySelector('app-return-summary app-stay-chips')).toBeNull();
+  });
+
+  it('"Plan round trip" opens /plan with dep, ret and this flight', async () => {
+    setup();
+    const { el } = await lis({ ret: '2026-11-28' });
+    const a = el.querySelector<HTMLAnchorElement>('[data-plan-round]')!;
+    expect(a.textContent!.trim()).toBe('Plan round trip');
+    expect(a.getAttribute('href')).toBe('/plan/LIS?from=YUL&dep=2026-11-20&ret=2026-11-28&out=AC834');
+  });
+
+  it('a 30s clock tick inside the same minute keeps the count context (no recount)', async () => {
+    setup({ showConnections: false, minConnect: 60 });
+    const { cmp } = await lis({ ret: '2026-11-28' });
+    const state = TestBed.inject(AppStateService);
+    const before = cmp.countCtx();
+    const m = Math.floor(state.nowMs() / 60_000) * 60_000;
+    state.nowMs.set(m + 1_000);
+    const a = cmp.countCtx();
+    state.nowMs.set(m + 31_000);
+    expect(cmp.countCtx()).toBe(a);
+    state.nowMs.set(m + 61_000);
+    expect(cmp.countCtx()).not.toBe(a);
+    expect(before.today).toBe(a.today);
+  });
+
+  it('the card count equals the ways-home list /plan shows for the same outbound (parity)', async () => {
+    setup({ showConnections: false, minConnect: 60 });
+    const { text, cmp } = await lis({ ret: '2026-11-21' });
+    const out = cmp.current()!;
+    const ctx = cmp.countCtx();
+    const rows = waysHome('LIS', 'YUL', '2026-11-21', ctx, homeAfterUtc(out, [], ctx.connect));
+    // AC835 07:10 leaves before landing and AC831 08:45 within the hour: AC833, AC837, AC839 remain.
+    expect(rows.map(r => r.legs[0].flightNumber)).toEqual(['AC833', 'AC837', 'AC839']);
+    expect(text('[data-ret-line]')).toBe(`Sat, Nov 21 · 1 night · ${rows.length} ways home`);
+    for (const ret of ['2026-11-22', '2026-11-28', '2026-12-04']) {
+      const n = waysHome('LIS', 'YUL', ret, ctx, homeAfterUtc(out, [], ctx.connect)).length;
+      const r = await (TestBed.resetTestingModule(), setup({ showConnections: false, minConnect: 60 }), lis({ ret }));
+      expect(r.text('[data-ret-line]')).toContain(`${n} ways home`);
+    }
+  });
+
+  it('a legacy ?nights=4 on Nov 20 resolves to Tue, Nov 24 and is rewritten to ?ret (P3)', async () => {
+    setup();
+    const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const { text } = await lis({ nights: '4' });
+    expect(text('[data-ret-line]')).toBe('Tue, Nov 24 · 4 nights · 3 ways home');
+    expect(nav).toHaveBeenCalledWith([], { queryParams: { ret: '2026-11-24', nights: null }, ...NAV });
+  });
+
+  it('without a return day: stay chips count ways home after landing, and a chip writes ?ret', async () => {
+    setup();
+    const { el, text, nav } = await lis();
+    expect(text('app-return-summary .q')).toBe('When are you coming home?');
+    const chips = [...el.querySelectorAll<HTMLButtonElement>('app-return-summary [role="radio"][data-nights]')];
+    expect(chips.map(c => c.dataset['nights'])).toEqual(['2', '3', '4', '5', '7']);
+    expect(chips[2].textContent!.replace(/\s+/g, ' ').trim()).toBe('4 nights Tue 24 · 3 home');
+    chips[2].click();
+    expect(nav).toHaveBeenCalledWith([], { queryParams: { ret: '2026-11-24', nights: null }, ...NAV });
+    const plan = el.querySelector<HTMLAnchorElement>('[data-plan-round]')!;
+    expect(plan.getAttribute('href')).toBe('/plan/LIS?from=YUL&dep=2026-11-20&out=AC834');
+  });
+
+  it('a day with no way home after landing says so and offers the nearest days', async () => {
+    setup();
+    const { el, text, nav } = await lis({ ret: '2026-11-20' });
+    expect(text('[data-ret-line]')).toBe('Fri, Nov 20 · 0 nights · 0 ways home');
+    expect(text('[data-ret-zero]')).toBe('No ways home on Fri, Nov 20 after you land');
+    const near = [...el.querySelectorAll<HTMLButtonElement>('app-return-summary .near button')];
+    expect(near.map(b => b.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['Sat, Nov 21 · 3 home', 'Sun, Nov 22 · 3 home']);
+    near[1].click();
+    expect(nav).toHaveBeenCalledWith([], { queryParams: { ret: '2026-11-22', nights: null }, ...NAV });
+  });
+
+  it('the week strip shows flights out per day instead of dots', async () => {
+    setup();
+    const { el } = await lis({ ret: '2026-11-28' });
+    const cts = [...el.querySelectorAll('app-week-strip .ct')].map(c => c.textContent!.trim());
+    // Mon 16 … Sun 22: AC834 Mon/Wed/Fri/Sun, AC832 Tue/Thu, AC830 Fri; no nonstop on Saturday.
+    expect(cts).toEqual(['1', '1', '1', '1', '2', '–', '1']);
+    expect(el.querySelector('app-week-strip .dt')).toBeNull();
+  });
+
+  it('Change dates opens the picker with dep, ret and this flight', async () => {
+    setup();
+    const { el } = await lis({ ret: '2026-11-28' });
+    const a = [...el.querySelectorAll<HTMLAnchorElement>('.acts a')].find(x => x.textContent!.includes('Change dates'))!;
+    expect(a.getAttribute('href')).toBe('/calendar/LIS?from=YUL&dep=2026-11-20&ret=2026-11-28&out=AC834');
+  });
+
+  it('moving the day past the return keeps the nights and says so', async () => {
+    setup();
+    const { cmp, nav, state } = await lis({ ret: '2026-11-22' });
+    const flash = vi.spyOn(state, 'flash');
+    cmp.goDate('2026-11-23');
+    expect(nav).toHaveBeenCalledWith(['/flight', 'LIS', '2026-11-23'], { queryParams: { ret: '2026-11-25', nights: null }, ...NAV });
+    expect(flash).toHaveBeenCalledWith('Home moved to Wed, Nov 25 to keep 2 nights');
+    cmp.goDate('2026-11-21');
+    expect(nav).toHaveBeenLastCalledWith(['/flight', 'LIS', '2026-11-21'], NAV);
+  });
+
+  it('reads in Canadian French', async () => {
+    setup();
+    setLocale('fr');
+    const { text } = await lis({ ret: '2026-11-28' });
+    expect(text('app-return-summary h2')).toBe('Retour');
+    expect(text('[data-ret-line]')).toBe('sam. 28 nov. · 8 nuits · 3 retours');
+    expect(text('[data-plan-round]')).toBe("Planifier l'aller-retour");
+    expect(text()).not.toMatch(/Coming home|ways home|Plan round trip/);
   });
 });
 

@@ -3,6 +3,7 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { WeekStripComponent, SWIPE_PX } from './week-strip.component';
 import type { Coverage } from '../data/schedule-index';
+import type { DayCount } from '../planner/round-trip';
 
 const COVERAGE: Coverage = { from: '2026-09-01', to: '2027-03-31', generatedAt: '2026-09-28T06:00:00Z', hub: 'YUL' };
 
@@ -11,7 +12,7 @@ const COVERAGE: Coverage = { from: '2026-09-01', to: '2027-03-31', generatedAt: 
   imports: [WeekStripComponent],
   template: `
     <app-week-strip [weekStartKey]="week()" [selectedDateKey]="sel()" [todayKey]="today()" [coverage]="cov()"
-                    [dots]="dots()" [shortcuts]="shortcuts()"
+                    [dots]="dots()" [counts]="counts()" [shortcuts]="shortcuts()"
                     (selectDay)="sel.set($event); events.push(['selectDay', $event])"
                     (prev)="events.push(['prev'])" (next)="events.push(['next'])"
                     (jumpTo)="events.push(['jumpTo', $event])" />
@@ -24,6 +25,7 @@ class Host {
   cov = signal<Coverage | null>(COVERAGE);
   dots = signal<boolean[] | null>([true, true, false, true, true, true, true]);
   shortcuts = signal(true);
+  counts = signal<(DayCount | null)[] | null>(null);
   events: unknown[][] = [];
 }
 
@@ -49,7 +51,31 @@ function pointer(type: string, x: number, y = 0, pointerType = 'touch'): Pointer
   return e;
 }
 
+function count(key: string, state: DayCount['state'], total = 0, direct = total): DayCount {
+  return { key, state, total, direct, connecting: total - direct, hidden: 0, first: null, last: null };
+}
+
 describe('ui WeekStripComponent', () => {
+  it('counts replace the dots: a number, "–" or a hatch, and the count in the label', async () => {
+    const { days, fixture, host } = await setup();
+    host.counts.set([
+      count('2026-09-28', 'past'), count('2026-09-29', 'past'), count('2026-09-30', 'ok', 3, 2), count('2026-10-01', 'none'),
+      count('2026-10-02', 'ok', 1), count('2026-10-03', 'unpublished'), null,
+    ]);
+    await fixture.whenStable();
+    const btns = days();
+    expect(btns.map(b => b.querySelector('.ct')?.textContent?.trim() ?? null)).toEqual(['–', '–', '3', '–', '1', '–', '']);
+    expect(btns[0].querySelector('.dt')).toBeNull();
+    expect(btns[5].querySelector('.ct')!.classList).toContain('dm--hatch');
+    expect(btns[2].getAttribute('aria-label')).toBe('Wednesday, September 30, 2026, today, 3 flights out, 2 nonstop and 1 with a connection');
+    expect(btns[3].getAttribute('aria-label')).toBe('Thursday, October 1, 2026, no flights');
+    expect(btns[0].getAttribute('aria-label')).toBe('Monday, September 28, 2026');
+    host.counts.set(null);
+    await fixture.whenStable();
+    expect(days()[0].querySelector('.ct')).toBeNull();
+    expect(days()[0].querySelector('.dt')).not.toBeNull();
+  });
+
   it('renders seven day cells with weekday, date, dot and full labels', async () => {
     const { days, el } = await setup();
     const btns = days();

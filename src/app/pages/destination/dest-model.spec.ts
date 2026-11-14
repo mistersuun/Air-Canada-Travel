@@ -7,7 +7,7 @@ import { findItineraries } from '../../utils/connections';
 import { toUtcMs } from '../../utils/time';
 import { hm } from '../../ui/format';
 import {
-  availMonth, bestHub, destState, destSummary, itinFlights, monthRange, mostFrequent, nextConnectionDate,
+  bestHub, destState, destSummary, itinFlights, mostFrequent, nextConnectionDate,
   nextDeparture, placeLabel, shortAircraft, timelineDay, timelineItems, upcoming, zoneAbbr,
 } from './dest-model';
 import { currencyCode, currencyName } from './currency';
@@ -37,6 +37,8 @@ describe('small helpers', () => {
   it('formats the timeline date line', () => {
     expect(timelineDay('2026-10-01', '2026-10-01')).toBe('Today, Oct 1');
     expect(timelineDay('2026-10-02', '2026-10-01')).toBe('Fri, Oct 2');
+    // Another year carries it (a ?dep in late December lists January days).
+    expect(timelineDay('2027-01-01', '2026-11-14')).toBe('Fri, Jan 1, 2027');
   });
 
   it('names time zones, preferring a real abbreviation', () => {
@@ -116,6 +118,9 @@ describe('destSummary', () => {
     expect(s.stops).toMatch(/^Nonstop · \d+h\d\d$/);
     expect(s.meta).toBe(`${s.stops} · 7× this week · A330-300`);
     expect(s.season).toBe('Year-round');
+    // Another week browsed (?week=): named by its start, never "this week".
+    const other = destSummary('YUL', 'LHR', '2026-10-12', [], '2026-09-28');
+    expect(other.meta).toBe(`${other.stops} · 7× week of Oct 12 · A330-300`);
   });
 
   it('falls back to the sample when the week has no nonstop', () => {
@@ -190,32 +195,3 @@ describe('nextDeparture and nextConnectionDate', () => {
   });
 });
 
-describe('month availability', () => {
-  it('builds a Monday-first month with bars sized by departures', () => {
-    const m = availMonth('YUL', 'LHR', '2026-10', '2026-10-02', false);
-    expect(m.title).toBe('October 2026');
-    expect(m.lead).toBe(3); // Oct 1 2026 is a Thursday
-    expect(m.cells).toHaveLength(31);
-    expect(m.cells[0]).toMatchObject({ dateKey: '2026-10-01', off: true, fill: 0, direct: 0 });
-    expect(m.cells[1]).toMatchObject({ day: 2, direct: 1, fill: 33, off: false, connect: false });
-    expect(m.cells[2]).toMatchObject({ direct: 2, fill: 67 });
-    expect(m.cells[2].label).toBe('Sat, Oct 3: 2 nonstop departures');
-    expect(m.unpublished).toBe(false);
-  });
-
-  it('marks connection-only days and unpublished months', () => {
-    const m = availMonth('YHZ', 'LHR', '2026-10', '2026-10-01', true);
-    expect(m.cells[0]).toMatchObject({ connect: true, direct: 0, label: 'Thu, Oct 1: connection only' });
-    const none = availMonth('YUL', 'ATH', '2026-11', '2026-10-01', false);
-    expect(none.cells[0].label).toBe('Sun, Nov 1: no flights');
-    const late = availMonth('YUL', 'LHR', '2027-05', '2026-10-01', false);
-    expect(late.unpublished).toBe(true);
-    expect(late.cells[0]).toMatchObject({ off: true, label: 'Sat, May 1: not yet published' });
-  });
-
-  it('ranges from today’s month to the coverage end', () => {
-    expect(monthRange('2026-10-01', getCoverage('YUL'))).toEqual({ first: '2026-10', last: '2027-03' });
-    expect(monthRange('2026-10-01', null)).toEqual({ first: '2026-10', last: '2026-12' });
-    expect(monthRange('2027-06-01', getCoverage('YUL'))).toEqual({ first: '2027-06', last: '2027-06' });
-  });
-});

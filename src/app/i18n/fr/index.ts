@@ -17,6 +17,7 @@ import { home } from './home';
 import { logbook } from './logbook';
 import { map } from './map';
 import { passes } from './passes';
+import { planner } from './planner';
 import { places } from './places';
 import { recs } from './recs';
 import { saved } from './saved';
@@ -48,6 +49,7 @@ export const FR_AREAS: { readonly [A in keyof Areas]: { readonly [K in keyof Are
   logbook,
   map,
   passes,
+  planner,
   places,
   recs,
   saved,
@@ -77,6 +79,7 @@ export const FR = {
   ...logbook,
   ...map,
   ...passes,
+  ...planner,
   ...places,
   ...recs,
   ...saved,

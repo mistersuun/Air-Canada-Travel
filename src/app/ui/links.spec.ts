@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Itinerary } from '../utils/connections';
 import {
-  calendarPath, destPath, flightPath, flightSlug, gatewayPath, matchSlug, reachPath, recoverPath, todayPath, tripImportPath,
+  calendarPath, destPath, flightPath, flightSlug, gatewayPath, matchSlug, planPath, reachPath, recoverPath, todayPath, tripImportPath,
   tripPath, tripQuery, tripUrl, tripsPath,
 } from './links';
 
@@ -17,6 +17,7 @@ describe('ui/links', () => {
     expect(flightPath('LIS', '2026-10-01', direct)).toEqual(['/flight', 'LIS', '2026-10-01', 'AC812']);
     expect(calendarPath()).toEqual(['/calendar']);
     expect(calendarPath('cun')).toEqual(['/calendar', 'CUN']);
+    expect(planPath('lis')).toEqual(['/plan', 'LIS']);
   });
 
   it('slugs itineraries', () => {

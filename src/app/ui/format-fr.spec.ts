@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setLocale } from '../i18n/locale';
 import {
-  countdown, daysLabel, formatStay, greeting, hm, hubDisplayName, operatesLabel, relativeCountdown, relativeDay,
-  shortDay, timeRange, weekRangeLabel,
+  countdown, dayLabel, dayNum, daysLabel, formatStay, greeting, hm, hubDisplayName, operatesLabel, relativeCountdown, relativeDay,
+  shortDay, shortRange, timeRange, weekRangeLabel,
 } from './format';
 import { formatClock, formatDuration, formatKey, monthShort, weekdayLetters, weekdayLong, weekdayShort } from '../utils/time';
 import type { Itinerary } from '../utils/connections';
@@ -66,5 +66,13 @@ describe('formats in Canadian French', () => {
     expect(hubDisplayName('YUL')).toBe('Montréal');
     setLocale('en');
     expect(hubDisplayName('YQB')).toBe('Québec City');
+  });
+
+  it('planner days and ranges: "sam. 28 nov.", "mer. 2 juin 2027", "20–28 nov."', () => {
+    expect(plain(dayLabel('2026-11-28', '2026-11-14'))).toBe('sam. 28 nov.');
+    expect(plain(dayLabel('2027-06-02', '2026-11-14'))).toBe('mer. 2 juin 2027');
+    expect(dayNum('2026-11-24')).toBe('mar. 24');
+    expect(plain(shortRange('2026-11-20', '2026-11-28', '2026-11-14'))).toBe('20–28 nov.');
+    expect(plain(shortRange('2026-12-28', '2027-01-03', '2026-11-14'))).toBe('28 déc. 2026 – 3 janv. 2027');
   });
 });

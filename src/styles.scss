@@ -570,3 +570,17 @@ button.ui-link::after { content: ''; position: absolute; inset: -12px -6px; }
   }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
+
+// ── Day-count markers (round-trip planner, dates-spec §3) ─────────────────────
+// A count's shape says what kind of flights it counts; colour only repeats it.
+//   .dm--solid   14×3 filled bar: at least one nonstop
+//   .dm--dotted  14×3 dotted outline: connections only
+//   .dm--none    no flights (the count reads "–")
+//   .dm--hatch   on a cell: not yet published
+.dm { display: block; width: 14px; height: 3px; margin: 3px auto 0; border-radius: 2px; }
+.dm--solid { background: currentColor; }
+.dm--dotted { height: 3px; border: 1px dotted currentColor; background: transparent; box-sizing: border-box; }
+.dm--none { background: transparent; }
+.dm--hatch {
+  background-image: repeating-linear-gradient(45deg, var(--hair) 0 2px, transparent 2px 6px);
+}

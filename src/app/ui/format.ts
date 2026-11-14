@@ -203,3 +203,39 @@ export function hubDisplayName(code: string): string {
   const key = HUB_DISPLAY[code as keyof typeof HUB_DISPLAY];
   return key ? t(key) : HUBS.find(h => h.code === code)?.name ?? code;
 }
+
+// ── Round-trip planner (dates-spec §4) ───────────────────────────────────────
+
+/**
+ * 'Sat, Nov 28' in today's year, 'Wed, Jun 2, 2027' in any other
+ * (French 'sam. 28 nov.', 'mer. 2 juin 2027').
+ */
+export function dayLabel(key: string, today: string): string {
+  if (key.slice(0, 4) === today.slice(0, 4)) return shortDay(key);
+  return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** 'Tue 24' / 'mar. 24': the two-word day of a strip cell or stay chip. */
+export function dayNum(key: string): string {
+  return `${weekdayShort(weekdayIndex(key))} ${Number(key.slice(8))}`;
+}
+
+/**
+ * 'Nov 20 – 28', 'Nov 28 – Dec 3' ('20–28 nov.', '28 nov. – 3 déc.'); with the
+ * years, 'Dec 28, 2026 – Jan 3, 2027', when either end is outside today's year.
+ */
+export function shortRange(dep: string, ret: string, today: string): string {
+  const year = today.slice(0, 4);
+  if (dep.slice(0, 4) !== year || ret.slice(0, 4) !== year) {
+    const ymd = { month: 'short', day: 'numeric', year: 'numeric' } as const;
+    return t('format.range.twoMonths', { start: formatKey(dep, ymd), end: formatKey(ret, ymd) });
+  }
+  const md = { month: 'short', day: 'numeric' } as const;
+  const parts = {
+    start: formatKey(dep, md),
+    end: formatKey(ret, md),
+    startDay: formatKey(dep, { day: 'numeric' }),
+    endDay: formatKey(ret, { day: 'numeric' }),
+  };
+  return t(dep.slice(0, 7) === ret.slice(0, 7) ? 'format.range.sameMonth' : 'format.range.twoMonths', parts);
+}

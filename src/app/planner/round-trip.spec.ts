@@ -11,7 +11,7 @@ import { flightSlug } from '../ui/links';
 import {
   NIGHT_PRESETS, type CountCtx, carryPick, countDay, countWords, dayCountAria, earliestArrival, homeAfterUtc, homeByFor,
   homeCounts, itinerariesMemoStats, itinerariesOn, landingLabel, minuteOf, nearestHomeDays, nightsBetween, outCounts,
-  outboundsOn, pickable, planParams, readPlan, resetItinerariesMemo, retFrom, shiftRet, staleBack, startRoundTrip,
+  outboundsOn, pickable, planParams, readPlan, resetItinerariesMemo, retDeadline, retFrom, shiftRet, staleBack, startRoundTrip,
   stayOptions, stripKeys, waysHome,
 } from './round-trip';
 
@@ -281,5 +281,36 @@ describe('planner/round-trip', () => {
     startRoundTrip(fake, { hub: 'YUL', code: 'LIS', out, back: null, ret: '2026-11-27' });
     expect(calls[0][1]).toMatchObject({ homeBy: { dateKey: '2026-11-27', hhmm: '22:00' } });
     expect(calls).toHaveLength(2);
+  });
+  it('startRoundTrip never sets a home-by before the outbound lands', () => {
+    const c = ctx();
+    const out = byNum(outboundsOn('YUL', 'LIS', DEP, c), 'AC834'); // lands Sat Nov 21 08:15
+    expect(out.arrDateKey).toBe('2026-11-21');
+    // A same-day return (ret = dep) with an overnight outbound: the deadline moves to the arrival day.
+    expect(retDeadline(out, DEP)).toEqual({ dateKey: '2026-11-21', hhmm: '22:00' });
+    expect(retDeadline(out, '2026-11-25')).toEqual({ dateKey: '2026-11-25', hhmm: '22:00' });
+    expect(retDeadline(out, null)).toEqual({ dateKey: addDays('2026-11-21', 4), hhmm: '22:00' });
+    const calls: unknown[][] = [];
+    const trip = { id: 't1', legs: [] } as unknown as Trip;
+    const fake = {
+      create: (x: unknown) => (calls.push(['create', x]), trip),
+      addFlightLeg: () => 'l',
+      trip: () => trip,
+    } as unknown as TripsService;
+    startRoundTrip(fake, { hub: 'YUL', code: 'LIS', out, back: null, ret: DEP });
+    expect(calls[0][1]).toMatchObject({ homeBy: { dateKey: '2026-11-21', hhmm: '22:00' } });
+  });
+
+  it('counts one kind when a page lists one kind (Nonstop / Via seg)', () => {
+    const on = ctx({ showConnections: true });
+    const sat = '2026-11-21'; // connections only out of YUL
+    expect(outCounts('YUL', 'LIS', [sat], on, '24h')[0].total).toBeGreaterThan(0);
+    expect(outCounts('YUL', 'LIS', [sat], on, '24h', 'direct')[0]).toMatchObject({ total: 0, state: 'none' });
+    const via = outCounts('YUL', 'LIS', [sat], on, '24h', 'via')[0];
+    expect(via.total).toBe(via.connecting);
+    const fri = outCounts('YUL', 'LIS', [DEP], on, '24h', 'direct')[0];
+    expect(fri.total).toBe(outboundsOn('YUL', 'LIS', DEP, ctx()).length);
+    const stays = stayOptions(DEP, 'LIS', 'YUL', on, null, '24h', [2], 'direct');
+    expect(stays[0].count.total).toBe(waysHome('LIS', 'YUL', addDays(DEP, 2), ctx(), null).length);
   });
 });

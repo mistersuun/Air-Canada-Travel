@@ -11,6 +11,7 @@ import {
   readPlan, stayOptions, waysHome, type CountCtx, type StayOption,
 } from '../../planner/round-trip';
 import { AppStateService } from '../../state/app-state.service';
+import { RecentService } from '../../state/recent.service';
 import { BreakSourcesComponent } from '../../ui/break-sources.component';
 import { DestRowComponent } from '../../ui/dest-row.component';
 import { dayLabel, isOutside } from '../../ui/format';
@@ -112,13 +113,9 @@ function writeLegendOpen(open: boolean): void {
             <div class="bn__t">
               <b>{{ bannerText() }}</b>
               @if (home() && arrivalLine(); as al) { <span class="bn__s">{{ al }}</span> }
-              <span class="bn__c">
-                {{ state.showConnections() ? t('planner.conn.included') : t('planner.conn.nonstopsOnly') }} ·
-                <button type="button" class="ui-link bn__tg" [attr.aria-pressed]="state.showConnections()" (click)="toggleConnections()">
-                  {{ state.showConnections() ? t('planner.conn.nonstopsOnly') : t('planner.conn.include') }}
-                </button>
-              </span>
             </div>
+            <app-seg class="bn__tg" size="sm" [options]="connOptions()" [value]="state.showConnections() ? 'all' : 'nonstop'"
+                     (valueChange)="setConnections($event)" [ariaLabel]="t('planner.conn.aria')" data-conn />
           </div>
 
           @if (home() && chipDep(); as cd) {
@@ -131,6 +128,10 @@ function writeLegendOpen(open: boolean): void {
           <div class="vw">
             <app-seg [options]="viewOptions()" [value]="view()" (valueChange)="setView($event)" stretch size="sm"
                      [ariaLabel]="t('planner.picker.viewAria')" />
+            <p class="vw__k" data-key-line>
+              <span><i class="dm dm--solid" aria-hidden="true"></i>{{ t('planner.legend.nonstop') }}</span>
+              <span><i class="dm dm--dotted" aria-hidden="true"></i>{{ t('planner.legend.conn') }}</span>
+            </p>
           </div>
 
           @if (view() === 'cal') {
@@ -207,13 +208,21 @@ function writeLegendOpen(open: boolean): void {
             <app-icon name="arrow-left" [size]="20" />
           </button>
         </div>
-        <h1 class="ui-h1">{{ t('calendar.title') }}</h1>
-        <p class="ui-sub ch__s">{{ t('calendar.sub') }}</p>
+        <h1 class="ui-h1">{{ roundTrip() ? t('planner.home.chooserTitle') : t('calendar.title') }}</h1>
+        <p class="ui-sub ch__s">{{ roundTrip() ? t('planner.home.chooserSub') : t('calendar.sub') }}</p>
         <label class="ui-search ui-glass ch__q">
           <app-icon name="search" [size]="18" />
           <input type="search" data-search-input [placeholder]="t('calendar.search')" [attr.aria-label]="t('calendar.search')"
                  [value]="query()" (input)="query.set($any($event.target).value)" />
         </label>
+        @if (chooser().recent.length) {
+          <h2 class="ui-sec-h ch__h"><span class="ui-h3">{{ t('calendar.recent') }}</span></h2>
+          <div class="ui-card ch__l" data-recent>
+            @for (r of chooser().recent; track r.code) {
+              <app-dest-row [code]="r.code" [small]="r.code" [meta]="r.meta" [link]="calendarPath(r.code)" [queryParams]="chooserParams()" />
+            }
+          </div>
+        }
         @if (chooser().saved.length) {
           <h2 class="ui-sec-h ch__h"><span class="ui-h3">{{ t('calendar.saved') }}</span></h2>
           <div class="ui-card ch__l">
@@ -303,7 +312,7 @@ function writeLegendOpen(open: boolean): void {
 
     .step { padding: 4px 16px 10px; }
     .step__l { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.35; }
-    .step__n { color: var(--ink-3); }
+    .step__n { color: var(--ink-2); }
     .step__s { font-size: 13px; color: var(--ink-2); margin-top: 2px; line-height: 1.35; }
     .step__s--season { color: var(--ink); }
     .step__s .ui-link { position: relative; margin-left: 4px; font-weight: 600; }
@@ -324,10 +333,12 @@ function writeLegendOpen(open: boolean): void {
     .bn__t { display: flex; flex-direction: column; min-width: 0; gap: 1px; font-size: 14px; line-height: 1.3; }
     .bn__t b { font-weight: 650; }
     .bn__s { font-size: 12.5px; color: var(--ink-2); }
-    .bn__c { font-size: 12.5px; color: var(--ink-2); }
-    .bn__tg { position: relative; font-size: 12.5px; font-weight: 600; }
-    /* The text line is ~16px tall: reach the 44px tap height. */
-    .bn__tg::after { inset: -14px -6px; }
+    .bn { flex-wrap: wrap; row-gap: 6px; }
+    .bn__t { flex: 1 1 160px; }
+    .bn__tg { flex: none; margin-left: auto; }
+    .vw__k { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+    .vw__k span { display: inline-flex; align-items: center; gap: 6px; }
+    .vw__k .dm { color: var(--blue); }
     .chips { padding: 10px 16px 0; }
     .vw { padding: 10px 16px 4px; }
     .wkh {
@@ -402,6 +413,7 @@ export class CalendarPage {
   protected readonly t = t;
   protected readonly state = inject(AppStateService);
   private readonly router = inject(Router);
+  private readonly recent = inject(RecentService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly injector = inject(Injector);
   private destroyed = false;
@@ -410,6 +422,9 @@ export class CalendarPage {
   readonly code = input<string>();
   /** ?dep= and ?ret= (date keys). */
   readonly dep = input<string>();
+  /** ?trip=round: opened from Home's "Plan a round trip" (the chooser says so). */
+  readonly trip = input<string>();
+  protected readonly roundTrip = computed(() => this.trip() === 'round');
   readonly ret = input<string>();
   /** ?out= / ?back= (flight slugs): passed through to /plan untouched. */
   readonly out = input<string>();
@@ -422,7 +437,7 @@ export class CalendarPage {
   // ── Chooser ──
   readonly query = signal('');
   readonly chooser = computed(() =>
-    chooserRows(this.state.hub(), this.state.favourites(), this.state.todayKey(), this.query()),
+    chooserRows(this.state.hub(), this.state.favourites(), this.state.todayKey(), this.query(), this.recent.codes()),
   );
   /** A ?dep= from Home rides along to the picker. */
   protected readonly chooserParams = computed(() => {
@@ -516,6 +531,9 @@ export class CalendarPage {
   readonly home = computed<HomeBasis | null>(() => {
     const s = this.sel();
     return s.active === 'ret' && s.dep ? { dep: s.dep, afterUtc: this.afterUtc() } : null;
+  }, {
+    // A return-day tap leaves dep and afterUtc as they were: keep the identity, so no month recounts.
+    equal: (a, b) => a === b || (!!a && !!b && a.dep === b.dep && a.afterUtc === b.afterUtc),
   });
 
   /** Kept as `dir` for callers: which way the counts run. */
@@ -684,8 +702,13 @@ export class CalendarPage {
     this.sel.update(s => ({ ...s, active: f }));
   }
 
-  protected toggleConnections(): void {
-    this.state.setShowConnections(!this.state.showConnections());
+  /** [All flights | Nonstop only]: one fixed label per option, the pressed one is what the counts include. */
+  protected readonly connOptions = computed<SegOption[]>(() => [
+    { value: 'all', label: t('planner.conn.all') },
+    { value: 'nonstop', label: t('planner.conn.nonstopOnly') },
+  ]);
+  protected setConnections(v: string | undefined): void {
+    this.state.setShowConnections(v === 'all');
   }
 
   /**

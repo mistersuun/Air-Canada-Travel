@@ -67,6 +67,17 @@ describe('ui DayCountStripComponent', () => {
     expect(c[2].getAttribute('aria-label')).toBe('Friday, November 20, 2026, 2 flights out');
   });
 
+  it('the first day and the first of each month carry the month; a 0-night way home reads "Day trip"', async () => {
+    const { fixture, host, cells, lines } = await setup();
+    expect(lines(cells()[0])[0]).toBe('Fri, Nov 13');
+    expect(lines(cells()[5])[0]).toBe('Mon, Mar 29');
+    host.variant.set('home');
+    host.days.set([count('2026-11-20', 'ok', 2, 2, { nights: 0 }), count('2026-11-21', 'ok', 1, 1, { nights: 1 })]);
+    await fixture.whenStable();
+    expect(lines(cells()[0]).slice(0, 2)).toEqual(['Fri, Nov 20', 'Day trip']);
+    expect(lines(cells()[1]).slice(0, 2)).toEqual(['Sat 21', '1 night']);
+  });
+
   it('every closed day is aria-disabled and says why in words (1.4.1)', async () => {
     const { cells, lines } = await setup();
     const closed = cells().filter(b => b.getAttribute('aria-disabled') === 'true');

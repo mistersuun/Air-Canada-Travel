@@ -35,6 +35,7 @@ interface Chip {
         <button #chip type="button" role="radio" class="sc__c" [attr.data-nights]="c.nights"
                 [class.is-on]="c.nights === selected()" [class.is-zero]="c.zero" [class.is-closed]="c.closed"
                 [attr.aria-checked]="c.nights === selected()" [attr.aria-label]="c.aria"
+                [attr.aria-disabled]="c.closed ? 'true' : null"
                 [attr.tabindex]="$index === tabStop() ? 0 : -1"
                 (click)="choose(c)" (keydown)="onKey($event, $index)">
           <span class="sc__t">
@@ -46,7 +47,7 @@ interface Chip {
       }
       @if (compute()) {
         <button #chip type="button" role="radio" class="sc__c sc__c--other" [class.is-on]="otherOn()"
-                [attr.aria-checked]="otherOn()" [attr.aria-expanded]="otherOpen()"
+                [attr.aria-checked]="otherOn()"
                 [attr.tabindex]="chips().length === tabStop() ? 0 : -1"
                 (click)="toggleOther()" (keydown)="onKey($event, chips().length)">
           <span class="sc__t">
@@ -60,12 +61,14 @@ interface Chip {
       <div class="st">
         <button type="button" class="st__b" [attr.aria-label]="t('planner.chips.fewer')" [disabled]="o.nights <= 1"
                 (click)="step(-1)">−</button>
-        <button type="button" class="st__v tn" [class.is-zero]="o.zero" [attr.aria-label]="o.aria" (click)="choose(o)">
+        <button type="button" class="st__v tn" [class.is-zero]="o.zero" [attr.aria-label]="o.aria"
+                [attr.aria-disabled]="o.closed ? 'true' : null" (click)="choose(o)">
           {{ o.top }} · {{ o.date }} · {{ o.count }}
         </button>
         <button type="button" class="st__b" [attr.aria-label]="t('planner.chips.more')" [disabled]="o.nights >= max"
                 (click)="step(1)">+</button>
       </div>
+      <p class="ui-visually-hidden" aria-live="polite" data-stepper-live>{{ o.aria }}</p>
     }
   `,
   styles: [`
@@ -87,8 +90,8 @@ interface Chip {
     .sc__t { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 650; white-space: nowrap; }
     .sc__s { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
     .sc__ok { color: var(--red); }
-    .sc__c.is-zero { border: 1px dashed var(--ink-3); background: transparent; }
-    .sc__c.is-closed .sc__s { color: var(--ink-3); }
+    .sc__c.is-zero { border: 1px dashed var(--ink-2); background: transparent; }
+    .sc__c.is-closed { background: transparent; border: 1px dashed var(--hair); }
     .sc__c.is-on { box-shadow: inset 0 0 0 2px var(--red); }
     .st { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
     .st__b {
@@ -100,7 +103,7 @@ interface Chip {
       flex: 1; min-width: 0; min-height: 44px; padding: 6px 10px; border-radius: 12px; background: var(--fill);
       font-size: 14px; font-weight: 600; color: var(--ink); text-align: center;
     }
-    .st__v.is-zero { border: 1px dashed var(--ink-3); background: transparent; }
+    .st__v.is-zero { border: 1px dashed var(--ink-2); background: transparent; }
   `],
 })
 export class StayChipsComponent {

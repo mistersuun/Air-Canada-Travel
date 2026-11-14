@@ -78,7 +78,7 @@ describe('HomePage', () => {
     const btn = () => el.querySelector<HTMLAnchorElement>('a[data-plan-round]')!;
     expect(btn().textContent!.trim()).toBe('Plan a round trip');
     // No day selected: the picker opens without a departure.
-    expect(btn().getAttribute('href')).toBe('/calendar?from=YUL');
+    expect(btn().getAttribute('href')).toBe('/calendar?from=YUL&trip=round');
     state.selectDay('2026-10-09');
     await stable();
     expect(btn().getAttribute('href')).toContain('/calendar?');

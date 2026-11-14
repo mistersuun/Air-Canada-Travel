@@ -360,7 +360,8 @@ export function chooserRows(
   favourites: readonly string[],
   today: string,
   query: string,
-): { saved: ChooserRow[]; all: ChooserRow[] } {
+  recent: readonly string[] = [],
+): { recent: ChooserRow[]; saved: ChooserRow[]; all: ChooserRow[] } {
   const fav = new Set(favourites);
   const toRow = (d: Destination): ChooserRow => ({ code: d.code, city: d.city, meta: chooserMeta(hub, d, today) });
   const q = query.trim();
@@ -373,5 +374,16 @@ export function chooserRows(
     .filter(keep)
     .sort(byCity)
     .map(toRow);
-  return { saved, all };
+  // Recently viewed (newest first, not starred, served from this hub): one tap instead of typing.
+  const served = new Set(getDestinationCodes(hub));
+  const rec = recent
+    .filter(c => !fav.has(c) && served.has(c))
+    .map(c => findDestination(c))
+    .filter(keep)
+    .slice(0, RECENT_MAX)
+    .map(toRow);
+  return { recent: rec, saved, all };
 }
+
+/** Recently viewed destinations listed at the top of the chooser. */
+export const RECENT_MAX = 5;

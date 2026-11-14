@@ -63,6 +63,7 @@ export const dest: Translation<typeof en> = {
   'dest.trip.added': '{nums} ajouté à {name}',
   /** Model */
   'dest.timesWeek': '{n}× cette semaine',
+  'dest.timesWeekOf': '{n}× la semaine du {date}',
   'dest.yearRound': "Toute l'année",
   'dest.estimated': 'Estimé',
   'dest.arrives': '{flights} · arrivée {time}{offset}',

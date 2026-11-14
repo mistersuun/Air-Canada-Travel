@@ -14,7 +14,7 @@ import { ShareService } from '../../state/share.service';
 import type { Trip } from '../../trips/model';
 import { TripsService } from '../../trips/trips.service';
 import { DayCountStripComponent } from '../../ui/day-count-strip.component';
-import { dayLabel, formatStay, isOutside, itinKey, longDay, prettyFlight, shortRange } from '../../ui/format';
+import { dayLabel, formatStay, isOutside, itinKey, longDayLabel, prettyFlight, shortRange } from '../../ui/format';
 import { calendarPath, destPath, flightSlug, matchSlug, tripPath } from '../../ui/links';
 import { StayChipsComponent } from '../../ui/stay-chips.component';
 import { findDestination } from '../../utils/airports';
@@ -194,7 +194,7 @@ function flightsOf(it: Itinerary): string {
                     <p class="near">
                       {{ t('planner.plan.nearest') }}
                       @for (n of nearest(); track n.key) {
-                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="setRet(n.key)">{{ label(n.key) }} ({{ n.n }})</button>
+                        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="setRet(n.key)">{{ label(n.key) }} · {{ t('planner.count.home', { n: n.n }) }}</button>
                       }
                     </p>
                   }
@@ -214,27 +214,36 @@ function flightsOf(it: Itinerary): string {
               @if (rule(); as r) { <p class="rule tn" data-rule>{{ r }}</p> }
               <app-stay-chips [options]="stays()" [dep]="dep" [today]="state.todayKey()" [compute]="stayFor"
                               (pick)="setRet($event)" />
+              @if (chipNote(); as cn) { <p class="hid tn" data-chip-note>{{ cn }}</p> }
             }
           </section>
         </div>
 
         <div class="acts">
-          <button type="button" class="ui-btn ui-btn--ghost" data-ics [disabled]="!outPicked() || !backPicked()" (click)="exportIcs()">
+          <button type="button" class="ui-btn ui-btn--ghost" data-ics [class.is-off]="!outPicked() || !backPicked()"
+                  [attr.aria-disabled]="!outPicked() || !backPicked() ? 'true' : null"
+                  [attr.aria-describedby]="!outPicked() || !backPicked() ? 'pl-ics-need' : null" (click)="exportIcs()">
             <app-icon name="download" [size]="17" /> {{ t('planner.plan.ics') }}
           </button>
+          @if (!outPicked() || !backPicked()) {
+            <span id="pl-ics-need" class="ui-visually-hidden">{{ t('planner.plan.icsNeed') }}</span>
+          }
           <a class="ui-btn ui-btn--ghost" [href]="acUrl" target="_blank" rel="noopener">{{ t('dest.openAc') }}</a>
         </div>
         <p class="foot ui-sub">{{ t('flight.footer') }}</p>
 
         <app-plan-bar [out]="barOut()" [home]="barHome()" [label]="startLabel()" [disabled]="!outPicked() || trips.readOnly()"
-                      [needOut]="!outPicked()" (goOut)="focusSection('pl-out')" (goHome)="focusSection('pl-home')"
+                      [reason]="startReason()" (goOut)="focusSection('pl-out')" (goHome)="focusSection('pl-home')"
                       (start)="start()" />
       }
     </div>
   `,
   styles: [`
     :host { display: block; }
-    .pl { max-width: 480px; padding-bottom: calc(128px + env(safe-area-inset-bottom)); }
+    .pl { max-width: 480px; padding-bottom: calc(136px + env(safe-area-inset-bottom)); }
+    /* The fixed PlanBar never hides the focused row (WCAG 2.4.11). */
+    .pl :is(app-option-row, button, a, [tabindex]) { scroll-margin-bottom: calc(140px + env(safe-area-inset-bottom)); }
+    .acts .ui-btn.is-off { opacity: .55; }
     .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
     .top h1 { margin: 0; }
     .ctx { text-align: center; margin: 0 0 12px; font-size: 12.5px; }
@@ -306,6 +315,10 @@ export class PlanPage {
   protected readonly announce = signal('');
   /** Set when a departure move pushed the return (D6): 'Home moved to … to keep 8 nights'. */
   private readonly retMoved = signal<{ date: string; nights: number } | null>(null);
+  /** Set when a departure move changed the stay (the return stayed put): offers to keep the old nights. */
+  private readonly nightsChanged = signal<{ dep: string; nights: number; ret: string } | null>(null);
+  /** Why a stay chip did nothing (a day not yet published, or already past). */
+  protected readonly chipNote = signal<string | null>(null);
   private readonly outExt = signal({ before: 0, after: 0 });
   private readonly homeExt = signal({ before: 0, after: 0 });
 
@@ -415,6 +428,11 @@ export class PlanPage {
     if (!b) return null;
     const min = this.ctx().connect.minConnect ?? 60;
     const when = landingLabel(b, this.ctx().today, this.fmt());
+    const ret = this.plan().ret;
+    // A return days after landing: the connection rule changes nothing, so just say when you land.
+    if (ret && ret > b.arrDateKey) {
+      return this.outPicked() ? t('planner.plan.lands', { flight: flightsOf(b), when }) : t('planner.plan.youLand', { when });
+    }
     return this.outPicked()
       ? t('planner.plan.ruleAfterPicked', { min, flight: flightsOf(b), when })
       : t('planner.plan.ruleAfterEarliest', { min, when });
@@ -524,6 +542,18 @@ export class PlanPage {
         dismiss: () => this.setBack(null),
       });
     }
+    const kept = this.nightsChanged();
+    if (kept && ret && kept.dep === dep) {
+      out.push({
+        id: 'nights',
+        text: t('planner.toast.nightsChanged', { nights: t('planner.nights', { n: nightsBetween(dep, ret) }) }),
+        action: {
+          label: t('planner.toast.keepNights', { nights: t('planner.nights', { n: kept.nights }), date: this.label(kept.ret) }),
+          run: () => { this.nightsChanged.set(null); this.setRet(kept.ret); },
+        },
+        dismiss: () => this.nightsChanged.set(null),
+      });
+    }
     const moved = this.retMoved();
     if (moved) {
       out.push({
@@ -552,6 +582,9 @@ export class PlanPage {
     const it = this.outPicked();
     return it ? tripsFor(this.trips.activeTrips(), it) : [];
   });
+  /** Why Start a trip can't run yet (read by screen readers on the focusable, aria-disabled button). */
+  protected readonly startReason = computed(() =>
+    this.trips.readOnly() ? t('planner.plan.readOnly') : !this.outPicked() ? t('planner.plan.needOut') : null);
   protected readonly startLabel = computed(() => {
     const tr = this.connectedTrips()[0];
     return tr ? t('planner.plan.addTo', { name: tr.goal.name }) : t('planner.plan.start');
@@ -576,6 +609,16 @@ export class PlanPage {
     effect(() => {
       this.plan().dep;
       untracked(() => this.allOut.set(false));
+    });
+    // A legacy ?nights= becomes ?ret= (ret = dep + N), so a later departure move never shifts the return silently.
+    effect(() => {
+      const n = this.nights();
+      if (n === undefined) return;
+      const { dep, ret } = this.plan();
+      if (!dep) return;
+      untracked(() => void this.router.navigate([], {
+        queryParams: { ret: ret ?? null, nights: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+      }));
     });
     // Keep the picked days in view: the strips start days before them, wider than a phone.
     effect(() => {
@@ -604,7 +647,7 @@ export class PlanPage {
   }
 
   protected longDate(key: string): string {
-    return longDay(key);
+    return longDayLabel(key, this.ctx().today);
   }
 
   private write(p: Partial<Record<'dep' | 'ret' | 'out' | 'back', string | null>>): void {
@@ -617,24 +660,37 @@ export class PlanPage {
     if (!dep || key === dep || !isDateKey(key) || key < this.ctx().today || isOutside(key, this.ctx().coverage)) return;
     const shifted = shiftRet(key, dep, ret);
     const p: Partial<Record<'dep' | 'ret', string | null>> = { dep: key };
+    this.nightsChanged.set(null);
     if (shifted.moved && shifted.ret) {
       p.ret = shifted.ret;
       this.retMoved.set({ date: shifted.ret, nights: nightsBetween(key, shifted.ret) });
     } else {
       this.retMoved.set(null);
+      // The return stays put, so the stay changes length: offer the old one back (never applied silently).
+      const was = ret ? nightsBetween(dep, ret) : null;
+      const keep = was !== null ? addDays(key, was) : null;
+      if (ret && was !== null && keep && keep !== ret && !isOutside(keep, this.ctx().coverage)) {
+        this.nightsChanged.set({ dep: key, nights: was, ret: keep });
+      }
     }
     this.write(p);
     const n = outboundsOn(this.hub(), this.dest(), key, this.ctx()).length;
-    this.announce.set(t('planner.plan.announceOut', { n, date: longDay(key) }));
+    this.announce.set(t('planner.plan.announceOut', { n, date: this.longDate(key) }));
   }
 
   setRet(key: string): void {
     const { dep, ret } = this.plan();
-    if (!dep || key === ret || !isDateKey(key) || key < dep || isOutside(key, this.ctx().coverage)) return;
+    if (dep && isDateKey(key) && key >= dep && isOutside(key, this.ctx().coverage)) {
+      this.chipNote.set(t('planner.picker.unpublishedPeek', { date: this.coverageEnd() }));
+      return;
+    }
+    if (!dep || key === ret || !isDateKey(key) || key < dep) return;
+    this.chipNote.set(null);
     this.retMoved.set(null);
+    this.nightsChanged.set(null);
     this.write({ ret: key });
     const n = waysHome(this.dest(), this.hub(), key, this.ctx(), this.afterUtc()).length;
-    this.announce.set(t('planner.plan.announceHome', { n, date: longDay(key) }));
+    this.announce.set(t('planner.plan.announceHome', { n, date: this.longDate(key) }));
   }
 
   setOut(slug: string | null): void {
@@ -681,7 +737,7 @@ export class PlanPage {
 
   exportIcs(): void {
     const o = this.outPicked();
-    if (!o) return;
+    if (!o || !this.backPicked()) return;
     const list = roundTrip(o, this.backPicked());
     downloadIcs(buildIcs(list, this.city()), icsFilename(list));
   }
@@ -691,6 +747,7 @@ export class PlanPage {
     const out = this.outPicked();
     if (!out || this.trips.readOnly()) return;
     const existing = this.connectedTrips()[0];
+    // startRoundTrip moves a return day before the landing to the arrival day.
     const trip = existing ? this.addTo(existing, out) : startRoundTrip(this.trips, {
       hub: this.hub(), code: this.dest(), out, back: this.backPicked(), ret: this.plan().ret,
     });

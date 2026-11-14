@@ -120,7 +120,10 @@ export function nextConnectionDate(
 /** 'Today, Oct 1' / 'Fri, Oct 2' (the mockup's date line). */
 export function timelineDay(key: string, today: string): string {
   const day = key === today ? t('format.today') : weekdayShort(weekdayIndex(key));
-  return `${day}, ${formatKey(key, { month: 'short', day: 'numeric' })}`;
+  const opts = key.slice(0, 4) === today.slice(0, 4)
+    ? { month: 'short', day: 'numeric' } as const
+    : { month: 'short', day: 'numeric', year: 'numeric' } as const;
+  return `${day}, ${formatKey(key, opts)}`;
 }
 
 /** Flight numbers of an itinerary: 'AC5', 'AC300 + AC1', 'Estimated + AC1'. */
@@ -183,12 +186,23 @@ export interface DestSummary {
   meta: string;
 }
 
+/** '6× this week', or '3× week of May 31, 2027' when another week is shown (?week=). */
+function weekTimes(n: number, weekStart: string, thisWeek: string): string {
+  if (weekStart === thisWeek) return t('dest.timesWeek', { n });
+  const opts = weekStart.slice(0, 4) === thisWeek.slice(0, 4)
+    ? { month: 'short', day: 'numeric' } as const
+    : { month: 'short', day: 'numeric', year: 'numeric' } as const;
+  return t('dest.timesWeekOf', { n, date: formatKey(weekStart, opts) });
+}
+
 /**
  * Header facts for hub → dest over the week starting `weekStart`. When the
  * week has no nonstop, `sample` (upcoming itineraries) supplies the duration,
  * aircraft and the connection hub.
  */
-export function destSummary(hub: string, dest: string, weekStart: string, sample: readonly Itinerary[]): DestSummary {
+export function destSummary(
+  hub: string, dest: string, weekStart: string, sample: readonly Itinerary[], thisWeek: string = weekStart,
+): DestSummary {
   const week = weekKeys(weekStart).map(k => ({ k, flights: flightsOn(hub, dest, k) }));
   const flying = week.filter(d => d.flights.length);
   const weekFlights = flying.flatMap(d => d.flights);
@@ -209,7 +223,7 @@ export function destSummary(hub: string, dest: string, weekStart: string, sample
       aircraft: aircraftName(code),
       aircraftShort: shortAircraft(code),
       season,
-      meta: [stops, days ? t('dest.timesWeek', { n: days }) : '', shortAircraft(code)].filter(Boolean).join(' · '),
+      meta: [stops, days ? weekTimes(days, weekStart, thisWeek) : '', shortAircraft(code)].filter(Boolean).join(' · '),
     };
   }
   const conn = sample.find(it => it.hubs.length);

@@ -98,9 +98,14 @@ interface ListRow {
           <app-week-strip class="strip" glass shortcuts [weekStartKey]="state.weekStartKey()" [selectedDateKey]="state.selectedDateKey()"
                           [todayKey]="state.todayKey()" [coverage]="state.coverage()" [dots]="null"
                           (selectDay)="state.selectDay($event)" (prev)="state.prevWeek()" (next)="state.nextWeek()" (jumpTo)="state.jumpTo($event)" />
-          <a class="ui-btn ui-btn--ghost ui-btn--sm plan-rt" [routerLink]="calendarPath()" [queryParams]="planParams()" data-plan-round>
-            <app-icon name="calendar" [size]="16" [strokeWidth]="2" />{{ t('planner.home.plan') }}
-          </a>
+          <div class="day-acts">
+            <a class="ui-btn ui-btn--ghost ui-btn--sm plan-rt" [routerLink]="calendarPath()" [queryParams]="planParams()" data-plan-round>
+              <app-icon name="calendar" [size]="16" [strokeWidth]="2" />{{ t('planner.home.plan') }}
+            </a>
+            @if (dayJump(); as dj) {
+              <button type="button" class="ui-link see-day tn" (click)="showDay()" data-see-day>{{ dj }} <span aria-hidden="true">↓</span></button>
+            }
+          </div>
           <div class="xrow">
             <a class="wkend ui-link" routerLink="/weekend" [queryParams]="state.globalParams()">{{ t('home.weekendFinder') }}</a>
             <a class="wkend ui-link" routerLink="/commute" [queryParams]="state.globalParams()">{{ t('home.commute') }}</a>
@@ -238,7 +243,9 @@ interface ListRow {
     }
     .conn { align-self: center; }
     .strip { margin-top: 14px; }
-    .plan-rt { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; }
+    .day-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 10px; }
+    .plan-rt { display: inline-flex; align-items: center; gap: 6px; }
+    .see-day { position: relative; min-height: 44px; font-size: 13.5px; font-weight: 600; }
 
     .sec { margin-top: 40px; }
     .st { margin: 0; }
@@ -380,9 +387,24 @@ export class HomePage {
   );
   protected readonly calendarPath = calendarPath;
   /** "Plan a round trip": the picker's destination chooser, carrying the selected day as ?dep. */
+  /** 'Flights on Sun, Nov 15': a day is picked on the strip, and its departures are further down the page. */
+  protected readonly dayJump = computed(() => {
+    const day = this.state.selectedDateKey();
+    return day ? t('planner.home.seeDay', { date: formatKey(day, { weekday: 'short', month: 'short', day: 'numeric' }) }) : null;
+  });
+
+  /** Scrolls to the picked day's nonstops and moves the focus there. */
+  protected showDay(): void {
+    const h = this.doc.getElementById('h-nonstop');
+    if (!h) return;
+    h.setAttribute('tabindex', '-1');
+    h.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    h.focus({ preventScroll: true });
+  }
+
   protected readonly planParams = computed(() => {
     const day = this.state.selectedDateKey();
-    return { ...this.state.globalParams(), ...(day && day >= this.state.todayKey() ? { dep: day } : {}) };
+    return { ...this.state.globalParams(), trip: 'round', ...(day && day >= this.state.todayKey() ? { dep: day } : {}) };
   });
   protected readonly focus = computed(() =>
     focusDayIndex(this.state.weekStartKey(), this.state.selectedDateKey(), this.state.todayKey()),

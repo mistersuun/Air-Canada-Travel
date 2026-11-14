@@ -63,6 +63,7 @@ export const dest = {
   'dest.trip.added': '{nums} added to {name}',
   /** Model */
   'dest.timesWeek': '{n}× this week',
+  'dest.timesWeekOf': '{n}× week of {date}',
   'dest.yearRound': 'Year-round',
   'dest.estimated': 'Estimated',
   'dest.arrives': '{flights} · arrives {time}{offset}',

@@ -128,6 +128,9 @@ describe('PlanPage', () => {
     expect(el.querySelector('[data-side="out"]')!.classList).toContain('is-open');
     expect(el.querySelector('[data-side="out"]')!.textContent!.trim()).toBe('Out · pick one (2)');
     expect(el.querySelector('[data-side="home"]')!.textContent!.trim()).toBe('Home · pick one (3)');
+    // Screen readers hear the noun, not 'pick one, parenthesis 3'.
+    expect(el.querySelector('[data-side="out"]')!.getAttribute('aria-label')).toBe('Flights out: pick 1 of 2 flights');
+    expect(el.querySelector('[data-side="home"]')!.getAttribute('aria-label')).toBe('Ways home: pick 1 of 3 flights');
     const row = [...el.querySelectorAll<HTMLButtonElement>('[data-list="out"] button')].find(b => b.textContent!.includes('AC834'))!;
     row.click();
     expect(nav).toHaveBeenLastCalledWith([], { queryParams: { out: 'AC834' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual' });
@@ -147,7 +150,10 @@ describe('PlanPage', () => {
     expect(text('[aria-live="polite"]')).toBe('1 flight out on Sunday, November 22');
     await set({ dep: '2026-11-22' });
     expect(pressed('out')[0]).toContain('AC834');
-    expect(el.querySelector('[data-notice]')).toBeNull();
+    // The return stayed on Nov 28, so the stay shrank: said, with a one-tap way to keep 8 nights (never applied silently).
+    expect([...el.querySelectorAll('[data-notice]')].map(n => n.getAttribute('data-notice'))).toEqual(['nights']);
+    expect(text('[data-notice="nights"] p')).toBe('Your stay is now 6 nights');
+    expect(text('[data-notice="nights"] button')).toBe('Keep 8 nights (home Mon, Nov 30)');
 
     await set({ dep: '2026-11-19' });
     expect(pressed('out')).toEqual([]);
@@ -200,6 +206,24 @@ describe('PlanPage', () => {
     expect(text('[data-side="home"]')).toBe('Home · pick one (3)');
   });
 
+  it('days after landing, the rule line just says when you land', async () => {
+    configurePlan();
+    const { set, text } = await renderPlan({ dep: DEP, ret: RET });
+    expect(text('[data-rule]')).toBe('You land Sat, Nov 21 04:05 at the earliest');
+    await set({ out: 'AC834' });
+    expect(text('[data-rule]')).toBe('AC834 lands Sat, Nov 21 08:15');
+  });
+
+  it('a stay chip on a day not yet published says why instead of doing nothing', async () => {
+    configurePlan();
+    const { cmp, text, nav, stable } = await renderPlan({ dep: '2027-03-25' });
+    nav.mockClear();
+    cmp.setRet('2027-03-30');
+    await stable();
+    expect(nav).not.toHaveBeenCalled();
+    expect(text('[data-chip-note]')).toBe('Not yet published · schedules end Mar 28, 2027');
+  });
+
   it('Start a trip creates the outbound and return legs with home by the return; without one, the return day at 22:00', async () => {
     configurePlan();
     const a = await renderPlan({ dep: DEP, ret: RET, out: 'AC834', back: 'AC837' });
@@ -243,11 +267,18 @@ describe('PlanPage', () => {
     configurePlan();
     const { el, text } = await renderPlan({ dep: DEP, ret: RET });
     const btn = el.querySelector<HTMLButtonElement>('[data-start]')!;
-    expect(btn.disabled).toBe(true);
+    // aria-disabled, not disabled: it stays in the tab order, so the reason is heard.
+    expect(btn.disabled).toBe(false);
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
     expect(btn.getAttribute('aria-describedby')).toBe('pb-need');
     expect(text('#pb-need')).toBe('Pick a flight out first');
+    btn.click();
+    expect(TestBed.inject(TripsService).trips()).toHaveLength(0);
     expect(el.querySelector('[role="region"]')!.getAttribute('aria-label')).toBe('Your round trip');
-    expect(el.querySelector<HTMLButtonElement>('[data-ics]')!.disabled).toBe(true);
+    const ics = el.querySelector<HTMLButtonElement>('[data-ics]')!;
+    expect(ics.getAttribute('aria-disabled')).toBe('true');
+    expect(text('#' + ics.getAttribute('aria-describedby'))).toBe('Pick a flight out and a way home first');
+    expect(text('[data-ics]')).toBe('Add to my calendar');
   });
 
   it('with no return day yet, offers the stay chips counted after you land', async () => {
@@ -272,7 +303,7 @@ describe('PlanPage', () => {
     expect(text('[data-empty="home"]')).toContain('No ways home on Sun, Nov 29 after you land');
     expect(text('[data-empty="home"]')).toContain('Nearest:');
     const near = [...el.querySelectorAll<HTMLButtonElement>('[data-empty="home"] .near button')];
-    expect(near.map(b => b.textContent!.trim())).toEqual(['Sat, Nov 28 (3)', 'Mon, Nov 30 (3)']);
+    expect(near.map(b => b.textContent!.trim())).toEqual(['Sat, Nov 28 · 3 home', 'Mon, Nov 30 · 3 home']);
     near[1].click();
     expect(lastQuery()).toEqual({ ret: '2026-11-30' });
   });
@@ -329,8 +360,12 @@ describe('PlanPage', () => {
 
   it('a legacy ?nights= reads as dep + N', async () => {
     configurePlan();
-    const { text } = await renderPlan({ dep: DEP, nights: '4' });
+    const { text, nav } = await renderPlan({ dep: DEP, nights: '4' });
     expect(text('#pl-home')).toBe('Ways home · Tue, Nov 24');
     expect(text('[data-dates]')).toContain('4 nights');
+    // Rewritten to ?ret= at once, so a later departure move can't shift the return through ?nights.
+    expect(nav).toHaveBeenCalledWith([], {
+      queryParams: { ret: '2026-11-24', nights: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
   });
 });

@@ -158,7 +158,16 @@ function upcoming(from: string, to: string, key: string, ctx: CountCtx, afterUtc
   return itinerariesOn(from, to, key, ctx.connect).filter(it => it.departUtc >= min);
 }
 
-function bySetting(its: readonly Itinerary[], ctx: CountCtx): Itinerary[] {
+/**
+ * Which itineraries a count or list takes: 'setting' follows the connection
+ * setting; 'direct' and 'via' follow a page's Nonstop / Via seg (Destination),
+ * so a strip or chip counts exactly the kind the list under it shows.
+ */
+export type CountKind = 'setting' | 'direct' | 'via';
+
+function bySetting(its: readonly Itinerary[], ctx: CountCtx, kind: CountKind = 'setting'): Itinerary[] {
+  if (kind === 'direct') return its.filter(it => !it.hubs.length);
+  if (kind === 'via') return its.filter(it => it.hubs.length > 0);
   return ctx.showConnections ? [...its] : its.filter(it => !it.hubs.length);
 }
 
@@ -237,11 +246,13 @@ export function countDay(
   };
 }
 
-/** Flights out (hub → code) per day. */
-export function outCounts(hub: string, code: string, keys: readonly string[], ctx: CountCtx, fmt: TimeFormat): DayCount[] {
+/** Flights out (hub → code) per day; `kind` narrows them to one kind (default: the connection setting). */
+export function outCounts(
+  hub: string, code: string, keys: readonly string[], ctx: CountCtx, fmt: TimeFormat, kind: CountKind = 'setting',
+): DayCount[] {
   return keys.map(k => {
     const all = upcoming(hub, code, k, ctx, null);
-    return countDay(k, bySetting(all, ctx), all, ctx, fmt);
+    return countDay(k, bySetting(all, ctx, kind), all, ctx, fmt);
   });
 }
 
@@ -254,10 +265,11 @@ export function homeCounts(
   ctx: CountCtx,
   afterUtc: number | null,
   fmt: TimeFormat,
+  kind: CountKind = 'setting',
 ): DayCount[] {
   return keys.map(k => {
     const all = k < dep ? [] : upcoming(code, hub, k, ctx, afterUtc);
-    return countDay(k, bySetting(all, ctx), all, ctx, fmt, { dep });
+    return countDay(k, bySetting(all, ctx, kind), all, ctx, fmt, { dep });
   });
 }
 
@@ -276,9 +288,10 @@ export function stayOptions(
   afterUtc: number | null,
   fmt: TimeFormat,
   nights: readonly number[] = NIGHT_PRESETS,
+  kind: CountKind = 'setting',
 ): StayOption[] {
   const keys = nights.map(n => addDays(dep, n));
-  const counts = homeCounts(code, hub, keys, dep, ctx, afterUtc, fmt);
+  const counts = homeCounts(code, hub, keys, dep, ctx, afterUtc, fmt, kind);
   return nights.map((n, i) => ({ nights: n, key: keys[i], count: counts[i] }));
 }
 
@@ -459,18 +472,27 @@ export function homeByFor(ret: Itinerary): { dateKey: string; hhmm: string } {
   return { dateKey: ret.arrDateKey, hhmm: arr > '22:00' ? '23:59' : '22:00' };
 }
 
+/** The home-by for a return day with no flight picked: 22:00, on or after the outbound's arrival day. */
+export function retDeadline(out: Itinerary, ret: string | null): { dateKey: string; hhmm: string } {
+  const arr = out.arrDateKey;
+  if (!ret) return { dateKey: addDays(arr, DEFAULT_NIGHTS), hhmm: '22:00' };
+  if (ret > arr) return { dateKey: ret, hhmm: '22:00' };
+  const lands = out.legs[out.legs.length - 1].arrLocal;
+  return { dateKey: arr, hhmm: lands >= '22:00' ? '23:59' : '22:00' };
+}
+
 /**
  * A new trip with the outbound and (when picked) the return: home by the
  * return's homeByFor, else the return day (else the default stay after
- * landing) at 22:00.
+ * landing) at 22:00. The return day is never before the outbound lands (a
+ * same-day return whose picked outbound arrives the next day): it is moved
+ * to the arrival day, so the deadline is never before arrival.
  */
 export function startRoundTrip(
   trips: TripsService,
   a: { hub: string; code: string; out: Itinerary; back: Itinerary | null; ret: string | null },
 ): Trip {
-  const homeBy = a.back
-    ? homeByFor(a.back)
-    : { dateKey: a.ret ?? addDays(a.out.arrDateKey, DEFAULT_NIGHTS), hhmm: '22:00' };
+  const homeBy = a.back ? homeByFor(a.back) : retDeadline(a.out, a.ret);
   const trip = trips.create({
     goal: placeFromDestination(a.code),
     fromHub: a.hub,

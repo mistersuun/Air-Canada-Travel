@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, computed, input, output
 import { IconComponent } from '../components/shared/icons.component';
 import { t } from '../i18n/t';
 import { type DayCount, dayCountAria } from '../planner/round-trip';
-import { dayNum } from './format';
+import { dayNum, shortDay } from './format';
 import { tap } from './haptics';
 
 interface StripCell {
@@ -76,8 +76,10 @@ interface StripCell {
     .dcs__m { font-size: 13px; font-weight: 650; }
     .dcs__l { font-size: 12px; color: var(--ink-2); min-height: 1.2em; }
     .dcs__c .dm { color: var(--blue); }
-    .dcs__c.is-zero { border: 1px dashed var(--ink-3); background: transparent; }
+    .dcs__c.is-zero { border: 1px dashed var(--ink-2); background: transparent; }
+    /* Past and before-departure days are inactive (ink-3); 'not published' carries information, so it keeps ink-2. */
     .dcs__c.is-dim .dcs__d, .dcs__c.is-dim .dcs__m, .dcs__c.is-dim .dcs__l { color: var(--ink-3); }
+    .dcs__c.is-dim.dm--hatch .dcs__d, .dcs__c.is-dim.dm--hatch .dcs__m { color: var(--ink-2); }
     .dcs__c.is-sel { box-shadow: inset 0 0 0 2px var(--red); }
     .dcs__c:focus-visible { outline-offset: 2px; }
     .dcs__nav {
@@ -107,7 +109,11 @@ export class DayCountStripComponent {
 
   readonly cells = computed<StripCell[]>(() => {
     const home = this.variant() === 'home';
-    return this.days().map(c => cellOf(c, home));
+    // The first day and the first of each month carry the month ('Tue, Jun 1'), so a strip never reads ambiguously.
+    return this.days().map((c, i, all) => {
+      const cell = cellOf(c, home);
+      return i === 0 || c.key.slice(0, 7) !== all[i - 1].key.slice(0, 7) ? { ...cell, day: shortDay(c.key) } : cell;
+    });
   });
 
   /** The roving tab stop: the focused day, else the selected one, else the first. */
@@ -162,12 +168,12 @@ export function cellOf(c: DayCount, home: boolean): StripCell {
       return { ...base, mid: t('planner.chips.unpublished'), low: '', marker: null };
     case 'none':
       return home
-        ? { ...base, mid: nights || '–', low: t('planner.count.home', { n: 0 }), marker: 'none' }
+        ? { ...base, mid: c.nights === 0 ? t('planner.dayTrip') : nights || '–', low: t('planner.count.home', { n: 0 }), marker: 'none' }
         : { ...base, mid: t('planner.flights', { n: 0 }), low: '–', marker: 'none' };
     default: {
       const marker = c.direct ? 'solid' : 'dotted';
       return home
-        ? { ...base, mid: nights, low: t('planner.count.home', { n: c.total }), marker }
+        ? { ...base, mid: c.nights === 0 ? t('planner.dayTrip') : nights, low: t('planner.count.home', { n: c.total }), marker }
         : { ...base, mid: t('planner.flights', { n: c.total }), low: c.first ?? '', marker };
     }
   }

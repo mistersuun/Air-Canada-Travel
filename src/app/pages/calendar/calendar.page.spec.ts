@@ -4,6 +4,7 @@ import { Router, provideRouter } from '@angular/router';
 import { resetScheduleSource, setScheduleSource, type SchedulesMeta } from '../../data/schedule-index';
 import { FIXTURE_META, FIXTURE_ROUTES, rec, route } from '../../data/testing/schedule-fixtures';
 import { resetItinerariesMemo } from '../../planner/round-trip';
+import { RECENT_STORAGE, RecentService } from '../../state/recent.service';
 import { AppStateService, NOW } from '../../state/app-state.service';
 import { PREFS_STORAGE } from '../../state/prefs.service';
 import { MemoryStorage } from '../../state/testing';
@@ -19,16 +20,19 @@ function configure(prefs: object = { hub: 'YUL', showConnections: false }) {
   const storage = new MemoryStorage();
   storage.setItem('ac.prefs.v1', JSON.stringify(prefs));
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), { provide: PREFS_STORAGE, useValue: storage }, { provide: NOW, useValue: () => CLOCK }],
+    providers: [
+      provideRouter([]), { provide: PREFS_STORAGE, useValue: storage }, { provide: RECENT_STORAGE, useValue: new MemoryStorage() },
+      { provide: NOW, useValue: () => CLOCK },
+    ],
   });
 }
 
-type Inputs = { code?: string; dep?: string; ret?: string; out?: string; back?: string };
+type Inputs = { code?: string; dep?: string; ret?: string; out?: string; back?: string; trip?: string };
 
 async function render(inputs: Inputs = {}) {
   const fixture = TestBed.createComponent(CalendarPage);
   const ref = fixture.componentRef;
-  for (const k of ['code', 'dep', 'ret', 'out', 'back'] as const) if (inputs[k] !== undefined) ref.setInput(k, inputs[k]);
+  for (const k of ['code', 'dep', 'ret', 'out', 'back', 'trip'] as const) if (inputs[k] !== undefined) ref.setInput(k, inputs[k]);
   await fixture.whenStable();
   const el = fixture.nativeElement as HTMLElement;
   const router = TestBed.inject(Router);
@@ -68,6 +72,17 @@ describe('CalendarPage', () => {
     cmp.query.set('zzz');
     await stable();
     expect(el.querySelector('.ch__none')?.textContent).toContain('zzz');
+  });
+
+  it('from Home (?trip=round): titled as a round trip, recently viewed first', async () => {
+    configure({ hub: 'YUL', favourites: ['LHR'] });
+    TestBed.inject(RecentService).add('ATH');
+    const { el } = await render({ trip: 'round', dep: '2026-10-20' });
+    expect(el.querySelector('h1')?.textContent).toBe('Plan a round trip — where to?');
+    expect(el.querySelector('.ch__s')?.textContent).toBe('Pick a destination, then the days you leave and fly home');
+    const recent = el.querySelector('[data-recent]')!;
+    expect([...recent.querySelectorAll('small')].map(x => x.textContent)).toEqual(['ATH']);
+    expect(recent.querySelector('a')?.getAttribute('href')).toMatch(/^\/calendar\/ATH\?.*dep=2026-10-20/);
   });
 
   it('keeps a ?dep= from Home on the chooser links', async () => {
@@ -121,7 +136,7 @@ describe('CalendarPage', () => {
     });
     expect(cmp.dir()).toEqual({ from: 'LHR', to: 'YUL' });
     expect(text('[data-step] .step__l')).toBe('2 of 2 · Now tap the day you fly home');
-    expect(text('[data-step] .step__s')).toBe('Tap an earlier day to change your departure');
+    expect(text('[data-step] .step__s')).toBe('Tap an earlier day, or tap Leave, to change your departure');
     expect(text('[data-banner] b')).toBe('Flights home · LHR → YUL');
     expect(text('[data-banner] .bn__s')).toBe('Counted after the earliest arrival (Fri, Oct 9 10:00)');
     expect(text('.lg__h')).toBe('Ways home each day');
@@ -148,7 +163,7 @@ describe('CalendarPage', () => {
     expect(day('2026-10-10').classList).toContain('mid');
     expect(text('.ft .ui-btn')).toBe('See flights · Oct 8 – 15 · 7 nights');
     expect(text('.fld:nth-child(2) b')).toBe('Thu, Oct 15');
-    expect(text('[data-step] .step__l')).toBe('Dates set · tap See flights, or tap another day');
+    expect(text('[data-step] .step__l')).toBe('Dates set · tap Leave or Home to change one, or See flights');
     expect(text('[data-peek]')).toBe('Home Thu, Oct 15 · 7 nights · 1 way home · 12:10');
     expect(el.querySelector('app-stay-chips [role="radio"][data-nights="7"]')!.getAttribute('aria-checked')).toBe('true');
     // Past days do nothing.
@@ -187,6 +202,17 @@ describe('CalendarPage', () => {
     a.fixture.componentRef.setInput('dep', '2026-10-20');
     await a.stable();
     expect(a.cmp.sel().ret).toBeNull();
+  });
+
+  it('a return-day tap keeps the ways-home basis, so the months do not recount', async () => {
+    configure();
+    const { cmp, stable } = await render({ code: 'LHR', dep: '2026-10-08', ret: '2026-10-15' });
+    const basis = cmp.home();
+    expect(basis).not.toBeNull();
+    cmp.pick('2026-10-16');
+    await stable();
+    expect(cmp.sel().ret).toBe('2026-10-16');
+    expect(cmp.home()).toBe(basis);
   });
 
   it('drops a ?dep= on a day with no flights out, and says so', async () => {
@@ -264,7 +290,7 @@ describe('CalendarPage', () => {
     const cellKeys = [...el.querySelectorAll<HTMLElement>('app-cal-month [data-key]')]
       .filter(b => /^\d+$/.test((b.querySelector('.c')?.textContent ?? '').trim()))
       .map(b => b.dataset['key']);
-    el.querySelectorAll<HTMLButtonElement>('app-seg button')[1].click();
+    el.querySelectorAll<HTMLButtonElement>('.vw app-seg button')[1].click();
     await stable();
     expect(cmp.view()).toBe('list');
     expect(el.querySelector('app-cal-month')).toBeNull();
@@ -309,13 +335,17 @@ describe('CalendarPage', () => {
     const { el, day, state, stable, text } = await render({ code: 'LHR' });
     expect(day('2026-10-08').querySelector('.dm--dotted')).not.toBeNull();
     expect(day('2026-10-08').getAttribute('aria-label')).toMatch(/flights? out, 0 nonstop and \d+ with a connection$/);
-    const tg = el.querySelector<HTMLButtonElement>('.bn__tg')!;
-    expect(tg.getAttribute('aria-pressed')).toBe('true');
-    expect(text('.bn__c')).toBe('Incl. connections · Nonstops only');
-    tg.click();
+    // One labelled two-option toggle: fixed labels, the pressed one is what the counts include.
+    const [all, nonstop] = [...el.querySelectorAll<HTMLButtonElement>('[data-conn] button')];
+    expect(el.querySelector('[data-conn] [role="group"]')!.getAttribute('aria-label')).toBe('Flights counted');
+    expect([all.textContent!.trim(), nonstop.textContent!.trim()]).toEqual(['All flights', 'Nonstop only']);
+    expect([all.getAttribute('aria-pressed'), nonstop.getAttribute('aria-pressed')]).toEqual(['true', 'false']);
+    expect([...el.querySelectorAll('[data-key-line] span')].map(x => x.textContent!.trim())).toEqual(['has a nonstop', 'connections only']);
+    nonstop.click();
     await stable();
     expect(state.showConnections()).toBe(false);
-    expect(text('.bn__c')).toBe('Nonstops only · Include connections');
+    expect([all.getAttribute('aria-pressed'), nonstop.getAttribute('aria-pressed')]).toEqual(['false', 'true']);
+    expect(nonstop.textContent!.trim()).toBe('Nonstop only');
     expect(day('2026-10-08').querySelector('.dm--none')).not.toBeNull();
     expect(day('2026-10-08').getAttribute('aria-label')).toContain('with a connection hidden');
   });
@@ -384,16 +414,19 @@ describe('CalendarPage in French', () => {
     expect(text('.fld:nth-child(2) .fld__l')).toBe('Retour');
     expect(text('.tb .lnk')).toBe('Annuler');
     expect(text('.tb .lnk--b')).toBe('Effacer');
-    expect(text('[data-step] .step__l')).toBe('Dates choisies · touchez Voir les vols ou un autre jour');
+    expect(text('[data-step] .step__l')).toBe('Dates choisies · touchez Départ ou Retour pour en changer une, ou Voir les vols');
     expect(text('[data-banner] b')).toBe('Vols de retour · LHR → YUL');
     expect(text('[data-banner] .bn__s')).toBe('Comptés après la première arrivée (ven. 9 oct. 10:00)');
     expect(text('.ft .ui-btn')).toBe('Voir les vols · 8–15 oct. · 7 nuits');
-    expect(text('[data-peek]')).toBe('Retour jeu. 15 oct. · 7 nuits · 1 retour · 12:10');
-    expect(plain(el.querySelector('[data-key="2026-10-09"]')!.getAttribute('aria-label')!)).toBe('vendredi 9 octobre 2026, 1 retour, 1 nuit');
+    expect(text('[data-peek]')).toBe('Retour le jeu. 15 oct. · 7 nuits · 1 retour · 12:10');
     expect(plain(el.querySelector('[data-key="2026-10-07"]')!.getAttribute('aria-label')!)).toBe('mercredi 7 octobre 2026, avant le départ');
+    // The departure and return say which they are; days between say they are in the stay.
+    expect(plain(el.querySelector('[data-key="2026-10-08"]')!.getAttribute('aria-label')!)).toMatch(/, votre départ$/);
+    expect(plain(el.querySelector('[data-key="2026-10-15"]')!.getAttribute('aria-label')!)).toMatch(/, votre retour$/);
+    expect(plain(el.querySelector('[data-key="2026-10-09"]')!.getAttribute('aria-label')!)).toBe('vendredi 9 octobre 2026, 1 retour, 1 nuit, pendant le séjour');
     expect(text('.lg__s')).toBe('Légende');
     expect(text('.lg__h')).toBe('Retours par jour');
-    expect(text('app-seg')).toBe('Calendrier Liste');
+    expect(text('.vw app-seg')).toBe('Calendrier Liste');
   });
 
   it('words the empty picker in French', async () => {
@@ -402,8 +435,8 @@ describe('CalendarPage in French', () => {
     const { text } = await render({ code: 'LHR' });
     expect(text('[data-step] .step__l')).toBe('1 sur 2 · Touchez le jour du départ');
     expect(text('[data-banner] b')).toBe('Vols aller · YUL → LHR');
-    expect(text('.bn__c')).toBe('Sans escale seulement · Inclure les correspondances');
+    expect(text('[data-conn]')).toBe('Tous les vols Sans escale seulement');
     expect(text('.ft .ui-btn')).toBe('Touchez le jour du départ');
-    expect(text('[data-peek]')).toBe('Vols prévus, pas de places');
+    expect(text('[data-peek]')).toBe('Les nombres sont des vols prévus, pas des places');
   });
 });

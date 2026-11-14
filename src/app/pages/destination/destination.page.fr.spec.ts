@@ -73,12 +73,12 @@ describe('DestinationPage in French', () => {
       providers: [provideRouter([]), { provide: PREFS_STORAGE, useValue: new MemoryStorage() }, { provide: NOW, useValue: () => NOW_MS }],
     });
     const { el, text } = await render('LHR', { dep: '2026-10-02' });
-    expect(text('[data-dates-text]')).toBe('Départ ven. 2 oct. · choisissez le retour');
+    expect(text('[data-dates-text]')).toBe('Départ le ven. 2 oct. · choisissez le retour');
     expect(el.querySelector('[data-dates-clear]')!.getAttribute('aria-label')).toBe('Effacer les dates');
     const chip = el.querySelector('app-stay-chips [data-nights="4"]')!;
     expect(chip.textContent!.replace(/[\s\u00a0\u202f]+/g, ' ').trim()).toBe('4 nuits mar. 6 · 1 retour');
     expect(text('[data-from]')).toBe('À partir du ven. 2 oct.');
-    expect(text('[data-ret-heading]')).toMatch(/^Départs de LHR après l’arrivée \(sam\. 3 oct\. /);
+    expect(text('[data-ret-heading]')).toMatch(/^Départs de LHR après l'arrivée \(sam\. 3 oct\. /);
     for (const node of [el.querySelector('[data-dates-bar]')!, ...el.querySelectorAll('[data-dates-bar] *')]) {
       expect(getComputedStyle(node).textOverflow).not.toBe('ellipsis');
     }

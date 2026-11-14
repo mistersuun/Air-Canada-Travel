@@ -12,7 +12,7 @@ import { ShareService } from '../../state/share.service';
 import { airportTz, findDestination, findHub, getOrigins } from '../../utils/airports';
 import { formatKm, greatCircleKm } from '../../utils/geo';
 import type { Itinerary } from '../../utils/connections';
-import { addDays, formatKey, todayKey } from '../../utils/time';
+import { addDays, formatKey, todayKey, weekStartKey } from '../../utils/time';
 import { nextFlightDate } from '../../utils/week';
 import { IconComponent } from '../../components/shared/icons.component';
 import { SegComponent, type SegOption } from '../../ui/seg.component';
@@ -35,8 +35,8 @@ import type { TimelineItem } from './dest-model';
 import { DayCountStripComponent } from '../../ui/day-count-strip.component';
 import { StayChipsComponent } from '../../ui/stay-chips.component';
 import {
-  type CountCtx, earliestArrival, homeAfterUtc, landingLabel, minuteOf, nightsBetween, outCounts, outboundsOn, planParams,
-  readPlan, shiftRet, stayOptions, stripKeys, waysHome,
+  type CountCtx, type CountKind, earliestArrival, homeAfterUtc, landingLabel, minuteOf, nightsBetween, outCounts,
+  outboundsOn, planParams, readPlan, shiftRet, stayOptions, stripKeys, waysHome,
 } from '../../planner/round-trip';
 import { DestClimateComponent } from './dest-climate.component';
 import { DestForecastComponent } from './dest-forecast.component';
@@ -179,7 +179,9 @@ const AC_URL = 'https://www.aircanada.com/';
         } @else {
           <div class="dates__row">
             @let r = rangeLabel();
-            <p class="dates__q tn" data-dates-text><span class="nw">{{ r.range }}</span>&ngsp;<span class="nw">· {{ r.stay }}</span></p>
+            <p class="dates__q tn" data-dates-text>
+              <span class="nw">{{ r.start }}</span>@if (r.end) {{{ ' ' }}<span class="nw">– {{ r.end }}</span>}{{ ' ' }}<span class="nw">· {{ r.stay }}</span>
+            </p>
             <a class="ui-btn ui-btn--sm dates__btn" [routerLink]="planLink()" [queryParams]="planQuery()" data-dates-see>{{ t('planner.dest.seeFlights') }}</a>
             <button type="button" class="dates__x" [attr.aria-label]="t('planner.dest.clearDates')" (click)="clearDates()" data-dates-clear>
               <app-icon name="close" [size]="16" [strokeWidth]="2.2" />
@@ -265,17 +267,26 @@ const AC_URL = 'https://www.aircanada.com/';
                    [ariaLabel]="t('dest.tab.departures')" />
         }
         @if (!routeOnly()) {
-          <app-day-count-strip class="strip" [days]="stripDays()" [selected]="p.dep" [label]="t('planner.dest.stripAria')"
-                               (pick)="setDep($event)" (extend)="shiftStrip($event)" />
+          @if (!stripEmpty() || p.dep) {
+            <app-day-count-strip class="strip" [days]="stripDays()" [selected]="p.dep" [label]="t('planner.dest.stripAria')"
+                                 (pick)="setDep($event)" (extend)="shiftStrip($event)" />
+          }
           <div class="from" id="dep-list">
             @if (p.dep) {
-              <button type="button" class="ui-tag ui-tag--blue from__chip tn" [attr.aria-label]="t('planner.dest.from', { date: depLabel() }) + ' · ' + t('planner.dest.clearFrom')"
+              <button type="button" class="ui-tag ui-tag--blue from__chip tn" [attr.aria-label]="t('planner.dest.fromClear', { date: depLabel() })"
                       (click)="clearDates()" data-from>
                 {{ t('planner.dest.from', { date: depLabel() }) }} <app-icon name="close" [size]="12" [strokeWidth]="2.4" />
               </button>
             }
             <a class="ui-link from__cal" [routerLink]="calLink()" [queryParams]="calParams()" data-full-cal>{{ t('planner.dest.fullCalendar') }}</a>
           </div>
+          @if (dayGap(); as g) {
+            <p class="gap tn" role="status" data-day-gap>
+              {{ g.text }}@if (g.other) { · {{ g.other }}
+                <button type="button" class="ui-link gap__b" (click)="showKind(g.show!)">{{ t('planner.dest.show') }}</button>
+              }@if (g.first) { · {{ g.first }} }
+            </p>
+          }
         }
         <app-dest-timeline [items]="outItems()" [code]="code()" [records]="records()" linked [linkFor]="outLinkFor()" [more]="outMore()" (showMore)="outLimit.set(outLimit() + 5)"
                            [label]="t('dest.departuresFrom', { hub: hubName() })">
@@ -434,8 +445,9 @@ const AC_URL = 'https://www.aircanada.com/';
       display: grid; gap: 8px; align-content: center;
     }
     .dates.is-set:has(app-stay-chips) { padding-bottom: 10px; }
-    .dates__row { display: flex; align-items: center; gap: 8px; min-height: 40px; }
-    .dates__q { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.3; }
+    /* The range wraps at its dash; with years on both ends the buttons move to their own row. */
+    .dates__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 40px; }
+    .dates__q { flex: 1 1 132px; min-width: 0; font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.3; }
     .dates__q .nw { white-space: nowrap; }
     .dates__btn { flex: none; white-space: nowrap; }
     .dates__x {
@@ -451,6 +463,9 @@ const AC_URL = 'https://www.aircanada.com/';
     .from__chip { position: relative; display: inline-flex; align-items: center; gap: 4px; min-height: 28px; cursor: pointer; }
     .from__chip::after { content: ''; position: absolute; inset: -8px -4px; }
     .from__cal { display: inline-block; font-size: 13.5px; padding: 12px 0; }
+    .gap { margin: 0 0 10px; font-size: 13.5px; color: var(--ink-2); }
+    .gap__b { position: relative; font-size: 13.5px; margin-left: 2px; }
+    .gap__b::after { content: ''; position: absolute; inset: -14px -8px; }
     .map { display: block; height: 260px; border-radius: 16px; overflow: hidden; background: var(--sea); }
     .dist { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 4px 0; font-size: 13px; }
     .ess__h { margin-bottom: 12px; }
@@ -580,15 +595,35 @@ export class DestinationPage {
     readPlan({ dep: this.depParam(), ret: this.retParam() }, this.state.todayKey(), this.state.coverage(),
       dep => waysHome(this.code(), this.state.hub(), dep, this.ctx(), this.afterFor(dep)).length > 0));
 
-  /** The flights out on the departure day (by the connection setting). */
+  /**
+   * The flights out on the departure day: by the connection setting, narrowed
+   * to the kind the departures list shows (Nonstop / Via seg) when that kind
+   * flies that day, so the ways home are counted after a flight you can see.
+   */
   private readonly depOuts = computed(() => {
     const dep = this.plan().dep;
-    return dep ? outboundsOn(this.state.hub(), this.code(), dep, this.ctx()) : [];
+    if (!dep) return [];
+    const all = outboundsOn(this.state.hub(), this.code(), dep, this.ctx());
+    const kind = this.outKind();
+    if (kind === 'setting') return all;
+    const mine = all.filter(it => (kind === 'via') === it.hubs.length > 0);
+    return mine.length ? mine : all;
   });
   /** The outbound that lands first on the departure day: the best case for ways home. */
   private readonly earliest = computed(() => earliestArrival(this.depOuts()));
   /** A way home leaves at least minConnect after the earliest arrival (null: no outbound that day). */
   private readonly afterUtc = computed(() => homeAfterUtc(null, this.depOuts(), this.state.connect()));
+
+  /**
+   * What the departures list shows, for the strip's counts: one kind when the
+   * Nonstop / Via seg is there, else the connection setting.
+   */
+  protected readonly outKind = computed<CountKind>(() => {
+    if (!this.state.showConnections() || !this.outDirect().length) return 'setting';
+    return this.outMode() === 'via' ? 'via' : 'direct';
+  });
+  /** What the ways-home list shows, for the stay chips' counts (its Nonstop / Via seg). */
+  protected readonly retKind = computed<CountKind>(() => (this.retMode() === 'via' ? 'via' : 'direct'));
 
   private afterFor(dep: string): number | null {
     return homeAfterUtc(null, outboundsOn(this.state.hub(), this.code(), dep, this.ctx()), this.state.connect());
@@ -598,19 +633,25 @@ export class DestinationPage {
     const dep = this.plan().dep;
     return dep ? dayLabel(dep, this.state.todayKey()) : '';
   });
-  /** 'Nov 20 – 28' and '8 nights' (each kept on one line; the bar wraps between them). */
+  /**
+   * 'Nov 20 – 28' and '8 nights', as pieces that each stay on one line: the
+   * bar wraps at the dash ('Dec 28, 2026 –' / 'Jan 4, 2027') and before the nights.
+   */
   protected readonly rangeLabel = computed(() => {
     const { dep, ret } = this.plan();
-    if (!dep || !ret) return { range: '', stay: '' };
+    if (!dep || !ret) return { start: '', end: '', stay: '' };
     const n = nightsBetween(dep, ret);
-    const range = dep === ret ? dayLabel(dep, this.state.todayKey()) : shortRange(dep, ret, this.state.todayKey());
-    return { range, stay: n ? t('planner.nights', { n }) : t('planner.dayTrip') };
+    const stay = n ? t('planner.nights', { n }) : t('planner.dayTrip');
+    if (dep === ret) return { start: dayLabel(dep, this.state.todayKey()), end: '', stay };
+    const range = shortRange(dep, ret, this.state.todayKey());
+    const at = range.lastIndexOf(' – ');
+    return at < 0 ? { start: range, end: '', stay } : { start: range.slice(0, at), end: range.slice(at + 3), stay };
   });
 
   /** Five stays compared with no tap: nights, return day and ways home after you land. */
   protected readonly stays = computed(() => {
     const dep = this.plan().dep;
-    return dep ? stayOptions(dep, this.code(), this.state.hub(), this.ctx(), this.afterUtc(), this.state.timeFormat()) : [];
+    return dep ? stayOptions(dep, this.code(), this.state.hub(), this.ctx(), this.afterUtc(), this.state.timeFormat(), undefined, this.retKind()) : [];
   });
   protected readonly stayCompute = computed(() => {
     const dep = this.plan().dep;
@@ -620,7 +661,8 @@ export class DestinationPage {
     const ctx = this.ctx();
     const after = this.afterUtc();
     const fmt = this.state.timeFormat();
-    return (n: number) => stayOptions(dep, code, hub, ctx, after, fmt, [n])[0];
+    const kind = this.retKind();
+    return (n: number) => stayOptions(dep, code, hub, ctx, after, fmt, [n], kind)[0];
   });
 
   /** The picker's query: the global params plus the dates. */
@@ -644,7 +686,38 @@ export class DestinationPage {
     },
   });
   protected readonly stripDays = computed(() =>
-    outCounts(this.state.hub(), this.code(), stripKeys(this.stripStart(), 0, STRIP_DAYS - 1), this.ctx(), this.state.timeFormat()));
+    outCounts(this.state.hub(), this.code(), stripKeys(this.stripStart(), 0, STRIP_DAYS - 1), this.ctx(), this.state.timeFormat(), this.outKind()));
+  /** Nothing on the strip flies (a seasonal route out of season): the notice above says when it does, so the strip hides. */
+  protected readonly stripEmpty = computed(() => this.stripDays().every(c => c.state !== 'ok'));
+
+  /**
+   * The picked day has nothing of the listed kind, so the list starts later:
+   * say so, with the other kind's count that day and a way to show it.
+   */
+  protected readonly dayGap = computed(() => {
+    const dep = this.plan().dep;
+    if (!dep || this.routeOnly()) return null;
+    const first = this.outList()[0];
+    if (first && first.dateKey <= dep) return null;
+    const kind = this.outKind();
+    const ctx = { ...this.ctx(), showConnections: true };
+    const all = outboundsOn(this.state.hub(), this.code(), dep, ctx);
+    const via = kind !== 'via';
+    const other = all.filter(it => (it.hubs.length > 0) === via).length;
+    const today = this.state.todayKey();
+    return {
+      text: t(via ? 'planner.dest.noneOnDay' : 'planner.dest.noneOnDayVia', { date: dayLabel(dep, today) }),
+      other: other ? t(via ? 'planner.dest.otherKind' : 'planner.dest.otherKindNonstop', { n: other }) : null,
+      first: first ? t('planner.dest.firstListed', { date: dayLabel(first.dateKey, today) }) : null,
+      show: other ? (via ? 'via' : 'nonstop') as 'via' | 'nonstop' : null,
+    };
+  });
+
+  /** "Show" on the day-gap line: the other kind (connections are turned on first when they are off). */
+  protected showKind(kind: 'via' | 'nonstop'): void {
+    if (kind === 'via' && !this.state.showConnections()) this.state.setShowConnections(true);
+    this.setOutMode(kind);
+  }
 
   protected shiftStrip(d: -1 | 1): void {
     const today = this.state.todayKey();
@@ -785,7 +858,8 @@ export class DestinationPage {
 
   // ── Header ────────────────────────────────────────────────────────────────
   protected readonly summary = computed(() =>
-    destSummary(this.state.hub(), this.code(), this.state.weekStartKey(), this.outDirect().length ? this.outDirect() : this.outVia()));
+    destSummary(this.state.hub(), this.code(), this.state.weekStartKey(), this.outDirect().length ? this.outDirect() : this.outVia(),
+      weekStartKey(this.outToday())));
   /** 'Seasonal · last nonstop Oct 23' when the nonstop is about to end or pause (same rule as Home's "Seasonal & ending soon"). */
   protected readonly seasonTag = computed(() => {
     const ev = seasonEvent(this.state.hub(), this.code(), this.outToday());
@@ -874,7 +948,9 @@ export class DestinationPage {
   /** The day the weather is for: ?dep, else the picked day, else today at the destination. */
   protected readonly climateDay = computed(() => {
     const tz = this.dest()?.tz;
-    return this.plan().dep ?? this.state.selectedDateKey() ?? (tz ? todayKey(tz, this.state.nowMs()) : this.outToday());
+    const week = this.state.weekStartKey();
+    const browsed = week > weekStartKey(this.outToday()) ? week : null;
+    return this.plan().dep ?? this.state.selectedDateKey() ?? browsed ?? (tz ? todayKey(tz, this.state.nowMs()) : this.outToday());
   });
   /**
    * 'you: 3/4' tags for the departures, keyed by row: only the first row of each
@@ -964,14 +1040,25 @@ export class DestinationPage {
    */
   setDep(key: string): void {
     const { dep, ret } = this.plan();
-    const next = dep ? shiftRet(key, dep, ret).ret : ret && ret >= key ? ret : null;
-    this.writeDates({ dep: key, ret: next });
+    const shifted = dep ? shiftRet(key, dep, ret) : { ret: ret && ret >= key ? ret : null, moved: false };
+    this.writeDates({ dep: key, ret: shifted.ret });
+    // Nothing changes silently (D6): a return pushed to keep the nights says so, as on /plan and the Flight page.
+    if (shifted.moved && shifted.ret) {
+      this.state.flash(t('planner.toast.retMoved', {
+        date: dayLabel(shifted.ret, this.state.todayKey()), nights: t('planner.nights', { n: nightsBetween(key, shifted.ret) }),
+      }));
+    }
     this.doc.defaultView?.requestAnimationFrame?.(() =>
       this.doc.getElementById('dep-list')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }));
   }
 
-  /** A stay chip: ?ret. */
+  /** A stay chip: ?ret (a day not yet published says so instead). */
   setRet(key: string): void {
+    const to = this.state.coverage().to;
+    if (to && key > to) {
+      this.state.flash(t('planner.picker.unpublishedPeek', { date: formatKey(to, { month: 'short', day: 'numeric', year: 'numeric' }) }));
+      return;
+    }
     this.writeDates({ dep: this.plan().dep, ret: key });
   }
 
@@ -1032,8 +1119,15 @@ export class DestinationPage {
   /** 'Leaving LIS after you land (Sat, Nov 21 08:15)', else 'Next flights home from Lisbon'. */
   protected readonly retHeading = computed(() => {
     const e = this.earliest();
-    if (this.plan().dep && e) {
-      return t('planner.dest.homeHeading', { code: this.code(), when: landingLabel(e, this.state.todayKey(), this.state.timeFormat()) });
+    const { dep, ret } = this.plan();
+    if (dep && e) {
+      const today = this.state.todayKey();
+      // A return days after landing: the list starts on that day; the landing time no longer matters.
+      if (ret && ret > e.arrDateKey) return t('planner.dest.homeHeadingFrom', { code: this.code(), date: dayLabel(ret, today) });
+      const when = landingLabel(e, today, this.state.timeFormat());
+      return e.hubs.length
+        ? t('planner.dest.homeHeadingVia', { code: this.code(), via: e.hubs.join(', '), when })
+        : t('planner.dest.homeHeading', { code: this.code(), when });
     }
     return t('planner.dest.nextHome', { city: this.city() });
   });

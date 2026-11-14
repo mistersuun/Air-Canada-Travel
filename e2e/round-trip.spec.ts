@@ -20,6 +20,7 @@ interface Copy {
   waysHome: RegExp;
   barAria: RegExp;
   planRound: RegExp;
+  chooser: RegExp;
 }
 
 const LANGS: Copy[] = [
@@ -29,6 +30,7 @@ const LANGS: Copy[] = [
     waysHome: /^Ways home · /,
     barAria: /^Your round trip$/,
     planRound: /^\s*Plan a round trip\s*$/,
+    chooser: /^Plan a round trip — where to\?$/,
   },
   {
     locale: 'fr-CA',
@@ -36,6 +38,7 @@ const LANGS: Copy[] = [
     waysHome: /^Retours · /,
     barAria: /^Votre aller-retour$/,
     planRound: /^\s*Planifier un aller-retour\s*$/,
+    chooser: /^Planifier un aller-retour\s: où allez-vous\?$/,
   },
 ];
 
@@ -165,6 +168,14 @@ for (const L of LANGS) {
       await page.goto(`/to/${CODE}?dep=${dep}`);
       await expect(page.locator('[data-dates-bar] app-stay-chips')).toBeVisible();
       await guards(page, '[data-dates-bar]');
+      // A stay across the new year carries both years: the range wraps, Clear stays on screen, no sideways scroll.
+      const y = Number(new Date().toISOString().slice(0, 4));
+      await page.goto(`/to/${CODE}?dep=${y}-12-28&ret=${y + 1}-01-04`);
+      await expect(page.locator('[data-dates-see]')).toBeVisible();
+      await expect(page.locator('[data-dates-text]')).toContainText(String(y + 1));
+      await guards(page, '[data-dates-bar]');
+      const clear = (await page.locator('[data-dates-clear]').boundingBox())!;
+      expect(clear.x + clear.width, 'Clear dates fits on screen').toBeLessThanOrEqual(PHONE.width);
 
       await page.goto(url);
       await page.locator('[data-start]').click();
@@ -213,6 +224,7 @@ for (const L of LANGS) {
       await expect(btn).toHaveAttribute('href', /[?&]dep=\d{4}-\d{2}-\d{2}/);
       await btn.click();
       await expect(page).toHaveURL(/\/calendar\?.*dep=\d{4}-\d{2}-\d{2}/);
+      await expect(page.locator('h1')).toHaveText(L.chooser);
       const dep = new URL(page.url()).searchParams.get('dep')!;
       await page.locator('[data-search-input]').fill('Lisbon');
       await page.locator(`a[href^="/calendar/${CODE}"]`).first().click();

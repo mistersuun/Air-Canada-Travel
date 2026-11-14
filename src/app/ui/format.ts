@@ -215,6 +215,15 @@ export function dayLabel(key: string, today: string): string {
   return formatKey(key, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * 'Monday, January 4, 2027' / 'Saturday, November 28': the long date for
+ * screen readers, with the year outside today's year (as dayLabel).
+ */
+export function longDayLabel(key: string, today: string): string {
+  if (key.slice(0, 4) === today.slice(0, 4)) return longDay(key);
+  return formatKey(key, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 /** 'Tue 24' / 'mar. 24': the two-word day of a strip cell or stay chip. */
 export function dayNum(key: string): string {
   return `${weekdayShort(weekdayIndex(key))} ${Number(key.slice(8))}`;

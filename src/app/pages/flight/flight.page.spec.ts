@@ -264,6 +264,21 @@ describe('FlightPage · Coming home (dates-spec §3.4)', () => {
     expect(a.getAttribute('href')).toBe('/plan/LIS?from=YUL&dep=2026-11-20&ret=2026-11-28&out=AC834');
   });
 
+  it('a 30s clock tick inside the same minute keeps the count context (no recount)', async () => {
+    setup({ showConnections: false, minConnect: 60 });
+    const { cmp } = await lis({ ret: '2026-11-28' });
+    const state = TestBed.inject(AppStateService);
+    const before = cmp.countCtx();
+    const m = Math.floor(state.nowMs() / 60_000) * 60_000;
+    state.nowMs.set(m + 1_000);
+    const a = cmp.countCtx();
+    state.nowMs.set(m + 31_000);
+    expect(cmp.countCtx()).toBe(a);
+    state.nowMs.set(m + 61_000);
+    expect(cmp.countCtx()).not.toBe(a);
+    expect(before.today).toBe(a.today);
+  });
+
   it('the card count equals the ways-home list /plan shows for the same outbound (parity)', async () => {
     setup({ showConnections: false, minConnect: 60 });
     const { text, cmp } = await lis({ ret: '2026-11-21' });
@@ -345,7 +360,7 @@ describe('FlightPage · Coming home (dates-spec §3.4)', () => {
     const { text } = await lis({ ret: '2026-11-28' });
     expect(text('app-return-summary h2')).toBe('Retour');
     expect(text('[data-ret-line]')).toBe('sam. 28 nov. · 8 nuits · 3 retours');
-    expect(text('[data-plan-round]')).toBe('Planifier l’aller-retour');
+    expect(text('[data-plan-round]')).toBe("Planifier l'aller-retour");
     expect(text()).not.toMatch(/Coming home|ways home|Plan round trip/);
   });
 });

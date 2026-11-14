@@ -7,6 +7,7 @@ export const calendar = {
   'calendar.sub': 'Pick a destination to see which days it flies',
   'calendar.search': 'Search destinations',
   'calendar.saved': 'Saved',
+  'calendar.recent': 'Recently viewed',
   'calendar.all': 'All nonstop destinations',
   'calendar.az': 'Jump to a letter',
   'calendar.noMatch': 'No destinations match “{query}”.',

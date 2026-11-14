@@ -40,6 +40,21 @@ abstract class MonthBase {
   protected readonly t = t;
   readonly variant = computed<CalVariant>(() => (this.home() ? 'home' : 'out'));
   readonly days = computed<CalDay[]>(() => monthDays(this.hub(), this.code(), this.ym(), this.ctx(), this.fmt(), this.home()));
+
+  /** ', your departure' / ', your return' / ', during your stay': what a selected or in-range day is, in words. */
+  protected roleSuffix(key: string): string {
+    const dep = this.dep();
+    const ret = this.ret();
+    const word = key === dep ? 'planner.cell.isDep' : key === ret ? 'planner.cell.isRet' : this.inRange(key) ? 'planner.cell.inStay' : null;
+    return word ? `, ${t(word)}` : '';
+  }
+
+  protected inRange(key: string): boolean {
+    const dep = this.dep();
+    const ret = this.ret();
+    return !!dep && !!ret && key > dep && key < ret;
+  }
+
   protected readonly title = computed(() => monthTitle(this.ym()));
   /** Every remaining day is beyond the published window. */
   readonly unpublished = computed(() => {
@@ -94,7 +109,7 @@ abstract class MonthBase {
                       [attr.data-key]="d.key" [attr.tabindex]="d.key === focusKey() ? 0 : -1"
                       [attr.aria-selected]="d.key === dep() || d.key === ret()"
                       [attr.aria-disabled]="d.ok ? null : 'true'"
-                      [attr.aria-label]="d.aria"
+                      [attr.aria-label]="d.aria + roleSuffix(d.key)"
                       (click)="tap(d)">
                 <span class="n tn">{{ d.day }}</span>
                 @if (d.holiday || d.brk) {
@@ -195,12 +210,6 @@ export class CalMonthComponent extends MonthBase {
   });
   protected readonly weeks = computed(() => monthWeeks(this.ym(), this.cells()));
 
-  protected inRange(key: string): boolean {
-    const dep = this.dep();
-    const ret = this.ret();
-    return !!dep && !!ret && key > dep && key < ret;
-  }
-
   /** Holiday / school-break markers and their text for one day (empty when none). */
   private signals(key: string): { holiday: boolean; brk: boolean; text: string } {
     const cache = this.signalCache();
@@ -247,7 +256,7 @@ interface ListRow {
       <div class="ls">
         @for (r of rows(); track r.key) {
           <button type="button" class="lr" [class.on]="r.on" [attr.data-list-key]="r.key" [attr.aria-pressed]="r.on"
-                  (click)="pick.emit(r.key)">
+                  [attr.aria-label]="r.text + roleSuffix(r.key)" (click)="pick.emit(r.key)">
             <i [class]="'dm dm--' + r.marker" aria-hidden="true"></i>
             <span class="lr__t tn">{{ r.text }}</span>
           </button>

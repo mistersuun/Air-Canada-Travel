@@ -67,6 +67,8 @@ describe('ui StayChipsComponent', () => {
     expect(text(radios()[0])).toBe('2 nights Sun 22 · not published');
     for (const b of radios()) expect(text(b)).not.toBe('');
     expect(radios()[0].getAttribute('aria-label')).toBe('Sunday, November 22, 2026, not yet published, 2 nights');
+    expect(radios()[0].getAttribute('aria-disabled')).toBe('true');
+    expect(radios()[2]?.getAttribute('aria-disabled') ?? null).toBeNull();
   });
 
   it('a tap emits the return day; arrows move between chips', async () => {
@@ -83,13 +85,16 @@ describe('ui StayChipsComponent', () => {
     const { fixture, host, el, radios, text } = await setup();
     radios()[5].click();
     await fixture.whenStable();
-    expect(radios()[5].getAttribute('aria-expanded')).toBe('true');
+    // role=radio has no aria-expanded; the stepper's value is announced in a polite live region.
+    expect(radios()[5].hasAttribute('aria-expanded')).toBe(false);
     const value = () => el.querySelector<HTMLButtonElement>('.st__v')!;
     expect(text(value())).toBe('8 nights · Sat, Nov 28 · 2 home');
     const [minus, plus] = [...el.querySelectorAll<HTMLButtonElement>('.st__b')];
     plus.click();
     await fixture.whenStable();
     expect(text(value())).toBe('9 nights · Sun, Nov 29 · 2 home');
+    expect(el.querySelector('[data-stepper-live]')!.getAttribute('aria-live')).toBe('polite');
+    expect(el.querySelector('[data-stepper-live]')!.textContent).toContain('November 29');
     value().click();
     expect(host.picks).toEqual(['2026-11-29']);
     for (let i = 0; i < 12; i++) minus.click();

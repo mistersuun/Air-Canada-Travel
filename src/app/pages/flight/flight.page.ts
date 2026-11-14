@@ -281,9 +281,11 @@ export class FlightPage {
   readonly retKey = computed(() => retFrom(this.dateKey(), this.ret(), this.nights()));
 
   /** The planner's count context (one source for the strip and the Coming home card). */
+  /** Minute-floored clock: the 30s tick does not give the count context a new identity. */
+  private readonly nowMinute = computed(() => minuteOf(this.state.nowMs()));
   readonly countCtx = computed<CountCtx>(() => ({
     today: this.state.todayKey(),
-    nowMinute: minuteOf(this.state.nowMs()),
+    nowMinute: this.nowMinute(),
     coverage: this.state.coverage(),
     showConnections: this.state.showConnections(),
     connect: this.state.connect(),

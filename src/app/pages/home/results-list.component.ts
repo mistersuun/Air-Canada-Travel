@@ -143,7 +143,7 @@ const ENTRY_TAG_KEYS = {
     }
     .ptx { flex: 1; min-width: 0; display: grid; }
     .pnm { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .psub { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .psub { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; overflow-wrap: anywhere; }
     .chev { color: var(--ink-3); font-size: 18px; line-height: 1; margin-left: 8px; flex: none; }
     .star {
       flex: none; width: 36px; height: 36px; margin-left: 6px; border-radius: 50%;

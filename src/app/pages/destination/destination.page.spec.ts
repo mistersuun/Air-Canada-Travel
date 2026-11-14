@@ -327,7 +327,7 @@ describe('DestinationPage', () => {
     const cells = el.querySelectorAll<HTMLButtonElement>('.dep app-day-count-strip [role="option"]');
     expect(cells).toHaveLength(14);
     expect(cells[0].dataset['key']).toBe('2026-10-01');
-    expect([...cells[0].querySelectorAll('span')].map(x => x.textContent!.trim())).toEqual(['Thu 1', '1 flight', '22:10']);
+    expect([...cells[0].querySelectorAll('span')].map(x => x.textContent!.trim())).toEqual(['Thu, Oct 1', '1 flight', '22:10']);
     expect(el.querySelector('[data-from]')).toBeNull();
     expect(el.querySelector('[data-full-cal]')!.textContent!.trim()).toBe('Full calendar');
     const nav = spyNav();
@@ -351,6 +351,42 @@ describe('DestinationPage', () => {
     expect(nav).toHaveBeenLastCalledWith([], {
       queryParams: { dep: null, ret: null }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
     });
+  });
+
+  it('the strip counts what the list under it shows; a day with none of that kind says so, with the other kind', async () => {
+    resetScheduleSource();
+    setScheduleSource([
+      route('YUL', 'LHR', rec('AC864', '22:10', '10:00', '2026-09-01', '2027-03-31', 'Mon', '333')),
+      route('YYZ', 'LHR', rec('AC848', '18:00', '06:15', '2026-09-01', '2027-03-31', ALL_DAYS, '77W')),
+      route('LHR', 'YUL', rec('AC865', '12:10', '14:35', '2026-09-01', '2027-03-31', ALL_DAYS, '333')),
+    ], FIXTURE_META);
+    await render('LHR', s => s.setShowConnections(true), { dep: '2026-10-06' });
+    const cell = (k: string) => [...el.querySelectorAll(`.dep app-day-count-strip [data-key="${k}"] span`)].map(x => x.textContent!.trim());
+    // Nonstop seg: Monday's AC864 only, never the via-YYZ connection (which flies daily).
+    expect(cell('2026-10-05').slice(1)).toEqual(['1 flight', '22:10']);
+    expect(cell('2026-10-06').slice(0, 2)).toEqual(['Tue 6', '0 flights']);
+    expect(text('[data-day-gap]')).toBe('No nonstop on Tue, Oct 6 · 1 with a connection that day Show · first listed: Mon, Oct 12');
+    // Ways home are counted after the flight that does fly that day (the connection), and the heading says so.
+    expect(text('[data-ret-heading]')).toMatch(/^Leaving LHR after you land via YYZ \(Wed, Oct 7 /);
+    el.querySelector<HTMLButtonElement>('[data-day-gap] button')!.click();
+    await fixture.whenStable();
+    // Via seg: the strip counts connections only, and the tapped day is listed first.
+    expect(cell('2026-10-06').slice(1, 2)).toEqual(['1 flight']);
+    expect(el.querySelector('[data-day-gap]')).toBeNull();
+    expect(items('.dep')[0].querySelector('.d')!.textContent).toContain('Tue, Oct 6');
+  });
+
+  it('a departure tapped past the return moves it and says so (nothing changes silently)', async () => {
+    await render('LHR', s => s.setShowConnections(false), { dep: '2026-10-05', ret: '2026-10-08' });
+    const nav = spyNav();
+    const flash = vi.spyOn(state, 'flash');
+    el.querySelector<HTMLButtonElement>('.dep app-day-count-strip [data-key="2026-10-10"]')!.click();
+    expect(nav).toHaveBeenLastCalledWith([], {
+      queryParams: { dep: '2026-10-10', ret: '2026-10-13' }, queryParamsHandling: 'merge', replaceUrl: true, scroll: 'manual',
+    });
+    expect(flash).toHaveBeenCalledWith('Home moved to Tue, Oct 13 to keep 3 nights');
+    // The From chip's name says what it does: it clears both dates.
+    expect(el.querySelector('[data-from]')!.getAttribute('aria-label')).toBe('From Mon, Oct 5 · clear dates');
   });
 
   it('Ways home without dates: the next flights home, unlinked, with a prompt to pick dates', async () => {

@@ -7,6 +7,7 @@ export const calendar: Translation<typeof en> = {
   'calendar.sub': 'Choisissez une destination pour voir les jours où elle est desservie',
   'calendar.search': 'Rechercher des destinations',
   'calendar.saved': 'Enregistrées',
+  'calendar.recent': 'Consultées récemment',
   'calendar.all': 'Toutes les destinations sans escale',
   'calendar.az': 'Aller à une lettre',
   'calendar.noMatch': 'Aucune destination ne correspond à «\u00a0{query}\u00a0».',

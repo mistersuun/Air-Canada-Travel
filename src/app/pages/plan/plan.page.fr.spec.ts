@@ -68,12 +68,13 @@ describe('PlanPage in French', () => {
     expect(text('[data-change]')).toBe('Modifier');
     expect(text('#pl-out')).toBe('Vols aller · ven. 20 nov.');
     expect(text('#pl-home')).toBe('Retours · sam. 28 nov.');
-    expect(text('[data-rule]')).toBe('Départ au moins 60 min après l’arrivée du AC834 (sam. 21 nov. 08:15)');
+    // Days after landing, the rule line just says when you land.
+    expect(text('[data-rule]')).toBe('AC834 arrive le sam. 21 nov. 08:15');
     expect(text('[data-side="out"]')).toBe('Aller · AC834 22:10');
     expect(text('[data-side="home"]')).toBe('Retour · à choisir (3)');
     expect(text('[data-start]')).toBe('Commencer un voyage');
     expect(el.querySelector('[role="region"]')!.getAttribute('aria-label')).toBe('Votre aller-retour');
-    expect(text('[data-ics]')).toBe('Aller-retour .ics');
+    expect(text('[data-ics]')).toBe('Ajouter à mon calendrier');
     // Times keep the schedule form (21:05, docs/i18n.md); the 12-hour preference would give 'p.m.'.
     expect(text()).not.toMatch(/Round trip|Flights out|Ways home|pick one|Start a trip|nights/);
   });

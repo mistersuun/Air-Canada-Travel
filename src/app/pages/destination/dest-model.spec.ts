@@ -37,6 +37,8 @@ describe('small helpers', () => {
   it('formats the timeline date line', () => {
     expect(timelineDay('2026-10-01', '2026-10-01')).toBe('Today, Oct 1');
     expect(timelineDay('2026-10-02', '2026-10-01')).toBe('Fri, Oct 2');
+    // Another year carries it (a ?dep in late December lists January days).
+    expect(timelineDay('2027-01-01', '2026-11-14')).toBe('Fri, Jan 1, 2027');
   });
 
   it('names time zones, preferring a real abbreviation', () => {
@@ -116,6 +118,9 @@ describe('destSummary', () => {
     expect(s.stops).toMatch(/^Nonstop · \d+h\d\d$/);
     expect(s.meta).toBe(`${s.stops} · 7× this week · A330-300`);
     expect(s.season).toBe('Year-round');
+    // Another week browsed (?week=): named by its start, never "this week".
+    const other = destSummary('YUL', 'LHR', '2026-10-12', [], '2026-09-28');
+    expect(other.meta).toBe(`${other.stops} · 7× week of Oct 12 · A330-300`);
   });
 
   it('falls back to the sample when the week has no nonstop', () => {
